@@ -49,7 +49,7 @@ tools/game-server.sh logs        # the last lines of the game server's log
 
 The game server loads the definitions and the world in a few seconds and starts reporting to the login server, which then lists it as open.
 
-**The client** has its login address built in. `tools/patch_client_ip.py` writes a copy of `game.exe` with your server's address (it checks the file's hash first and changes only the address), or a network redirect does the same without touching the client. Log in with the account you made.
+**The client** has its login address built in. `tools/patch_client_ip.py` writes a copy of `game.exe` with your server's address (it checks the file's hash first and changes only the address), or a network redirect does the same without touching the client. Log in with the account you made. [Pointing the client at the server](../original/client-login.md) has the details: what the address is in the client, both ways to change it, and what each error on screen means.
 
 ## Running and stopping
 

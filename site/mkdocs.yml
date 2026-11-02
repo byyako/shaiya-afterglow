@@ -188,6 +188,7 @@ nav:
       - Running it:
           - Settings: server/settings.md
           - Deploying on a VPS: server/deploy.md
+          - Pointing the client at the server: original/client-login.md
       - Behaviour and safety:
           - Deviations from the original: server/deviations.md
           - Robustness audit: server/audit.md

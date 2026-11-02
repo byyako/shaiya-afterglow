@@ -22,7 +22,7 @@ built 2010-04-26, MSVC 7.1, not packed, no PDB). Nothing was executed. The clien
 - `ShaiyaUS.ini` in the client folder is encrypted (330 bytes). Which program reads it, and whether it matters, is unknown.
 - The cipher: all of `docs/original/ps_login.md` section 4 is from the server binary; the client side has not been read.
 
-## Pointing the client at our server
+## Pointing the client at the server
 
 Two options. Neither modifies the original files.
 

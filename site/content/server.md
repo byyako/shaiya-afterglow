@@ -33,9 +33,10 @@ A reading path, from running it to how it is made:
 4. [Settings](server/settings.md): every environment variable with its default; the ones that change gameplay default to the original.
 5. [Deviations from the original](server/deviations.md): every difference, by kind, with the setting that controls it.
 6. [Deploying on a VPS](server/deploy.md): a public server with systemd, the firewall, backups and updates.
-7. [Robustness audit](server/audit.md): what a hostile client could do, what was fixed, and the fuzz harness.
-8. The original's side, on the other tabs: [the login server](original/ps_login.md) and [the game server](original/ps_game.md) first, then one system, for example [Trade](original/trade.md). Each note ends with what this server does differently.
-9. The operator's side of the original, which the server keeps: [the operator console](original/operator-console.md), [GM commands](original/gm-commands.md) and [the game log](original/game-log.md).
+7. [Pointing the client at the server](original/client-login.md): how the client finds the login server, the two ways to change that, and reading what it shows.
+8. [Robustness audit](server/audit.md): what a hostile client could do, what was fixed, and the fuzz harness.
+9. The original's side, on the other tabs: [the login server](original/ps_login.md) and [the game server](original/ps_game.md) first, then one system, for example [Trade](original/trade.md). Each note ends with what this server does differently.
+10. The operator's side of the original, which the server keeps: [the operator console](original/operator-console.md), [GM commands](original/gm-commands.md) and [the game log](original/game-log.md).
 
 ## Sections
 
@@ -43,7 +44,7 @@ A reading path, from running it to how it is made:
 |---|---|
 | Start here | This page and [Run your own server](server/run.md) |
 | How it works | [Architecture](server/architecture.md): programs, the login path, the game server's tasks and locks, the schemas |
-| Running it | [Settings](server/settings.md) and [Deploying on a VPS](server/deploy.md) |
+| Running it | [Settings](server/settings.md), [Deploying on a VPS](server/deploy.md) and [Pointing the client at the server](original/client-login.md) |
 | Behaviour and safety | [Deviations from the original](server/deviations.md) and the [Robustness audit](server/audit.md) |
 
 The rest is on GitHub: the [README](https://github.com/byyako/shaiya-afterglow#readme) (the full setup), [`tools/README.md`](https://github.com/byyako/shaiya-afterglow/blob/main/tools/README.md) (every script), [CONTRIBUTING](https://github.com/byyako/shaiya-afterglow/blob/main/CONTRIBUTING.md), [SECURITY](https://github.com/byyako/shaiya-afterglow/blob/main/SECURITY.md) (reporting a vulnerability privately), and the plans in [`docs/plans/`](https://github.com/byyako/shaiya-afterglow/tree/main/docs/plans).
