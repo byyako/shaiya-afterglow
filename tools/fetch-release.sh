@@ -26,7 +26,7 @@ base="https://github.com/$repo/releases/download/$tag"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 echo "downloading $asset"
-curl -fSL -o "$work/$asset" "$base/$asset"
+curl -fSL --progress-bar -o "$work/$asset" "$base/$asset"
 curl -fsSL -o "$work/$asset.sha256" "$base/$asset.sha256"
 (cd "$work" && sha256sum -c "$asset.sha256")
 tar -xzf "$work/$asset" -C "$work"
