@@ -31,6 +31,7 @@ of a fact; the table is in [`original/protocol-notes.md`](original/protocol-note
 
 `site/` builds a public site from these files with MkDocs (`site/README.md`). It publishes exactly the pages listed in the nav of
 `site/mkdocs.yml`; a page comes from `site/content/` when a file of that path is there (pages written for the site) and from `docs/`
-otherwise. The plans and the testing pages are not on it.
+otherwise. The plans and the testing pages are not on it; a backticked path to them, or to any other file of the repository, links to
+it on GitHub.
 
 `python3 tools/check_links.py` checks every link and every path and section reference in the repository; CI runs it.

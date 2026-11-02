@@ -353,8 +353,8 @@ Steps 1 to 7 of section 6 as planned, with these points:
   (`has_applied_skill`), `pg` (the NOTIFY payloads), the tool (reply matching), `shaiya-proto` (`world_notice`), `game_flow`
   (`a_level_one_gm_types_console_commands_with_a_dot`, `a_higher_level_gms_dot_line_is_ordinary_chat`, the shop switch inside
   `buying_in_the_item_mall`). **No test drives a PvP kill through the kill rate** (the player-kill path needs a heavy setup): the pieces are
-  tested (`counted`, `has_applied_skill`), the whole is for live test 51. **No PostgreSQL test of the NOTIFY path**: it was run against the
-  live dev server instead (info, help, a wrong argument, zones, map, quit and quit cancel, a countdown to its end, a server id nobody
+  tested (`counted`, `has_applied_skill`), the whole is for live test 51. **No PostgreSQL test of the NOTIFY path**: it was run against a
+  running test server instead (info, help, a wrong argument, zones, map, quit and quit cancel, a countdown to its end, a server id nobody
   listens for).
 - **Docs:** README (settings, the tool, test count), `docs/original/pvp.md` and `docs/original/lapis.md` (`NEW_SERVER` not built by decision),
   `docs/testing/live-test-checklist.md` section 51.
@@ -368,7 +368,7 @@ Steps 1 to 7 of section 6 as planned, with these points:
   `restart` is `quit` with `Quit.restart`: when the countdown ends `Context.restart` is set and `main` exits with `console::RESTART_STATUS`
   (75) after saving everyone; `quit cancel` cancels either. Tests: `console` (parse, help), `game_flow` (`reload_puts_new_drops_in_force_and_a_failed_one_changes_nothing`:
   a failed load, then a monster killed after the reload drops its new grade; `reload_puts_a_new_attack_in_force`;
-  `restart_counts_down_like_quit_and_cancel_ends_either`). The exit status itself and `tools/game-server.sh`'s loop were run on the dev server.
+  `restart_counts_down_like_quit_and_cancel_ends_either`). The exit status itself and `tools/game-server.sh`'s loop were run on a test server.
 - **Three strengths**: `skills::KillBoost { skill: SkillMatch, times }`; `GAME_KILL_BOOST_SKILLS` parses `id[/level][:times]`
   (times 1 to 100, 2 when left out), default `200/1:2,200/2:5,200/3:10`; `Zones::kill_boost(map, id, &[KillBoost]) -> u32` is the highest
   `times` of the entries matching an applied skill, 1 when none (replacing `has_applied_skill`); `pvp::kill_counted` uses

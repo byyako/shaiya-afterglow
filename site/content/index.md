@@ -13,6 +13,8 @@ says so; where it is an inference it says that too.
 - **A game system:** use the tabs above, or the search box. Each page covers one system from the packets in, through the checks the original
   server makes, to the packets out.
 - **The client side:** the [game.exe pages](client.md): how the client talks to the servers, its engine and game state, every packet it handles, the data formats, and a patch kit for your own `game.exe` (US build, patch level 108).
+- **Running a server:** the [server pages](server.md): NewShaiya, the open-source server built from these notes; how to run your own,
+  its architecture, every setting, and every place it differs from the original.
 - **Bugs in the original:** [Known bugs and fixes](original/community-fixes.md), and a [patch kit](server-patches.md) that fixes many of them in
   the EP4.5 `ps_game.exe`.
 
@@ -28,7 +30,7 @@ says so; where it is an inference it says that too.
 
 !!! note "The open-source server"
     A server built from this research is open source: [shaiya-afterglow on GitHub](https://github.com/byyako/shaiya-afterglow) (Rust and PostgreSQL,
-    MIT license). You bring your own copy of the original server files.
+    MIT license). You bring your own copy of the original server files. The [server pages](server.md) describe it.
 
 ## In memory
 

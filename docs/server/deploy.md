@@ -12,7 +12,7 @@ What the servers need at runtime:
 
 ## Sizing
 
-Measured on the dev server (release build, all maps loaded, about 18,000 monsters spawned, nobody online): game server 38 MB of memory and about
+Measured on a test server (release build, all maps loaded, about 18,000 monsters spawned, nobody online): game server 38 MB of memory and about
 1% of one 2012 desktop core, login server 6 MB, PostgreSQL about 65 MB. The world update (`mob_updater`, every 500 ms) runs on one core, so a
 fast core matters more than many; player connections use every core. Per-player costs have not been measured under load.
 
@@ -23,7 +23,7 @@ fast core matters more than many; player connections use every core. Per-player 
 
 ## 1. PostgreSQL
 
-The dev setup uses PostgreSQL 16; other recent versions should work but have not been tried. `pg_restore` must be the same version as the
+The README's setup uses PostgreSQL 16; other recent versions should work but have not been tried. `pg_restore` must be the same version as the
 dump's `pg_dump` or newer.
 
 ```bash
@@ -50,12 +50,12 @@ sudo install -D -t /opt/newshaiya/bin target/release/{login-server,game-server,d
 ```
 
 **Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}`. They link against the system
-glibc, so the VPS needs the build machine's glibc version or newer (the dev machine is Debian 13, glibc 2.41: Debian 12 and Ubuntu 24.04 are
-older and will not run them). If the VPS is older, build there, or build in a container of the VPS's distribution.
+glibc, so the VPS needs the build machine's glibc version or newer (a build on Debian 13, glibc 2.41, will not run on Debian 12 or Ubuntu 24.04,
+which are older). If the VPS is older, build there, or build in a container of the VPS's distribution.
 
 ## 3. The game data
 
-On the machine with the working database (the dev database runs in the `newshaiya-postgres` container):
+On the machine with the working database (with the README's setup, it runs in the `newshaiya-postgres` container):
 
 ```bash
 docker exec newshaiya-postgres pg_dump -U shaiya -n defs -n world -Fc newshaiya > gamedata.dump    # about 1.2 MB
@@ -91,8 +91,8 @@ GAME_SERVER_ID=1
 RUST_LOG=info
 ```
 
-The services run at `RUST_LOG=info` and log to the journal, which rotates; `tools/game-server.sh` and `tools/login-server.sh` are the dev
-box's and default to `debug` in a file that does not (`docs/server/audit.md` R18). Both units below carry `LimitNOFILE=65536`: systemd's
+The services run at `RUST_LOG=info` and log to the journal, which rotates; `tools/game-server.sh` and `tools/login-server.sh` are meant
+for a development machine and default to `debug` in a file that does not (`docs/server/audit.md` R18). Both units below carry `LimitNOFILE=65536`: systemd's
 default of 1024 open files is below `GAME_MAX_CONNECTIONS` (5000), and running out of them makes `accept` fail. Open the game port to the
 world but keep PostgreSQL on loopback: the game server's pool (`GAME_DB_POOL`, 24) and the login server's (16) plus the notification
 listener fit PostgreSQL's default of 100 connections.

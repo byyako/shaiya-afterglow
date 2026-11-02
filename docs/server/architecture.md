@@ -1,5 +1,19 @@
 # Architecture
 
+How the server is put together: the programs, how a player's login reaches a game server, what runs inside the game server, and
+which program writes which part of the database.
+
+## In short
+
+- Players connect to two programs: the login server (port 30800) and a game server (port 30810, one per world). The operator's tools
+  are separate small programs.
+- PostgreSQL is the only shared state. The programs never talk to each other directly, only through rows and `NOTIFY`, so several
+  game servers can share one login server, on one machine or many.
+- A login writes a session row; the game server the player picks claims it and takes the cipher keys from it.
+- Inside the game server, each connection is a task that owns its player; the maps live in one shared structure with a fixed lock
+  order; saves, the guilds, the friends and the game log are written by background tasks so that no player waits for the database.
+- The imported game data (`defs`, `world`) is replaced by the importers; the player data (`public`) is made by the migrations.
+
 ## Programs
 
 | program | what it does |
@@ -49,6 +63,8 @@ server-select reply carries only an IPv4 address, so every game server needs its
 VMs or containers. The database enforces it (`game_servers.address` is a unique `/32` IPv4 address).
 
 ## Inside the game server
+
+The source files named in this section are under `crates/game-server/src/`.
 
 - **Connections.** `serve` (`server/tasks.rs`) accepts on the listening socket and starts one task per connection (`handle` in `server.rs`) after the
   limits: `/server off`, the console's `maxusers`, the connection permits, and the per-address share (`limits.rs`). The task runs the handshake under a

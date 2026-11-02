@@ -1,5 +1,5 @@
 site_name: Shaiya internals
-site_description: Reverse-engineering notes on the Shaiya EP4.5 server programs, the US client, the protocol and the game rules
+site_description: Reverse-engineering notes on the Shaiya EP4.5 server programs, the US client, the protocol and the game rules, and the open-source server built from them
 docs_dir: build/docs
 site_dir: dist
 use_directory_urls: true
@@ -73,9 +73,6 @@ nav:
       - Known bugs and fixes: original/community-fixes.md
       - Patch kit for ps_game.exe: server-patches.md
       - "Patch kit notes: how each fix works": original/server-patch-notes.md
-      - Deviations from the original: server/deviations.md
-      - Settings: server/settings.md
-      - Robustness audit: server/audit.md
   - Characters and items:
       - Character numbers: original/stats.md
       - Moving and equipping: original/items.md
@@ -182,3 +179,15 @@ nav:
           - "The Priest packets 0x0F01 / 0x0F02": client/research-priest-packets.md
           - Character window, attack timing, creation screen: client/research-balance.md
           - Quality-of-life features: client/qol-feasibility.md
+  - Server (NewShaiya):
+      - Start here:
+          - About the server: server.md
+          - Run your own server: server/run.md
+      - How it works:
+          - Architecture: server/architecture.md
+      - Running it:
+          - Settings: server/settings.md
+          - Deploying on a VPS: server/deploy.md
+      - Behaviour and safety:
+          - Deviations from the original: server/deviations.md
+          - Robustness audit: server/audit.md

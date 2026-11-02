@@ -15,6 +15,9 @@
   through the `nsh` helper.
 - There is no player alpha: the roadmap and the testing pages describe testing by whoever runs a server; stale "not built" notes fixed.
 - The docs site has a "Buy me a coffee" link and the GitHub link in its footer.
+- The docs site has a "Server (NewShaiya)" tab: a landing page, a short "Run your own server" page, and the architecture, settings,
+  deployment, deviations and audit pages; backticked repository paths on the site link to GitHub. The server pages no longer
+  mention the development machine.
 
 ## 0.1.0
 

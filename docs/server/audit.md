@@ -1,6 +1,6 @@
 # Robustness audit
 
-A read-only review of `crates/`, made in October 2026 before 20 to 100 untrusted players were to be let in. It looked for what
+A read-only review of `crates/`, made in October 2026 before the server was opened to untrusted players. It looked for what
 F1 and F2 were (`docs/client/CLIENT-FACTS.md`, "Open for the server"): half-done changes, item and gold duplication, client values
 trusted without a check, decoders that panic or allocate without limit, lock order and blocking under locks, leaked tasks, and what a
 hostile client or a flood of connections does at the login server and in the first game packets.
@@ -443,7 +443,7 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   - The refused step and the unsafe-markup line go to debug.
   - The hex dumps are cut to the first 64 bytes.
   - A per-connection limit of one such line per kind per 10 s.
-  - The scripts keep debug (they are the dev box's), but `docs/server/deploy.md` runs a public server under systemd at `info`.
+  - The scripts keep debug (they are meant for a development machine), but `docs/server/deploy.md` runs a public server under systemd at `info`.
   - `GAME_LOG_DAYS` is built (`docs/server/settings.md`); a `login_log` purge is not (it was left to an operations step that is not
     scheduled: `docs/plans/roadmap.md`).
 - Player-visible: none.
@@ -473,14 +473,14 @@ pass") no longer keeps an auction open.
   - No server panic follows.
 - Shop titles: `my_shop::parse_start` keeps up to 120 bytes, and `shop_open` (`zone/my_shop.rs:128-138`) shows them to the view
   without `chat::markup_is_safe`, which chat, memos, remarks and Lua lines all pass. If the sign is drawn by the same code as chat, a
-  `<<999c01` title crashes every client in view (client queue entry 13 asks).
+  `<<999c01` title crashes every client in view (entry 13 of `docs/testing/client-research-queue.md` asks).
 - Looks: hair, face and size from `0x0102` (`creation.rs:208-210`) and `0x0226` are stored as sent, as in the original
   (`docs/original/ps_game.md` line 335).
 - Fix (decision 7):
   - The float decoders refuse non-finite values; `is_safe_pos` also wants `-10_000.0 <= y <= 10_000.0`.
   - A title failing `markup_is_safe`, or holding a byte below 0x20, is refused: the shop does not open and nothing is sent, as when
     `0x2303` is refused today.
-  - Hair, face and size are clamped once client queue entry 13 gives the ranges. Until then they stay as they are, with a `TODO`
+  - Hair, face and size are clamped once entry 13 of `docs/testing/client-research-queue.md` gives the ranges. Until then they stay as they are, with a `TODO`
     naming the entry.
 
 **R22. `frame::encode` panics on an oversize packet.**
@@ -812,7 +812,7 @@ New settings: `GAME_WRITE_TIMEOUT_SECS` 20, `GAME_OUTBOX_LIMIT`
   `LOGIN_FAILURE_*` address count no longer clears on a good login.
 - R17: `tools/checklist_server.py` takes any IP address as the `Host` as well as `localhost` (the page is opened by the box's LAN address;
   a rebinding page has a name, never an address). Extra names: `CHECKLIST_HOSTS`. The editor follows the text exactly (`EDITOR_HOSTS`).
-- R21: the height limit is `world::MAX_HEIGHT` (10,000). Hair, face and size are not clamped: client queue entry 13 has since been answered (the ranges are in
+- R21: the height limit is `world::MAX_HEIGHT` (10,000). Hair, face and size are not clamped: entry 13 of `docs/testing/client-research-queue.md` has since been answered (the ranges are in
   `docs/client/research-extension-features.md`, "Input ranges"), but the clamp is not built, so
   `creation.rs` and `server/items.rs` carry the `TODO` the entry asks for. The shop title check is in `my_shop::parse_start`.
 - R22: `frame::encode` logs through `tracing`, which `shaiya-proto` now depends on. The market refresh cut is `PAGE + 1` rows.
@@ -857,11 +857,11 @@ New settings: `GAME_WRITE_TIMEOUT_SECS` 20, `GAME_OUTBOX_LIMIT`
   shrank to one `0x0206` packet), a planted second ground drop was found by the value count (an item grew from 4 to 5), and a planted panic
   in the login decoder failed all four login properties. Each was reverted. The first try found the hook's thread name wrong, so it had
   counted nothing: the reason this check is written here.
-- Default run times (debug, on the dev machine): `decoders` 3.3 s, `fuzz` 0.6 s, `fuzz_login` 12 s, `fuzz_dispatch` 10 s.
+- Default run times (debug build, on an 8 GB desktop of 2012): `decoders` 3.3 s, `fuzz` 0.6 s, `fuzz_login` 12 s, `fuzz_dispatch` 10 s.
 - Long runs (`PROPTEST_CASES=5000`, release): all passed. Release, 5,000 cases each: `decoders` 143 tests in 4 s, `fuzz` (crypto) 5 in 8 s, `fuzz_login` four twins in 2,714 s (the lockout
   property is most of it: each case hashes passwords, about 0.45 s), `fuzz_dispatch` four twins in 1,901 s (`--test-threads=2`; the
   one-player, staff and before-the-world twins together took about 30 minutes, the two-player one the rest). Run the twins only (`--ignored`) with
-  two test threads: eight at once on this 8 GB box, with swap in use, made timeouts of the test's own clients fail the lockout property
+  two test threads: eight at once on that 8 GB machine, with swap in use, made timeouts of the test's own clients fail the lockout property
   once (it passed alone, 200 cases in 90 s) and made the short ones crawl. The twins of a file are the same properties as the short ones,
   so `--include-ignored` only adds the short ones again.
 

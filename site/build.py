@@ -3,7 +3,8 @@
 
 Publishes exactly the pages listed in mkdocs.yml's nav, so nothing reaches the site by accident. A nav entry
 is taken from content/ when a file of that path exists there (pages written for the site), and from docs/
-otherwise. Backticked references to published pages (`docs/original/shop.md`) become links.
+otherwise. Backticked references to published pages (`docs/original/shop.md`) become links; backticked paths of other files
+and folders of the repository (`docs/plans/roadmap.md`, `crates/game-server`) link to them on GitHub.
 The server patch kit is zipped into downloads/ and its byte lists are written into the kit page.
 Output: `dist/` beside this file (static files, relative links, servable from any path).
 """
@@ -120,6 +121,24 @@ for p in published:
         aliases[p[len("client/"):]] = p
 ref = re.compile(r"`(" + "|".join(re.escape(a) for a in sorted(aliases, key=len, reverse=True)) + r")`")
 
+# Every other tracked file or folder named in backticks links to the public repository. Only paths with a '/', so a bare
+# `README.md` or `server.rs` stays code; lines about the client's own repository keep its paths as code (as tools/check_links.py does).
+REPO_URL = "https://github.com/byyako/shaiya-afterglow"
+tracked = subprocess.run(["git", "ls-files", "-z"], cwd=HERE.parent, capture_output=True, text=True).stdout.split("\0")
+tracked_files = {f for f in tracked if f}
+tracked_dirs = {p.as_posix() for f in tracked_files for p in Path(f).parents if p.as_posix() != "."}
+repo_path = re.compile(r"(?<!\[)`([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+/?)`")
+
+
+def github(m):
+    path = m.group(1).rstrip("/")
+    if path in tracked_files:
+        return f"[`{m.group(1)}`]({REPO_URL}/blob/main/{path})"
+    if path in tracked_dirs:
+        return f"[`{m.group(1)}`]({REPO_URL}/tree/main/{path})"
+    return m.group(0)
+
+
 CLIENT_NOTE = (
     '!!! info "Client these notes describe"\n'
     "    US `game.exe` built 2010-04-26, patch level 108 (`ps0108.patch`), EP4.5. "
@@ -215,6 +234,8 @@ for p in published:
             in_fence = not in_fence
         elif not in_fence and not line.startswith("#"):
             line = ref.sub(link, line)
+            if not re.search(r"client repo", line, re.I):
+                line = repo_path.sub(github, line)
         out.append(line)
     # the title comes first, then the note saying which client the page is about
     if p.startswith("client/") and out and out[0].startswith("# "):
