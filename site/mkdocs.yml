@@ -73,6 +73,8 @@ nav:
       - Known bugs and fixes: original/community-fixes.md
       - Patch kit for ps_game.exe: server-patches.md
       - "Patch kit notes: how each fix works": original/server-patch-notes.md
+      - "The original's server files: inventory": original/server-inventory.md
+      - "The original's databases": original/database-notes.md
   - Characters and items:
       - Character numbers: original/stats.md
       - Moving and equipping: original/items.md

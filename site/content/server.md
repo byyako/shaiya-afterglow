@@ -1,13 +1,13 @@
 # The server: Shaiya Afterglow
 
-Shaiya Afterglow is a Shaiya Episode 4.5 server written from scratch in Rust, with PostgreSQL for its data. It is built from the research on the other tabs of this site: each system was read from the original server programs first, written up as a note, and then coded to that note. It works with the unmodified US client. The code is open source under the MIT license, on GitHub as [byyako/shaiya-afterglow](https://github.com/byyako/shaiya-afterglow).
+Shaiya Afterglow is an open-source server for Shaiya Episode 4.5, written from scratch in Rust, with PostgreSQL for its data. It is built from the research on the other tabs of this site: each system was read from the original server programs first, written up as a note, and then coded to that note. It works with the unmodified US client. The code is open source under the MIT license, on GitHub as [byyako/shaiya-afterglow](https://github.com/byyako/shaiya-afterglow).
 
 No original code, binaries or game data are included. You bring your own copy of the original server files, and the import tools load them into PostgreSQL.
 
 !!! info "What the server is built against"
     | | |
     |---|---|
-    | Original server | EP4.5 `ps_login.exe`, `ps_game.exe` and their neighbours, from the widely shared server pack (binaries of mid-2009, pack of 2010-03) |
+    | Original server | EP4.5 `ps_login.exe`, `ps_game.exe` and their neighbours, from the widely shared server pack ([file inventory](original/server-inventory.md); binaries of mid-2009, pack of 2010-03) |
     | Client | US `game.exe`, built 2010-04-26, patch level 108, unmodified (only its login address is pointed at your server) |
     | Version | 0.1.0, the first public release ([changelog](https://github.com/byyako/shaiya-afterglow/blob/main/CHANGELOG.md)) |
     | Runs on | Linux, with Docker for PostgreSQL; Rust 1.94 or newer to build |
@@ -35,7 +35,7 @@ A reading path, from running it to how it is made:
 6. [Deploying on a VPS](server/deploy.md): a public server with systemd, the firewall, backups and updates.
 7. [Pointing the client at the server](original/client-login.md): how the client finds the login server, the two ways to change that, and reading what it shows.
 8. [Robustness audit](server/audit.md): what a hostile client could do, what was fixed, and the fuzz harness.
-9. The original's side, on the other tabs: [the login server](original/ps_login.md) and [the game server](original/ps_game.md) first, then one system, for example [Trade](original/trade.md). Each note ends with what this server does differently.
+9. The original's side, on the other tabs: [the login server](original/ps_login.md) and [the game server](original/ps_game.md) first, then one system, for example [Trade](original/trade.md); [the original's databases](original/database-notes.md) are described too. Each note ends with what this server does differently.
 10. The operator's side of the original, which the server keeps: [the operator console](original/operator-console.md), [GM commands](original/gm-commands.md) and [the game log](original/game-log.md).
 
 ## Sections
