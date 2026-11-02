@@ -9,7 +9,7 @@ Installed with the maintainer's explicit approval for this client installation a
 - Added only `listen_chat=1` immediately below `[fixes]` in root `fixes.ini`. Removing that inserted line restores the exact original file bytes. All other settings, comments, encoding and line endings were retained. In particular, the existing feature list `0,5,8,23,26,43,45,46,62,21,35`, `anti_freeze=1`, `road_messages=1`, `log=0`, and all graphics settings remain as found. Other default-on behavior in this build remains at its existing defaults.
 - Installed config SHA-256: `9a6bfd68f365c89a69640f3080c06b082beddc00dce403b59bede2e15527f4e2`.
 - `game.exe` was not written. Before/after SHA-256: `5f045bcb4a2e29562ac79effc4108fbaa6404ab29258df02c4dfc6ed7e3401a6`.
-- No client process was running at the install check. No process was closed or launched by this session. Server code, configuration, binaries and existing documentation were not edited; the only NewShaiya write was this new report.
+- No client process was running at the install check. No process was closed or launched by this session. Server code, configuration, binaries and existing documentation were not edited; the only Shaiya Afterglow write was this new report.
 
 ## Verified backup
 

@@ -179,7 +179,7 @@ nav:
           - "The Priest packets 0x0F01 / 0x0F02": client/research-priest-packets.md
           - Character window, attack timing, creation screen: client/research-balance.md
           - Quality-of-life features: client/qol-feasibility.md
-  - Server (NewShaiya):
+  - Server (Shaiya Afterglow):
       - Start here:
           - About the server: server.md
           - Run your own server: server/run.md

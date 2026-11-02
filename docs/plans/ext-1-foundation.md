@@ -219,7 +219,7 @@ name = "kill-boost"              # ^[a-z][a-z0-9-]{1,39}$; its schema is ext_kil
 version = "1.0.0"                # semver; an upgrade must raise it
 title = "Kill Boost Stones"
 description = "Three stones whose buff multiplies player kills (2x, 5x, 10x) for one hour."
-authors = ["NewShaiya"]          # optional
+authors = ["Shaiya Afterglow"]          # optional
 license = "MIT"                  # optional
 
 [ids]                            # what it owns; checked against the client's ceilings and other extensions (5.6)
@@ -433,7 +433,7 @@ kills still count 2×, 5×, 10×. Disabled, the stones and buffs stay and count 
 1. **Built-in defaults** (the code; today's defaults, except `kill_boost_skills` which becomes empty).
 2. **Extension defaults**: `content.ext_settings` of the **enabled** extensions, in `install_seq` order (two enabled extensions never
    set the same setting: refused at install and enable).
-3. **The config file** (`GAME_CONFIG`, default `config/game.toml` in the working folder; deploy: `/etc/newshaiya/game.toml`).
+3. **The config file** (`GAME_CONFIG`, default `config/game.toml` in the working folder; deploy: `/etc/shaiya-afterglow/game.toml`).
 4. **The data editor's edits**: `content.setting_values`, written only through the `edits` overlay (target `setting`, 7.4).
 
 Then, while the server runs, the console's switches (exp rate, kill rate, shop, max users) change their four values until the next
@@ -791,7 +791,7 @@ bad value name the line; a `GAME_` variable that is not start-up stops the start
 
 **B2. `main.rs` and the scripts**: the server resolves its settings at start and logs one line per value not at its default with its
 layer. `tools/game-server.sh` exports `GAME_CONFIG` when unset (`$root/config/game.toml`). `docs/server/deploy.md`'s env file keeps the start-up
-variables; the game settings go to `/etc/newshaiya/game.toml` (`GAME_CONFIG` in the env file).
+variables; the game settings go to `/etc/shaiya-afterglow/game.toml` (`GAME_CONFIG` in the env file).
 
 **B3. This box**: `config/game.toml` with `guild_party_size = 2`; remove `GAME_GUILD_PARTY_SIZE` from `.env`; `game-server config` shows `guild_party_size` from the file and `kill_boost_skills` from the extension; restart; the log agrees.
 

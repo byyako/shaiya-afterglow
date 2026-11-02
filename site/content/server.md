@@ -1,6 +1,6 @@
-# The server: NewShaiya
+# The server: Shaiya Afterglow
 
-NewShaiya is a Shaiya Episode 4.5 server written from scratch in Rust, with PostgreSQL for its data. It is built from the research on the other tabs of this site: each system was read from the original server programs first, written up as a note, and then coded to that note. It works with the unmodified US client. The code is open source under the MIT license, on GitHub as [byyako/shaiya-afterglow](https://github.com/byyako/shaiya-afterglow).
+Shaiya Afterglow is a Shaiya Episode 4.5 server written from scratch in Rust, with PostgreSQL for its data. It is built from the research on the other tabs of this site: each system was read from the original server programs first, written up as a note, and then coded to that note. It works with the unmodified US client. The code is open source under the MIT license, on GitHub as [byyako/shaiya-afterglow](https://github.com/byyako/shaiya-afterglow).
 
 No original code, binaries or game data are included. You bring your own copy of the original server files, and the import tools load them into PostgreSQL.
 
@@ -51,7 +51,7 @@ The rest is on GitHub: the [README](https://github.com/byyako/shaiya-afterglow#r
 
 ## Conventions
 
-- **The original** is the EP4.5 server above; **this server** is NewShaiya.
+- **The original** is the EP4.5 server above; **this server** is Shaiya Afterglow.
 - Status words for the server: **built**, **not built** (by decision, or planned), **tested in play** (tried with the real client) and **waiting for a test in play** (covered by the test suite only; the list is the [live test checklist](https://github.com/byyako/shaiya-afterglow/blob/main/docs/testing/live-test-checklist.md)).
 - Status words for what is said about the original: **confirmed** (read in the binary or the code, with the address or function), *inferred* (follows from what was read, not seen directly) and **PDB** (from the debug symbols, so names and layouts are exact).
 - Deviations have a kind: **fix**, **client**, **robust**, **tooling**, **gameplay**, **addition** or **internal**; [the Deviations page](server/deviations.md) explains each.

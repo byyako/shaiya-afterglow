@@ -26,7 +26,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "CMob::SendSpeed builds 0x0609 without the monster id; nearby players get stack garbage as the id when a monster resets its speed.",
-      "credit": "NewShaiya analysis (docs/original/mob-fight.md section 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/mob-fight.md section 5)",
       "inplace": [
         {
           "va": 4785986,
@@ -50,7 +50,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "With a logout pending the gatekeeper subtracts the fare and the player does not move.",
-      "credit": "NewShaiya analysis (docs/original/gatekeeper.md section 2)",
+      "credit": "Shaiya Afterglow analysis (docs/original/gatekeeper.md section 2)",
       "inplace": [
         {
           "va": 4624807,
@@ -74,7 +74,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "A damage-over-time debuff on a player adds elapsed/3000 to the base instead of multiplying, unlike the monster version.",
-      "credit": "NewShaiya analysis (docs/original/mob-skills.md section 8)",
+      "credit": "Shaiya Afterglow analysis (docs/original/mob-skills.md section 8)",
       "inplace": [
         {
           "va": 4744438,
@@ -103,7 +103,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "Illusion (change type 102) is saved with the character but its copied monster is not; after login the player has shape 102 with monster 0 and item attack/defence drop to 0 until it ends.",
-      "credit": "NewShaiya analysis (docs/original/skills-special.md section 5.4)",
+      "credit": "Shaiya Afterglow analysis (docs/original/skills-special.md section 5.4)",
       "inplace": [
         {
           "va": 4639682,
@@ -127,7 +127,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "Leaving the zone while visiting a personal shop removes the visitor from its own shop, not the seller's, so the seller's list keeps dead visitors and fills up.",
-      "credit": "NewShaiya analysis (docs/original/personal-shop.md section 6)",
+      "credit": "Shaiya Afterglow analysis (docs/original/personal-shop.md section 6)",
       "inplace": [
         {
           "va": 4501294,
@@ -151,7 +151,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "0x0209 accepts any level above the one known, so a modified client jumps skill levels; a passive then drifts for good.",
-      "credit": "NewShaiya analysis (docs/original/skills.md sections 3 and 7)",
+      "credit": "Shaiya Afterglow analysis (docs/original/skills.md sections 3 and 7)",
       "inplace": [
         {
           "va": 4736176,
@@ -175,7 +175,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "0x0805's material bag and slot index the item table without bounds, so a bad place reads outside it (a crash, or a stray object as material).",
-      "credit": "NewShaiya analysis (docs/original/lapis.md section 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md section 5)",
       "inplace": [
         {
           "va": 4586419,
@@ -199,7 +199,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "EnableGemAdd says yes for a cloak before checking the lapis, so any item can be linked into a cloak for the price of its grade (usually free).",
-      "credit": "NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)",
       "inplace": [
         {
           "va": 4586089,
@@ -223,7 +223,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "EnableLapisianAdd says yes for a cloak before checking the Lapisia, so any item can enchant a cloak (an apple to +20 absorption, free).",
-      "credit": "NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)",
       "inplace": [
         {
           "va": 4585849,
@@ -247,7 +247,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "CMap::IsSafePos lets NaN coordinates pass its x87 range checks.",
-      "credit": "NewShaiya analysis (docs/original/maps-npcs.md section 2)",
+      "credit": "Shaiya Afterglow analysis (docs/original/maps-npcs.md section 2)",
       "inplace": [
         {
           "va": 4281184,
@@ -271,7 +271,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "PacketExchange checks only real type 27, not byOG, so a modified client can trade account/character-bound items.",
-      "credit": "NewShaiya analysis (docs/original/trade.md section 2.3)",
+      "credit": "Shaiya Afterglow analysis (docs/original/trade.md section 2.3)",
       "inplace": [
         {
           "va": 4649018,
@@ -295,7 +295,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "The duel stakes window checks only real type 27, not byOG, as the trade window does.",
-      "credit": "NewShaiya analysis (docs/original/duel.md section 4)",
+      "credit": "Shaiya Afterglow analysis (docs/original/duel.md section 4)",
       "inplace": [
         {
           "va": 4708196,
@@ -319,7 +319,7 @@
       "default": false,
       "status": "verified in disassembly",
       "symptom": "A self buff with an aggro value should anger the monster the caster is fighting, but the server only does it when the caster is not attacking, which an instant skill never is.",
-      "credit": "NewShaiya analysis (docs/original/skills-buffs.md section 4)",
+      "credit": "Shaiya Afterglow analysis (docs/original/skills-buffs.md section 4)",
       "inplace": [
         {
           "va": 4525221,
@@ -336,7 +336,7 @@
       "default": false,
       "status": "verified in disassembly",
       "symptom": "The staff Linking Hammer multiplies the rate like any hammer and the 50% cap then holds it at 50%, though it was meant to be certain.",
-      "credit": "NewShaiya analysis (docs/original/lapis.md section 3)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md section 3)",
       "inplace": [
         {
           "va": 4593402,
@@ -360,7 +360,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "In a party of 7 each gain counts the bonus twice except a gain that levels the player up, which counts it once.",
-      "credit": "NewShaiya analysis (docs/original/party.md section 8)",
+      "credit": "Shaiya Afterglow analysis (docs/original/party.md section 8)",
       "inplace": [
         {
           "va": 4555615,
@@ -384,7 +384,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "An item moved while hidden (Stealth, shape 13) keeps or doubles its attack and defence, because the equip code skips its numbers while any shape is set and Stealth never recomputes them.",
-      "credit": "NewShaiya analysis (docs/original/skills-buffs.md section 5); the community's own fix is a code cave by Bowie (kreon800/shaiya) that skips item moves in shape 13, and an earlier ItemBagToBag cave of unnamed authorship; this kit instead counts the items.",
+      "credit": "Shaiya Afterglow analysis (docs/original/skills-buffs.md section 5); the community's own fix is a code cave by Bowie (kreon800/shaiya) that skips item moves in shape 13, and an earlier ItemBagToBag cave of unnamed authorship; this kit instead counts the items.",
       "inplace": [
         {
           "va": 5374881,
@@ -469,7 +469,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "The personal-shop place handler stores a slot without checking the item, so a modified client can sell quest or bound items.",
-      "credit": "NewShaiya analysis (docs/original/personal-shop.md sections 3.3 and 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/personal-shop.md sections 3.3 and 5)",
       "inplace": [
         {
           "va": 4689565,
@@ -493,7 +493,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "The database agent inserts create and rename names directly into Usp_Create_Char_R and usp_Save_Char_Name_E SQL text.",
-      "credit": "NewShaiya analysis (docs/original/ps_game.md; docs/original/server-patch-notes.md)",
+      "credit": "Shaiya Afterglow analysis (docs/original/ps_game.md; docs/original/server-patch-notes.md)",
       "inplace": [
         {
           "va": 4636678,
@@ -530,7 +530,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "Guild create formats the name and remark into SQL text; remark updates reject a quote instead of normalizing it. Normalize before both paths.",
-      "credit": "NewShaiya analysis (CUser::PacketGuild; docs/original/server-patch-notes.md)",
+      "credit": "Shaiya Afterglow analysis (CUser::PacketGuild; docs/original/server-patch-notes.md)",
       "inplace": [
         {
           "va": 4678919,
@@ -567,7 +567,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "PacketPoint copies the gift target into the database request used in the gift item and notification SQL statements without escaping it.",
-      "credit": "NewShaiya analysis (CUser::PacketPoint; docs/original/server-patch-notes.md)",
+      "credit": "Shaiya Afterglow analysis (CUser::PacketPoint; docs/original/server-patch-notes.md)",
       "inplace": [
         {
           "va": 4693834,
@@ -591,7 +591,7 @@
       "default": true,
       "status": "verified in disassembly",
       "symptom": "SendLogAdmin copies notice/detail text into 0x0C03 and the game log formats it directly into usp_Insert_Action_Log_E SQL text.",
-      "credit": "NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      "credit": "Shaiya Afterglow analysis (docs/original/game-log.md section 3.8)",
       "inplace": [
         {
           "va": 4660392,
@@ -615,7 +615,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "Buying from a personal shop multiplies count by price in 32 bits; a large price wraps to a small one, so the item sells for almost nothing.",
-      "credit": "NewShaiya analysis (docs/original/personal-shop.md section 5); the same refusal as ScreaM's GoldBugFix.CT for NPC shops",
+      "credit": "Shaiya Afterglow analysis (docs/original/personal-shop.md section 5); the same refusal as ScreaM's GoldBugFix.CT for NPC shops",
       "inplace": [
         {
           "va": 4690157,
@@ -639,7 +639,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "Buying from an NPC multiplies count by price in 32 bits; a large count times a large price wraps to a small one.",
-      "credit": "NewShaiya analysis (docs/original/shop.md); ScreaM's GoldBugFix.CT makes the same refusal in the running process (Cheat Engine)",
+      "credit": "Shaiya Afterglow analysis (docs/original/shop.md); ScreaM's GoldBugFix.CT makes the same refusal in the running process (Cheat Engine)",
       "inplace": [
         {
           "va": 4633946,
@@ -663,7 +663,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "A remake request may name the same place three times: one item becomes a new one with fresh craft stats, and its object is freed three times.",
-      "credit": "NewShaiya analysis (docs/original/lapis.md section 7)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md section 7)",
       "inplace": [
         {
           "va": 4589955,
@@ -687,7 +687,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "The enchant roll is seeded with the time in seconds xor the session id, so two enchants within a second roll the same number.",
-      "credit": "NewShaiya analysis (docs/original/lapis.md section 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/lapis.md section 5)",
       "inplace": [
         {
           "va": 4586638,
@@ -711,7 +711,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "A quest end request with NPC id 0 skips the end NPC, so item, monster and player-kill quests can be handed in anywhere.",
-      "credit": "NewShaiya analysis (docs/original/quest.md sections 7 and 11)",
+      "credit": "Shaiya Afterglow analysis (docs/original/quest.md sections 7 and 11)",
       "inplace": [
         {
           "va": 4715260,
@@ -735,7 +735,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "A colour marker whose length runs past the text crashes every client that shows the line; the server relays it in chat, GM chat and notices, memos and shop titles.",
-      "credit": "NewShaiya analysis (docs/client/client-packets.md, the chat markup crash)",
+      "credit": "Shaiya Afterglow analysis (docs/client/client-packets.md, the chat markup crash)",
       "inplace": [
         {
           "va": 5375348,
@@ -818,7 +818,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "Taking an item out of the guild bank onto a taken bag place puts the bag item into the bank unchecked, so a bound or quest item can pass to another member.",
-      "credit": "NewShaiya analysis (docs/original/guild-bank.md section 13)",
+      "credit": "Shaiya Afterglow analysis (docs/original/guild-bank.md section 13)",
       "inplace": [
         {
           "va": 4390891,
@@ -842,7 +842,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "SendLogAdmin copies the GM's typed target name into 0x0C02/0x0C03 and the game log formats it directly into usp_Insert_Action_Log_E SQL text.",
-      "credit": "NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      "credit": "Shaiya Afterglow analysis (docs/original/game-log.md section 3.8)",
       "inplace": [
         {
           "va": 4660116,
@@ -879,7 +879,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "A trade or duel stake hands over the count offered and subtracts it from whatever is in the slot by then; a count lowered after the offer wraps round and duplicates the item.",
-      "credit": "NewShaiya analysis (docs/original/trade.md sections 3 and 6, docs/original/duel.md section 4)",
+      "credit": "Shaiya Afterglow analysis (docs/original/trade.md sections 3 and 6, docs/original/duel.md section 4)",
       "inplace": [
         {
           "va": 4651483,
@@ -916,7 +916,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "Kicking a member who came before the leader in the party silently makes the next member the leader on the server while every client still shows the old one; a leader kicking itself does the same.",
-      "credit": "NewShaiya analysis (docs/original/party.md section 4)",
+      "credit": "Shaiya Afterglow analysis (docs/original/party.md section 4)",
       "inplace": [
         {
           "va": 4485517,
@@ -953,7 +953,7 @@
       "default": true,
       "status": "verified in disassembly and emulation",
       "symptom": "After repairing a single item, the server records the new quality for the shield's slot whatever was repaired, so the shield's own quality change may later go unsaved or be saved twice.",
-      "credit": "NewShaiya analysis (docs/original/repair.md section 5)",
+      "credit": "Shaiya Afterglow analysis (docs/original/repair.md section 5)",
       "inplace": [
         {
           "va": 4606415,

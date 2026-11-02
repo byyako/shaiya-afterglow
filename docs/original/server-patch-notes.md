@@ -70,7 +70,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `mob-speed-id` — Monster speed packet carries the monster's id
 
 - **Symptom:** CMob::SendSpeed builds 0x0609 without the monster id; nearby players get stack garbage as the id when a monster resets its speed.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/mob-fight.md section 5)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/mob-fight.md section 5)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -81,7 +81,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `gatekeeper-logout` — Gatekeeper takes no fare when a logout is pending
 
 - **Symptom:** With a logout pending the gatekeeper subtracts the fare and the player does not move.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/gatekeeper.md section 2)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/gatekeeper.md section 2)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -92,7 +92,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `time-damage-player` — Damage over time on players multiplies, as on monsters
 
 - **Symptom:** A damage-over-time debuff on a player adds elapsed/3000 to the base instead of multiplying, unlike the monster version.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/mob-skills.md section 8)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/mob-skills.md section 8)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -104,7 +104,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `illusion-save` — Illusion is not saved across a relog
 
 - **Symptom:** Illusion (change type 102) is saved with the character but its copied monster is not; after login the player has shape 102 with monster 0 and item attack/defence drop to 0 until it ends.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/skills-special.md section 5.4)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/skills-special.md section 5.4)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -115,7 +115,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `myshop-visit-cleanup` — Leaving a personal-shop visit clears the seller's list
 
 - **Symptom:** Leaving the zone while visiting a personal shop removes the visitor from its own shop, not the seller's, so the seller's list keeps dead visitors and fills up.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/personal-shop.md section 6)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/personal-shop.md section 6)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -126,7 +126,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `learn-skill-level` — Only the next skill level can be learnt
 
 - **Symptom:** 0x0209 accepts any level above the one known, so a modified client jumps skill levels; a passive then drifts for good.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/skills.md sections 3 and 7)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/skills.md sections 3 and 7)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -137,7 +137,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `enchant-material-bounds` — The enchant material's place is bounds-checked
 
 - **Symptom:** 0x0805's material bag and slot index the item table without bounds, so a bad place reads outside it (a crash, or a stray object as material).
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/lapis.md section 5)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/lapis.md section 5)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -148,7 +148,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `cloak-lapis` — Cloaks take no lapis (link)
 
 - **Symptom:** EnableGemAdd says yes for a cloak before checking the lapis, so any item can be linked into a cloak for the price of its grade (usually free).
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/lapis.md sections 3 and 5)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -159,7 +159,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `cloak-lapisia` — Cloaks take no Lapisia (enchant)
 
 - **Symptom:** EnableLapisianAdd says yes for a cloak before checking the Lapisia, so any item can enchant a cloak (an apple to +20 absorption, free).
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/lapis.md sections 3 and 5)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -170,7 +170,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `nan-pos` — NaN positions are refused
 
 - **Symptom:** CMap::IsSafePos lets NaN coordinates pass its x87 range checks.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/maps-npcs.md section 2)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/maps-npcs.md section 2)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -181,7 +181,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `bound-trade` — Bound items cannot be traded
 
 - **Symptom:** PacketExchange checks only real type 27, not byOG, so a modified client can trade account/character-bound items.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/trade.md section 2.3)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/trade.md section 2.3)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -192,7 +192,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `bound-duel` — Bound items cannot be staked in a duel
 
 - **Symptom:** The duel stakes window checks only real type 27, not byOG, as the trade window does.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/duel.md section 4)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/duel.md section 4)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -203,7 +203,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `party-exp-levelup` — The full-party experience bonus is paid on a level-up
 
 - **Symptom:** In a party of 7 each gain counts the bonus twice except a gain that levels the player up, which counts it once.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/party.md section 8)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/party.md section 8)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -214,7 +214,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `stealth-equip` — Equipment counts normally in Stealth
 
 - **Symptom:** An item moved while hidden (Stealth, shape 13) keeps or doubles its attack and defence, because the equip code skips its numbers while any shape is set and Stealth never recomputes them.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/skills-buffs.md section 5); the community's own fix is a code cave by Bowie (kreon800/shaiya) that skips item moves in shape 13, and an earlier ItemBagToBag cave of unnamed authorship; this kit instead counts the items.
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/skills-buffs.md section 5); the community's own fix is a code cave by Bowie (kreon800/shaiya) that skips item moves in shape 13, and an earlier ItemBagToBag cave of unnamed authorship; this kit instead counts the items.
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -235,7 +235,7 @@ section is mapped anyway; the kit changes it so the mapping is not left implicit
 ### `bound-shop` — Bound items cannot be sold in a personal shop
 
 - **Symptom:** The personal-shop place handler stores a slot without checking the item, so a modified client can sell quest or bound items.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/personal-shop.md sections 3.3 and 5)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/personal-shop.md sections 3.3 and 5)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -378,7 +378,7 @@ fix already known for any of these bugs.
   unchanged.
 - **Status:** verified in disassembly and emulation (12 count/price pairs at
   and around the 2^32 boundary, against the original's product).
-  **Credit:** NewShaiya analysis (docs/original/personal-shop.md section 5); the
+  **Credit:** Shaiya Afterglow analysis (docs/original/personal-shop.md section 5); the
   same refusal as ScreaM's `GoldBugFix.CT` for NPC shops.
 - **Bytes:**
 
@@ -415,7 +415,7 @@ fix already known for any of these bugs.
   (0x461013, the same exit as for an empty place). The displaced
   `mov bl,[esi+0x68]; cmp bl,0x51` runs after the check, so the original `je`
   sees its own flags.
-- **Status:** verified in disassembly and emulation. **Credit:** NewShaiya
+- **Status:** verified in disassembly and emulation. **Credit:** Shaiya Afterglow
   analysis (docs/original/lapis.md section 7).
 - **Bytes:**
 
@@ -440,7 +440,7 @@ fix already known for any of these bugs.
   takes the seed in `edi`). The rates and the `% 1000000` roll are unchanged.
 - **Status:** verified in disassembly and emulation (the seed equals
   `time ^ session ^ tsc`; two runs give different seeds; the other registers are
-  kept). **Credit:** NewShaiya analysis (docs/original/lapis.md section 5).
+  kept). **Credit:** Shaiya Afterglow analysis (docs/original/lapis.md section 5).
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -462,7 +462,7 @@ fix already known for any of these bugs.
   handing in. The new server enforces the same rule, and a kill quest with an end
   NPC (quest 155, NPC 8/47) was handed in through the real client on it
   (seen in play). Not every quest kind has been tried that way.
-- **Status:** verified in disassembly and emulation. **Credit:** NewShaiya
+- **Status:** verified in disassembly and emulation. **Credit:** Shaiya Afterglow
   analysis (docs/original/quest.md sections 7 and 11).
 - **Bytes:**
 
@@ -508,7 +508,7 @@ fix already known for any of these bugs.
 - **Status:** verified in disassembly and emulation (19 text cases × every
   opcode and layout above, plus untouched opcodes and over-long lengths; text
   compared with an independent model, registers and flags with the original
-  bytes). **Credit:** NewShaiya analysis (the client-side finding in
+  bytes). **Credit:** Shaiya Afterglow analysis (the client-side finding in
   docs/client/client-packets.md).
 - **Bytes:**
 
@@ -538,7 +538,7 @@ fix already known for any of these bugs.
   answer, as a refused deposit does.
 - **Status:** verified in disassembly and emulation (empty place, normal, quest,
   bound; the lock released exactly once on refusal, the stack balanced).
-  **Credit:** NewShaiya analysis (docs/original/guild-bank.md section 13).
+  **Credit:** Shaiya Afterglow analysis (docs/original/guild-bank.md section 13).
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -556,7 +556,7 @@ fix already known for any of these bugs.
   loops (0x471b94, 0x471c94). The source stays as it is (it is the command's own
   argument), and EFLAGS and the loop's NUL test are kept.
 - **Status:** verified in disassembly and emulation (single bytes under four
-  flag states; whole names through the original loop). **Credit:** NewShaiya
+  flag states; whole names through the original loop). **Credit:** Shaiya Afterglow
   analysis (docs/original/game-log.md section 3.8).
 - **Bytes:**
 
@@ -588,7 +588,7 @@ fix already known for any of these bugs.
   closes the wrap whatever the path.
 - **Status:** verified in disassembly and emulation (both sites; equal,
   smaller, larger and boundary counts; the original goes on to split where the
-  patch skips). **Credit:** NewShaiya analysis (docs/original/trade.md sections
+  patch skips). **Credit:** Shaiya Afterglow analysis (docs/original/trade.md sections
   3 and 6, docs/original/duel.md section 4).
 - **Bytes:**
 
@@ -662,7 +662,7 @@ run against a live server.
 - **Client:** none needed. The client only sees the same `0x0B06` it always got;
   a kick of the leader by itself now gets no answer, as any refused kick does.
 - **Status:** verified in disassembly and emulation (every count 2–6, slot,
-  leader and turn). **Credit:** NewShaiya
+  leader and turn). **Credit:** Shaiya Afterglow
   analysis (docs/original/party.md section 4).
 - **Bytes:**
 
@@ -688,7 +688,7 @@ run against a live server.
   both paths.
 - **Client:** none needed; nothing is sent differently.
 - **Status:** verified in disassembly and emulation (bag 0 and others, several
-  slots and qualities, against the original). **Credit:** NewShaiya analysis (docs/original/party.md section 4)
+  slots and qualities, against the original). **Credit:** Shaiya Afterglow analysis (docs/original/party.md section 4)
   this build (docs/original/repair.md section 5).
 - **Bytes:**
 
@@ -705,7 +705,7 @@ choices the new server made. Apply them by id if you want them.
 ### `fire-thorns-aggro` — Fire Thorns / Mass Taunt aggro works
 
 - **Symptom:** A self buff with an aggro value should anger the monster the caster is fighting, but the server only does it when the caster is not attacking, which an instant skill never is.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/skills-buffs.md section 4)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/skills-buffs.md section 4)
 - **Bytes:**
 
   | virtual address | file offset | before | after |
@@ -715,7 +715,7 @@ choices the new server made. Apply them by id if you want them.
 ### `op-exclusive` — Hammers of 1000% or more always link
 
 - **Symptom:** The staff Linking Hammer multiplies the rate like any hammer and the 50% cap then holds it at 50%, though it was meant to be certain.
-- **Status:** verified in disassembly. **Credit:** NewShaiya analysis (docs/original/lapis.md section 3)
+- **Status:** verified in disassembly. **Credit:** Shaiya Afterglow analysis (docs/original/lapis.md section 3)
 - **Bytes:**
 
   | virtual address | file offset | before | after |

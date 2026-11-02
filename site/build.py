@@ -151,7 +151,7 @@ CLIENT_NOTE = (
 # stops if a project name or path is still in what is shipped.
 KIT = HERE.parent / "tools" / "server-patches"
 KIT_ZIP = "downloads/ps_game-patch-kit.zip"
-KIT_PRIVATE = re.compile(r"NewShaiya|Rusty|docs/|reference/|/media/|new server", re.I)
+KIT_PRIVATE = re.compile(r"NewShaiya|Shaiya Afterglow|Rusty|docs/|reference/|/media/|new server", re.I)
 # these five describe the SQL text the quote reaches; the site names the symptom only
 KIT_SYMPTOMS = {
     "character-name-filter": "An apostrophe in a character name (create or rename) reaches the database unescaped.",
@@ -165,7 +165,7 @@ KIT_SYMPTOMS = {
 def public_kit():
     doc = json.loads((KIT / "fixes.json").read_text(encoding="utf-8"))
     for f in doc["fixes"]:
-        f["credit"] = re.sub(r"^NewShaiya analysis \([^)]*\)", "found in disassembly of this build", f["credit"])
+        f["credit"] = re.sub(r"^(?:NewShaiya|Shaiya Afterglow) analysis \([^)]*\)", "found in disassembly of this build", f["credit"])
         f["symptom"] = KIT_SYMPTOMS.get(f["id"], f["symptom"])
     files = {
         "ps_game-patch-kit/patch_ps_game.py": (KIT / "patch_ps_game.py").read_bytes(),

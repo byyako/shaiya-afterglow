@@ -8,9 +8,9 @@ Batch 1 only. **Verified (files) and live (updater):** the hand-over passed inde
 - **Verified (files):** original client, the client repository's `game.exe`, SHA-256 `5f045bcb4a2e29562ac79effc4108fbaa6404ab29258df02c4dfc6ed7e3401a6`; its archive is still at 108 (`Version.ini`). The original executable was not changed or run. The everyday archive was read directly, not trusted from an older extraction.
 - **Verified (files):** client readers used were the client repository's `tools/sah.py`, `tools/sdata_crypt.py`, `tools/sdata_diff.py`, plus the existing viewer's `sdata-viewer/generated/Schemas.cs` to label the skill fixed fields. No server SEED implementation, generator, database or server tool was used to establish the binary comparisons.
 - **Verified (files):** all six required background documents were read: `docs/client/README.md`, `CLIENT-FACTS.md`, `sdata-generation.md`, `gm-and-commands.md`, `research-gambling-kill-boost.md`, and `docs/plans/done/client-patches.md`. Batch 1 names no research-queue entry. The patch specification's section 5 and section 51's kill-boost checklist govern the acceptance below.
-- **Verified (files):** only this report is intended for the NewShaiya commit. Client release and staging files remain on the client side's machine. No server code, database, queue, checklist, README or patch ledger was changed. No patch was published or pushed. The temporary staging listener bound only `127.0.0.1` and was stopped.
+- **Verified (files):** only this report is intended for the Shaiya Afterglow commit. Client release and staging files remain on the client side's machine. No server code, database, queue, checklist, README or patch ledger was changed. No patch was published or pushed. The temporary staging listener bound only `127.0.0.1` and was stopped.
 
-Statuses: **verified** = inspected code/data, **inferred** = conclusion from that evidence, **live** = observed execution. Source paths below are relative to the client repo unless prefixed NewShaiya. VAs, where used, are `game.exe` virtual addresses, not file offsets.
+Statuses: **verified** = inspected code/data, **inferred** = conclusion from that evidence, **live** = observed execution. Source paths below are relative to the client repo unless prefixed Shaiya Afterglow. VAs, where used, are `game.exe` virtual addresses, not file offsets.
 
 ## 1. Independent hand-over verification
 
@@ -41,7 +41,7 @@ Statuses: **verified** = inspected code/data, **inferred** = conclusion from tha
 
 **Verified (records):** each item's model/icon and grouping bytes equal old 100/108; ordinary-use Special is 0, the skill-link byte is 200, and the level is 1/2/3. Each skill's icon/animation/toggle/sound bytes equal old 250/1; icon is 225; KeepTime is 1 and duration flag is 1; all three ability type/value pairs remain zero. All other item/skill records, including 100/108, are byte-equivalent at record level. These checks establish data, not rendered appearance, server multipliers, consumption or persistence.
 
-**Verified (Ghidra, local-copy evidence):** lookup `0x461ba0` requires a nonzero skill ID at most the loaded u16 count, a non-null skill row, and level 1..3, then selects its `0x88`-byte level record. This was rechecked on the hash-identical original game.exe copy. **Prior verified code references**, corroborated by the game observations below: buff application `0x56c020`, long-duration update `0x4b8710`, icon draw `0x49dfd0`; source NewShaiya `docs/client/research-gambling-kill-boost.md`, "Item use, buff duration, icon and text". The remaining decompilation statements are prior evidence, not newly re-run routines.
+**Verified (Ghidra, local-copy evidence):** lookup `0x461ba0` requires a nonzero skill ID at most the loaded u16 count, a non-null skill row, and level 1..3, then selects its `0x88`-byte level record. This was rechecked on the hash-identical original game.exe copy. **Prior verified code references**, corroborated by the game observations below: buff application `0x56c020`, long-duration update `0x4b8710`, icon draw `0x49dfd0`; source Shaiya Afterglow `docs/client/research-gambling-kill-boost.md`, "Item use, buff duration, icon and text". The remaining decompilation statements are prior evidence, not newly re-run routines.
 
 **Verified (commands):** the core independent verification was run from the client repo with `python -u -B -I -`, passing this code on stdin (the field-by-field extension also used the existing Skill schema and checked every `changes.txt` field as described above):
 
@@ -202,7 +202,7 @@ Cheapest exact acceptance sequence, on this spare only, against the existing dev
 
 ## Files, commit and remaining gates
 
-**Verified (files):** NewShaiya write: only `docs/client/client-patch-0109.md`, CRLF. Outputs on the client side: the three release files listed above; two encrypted build inputs; the isolated spare, HTTP staging copies and staging evidence files under the client repository's `release\ps0109\`; hash-identical local analysis copies and result files in a scratch folder. No key was copied.
+**Verified (files):** Shaiya Afterglow write: only `docs/client/client-patch-0109.md`, CRLF. Outputs on the client side: the three release files listed above; two encrypted build inputs; the isolated spare, HTTP staging copies and staging evidence files under the client repository's `release\ps0109\`; hash-identical local analysis copies and result files in a scratch folder. No key was copied.
 
 | Not yet settled | Cheapest confirming check |
 |---|---|

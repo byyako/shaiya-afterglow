@@ -134,7 +134,7 @@ b.add(id="mob-speed-id", title="Monster speed packet carries the monster's id",
       category="clear", default=True, status="verified in disassembly",
       symptom="CMob::SendSpeed builds 0x0609 without the monster id; nearby players "
               "get stack garbage as the id when a monster resets its speed.",
-      credit="NewShaiya analysis (docs/original/mob-fight.md section 5)",
+      credit="Shaiya Afterglow analysis (docs/original/mob-fight.md section 5)",
       inplace=[hook, cave])
 
 # --- gatekeeper-logout ------------------------------------------------------
@@ -152,7 +152,7 @@ b.add(id="gatekeeper-logout", title="Gatekeeper takes no fare when a logout is p
       category="clear", default=True, status="verified in disassembly",
       symptom="With a logout pending the gatekeeper subtracts the fare and the player "
               "does not move.",
-      credit="NewShaiya analysis (docs/original/gatekeeper.md section 2)",
+      credit="Shaiya Afterglow analysis (docs/original/gatekeeper.md section 2)",
       inplace=[hook, cave])
 
 # --- time-damage-player -----------------------------------------------------
@@ -164,7 +164,7 @@ b.add(id="time-damage-player", title="Damage over time on players multiplies, as
       category="clear", default=True, status="verified in disassembly",
       symptom="A damage-over-time debuff on a player adds elapsed/3000 to the base "
               "instead of multiplying, unlike the monster version.",
-      credit="NewShaiya analysis (docs/original/mob-skills.md section 8)",
+      credit="Shaiya Afterglow analysis (docs/original/mob-skills.md section 8)",
       inplace=[b.inplace(0x4864f6, "442410", "4c2410"),
                b.inplace(0x486527, "442410", "4c2410"),
                b.inplace(0x486559, "442410", "4c2410")])
@@ -186,7 +186,7 @@ b.add(id="illusion-save", title="Illusion is not saved across a relog",
       symptom="Illusion (change type 102) is saved with the character but its copied "
               "monster is not; after login the player has shape 102 with monster 0 and "
               "item attack/defence drop to 0 until it ends.",
-      credit="NewShaiya analysis (docs/original/skills-special.md section 5.4)",
+      credit="Shaiya Afterglow analysis (docs/original/skills-special.md section 5.4)",
       inplace=[hook, cave])
 
 # --- myshop-visit-cleanup ---------------------------------------------------
@@ -205,7 +205,7 @@ b.add(id="myshop-visit-cleanup", title="Leaving a personal-shop visit clears the
       symptom="Leaving the zone while visiting a personal shop removes the visitor from "
               "its own shop, not the seller's, so the seller's list keeps dead visitors "
               "and fills up.",
-      credit="NewShaiya analysis (docs/original/personal-shop.md section 6)",
+      credit="Shaiya Afterglow analysis (docs/original/personal-shop.md section 6)",
       inplace=[hook, cave])
 
 # --- learn-skill-level ------------------------------------------------------
@@ -225,7 +225,7 @@ b.add(id="learn-skill-level", title="Only the next skill level can be learnt",
       category="clear", default=True, status="verified in disassembly",
       symptom="0x0209 accepts any level above the one known, so a modified client "
               "jumps skill levels; a passive then drifts for good.",
-      credit="NewShaiya analysis (docs/original/skills.md sections 3 and 7)",
+      credit="Shaiya Afterglow analysis (docs/original/skills.md sections 3 and 7)",
       inplace=[hook, cave])
 
 # --- enchant-material-bounds ------------------------------------------------
@@ -250,7 +250,7 @@ b.add(id="enchant-material-bounds", title="The enchant material's place is bound
       category="clear", default=True, status="verified in disassembly",
       symptom="0x0805's material bag and slot index the item table without bounds, so "
               "a bad place reads outside it (a crash, or a stray object as material).",
-      credit="NewShaiya analysis (docs/original/lapis.md section 5)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md section 5)",
       inplace=[hook, cave])
 
 # --- cloak-lapis ------------------------------------------------------------
@@ -267,7 +267,7 @@ b.add(id="cloak-lapis", title="Cloaks take no lapis (link)",
       category="clear", default=True, status="verified in disassembly",
       symptom="EnableGemAdd says yes for a cloak before checking the lapis, so any item "
               "can be linked into a cloak for the price of its grade (usually free).",
-      credit="NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)",
       inplace=[hook, cave])
 hook, cave = b.hook_raw(
     0x45f979, 5,                      # cmp edi,0x18 ; jne 0x45f983  (cloak early-yes)
@@ -278,7 +278,7 @@ b.add(id="cloak-lapisia", title="Cloaks take no Lapisia (enchant)",
       category="clear", default=True, status="verified in disassembly",
       symptom="EnableLapisianAdd says yes for a cloak before checking the Lapisia, so "
               "any item can enchant a cloak (an apple to +20 absorption, free).",
-      credit="NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md sections 3 and 5)",
       inplace=[hook, cave])
 
 # --- nan-pos ----------------------------------------------------------------
@@ -305,7 +305,7 @@ hook, cave = b.hook(
 b.add(id="nan-pos", title="NaN positions are refused",
       category="clear", default=True, status="verified in disassembly",
       symptom="CMap::IsSafePos lets NaN coordinates pass its x87 range checks.",
-      credit="NewShaiya analysis (docs/original/maps-npcs.md section 2)",
+      credit="Shaiya Afterglow analysis (docs/original/maps-npcs.md section 2)",
       inplace=[hook, cave])
 
 # --- bound-trade ------------------------------------------------------------
@@ -323,7 +323,7 @@ b.add(id="bound-trade", title="Bound items cannot be traded",
       category="clear", default=True, status="verified in disassembly",
       symptom="PacketExchange checks only real type 27, not byOG, so a modified client "
               "can trade account/character-bound items.",
-      credit="NewShaiya analysis (docs/original/trade.md section 2.3)",
+      credit="Shaiya Afterglow analysis (docs/original/trade.md section 2.3)",
       inplace=[hook, cave])
 
 # --- bound-duel -------------------------------------------------------------
@@ -339,7 +339,7 @@ b.add(id="bound-duel", title="Bound items cannot be staked in a duel",
       category="clear", default=True, status="verified in disassembly",
       symptom="The duel stakes window checks only real type 27, not byOG, as the trade "
               "window does.",
-      credit="NewShaiya analysis (docs/original/duel.md section 4)",
+      credit="Shaiya Afterglow analysis (docs/original/duel.md section 4)",
       inplace=[hook, cave])
 
 # =============================================================================
@@ -357,7 +357,7 @@ b.add(id="fire-thorns-aggro", title="Fire Thorns / Mass Taunt aggro works",
       symptom="A self buff with an aggro value should anger the monster the caster is "
               "fighting, but the server only does it when the caster is not attacking, "
               "which an instant skill never is.",
-      credit="NewShaiya analysis (docs/original/skills-buffs.md section 4)",
+      credit="Shaiya Afterglow analysis (docs/original/skills-buffs.md section 4)",
       inplace=[b.inplace(0x450ca5, "7432", "9090")])
 
 # --- op-exclusive -----------------------------------------------------------
@@ -378,7 +378,7 @@ b.add(id="op-exclusive", title="Hammers of 1000% or more always link",
       category="design", default=False, status="verified in disassembly",
       symptom="The staff Linking Hammer multiplies the rate like any hammer and the "
               "50% cap then holds it at 50%, though it was meant to be certain.",
-      credit="NewShaiya analysis (docs/original/lapis.md section 3)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md section 3)",
       inplace=[hook, cave])
 
 # --- party-exp-levelup ------------------------------------------------------
@@ -396,7 +396,7 @@ b.add(id="party-exp-levelup", title="The full-party experience bonus is paid on 
       category="clear", default=True, status="verified in disassembly",
       symptom="In a party of 7 each gain counts the bonus twice except a gain that "
               "levels the player up, which counts it once.",
-      credit="NewShaiya analysis (docs/original/party.md section 8)",
+      credit="Shaiya Afterglow analysis (docs/original/party.md section 8)",
       inplace=[hook, cave])
 
 # --- stealth-equip ----------------------------------------------------------
@@ -441,7 +441,7 @@ b.add(id="stealth-equip", title="Equipment counts normally in Stealth",
       symptom="An item moved while hidden (Stealth, shape 13) keeps or doubles its "
               "attack and defence, because the equip code skips its numbers while any "
               "shape is set and Stealth never recomputes them.",
-      credit="NewShaiya analysis (docs/original/skills-buffs.md section 5); the "
+      credit="Shaiya Afterglow analysis (docs/original/skills-buffs.md section 5); the "
              "community's own fix is a code cave by Bowie (kreon800/shaiya) that skips "
              "item moves in shape 13, and an earlier ItemBagToBag cave of unnamed "
              "authorship; this kit instead counts the items.",
@@ -476,7 +476,7 @@ b.add(id="bound-shop", title="Bound items cannot be sold in a personal shop",
       category="clear", default=True, status="verified in disassembly",
       symptom="The personal-shop place handler stores a slot without checking the item, "
               "so a modified client can sell quest or bound items.",
-      credit="NewShaiya analysis (docs/original/personal-shop.md sections 3.3 and 5)",
+      credit="Shaiya Afterglow analysis (docs/original/personal-shop.md sections 3.3 and 5)",
       inplace=[hook, cave])
 
 # --- input filtering --------------------------------------------------------
@@ -507,7 +507,7 @@ b.add(id="character-name-filter", title="Character create and rename names repla
       category="clear", default=True, status="verified in disassembly",
       symptom="The database agent inserts create and rename names directly into "
               "Usp_Create_Char_R and usp_Save_Char_Name_E SQL text.",
-      credit="NewShaiya analysis (docs/original/ps_game.md; docs/original/server-patch-notes.md)",
+      credit="Shaiya Afterglow analysis (docs/original/ps_game.md; docs/original/server-patch-notes.md)",
       inplace=name_patches)
 
 # Guild create has just forced name[24] and remark[64] to NUL. Normalize before
@@ -525,7 +525,7 @@ b.add(id="guild-text-filter", title="Guild names and remarks replace quotes with
       category="clear", default=True, status="verified in disassembly",
       symptom="Guild create formats the name and remark into SQL text; remark updates "
               "reject a quote instead of normalizing it. Normalize before both paths.",
-      credit="NewShaiya analysis (CUser::PacketGuild; docs/original/server-patch-notes.md)",
+      credit="Shaiya Afterglow analysis (CUser::PacketGuild; docs/original/server-patch-notes.md)",
       inplace=guild_patches)
 
 # EBP=request+0x17; request[0x2b] is already NUL. strncpy's three arguments are
@@ -537,7 +537,7 @@ b.add(id="gift-target-filter", title="Gift target names replace quotes with spac
       category="clear", default=True, status="verified in disassembly",
       symptom="PacketPoint copies the gift target into the database request used in "
               "the gift item and notification SQL statements without escaping it.",
-      credit="NewShaiya analysis (CUser::PacketPoint; docs/original/server-patch-notes.md)",
+      credit="Shaiya Afterglow analysis (CUser::PacketPoint; docs/original/server-patch-notes.md)",
       inplace=[hook, cave])
 
 # Filter the byte copied to SendLogAdmin's 0x0C03 detail field, keeping the source
@@ -551,7 +551,7 @@ b.add(id="gm-notice-filter", title="GM notice log text replaces quotes with spac
       category="clear", default=True, status="verified in disassembly",
       symptom="SendLogAdmin copies notice/detail text into 0x0C03 and the game log "
               "formats it directly into usp_Insert_Action_Log_E SQL text.",
-      credit="NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      credit="Shaiya Afterglow analysis (docs/original/game-log.md section 3.8)",
       inplace=[hook, cave])
 
 # =============================================================================
@@ -575,7 +575,7 @@ b.add(id="myshop-price-wrap", title="Personal-shop prices that wrap past 2^32 ar
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="Buying from a personal shop multiplies count by price in 32 bits; a large "
               "price wraps to a small one, so the item sells for almost nothing.",
-      credit="NewShaiya analysis (docs/original/personal-shop.md section 5); the same "
+      credit="Shaiya Afterglow analysis (docs/original/personal-shop.md section 5); the same "
              "refusal as ScreaM's GoldBugFix.CT for NPC shops",
       inplace=[hook, cave])
 
@@ -599,7 +599,7 @@ b.add(id="npc-shop-price-wrap", title="NPC-shop prices that wrap past 2^32 are r
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="Buying from an NPC multiplies count by price in 32 bits; a large count "
               "times a large price wraps to a small one.",
-      credit="NewShaiya analysis (docs/original/shop.md); ScreaM's GoldBugFix.CT makes "
+      credit="Shaiya Afterglow analysis (docs/original/shop.md); ScreaM's GoldBugFix.CT makes "
              "the same refusal in the running process (Cheat Engine)",
       inplace=[hook, cave])
 
@@ -619,7 +619,7 @@ b.add(id="remake-distinct", title="Remaking needs three different items",
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="A remake request may name the same place three times: one item becomes "
               "a new one with fresh craft stats, and its object is freed three times.",
-      credit="NewShaiya analysis (docs/original/lapis.md section 7)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md section 7)",
       inplace=[hook, cave])
 
 # --- enchant-seed -----------------------------------------------------------
@@ -637,7 +637,7 @@ b.add(id="enchant-seed", title="Each enchant roll gets its own seed",
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="The enchant roll is seeded with the time in seconds xor the session id, "
               "so two enchants within a second roll the same number.",
-      credit="NewShaiya analysis (docs/original/lapis.md section 5)",
+      credit="Shaiya Afterglow analysis (docs/original/lapis.md section 5)",
       inplace=[hook, cave])
 
 # --- quest-end-npc ----------------------------------------------------------
@@ -655,7 +655,7 @@ b.add(id="quest-end-npc", title="Quests that name an end NPC are handed in at it
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="A quest end request with NPC id 0 skips the end NPC, so item, monster "
               "and player-kill quests can be handed in anywhere.",
-      credit="NewShaiya analysis (docs/original/quest.md sections 7 and 11)",
+      credit="Shaiya Afterglow analysis (docs/original/quest.md sections 7 and 11)",
       inplace=[hook, cave])
 
 # --- chat-markup-filter -----------------------------------------------------
@@ -761,7 +761,7 @@ b.add(id="chat-markup-filter", title="Malformed chat colour markers are broken u
       symptom="A colour marker whose length runs past the text crashes every client "
               "that shows the line; the server relays it in chat, GM chat and notices, "
               "memos and shop titles.",
-      credit="NewShaiya analysis (docs/client/client-packets.md, the chat markup crash)",
+      credit="Shaiya Afterglow analysis (docs/client/client-packets.md, the chat markup crash)",
       inplace=_chat())
 
 # --- guild-bank-bound -------------------------------------------------------
@@ -787,7 +787,7 @@ b.add(id="guild-bank-bound", title="Bound items cannot enter the guild bank by a
       symptom="Taking an item out of the guild bank onto a taken bag place puts the bag "
               "item into the bank unchecked, so a bound or quest item can pass to "
               "another member.",
-      credit="NewShaiya analysis (docs/original/guild-bank.md section 13)",
+      credit="Shaiya Afterglow analysis (docs/original/guild-bank.md section 13)",
       inplace=[hook, cave])
 
 # --- gm-target-filter -------------------------------------------------------
@@ -803,7 +803,7 @@ b.add(id="gm-target-filter", title="GM log target names replace quotes with spac
       category="clear", default=True, status="verified in disassembly and emulation",
       symptom="SendLogAdmin copies the GM's typed target name into 0x0C02/0x0C03 and the "
               "game log formats it directly into usp_Insert_Action_Log_E SQL text.",
-      credit="NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      credit="Shaiya Afterglow analysis (docs/original/game-log.md section 3.8)",
       inplace=target_patches)
 
 # --- exchange-count-guard ---------------------------------------------------
@@ -829,7 +829,7 @@ b.add(id="exchange-count-guard", title="A trade or duel stake that shrank is ski
       symptom="A trade or duel stake hands over the count offered and subtracts it from "
               "whatever is in the slot by then; a count lowered after the offer wraps "
               "round and duplicates the item.",
-      credit="NewShaiya analysis (docs/original/trade.md sections 3 and 6, "
+      credit="Shaiya Afterglow analysis (docs/original/trade.md sections 3 and 6, "
              "docs/original/duel.md section 4)",
       inplace=trade_patches)
 
@@ -868,7 +868,7 @@ b.add(id="party-kick-leader", title="Kicking a party member keeps the leader and
       symptom="Kicking a member who came before the leader in the party silently makes "
               "the next member the leader on the server while every client still shows "
               "the old one; a leader kicking itself does the same.",
-      credit="NewShaiya analysis (docs/original/party.md section 4)",
+      credit="Shaiya Afterglow analysis (docs/original/party.md section 4)",
       inplace=kick_patches)
 
 # --- repair-shield-slot -----------------------------------------------------
@@ -891,7 +891,7 @@ b.add(id="repair-shield-slot", title="Repairing one item updates that item's sav
       symptom="After repairing a single item, the server records the new quality for "
               "the shield's slot whatever was repaired, so the shield's own quality "
               "change may later go unsaved or be saved twice.",
-      credit="NewShaiya analysis (docs/original/repair.md section 5)",
+      credit="Shaiya Afterglow analysis (docs/original/repair.md section 5)",
       inplace=repair_patches)
 
 OUT = os.path.join(os.path.dirname(__file__), "fixes.json")

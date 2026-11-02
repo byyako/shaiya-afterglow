@@ -1,6 +1,6 @@
 # tools/balance: the balance model
 
-A model of how characters fight in NewShaiya, built from the server's own formulas and the game's data, for the balance analysis
+A model of how characters fight in Shaiya Afterglow, built from the server's own formulas and the game's data, for the balance analysis
 (`docs/plans/balance/1-formulas.md` explains every formula; parts 2 and 3 use these tools). Analysis only: nothing here writes to the
 database, the game or the client.
 

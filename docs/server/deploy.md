@@ -1,7 +1,7 @@
 # Deploying on a VPS
 
 How to run the login and game servers on one Linux VPS with PostgreSQL on the same machine. The commands assume Debian or Ubuntu and
-systemd; paths and names (`/opt/newshaiya`, `/etc/newshaiya`, user and database `shaiya` / `newshaiya`) are suggestions.
+systemd; paths and names (`/opt/shaiya-afterglow`, `/etc/shaiya-afterglow`, user and database `shaiya` / `newshaiya`) are suggestions.
 
 What the servers need at runtime:
 
@@ -44,9 +44,9 @@ Seven binaries: `login-server`, `game-server`, the data editor `data-editor` (`d
 ```bash
 sudo apt install build-essential git
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh     # Rust 1.94 or newer (edition 2024; sqlx 0.9 needs it)
-git clone https://github.com/byyako/shaiya-afterglow.git newshaiya && cd newshaiya
+git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
 cargo build --release -p login-server -p game-server -p data-editor
-sudo install -D -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
+sudo install -D -t /opt/shaiya-afterglow/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
 ```
 
 **Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}`. They link against the system
@@ -79,13 +79,13 @@ A system user for the services, and one environment file for both servers and th
 
 ```bash
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin shaiya
-sudo install -d -m 750 -o root -g shaiya /etc/newshaiya
-sudoedit /etc/newshaiya/newshaiya.env
-sudo chown root:shaiya /etc/newshaiya/newshaiya.env && sudo chmod 640 /etc/newshaiya/newshaiya.env
+sudo install -d -m 750 -o root -g shaiya /etc/shaiya-afterglow
+sudoedit /etc/shaiya-afterglow/shaiya-afterglow.env
+sudo chown root:shaiya /etc/shaiya-afterglow/shaiya-afterglow.env && sudo chmod 640 /etc/shaiya-afterglow/shaiya-afterglow.env
 ```
 
 ```bash
-# /etc/newshaiya/newshaiya.env
+# /etc/shaiya-afterglow/shaiya-afterglow.env
 DATABASE_URL=postgres://shaiya:<password>@127.0.0.1:5432/newshaiya
 GAME_SERVER_ID=1
 RUST_LOG=info
@@ -112,7 +112,7 @@ the servers have ever started. A helper that runs one as the `shaiya` user with 
 services:
 
 ```bash
-nsh() { sudo systemd-run --quiet --pty --collect -p User=shaiya -p EnvironmentFile=/etc/newshaiya/newshaiya.env "/opt/newshaiya/bin/$1" "${@:2}"; }
+nsh() { sudo systemd-run --quiet --pty --collect -p User=shaiya -p EnvironmentFile=/etc/shaiya-afterglow/shaiya-afterglow.env "/opt/shaiya-afterglow/bin/$1" "${@:2}"; }
 ```
 
 ```bash
@@ -129,20 +129,20 @@ enforced with `LOGIN_CHECK_VERSION=true`.
 The two servers do not depend on each other: both only need PostgreSQL. The game server reports itself through the database (a heartbeat every
 5 s), and the login server lists it as open while the heartbeat is recent. Logs go to the journal.
 
-`/etc/systemd/system/newshaiya-login.service`:
+`/etc/systemd/system/shaiya-afterglow-login.service`:
 
 ```ini
 [Unit]
-Description=NewShaiya login server
+Description=Shaiya Afterglow login server
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 User=shaiya
 Group=shaiya
-EnvironmentFile=/etc/newshaiya/newshaiya.env
+EnvironmentFile=/etc/shaiya-afterglow/shaiya-afterglow.env
 Environment=NO_COLOR=1
-ExecStart=/opt/newshaiya/bin/login-server
+ExecStart=/opt/shaiya-afterglow/bin/login-server
 LimitNOFILE=65536
 # The login server shuts down cleanly on Ctrl+C (SIGINT) only.
 KillSignal=SIGINT
@@ -157,20 +157,20 @@ PrivateTmp=true
 WantedBy=multi-user.target
 ```
 
-`/etc/systemd/system/newshaiya-game.service`:
+`/etc/systemd/system/shaiya-afterglow-game.service`:
 
 ```ini
 [Unit]
-Description=NewShaiya game server
+Description=Shaiya Afterglow game server
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 User=shaiya
 Group=shaiya
-EnvironmentFile=/etc/newshaiya/newshaiya.env
+EnvironmentFile=/etc/shaiya-afterglow/shaiya-afterglow.env
 Environment=NO_COLOR=1
-ExecStart=/opt/newshaiya/bin/game-server
+ExecStart=/opt/shaiya-afterglow/bin/game-server
 LimitNOFILE=65536
 # SIGTERM (the default) closes every connection the way a lost connection does, saving the players in the world; it waits up to 10 s for that.
 TimeoutStopSec=30
@@ -193,8 +193,8 @@ and its player is saved as on a lost connection, the task starts again after a s
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now newshaiya-login newshaiya-game
-journalctl -u newshaiya-game -f                  # the log; it ends its start with "listening for logins"
+sudo systemctl enable --now shaiya-afterglow-login shaiya-afterglow-game
+journalctl -u shaiya-afterglow-game -f                  # the log; it ends its start with "listening for logins"
 nsh servers list                                 # the heartbeat column shows the game server's last report
 ```
 
@@ -203,7 +203,7 @@ nsh servers list                                 # the heartbeat column shows th
 ## 6b. The data editor
 
 `data-editor` changes the game's data (drops, gold, monster stats, item grades, spawn areas, obelisks, boss groups, portal destinations) without
-SQL. It needs only `DATABASE_URL` (the same file as the servers, `/etc/newshaiya/newshaiya.env`), so it runs on the server machine or anywhere
+SQL. It needs only `DATABASE_URL` (the same file as the servers, `/etc/shaiya-afterglow/shaiya-afterglow.env`), so it runs on the server machine or anywhere
 that reaches the database. It is not a service: run it when the data is edited.
 
 ```bash
@@ -226,7 +226,7 @@ nsh console 1 restart 5                # spawns, obelisks, boss groups and porta
   in `EDITOR_HOSTS`, comma separated), with no login yet: a web page that rebinds its own name to the box is refused (`docs/server/audit.md` R17). It shows the maps drawn from the database (spawn areas, portals, NPCs,
   obelisks, boss spots), the monsters' drop tables and stats, and the draft, History with Undo, and the game servers with Reload and Restart.
   On a VPS reach it through a tunnel, never by opening the port: `ssh -L 30890:127.0.0.1:30890 user@vps`, then browse `http://127.0.0.1:30890`. Run it
-  only while data is being edited, or as a unit like the servers (`ExecStart=/opt/newshaiya/bin/data-editor serve`, same `EnvironmentFile`); it holds no
+  only while data is being edited, or as a unit like the servers (`ExecStart=/opt/shaiya-afterglow/bin/data-editor serve`, same `EnvironmentFile`); it holds no
   state of its own, so stopping it loses nothing (the draft is in the database). **Map pictures**: "Set picture…" on each map, or
   `data-editor images import <folder>` with `<map id>.png` (or `.jpg`), `<map id>.json` (`{"x1", "z1", "x2", "z2"}`) and `names.json`.
 - **Every game server sharing the database** takes `reload` and `restart` from the editor through PostgreSQL `NOTIFY`, as the `console` tool does.
@@ -260,9 +260,9 @@ between the two (some mobile and carrier-grade NAT connections) cannot enter; `G
 ## 9. Updating
 
 ```bash
-cd newshaiya && git pull && cargo build --release -p login-server -p game-server -p data-editor
-sudo install -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
-sudo systemctl restart newshaiya-game newshaiya-login
+cd shaiya-afterglow && git pull && cargo build --release -p login-server -p game-server -p data-editor
+sudo install -t /opt/shaiya-afterglow/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
+sudo systemctl restart shaiya-afterglow-game shaiya-afterglow-login
 ```
 
 New migrations run when the servers start. Players in the world are saved on the game server's stop and must log in again.
@@ -274,14 +274,14 @@ The `public` schema is the player data; `defs` and `world` can always be restore
 section 6b is a second copy of the edits. A daily dump, kept for two weeks:
 
 ```bash
-sudo install -d -o postgres /var/backups/newshaiya
-sudo tee /etc/cron.daily/newshaiya-backup >/dev/null <<'EOF'
+sudo install -d -o postgres /var/backups/shaiya-afterglow
+sudo tee /etc/cron.daily/shaiya-afterglow-backup >/dev/null <<'EOF'
 #!/bin/sh
-cd /var/backups/newshaiya || exit 1
+cd /var/backups/shaiya-afterglow || exit 1
 runuser -u postgres -- pg_dump -n public -n edits -Fc newshaiya > "players-$(date +%F).dump"
 find . -name 'players-*.dump' -mtime +14 -delete
 EOF
-sudo chmod 755 /etc/cron.daily/newshaiya-backup
+sudo chmod 755 /etc/cron.daily/shaiya-afterglow-backup
 ```
 
 Restore into an empty database with `pg_restore -d newshaiya --no-owner players-<date>.dump`, together with the game data dump. Copy the

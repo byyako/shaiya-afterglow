@@ -2,7 +2,7 @@
 
 Built (parts A and B); the console commands are described in `docs/original/operator-console.md`, the rest in this plan's "as built" sections.
 
-The operator of a NewShaiya server wants to change the game's data without writing SQL: pick a map, see the monsters spawned on it and
+The operator of a Shaiya Afterglow server wants to change the game's data without writing SQL: pick a map, see the monsters spawned on it and
 what each drops, and change it; move or refill spawn areas; change obelisks, boss groups and where portals lead; tune monsters. Edits
 must survive a fresh import of the original files, be reviewable and undoable, and work for **other people hosting the server**, who
 have the binaries and a database but no git and no Python. This plan adds a third program, `data-editor`, with a web page and a drawn
@@ -41,7 +41,7 @@ respawn codes), `docs/original/obelisks.md`, `docs/original/portals.md`, `docs/o
    another server, sharing). On this dev box the export file may be kept in the repo (`EDITOR_EXPORT_FILE`, section 5).
 8. **Access, for now, like the live-test page**: no login; only loopback, private and Tailscale addresses may connect. Later: sign in
    with a GM account of the accounts table (section 10).
-9. **Later, on the roadmap**: converting an existing original server (its databases and files) to NewShaiya (`docs/plans/roadmap.md`).
+9. **Later, on the roadmap**: converting an existing original server (its databases and files) to Shaiya Afterglow (`docs/plans/roadmap.md`).
 
 ## 2. What can be edited
 
@@ -322,7 +322,7 @@ like the others from the `console` tool, from the editor through `NOTIFY`, and i
 The server side never reads the client. The client side answers queue entry 8 (`docs/testing/client-research-queue.md`): where the
 extracted client keeps a picture of each map (minimap or the big map window), which picture is which map id, how `game.exe` places a
 world position on it (the rectangle and the axis directions, with addresses), and each map's name as the client shows it. It converts
-the pictures to PNG into `NewShaiya/data/map-images/` (git-ignored): `<map id>.png`, `<map id>.json` (`{"x1", "z1", "x2", "z2"}` as in
+the pictures to PNG into `data/map-images/` (git-ignored): `<map id>.png`, `<map id>.json` (`{"x1", "z1", "x2", "z2"}` as in
 `edits.map_images`), `names.json`, and a `README.txt` naming each source file. `data-editor images import data/map-images` then loads
 them. Until then the page draws the grid alone. Other operators upload their own pictures or import such a folder.
 

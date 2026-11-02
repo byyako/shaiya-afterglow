@@ -152,13 +152,13 @@ rollback, the wipe script and one login-to-world run on the VPS have each been d
 
 ## Later, for other operators
 
-Raised by the maintainer (2026-10-22): people already running the original server files should be able to move to NewShaiya.
+Raised by the maintainer (2026-10-22): people already running the original server files should be able to move to Shaiya Afterglow.
 
 **2026-10-26: the maintainer wants this fully discussed before it is specified** (`docs/plans/ideas.md` section 5).
 
 - **Converting an existing original server**: its game definitions (`PS_GameDefs`), its world files (`Data/`: `Map.ini`, the svmaps,
   `Obelisk.ini`, `ItemCreate.ini`, `NpcQuest.SData`, …) and its players (`PS_UserData` accounts, `PS_GameData` characters, items,
-  skills, quests, guilds, banks, and the rest the new server keeps) into a NewShaiya database. Today `tools/defs/` (an MSSQL export and
+  skills, quests, guilds, banks, and the rest the new server keeps) into a Shaiya Afterglow database. Today `tools/defs/` (an MSSQL export and
   `load_into_postgres.py`) and `tools/world/import.py` do the first two as dev tools (Python, the dev container); the conversion needs
   them packaged for an operator, the player data mapped table by table (`docs/original/database-notes.md`), and a dry run that reports what
   cannot be carried over. Their own edits then carry over as data, and later ones go through the data editor

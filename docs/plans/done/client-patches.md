@@ -147,7 +147,7 @@ refuses a dirty manifest.
    names, the Mini Sun EXP Stone's icon and their text; each one used shows its buff with icon 225, its name and text and one hour; the
    live test of section 51 of `docs/testing/live-test-checklist.md` (kill counts) can then run. Spot-check a few unchanged records (100/108,
    a weapon, a potion) look as before.
-5. **Report**: `docs/client/client-patch-NNNN.md` in NewShaiya (what was run, the hashes of the patch and signature, the staging and
+5. **Report**: `docs/client/client-patch-NNNN.md` in Shaiya Afterglow (what was run, the hashes of the patch and signature, the staging and
    in-game results); the patch, signature and `UpdateVersion.ini` stay in the client repo (or its release folder) until serving starts.
    The server side then records the patch in section 9.
 

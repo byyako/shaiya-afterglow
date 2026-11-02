@@ -25,7 +25,7 @@
 From a fresh clone:
 
 ```bash
-git clone https://github.com/byyako/shaiya-afterglow.git newshaiya && cd newshaiya
+git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
 cp .env.example .env          # then set the passwords in it
 tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 ```

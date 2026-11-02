@@ -1,4 +1,4 @@
-# NewShaiya
+# Shaiya Afterglow
 
 [![CI](https://github.com/byyako/shaiya-afterglow/actions/workflows/ci.yml/badge.svg)](https://github.com/byyako/shaiya-afterglow/actions/workflows/ci.yml)
 
@@ -73,7 +73,7 @@ world.
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/byyako/shaiya-afterglow.git newshaiya && cd newshaiya
+git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
 cp .env.example .env        # then set the passwords in it (letters and digits are safest in the URL)
 ```
 

@@ -2,7 +2,7 @@ Server-side working notes moved out of the published client pages; never in the 
 
 ## From CLIENT-FACTS.md
 
-## Server side: acted on (NewShaiya)
+## Server side: acted on (Shaiya Afterglow)
 
 - **Item use** (`docs/original/item-use.md`, built): the `0x050A`/`0x0557` facts, the bag-0 failure, the Warehouse
   Recall Rune's window and buff, and the `0x0214`/`0x0215`/`0x021B` counters are folded into its section 10a; they agree with what was built.
