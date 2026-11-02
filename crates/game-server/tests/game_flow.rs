@@ -1898,14 +1898,24 @@ async fn die(client: &mut Client, ctx: &Context<Arc<MemoryBackend>>, id: u32) {
         ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
     }
     client.write(step(598.0, 1779.0)).await;
-    client.write(shaiya_proto::encode(cp::OP_ATTACK_MOB, &1u32.to_le_bytes())).await;
+    let attack = shaiya_proto::encode(cp::OP_ATTACK_MOB, &1u32.to_le_bytes());
+    client.write(attack.clone()).await;
     let live = ctx.data.live();
     let loot = (&live.drops, &ctx.data.items);
     let mut rolls = [0, 99].into_iter().cycle();
-    // A monster going home after the last kill cannot be hit; the player's next swing after it is home makes it fight again.
+    // A monster going home after the last kill cannot be hit, and the swing that found it so may not lead to a fight; while the
+    // monster is not fighting this player the attack is sent again, as a player clicks again. The wait is real time, not a count of
+    // passes, so a slow machine (a busy CI runner) gets as long as it needs.
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    let mut last_attack = std::time::Instant::now();
     let mut later = std::time::Instant::now();
-    for _ in 0..200 {
+    while std::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(20)).await;
+        let fighting = ctx.zones.mob(1, 1).is_some_and(|m| m.state == game_server::mobs::MobState::Fighting(id));
+        if !fighting && last_attack.elapsed() >= Duration::from_millis(500) {
+            client.write(attack.clone()).await;
+            last_attack = std::time::Instant::now();
+        }
         later += Duration::from_secs(5);
         ctx.zones.mob_fight(later, &ctx.data.world, &ctx.data.live().mobs, loot, &mut || rolls.next().unwrap());
         if ctx.zones.health(1, id) == Some([0; 3]) {

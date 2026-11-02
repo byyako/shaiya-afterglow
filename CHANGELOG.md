@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**Build and tests**
+- `rust-version = "1.94"` in the workspace, so an older Rust stops with a clear message instead of a build error in `sqlx`.
+- The death helper of `game_flow`'s tests sends the attack again while the monster is not fighting the player and waits by the
+  clock, not by a count of passes: a busy CI runner failed `the_death_windows_resurrection_runes` once.
+
 **Documentation**
 - Building needs Rust 1.94 or newer (`sqlx` 0.9), not 1.85 as the README, the deploy guide and `tools/setup.sh` said.
 - `docs/server/settings.md`: how on/off values and numbers are read, the ranges, `NEWSHAIYA_PASSWORD` and the test variables; the run
