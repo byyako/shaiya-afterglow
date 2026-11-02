@@ -287,7 +287,7 @@ async fn export_then_import_replace_gives_the_same_export() {
 
     let plain = db.editor.export(false).await.unwrap();
     let with_images = db.editor.export(true).await.unwrap();
-    assert_eq!(plain["format"], "newshaiya-edits");
+    assert_eq!(plain["format"], "shaiya-afterglow-edits");
     assert_eq!(plain["map_images"], json!([]));
     assert_eq!(with_images["map_images"][0]["image"], "iVBORw0K", "base64 without line breaks");
     assert_eq!(db.editor.export(false).await.unwrap(), plain, "two exports of the same edits are identical");

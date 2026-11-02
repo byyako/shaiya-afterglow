@@ -27,7 +27,7 @@ nearest around (740, 1815).
 
 Logs: `logs/login-server.log` and `logs/game-server.log` (debug level, so the refusals show), newest at the bottom; `grep` them for the
 quoted text. The game also writes what the original's `ps_gameLog` wrote into the database: `U=$(. ./.env; echo "$DATABASE_URL" | sed -E
-'s#@[^/]+/#@localhost:5432/#'); docker exec -i newshaiya-postgres psql "$U" -c "SELECT at, character_name, action, value1, value2, value3,
+'s#@[^/]+/#@localhost:5432/#'); docker exec -i shaiya-afterglow-postgres psql "$U" -c "SELECT at, character_name, action, value1, value2, value3,
 text1 FROM game_log WHERE character_name IN ('sefewfe','PISS') ORDER BY id DESC LIMIT 40"` (actions: 232 enter and leave, 111 pick up, 161
 gold picked up, 113 buy, 114 sell, 121 and 122 warehouse, 116 and 164 trade giver, 115 and 163 trade receiver).
 

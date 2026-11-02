@@ -32,7 +32,7 @@ Status words: **confirmed** = read in the code (address given). `CUser` offsets 
 
 From `ps_game.exe` and `ps_dbAgent.exe` (EP4.5, with their PDB names), read in the Ghidra decompile (REA) and the disassembly
 (`objdump`, names from `docs/original/symbols/ps_game.tsv` and `ps_dbAgent.tsv`); the stored procedures and tables of the restored original
-databases (`PS_GameData`, `PS_UserData`, `PS_GameDefs`, `PS_Billing` in the `newshaiya-mssql` container); packet layouts from the PDB
+databases (`PS_GameData`, `PS_UserData`, `PS_GameDefs`, `PS_Billing` in the `shaiya-afterglow-mssql` container); packet layouts from the PDB
 (`docs/original/symbols/ps_game.packets.txt`). Client side: `docs/client/item-mall.md`, `docs/client/CLIENT-FACTS.md` (`0xB103`) and
 `docs/client/skill-monster-sdata-vs-defs.md` ("The item mall"; `Cash.SData` against `defs.product_list`). Nothing was executed. `CUser` offsets
 are the code's (`docs/original/small-items.md`). Sizes include the opcode.

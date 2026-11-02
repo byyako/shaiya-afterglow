@@ -9,7 +9,7 @@ Structure only; this file holds no player data. Full column/index/procedure list
 - Collation: `Chinese_PRC_Stroke_CI_AS`. Text columns hold Korean, CP949 bytes read through a Chinese collation, so names will look
   garbled unless re-decoded. Expect to convert when exporting.
 - Restored into SQL Server 2022 Developer (Docker image `mcr.microsoft.com/mssql/server:2022-latest`, container `MSSQL_CONTAINER`,
-  default `newshaiya-mssql`, localhost only, data in the Docker volume `MSSQL_VOLUME`, default `newshaiya-mssql-data`, the SA password
+  default `shaiya-afterglow-mssql`, localhost only, data in the Docker volume `MSSQL_VOLUME`, default `shaiya-afterglow-mssql-data`, the SA password
   `MSSQL_SA_PASSWORD` in `.env` (see `.env.example`), memory capped at 2.2 GB). SQL 2022
   accepted the 2005 backups and upgraded them. Script: `tools/restore_backups.sh`.
 - Gotcha: the server reports "ready for client connections" well before logins work (system databases are still upgrading).
@@ -95,7 +95,7 @@ These are community findings, not verified against the binaries.
 `items.itemid`, `mobs.mobid` and `product_list.productcode`. The schema is `db/defs/schema.sql` (generated, committed). The data is proprietary and stays in
 the database and in git-ignored `data/`.
 
-Reproduce (needs the SQL Server and PostgreSQL containers, `MSSQL_CONTAINER` and `PG_CONTAINER`, defaults `newshaiya-mssql` and `newshaiya-postgres`):
+Reproduce (needs the SQL Server and PostgreSQL containers, `MSSQL_CONTAINER` and `PG_CONTAINER`, defaults `shaiya-afterglow-mssql` and `shaiya-afterglow-postgres`):
 
 ```
 python3 tools/defs/generate.py docs/original/db/PS_GameDefs.columns.txt db/defs/schema.sql tools/defs/export_queries.tsv

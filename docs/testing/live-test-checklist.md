@@ -72,7 +72,7 @@ nearest around (740, 1815).
 
 Logs: `logs/login-server.log` and `logs/game-server.log` (debug level, so the refusals show), newest at the bottom; `grep` them for the
 quoted text. The game also writes what the original's `ps_gameLog` wrote into the database: `U=$(. ./.env; echo "$DATABASE_URL" | sed -E
-'s#@[^/]+/#@localhost:5432/#'); docker exec -i newshaiya-postgres psql "$U" -c "SELECT at, character_name, action, value1, value2, value3,
+'s#@[^/]+/#@localhost:5432/#'); docker exec -i shaiya-afterglow-postgres psql "$U" -c "SELECT at, character_name, action, value1, value2, value3,
 text1 FROM game_log WHERE character_name IN ('sefewfe','PISS') ORDER BY id DESC LIMIT 40"` (actions: 232 enter and leave, 111 pick up, 161
 gold picked up, 113 buy, 114 sell, 121 and 122 warehouse, 116 and 164 trade giver, 115 and 163 trade receiver).
 
@@ -1326,7 +1326,7 @@ the fights (section 37's TestVail as staff, or TestRanger raised to about level 
 
 `docs/original/game-log.md`. The game server writes what the original's `ps_game` sent to `ps_gameLog` straight into PostgreSQL (`game_log`
 for `ActionLog`, `chat_log` for `ChatLog`; migration 0029, runs at start). The client has nothing to show: you do ordinary things, and the
-next session reads the rows (`docker exec newshaiya-postgres psql … "SELECT action, value1, value2, value3, text1 … FROM game_log
+next session reads the rows (`docker exec shaiya-afterglow-postgres psql … "SELECT action, value1, value2, value3, text1 … FROM game_log
 ORDER BY id DESC LIMIT 50"`) and checks them against this list. Use two clients where it says so (any two characters of one country; one of them staff for the staff item). Every row
 has the character's name and the time, so the rows are found from those. Nothing else is needed: the log is on by default (`GAME_LOG`,
 `GAME_CHAT_LOG`).

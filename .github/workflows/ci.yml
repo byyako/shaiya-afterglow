@@ -16,18 +16,18 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: newshaiya
+          POSTGRES_DB: shaiya
           POSTGRES_USER: shaiya
           POSTGRES_PASSWORD: ci-only
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U shaiya -d newshaiya"
+          --health-cmd "pg_isready -U shaiya -d shaiya"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgres://shaiya:ci-only@localhost:5432/newshaiya
+      DATABASE_URL: postgres://shaiya:ci-only@localhost:5432/shaiya
     steps:
       - uses: actions/checkout@v5
       - name: links and paths

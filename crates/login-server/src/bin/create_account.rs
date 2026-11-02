@@ -2,8 +2,8 @@
 //!
 //! usage: create_account <username> [status]
 //! Status uses the original values: 0 normal account (default), 16 full GM, 32/48/64/80 lesser GM levels.
-//! The password is read from the NEWSHAIYA_PASSWORD environment variable, or from
-//! standard input if that is not set, so it does not appear in the process list.
+//! The password is read from the SHAIYA_PASSWORD environment variable (NEWSHAIYA_PASSWORD, its old name, still works), or from
+//! standard input if neither is set, so it does not appear in the process list.
 
 use std::io::BufRead;
 
@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let username = args.next().context("usage: create_account <username> [status]")?;
     let status: i16 = args.next().map(|p| p.parse()).transpose().context("status must be a number such as 0 or 16")?.unwrap_or(0);
 
-    let password = match std::env::var("NEWSHAIYA_PASSWORD") {
+    let password = match std::env::var("SHAIYA_PASSWORD").or_else(|_| std::env::var("NEWSHAIYA_PASSWORD")) {
         Ok(password) => password,
         Err(_) => {
             eprintln!("password for {username}:");

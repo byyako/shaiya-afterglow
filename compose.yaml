@@ -9,11 +9,11 @@
 services:
   postgres:
     image: postgres:16
-    container_name: ${PG_CONTAINER:-newshaiya-postgres}
+    container_name: ${PG_CONTAINER:-shaiya-afterglow-postgres}
     restart: unless-stopped
     network_mode: bridge
     environment:
-      POSTGRES_DB: newshaiya
+      POSTGRES_DB: shaiya
       POSTGRES_USER: shaiya
       POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in .env (the password of DATABASE_URL)}
     ports:
@@ -24,7 +24,7 @@ services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     profiles: [import]
-    container_name: ${MSSQL_CONTAINER:-newshaiya-mssql}
+    container_name: ${MSSQL_CONTAINER:-shaiya-afterglow-mssql}
     network_mode: bridge
     environment:
       ACCEPT_EULA: "Y"
@@ -40,6 +40,6 @@ services:
 
 volumes:
   pgdata:
-    name: ${PG_VOLUME:-newshaiya-pgdata}
+    name: ${PG_VOLUME:-shaiya-afterglow-pgdata}
   mssql-data:
-    name: ${MSSQL_VOLUME:-newshaiya-mssql-data}
+    name: ${MSSQL_VOLUME:-shaiya-afterglow-mssql-data}

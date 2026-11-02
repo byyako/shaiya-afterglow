@@ -4,7 +4,7 @@ A model of how characters fight in Shaiya Afterglow, built from the server's own
 (`docs/plans/balance/1-formulas.md` explains every formula; parts 2 and 3 use these tools). Analysis only: nothing here writes to the
 database, the game or the client.
 
-Python 3.11 or later, standard library only. The data comes read-only from the dev database through `docker exec newshaiya-postgres
+Python 3.11 or later, standard library only. The data comes read-only from the dev database through `docker exec shaiya-afterglow-postgres
 psql` (as `tools/defs/verify.py` does) and is cached as CSV in `data/balance/cache/` (git-ignored); `--refresh` reads it again.
 
 ## Files

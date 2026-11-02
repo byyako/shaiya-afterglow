@@ -24,7 +24,7 @@ tools/defs/describe_mssql.sh [out dir]        # default: this folder
 ```
 
 It runs read-only catalogue queries (`sys.tables`, `sys.columns`, `sys.indexes`, `sys.procedures`, `sys.partitions`) with `sqlcmd` inside the
-SQL Server container (`MSSQL_CONTAINER`, default `newshaiya-mssql`; `tools/dbconn.sh`), once per user database. The container must run
+SQL Server container (`MSSQL_CONTAINER`, default `shaiya-afterglow-mssql`; `tools/dbconn.sh`), once per user database. The container must run
 with the ten databases restored.
 
 ## Proof

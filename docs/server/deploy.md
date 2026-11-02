@@ -1,7 +1,7 @@
 # Deploying on a VPS
 
 How to run the login and game servers on one Linux VPS with PostgreSQL on the same machine. The commands assume Debian or Ubuntu and
-systemd; paths and names (`/opt/shaiya-afterglow`, `/etc/shaiya-afterglow`, user and database `shaiya` / `newshaiya`) are suggestions.
+systemd; paths and names (`/opt/shaiya-afterglow`, `/etc/shaiya-afterglow`, user and database `shaiya` / `shaiya`) are suggestions.
 
 What the servers need at runtime:
 
@@ -29,7 +29,7 @@ dump's `pg_dump` or newer.
 ```bash
 sudo apt install postgresql
 sudo -u postgres createuser -P shaiya            # asks for the password
-sudo -u postgres createdb -O shaiya newshaiya
+sudo -u postgres createdb -O shaiya shaiya
 ```
 
 The Debian package listens on localhost only; keep it that way.
@@ -55,16 +55,16 @@ which are older). If the VPS is older, build there, or build in a container of t
 
 ## 3. The game data
 
-On the machine with the working database (with the README's setup, it runs in the `newshaiya-postgres` container):
+On the machine with the working database (with the README's setup, it runs in the `shaiya-afterglow-postgres` container):
 
 ```bash
-docker exec newshaiya-postgres pg_dump -U shaiya -n defs -n world -Fc newshaiya > gamedata.dump    # about 1.2 MB
+docker exec shaiya-afterglow-postgres pg_dump -U shaiya -n defs -n world -Fc shaiya > gamedata.dump    # about 1.2 MB
 ```
 
-Without Docker: `pg_dump -h <host> -p <port> -U shaiya -n defs -n world -Fc newshaiya > gamedata.dump`. Copy it to the VPS and restore:
+Without Docker: `pg_dump -h <host> -p <port> -U shaiya -n defs -n world -Fc shaiya > gamedata.dump`. Copy it to the VPS and restore:
 
 ```bash
-pg_restore -h 127.0.0.1 -U shaiya -d newshaiya --no-owner gamedata.dump
+pg_restore -h 127.0.0.1 -U shaiya -d shaiya --no-owner gamedata.dump
 ```
 
 The migrations do not touch `defs` or `world`, so the order of this step and the first start does not matter. To update the game data later,
@@ -86,7 +86,7 @@ sudo chown root:shaiya /etc/shaiya-afterglow/shaiya-afterglow.env && sudo chmod 
 
 ```bash
 # /etc/shaiya-afterglow/shaiya-afterglow.env
-DATABASE_URL=postgres://shaiya:<password>@127.0.0.1:5432/newshaiya
+DATABASE_URL=postgres://shaiya:<password>@127.0.0.1:5432/shaiya
 GAME_SERVER_ID=1
 RUST_LOG=info
 ```
@@ -278,11 +278,11 @@ sudo install -d -o postgres /var/backups/shaiya-afterglow
 sudo tee /etc/cron.daily/shaiya-afterglow-backup >/dev/null <<'EOF'
 #!/bin/sh
 cd /var/backups/shaiya-afterglow || exit 1
-runuser -u postgres -- pg_dump -n public -n edits -Fc newshaiya > "players-$(date +%F).dump"
+runuser -u postgres -- pg_dump -n public -n edits -Fc shaiya > "players-$(date +%F).dump"
 find . -name 'players-*.dump' -mtime +14 -delete
 EOF
 sudo chmod 755 /etc/cron.daily/shaiya-afterglow-backup
 ```
 
-Restore into an empty database with `pg_restore -d newshaiya --no-owner players-<date>.dump`, together with the game data dump. Copy the
+Restore into an empty database with `pg_restore -d shaiya --no-owner players-<date>.dump`, together with the game data dump. Copy the
 backups off the VPS as well.

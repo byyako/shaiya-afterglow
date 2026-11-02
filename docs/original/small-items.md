@@ -34,7 +34,7 @@ account id. `CItem`: `+0x30` the definition, `+0x40` type, `+0x41` type id, `+0x
 
 From `ps_game.exe` and `ps_dbAgent.exe` (EP4.5, with their PDB names), read in the Ghidra decompile (REA) and the disassembly
 (`tools/disasm.py`, names from `docs/original/symbols/ps_game.tsv` and `ps_dbAgent.tsv`); struct layouts from the PDB (`tools/pdb_types.py`,
-`docs/original/symbols/ps_game.packets.txt`); stored procedures from the restored `PS_GameData` (the `newshaiya-mssql` container). Client side:
+`docs/original/symbols/ps_game.packets.txt`); stored procedures from the restored `PS_GameData` (the `shaiya-afterglow-mssql` container). Client side:
 `docs/client/CLIENT-FACTS.md` ("Answers to the live test", "fixes.dll changes the server must follow"),
 `docs/client/gm-and-commands.md` ("Answers for the server's live test") and `docs/client/packet-opportunities.md`, not repeated
 here except where the server's side adds to them or disagrees.

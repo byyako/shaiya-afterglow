@@ -2,9 +2,10 @@
 
 - `.env` at the repository root is read for any variable not already in the environment (`KEY=value` lines, `#` comments,
   optional quotes), as the servers read it.
-- `PG_CONTAINER` (default `newshaiya-postgres`) and `MSSQL_CONTAINER` (default `newshaiya-mssql`) name the containers.
+- `PG_CONTAINER` (default `shaiya-afterglow-postgres`) and `MSSQL_CONTAINER` (default `shaiya-afterglow-mssql`) name the containers;
+  an unset one falls back to the project's old name (`newshaiya-postgres`, `newshaiya-mssql`) when only that container exists.
 - The PostgreSQL user, password, host, port and database come from `DATABASE_URL`.
-- `NEWSHAIYA_PSQL` = `docker` | `host` | `auto` (default `auto`): `docker` runs psql inside `PG_CONTAINER`; `host` runs the host's
+- `SHAIYA_PSQL` (old name `NEWSHAIYA_PSQL`) = `docker` | `host` | `auto` (default `auto`): `docker` runs psql inside `PG_CONTAINER`; `host` runs the host's
   `psql "$DATABASE_URL"`; `auto` uses `docker` when that container is running, else `host` when `psql` is on the PATH.
 
 `tools/dbconn.sh` follows the same rules for the shell scripts.
@@ -43,8 +44,20 @@ def _load_env() -> None:
 
 _load_env()
 
-PG_CONTAINER = os.environ.get("PG_CONTAINER") or "newshaiya-postgres"
-MSSQL_CONTAINER = os.environ.get("MSSQL_CONTAINER") or "newshaiya-mssql"
+
+
+def _default_container(new: str, old: str) -> str:
+    """The container name when the variable is unset: the new default, or the old one if only that container exists."""
+    if shutil.which("docker"):
+        def exists(name: str) -> bool:
+            return subprocess.run(["docker", "inspect", name], capture_output=True).returncode == 0
+        if not exists(new) and exists(old):
+            return old
+    return new
+
+
+PG_CONTAINER = os.environ.get("PG_CONTAINER") or _default_container("shaiya-afterglow-postgres", "newshaiya-postgres")
+MSSQL_CONTAINER = os.environ.get("MSSQL_CONTAINER") or _default_container("shaiya-afterglow-mssql", "newshaiya-mssql")
 
 
 def database_url() -> str:
@@ -74,13 +87,13 @@ def _container_running(name: str) -> bool:
 
 
 def psql_mode() -> str:
-    """`docker` or `host`, by NEWSHAIYA_PSQL."""
+    """`docker` or `host`, by SHAIYA_PSQL (or its old name NEWSHAIYA_PSQL)."""
     global _mode_cache
     if _mode_cache:
         return _mode_cache
-    mode = (os.environ.get("NEWSHAIYA_PSQL") or "auto").strip().lower()
+    mode = (os.environ.get("SHAIYA_PSQL") or os.environ.get("NEWSHAIYA_PSQL") or "auto").strip().lower()
     if mode not in ("docker", "host", "auto"):
-        sys.exit(f"NEWSHAIYA_PSQL={mode!r}: use docker, host or auto")
+        sys.exit(f"SHAIYA_PSQL={mode!r}: use docker, host or auto")
     if mode == "auto":
         if _container_running(PG_CONTAINER):
             mode = "docker"
@@ -89,7 +102,7 @@ def psql_mode() -> str:
         else:
             sys.exit(f"cannot reach PostgreSQL: the container {PG_CONTAINER!r} is not running and psql is not on the PATH. "
                      f"Start the container (docker compose up -d postgres; PG_CONTAINER names it) or install the PostgreSQL client "
-                     f"and set NEWSHAIYA_PSQL=host")
+                     f"and set SHAIYA_PSQL=host")
     _mode_cache = mode
     return mode
 

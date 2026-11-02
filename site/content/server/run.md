@@ -35,7 +35,7 @@ tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 Then an account and the game server's entry in the server list:
 
 ```bash
-NEWSHAIYA_PASSWORD='secret123' target/release/create_account myname 16   # 16 = full GM; leave it out for a player
+SHAIYA_PASSWORD='secret123' target/release/create_account myname 16   # 16 = full GM; leave it out for a player
 target/release/servers add 1 MyServer 203.0.113.10                        # id, name, the address clients connect to
 ```
 

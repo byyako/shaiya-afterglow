@@ -278,7 +278,7 @@ async fn the_export_and_the_registry_and_the_guard() {
     let Some(db) = Db::create().await else { return };
     let api = Api::new(&db);
     let export = api.get("/api/export").await;
-    assert_eq!(export["format"], "newshaiya-edits");
+    assert_eq!(export["format"], "shaiya-afterglow-edits");
     let targets = api.get("/api/targets").await;
     assert!(targets.as_array().unwrap().iter().any(|t| t["name"] == "spawn_area" && t["can_add"] == true));
     assert_eq!(api.get("/api/status").await["draft_lines"], 0);

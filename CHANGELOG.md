@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Renamed**
+- The project's names inside the setup follow the repository: the containers are `shaiya-afterglow-postgres` and
+  `shaiya-afterglow-mssql`, the volumes `shaiya-afterglow-pgdata` and `shaiya-afterglow-mssql-data`, the compose database is `shaiya`
+  (was `newshaiya`; the `DATABASE_URL` of `.env.example` follows), the variables are `SHAIYA_PASSWORD` and `SHAIYA_PSQL`, and the
+  edits export is `shaiya-afterglow-edits`. The old variable names and old edits files are still read, and the tools find a
+  container under its old name when only that one exists. **A setup made before this keeps its data under the old names:** put
+  `PG_CONTAINER`, `PG_VOLUME` and the old database name in its `.env`, or dump and restore into the new one.
+
 **Build and tests**
 - `rust-version = "1.94"` in the workspace, so an older Rust stops with a clear message instead of a build error in `sqlx`.
 - The death helper of `game_flow`'s tests sends the attack again while the monster is not fighting the player and waits by the

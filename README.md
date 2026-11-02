@@ -62,7 +62,7 @@ IPv4 address.
 ## Setting up from a fresh clone
 
 The commands run from the repository root. The import scripts find the databases through `.env`: `DATABASE_URL`, and the
-container names `PG_CONTAINER` and `MSSQL_CONTAINER` (default `newshaiya-postgres` and `newshaiya-mssql`, the names below;
+container names `PG_CONTAINER` and `MSSQL_CONTAINER` (default `shaiya-afterglow-postgres` and `shaiya-afterglow-mssql`, the names below;
 `docs/server/settings.md`, "Tools").
 
 **Or all at once:** after step 1, `tools/setup.sh <PSM_Data folder> <PS_Game/Data folder>` runs steps 2 to 5 with `compose.yaml`
@@ -91,9 +91,9 @@ or, without the compose file:
 
 ```bash
 set -a; . ./.env; set +a
-docker run -d --name newshaiya-postgres --restart unless-stopped \
-  -e POSTGRES_DB=newshaiya -e POSTGRES_USER=shaiya -e POSTGRES_PASSWORD="$PG_PASSWORD" \
-  -p 127.0.0.1:5433:5432 -v newshaiya-pgdata:/var/lib/postgresql/data postgres:16
+docker run -d --name shaiya-afterglow-postgres --restart unless-stopped \
+  -e POSTGRES_DB=shaiya -e POSTGRES_USER=shaiya -e POSTGRES_PASSWORD="$PG_PASSWORD" \
+  -p 127.0.0.1:5433:5432 -v shaiya-afterglow-pgdata:/var/lib/postgresql/data postgres:16
 ```
 
 The first start takes a few seconds to create the database.
@@ -125,22 +125,22 @@ or without it:
 
 ```bash
 set -a; . ./.env; set +a
-docker run -d --name newshaiya-mssql \
+docker run -d --name shaiya-afterglow-mssql \
   -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" -e MSSQL_MEMORY_LIMIT_MB=1400 \
-  -p 127.0.0.1:14333:1433 -v /path/to/PSM_Data:/backups:ro -v newshaiya-mssql-data:/var/opt/mssql \
+  -p 127.0.0.1:14333:1433 -v /path/to/PSM_Data:/backups:ro -v shaiya-afterglow-mssql-data:/var/opt/mssql \
   mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-Then (with other container names, put `$MSSQL_CONTAINER` in place of `newshaiya-mssql`):
+Then (with other container names, put `$MSSQL_CONTAINER` in place of `shaiya-afterglow-mssql`):
 
 ```bash
 # wait a minute or two: "An error occurred while evaluating the password" or "Login failed" means it is still starting
-docker cp tools/restore_backups.sh newshaiya-mssql:/tmp/ && docker exec newshaiya-mssql bash /tmp/restore_backups.sh   # about 20 minutes
+docker cp tools/restore_backups.sh shaiya-afterglow-mssql:/tmp/ && docker exec shaiya-afterglow-mssql bash /tmp/restore_backups.sh   # about 20 minutes
 tools/defs/export_from_mssql.sh                                          # to data/defs-export/ (git-ignored)
 python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
 python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt   # row counts and sums against SQL Server
 tools/defs/additions.sh                                                  # the operator's edits (and, with --with-additions, the server's own extra rows: docs/server/deviations.md section 1)
-docker compose stop mssql                                                # or docker stop newshaiya-mssql; docker rm once the import is checked
+docker compose stop mssql                                                # or docker stop shaiya-afterglow-mssql; docker rm once the import is checked
 ```
 
 `load_into_postgres.py` decodes the text columns as GBK, the original database's code page, and checks that every value encodes back to
@@ -159,7 +159,7 @@ editing one of those files, then restart the game server.
 ### 6. An account and a game server entry
 
 ```bash
-NEWSHAIYA_PASSWORD='secret123' target/release/create_account myname 16    # 16 = full GM; leave it out (or 0) for a player
+SHAIYA_PASSWORD='secret123' target/release/create_account myname 16    # 16 = full GM; leave it out (or 0) for a player
 target/release/servers add 1 MyServer 203.0.113.10                         # id, name, the address clients connect to
 ```
 
@@ -211,7 +211,7 @@ For a public server on a VPS (systemd units, firewall, backups, updates, copying
 The tools read `.env` like the servers.
 
 ```bash
-target/release/create_account <name> [status]          # password from NEWSHAIYA_PASSWORD; status 16 = full GM
+target/release/create_account <name> [status]          # password from SHAIYA_PASSWORD; status 16 = full GM
 target/release/servers list | add <id> <name> <ipv4> [capacity] [version] | remove <id> | enable <id> | disable <id>
 target/release/mall points <user> add 1000             # item mall points; also: show, premium <user> <0-3> [days], deliver <user> <code>
 target/release/console 1 info                          # the operator console of game server 1

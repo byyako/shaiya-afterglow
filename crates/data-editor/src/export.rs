@@ -13,7 +13,9 @@ use sqlx::{AssertSqlSafe, PgConnection};
 use crate::apply::{Report, apply_all};
 use crate::store::{Editor, refuse};
 
-pub const FORMAT: &str = "newshaiya-edits";
+pub const FORMAT: &str = "shaiya-afterglow-edits";
+/// The name files carried before the project was renamed; still read on import.
+const OLD_FORMAT: &str = "newshaiya-edits";
 pub const VERSION: i64 = 1;
 
 fn sql(text: String) -> AssertSqlSafe<String> {
@@ -76,7 +78,7 @@ impl Editor {
     /// Import (section 4): into empty edits tables, or with `replace` after reverting every edit in force. The schemas count as fresh
     /// afterwards, so `apply` runs at once and refreshes the originals from this server's tables.
     pub async fn import(&self, doc: &Value, replace: bool) -> Result<Report> {
-        if doc.get("format").and_then(Value::as_str) != Some(FORMAT) {
+        if !matches!(doc.get("format").and_then(Value::as_str), Some(FORMAT | OLD_FORMAT)) {
             return refuse(format!("not an edits file (its \"format\" is not {FORMAT:?})"));
         }
         let version = doc.get("version").and_then(Value::as_i64).unwrap_or(0);

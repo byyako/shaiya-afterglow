@@ -1,6 +1,6 @@
 #!/bin/bash
 # Describe the structure of the restored original databases (the SQL Server container, MSSQL_CONTAINER, default
-# newshaiya-mssql: tools/dbconn.sh), three plain-text files per database, into docs/original/db/ or the directory given:
+# shaiya-afterglow-mssql: tools/dbconn.sh), three plain-text files per database, into docs/original/db/ or the directory given:
 #   tools/defs/describe_mssql.sh [out dir]
 #
 #   <db>.columns.txt  table|ordinal|column|type|NOT NULL or NULL|IDENTITY or empty|default|row count

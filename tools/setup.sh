@@ -99,7 +99,7 @@ cat <<EOF
 == done
 Left to do (README step 6), then start the servers (step 7):
 
-  NEWSHAIYA_PASSWORD='secret123' target/release/create_account myname 16    # 16 = full GM; leave it out for a player
+  SHAIYA_PASSWORD='secret123' target/release/create_account myname 16    # 16 = full GM; leave it out for a player
   target/release/servers add 1 MyServer 203.0.113.10                         # the address the clients connect to
 
   tools/login-server.sh start

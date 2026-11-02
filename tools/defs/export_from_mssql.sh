@@ -1,7 +1,7 @@
 #!/bin/bash
 # Export the PS_GameDefs tables from the restored SQL Server container to data/defs-export/*.psv
 # (pipe-separated via bcp, text columns as hex, NULL written as an empty field). Needs the SQL Server container
-# (MSSQL_CONTAINER, default newshaiya-mssql: tools/dbconn.sh) running.
+# (MSSQL_CONTAINER, default shaiya-afterglow-mssql: tools/dbconn.sh) running.
 # The output is proprietary game data: it stays in data/, which is git-ignored.
 set -eu
 root="$(cd "$(dirname "$0")/../.." && pwd)"

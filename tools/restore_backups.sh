@@ -1,6 +1,6 @@
 #!/bin/bash
 # Restore every SQL Server backup in /backups (mounted read-only) into the
-# SQL Server container (MSSQL_CONTAINER in .env, default newshaiya-mssql: tools/dbconn.sh). Runs INSIDE the container:
+# SQL Server container (MSSQL_CONTAINER in .env, default shaiya-afterglow-mssql: tools/dbconn.sh). Runs INSIDE the container:
 #   docker cp tools/restore_backups.sh "$MSSQL_CONTAINER":/tmp/ && docker exec "$MSSQL_CONTAINER" bash /tmp/restore_backups.sh
 # (tools/setup.sh does this for you.)
 # Existing databases are skipped.

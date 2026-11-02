@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Compare the loaded Postgres `defs` tables with the original SQL Server database.
 
-usage: verify.py <schema.sql> <PS_GameDefs.columns.txt>
+usage: verify.py <schema.sql> <PS_GameDefs.columns.txt> [--counts-only]
 
-For every table it compares the row count, the sum of each numeric column, and the total byte
+With --counts-only (the import that read the backup directly, with no SQL Server to compare against) it only checks each table's
+row count against the count recorded in the column list. Otherwise, for every table it compares the row count, the sum of each numeric column, and the total byte
 length of each text column (re-encoded as GBK in Postgres, DATALENGTH in SQL Server).
-Needs PostgreSQL and the SQL Server container (MSSQL_CONTAINER, tools/dbconn.py) running.
+The full check needs PostgreSQL and the SQL Server container (MSSQL_CONTAINER, tools/dbconn.py) running.
 """
 import re
 import subprocess
@@ -41,6 +42,19 @@ def main():
         if len(parts) >= 8:
             names[(parts[0], parts[2].lower())] = parts[2]
     problems = 0
+    if "--counts-only" in sys.argv:
+        expected = {}
+        for line in open(sys.argv[2]):
+            parts = line.rstrip("\n").split("|")
+            if len(parts) >= 8:
+                expected[parts[0]] = parts[7]
+        for pg in table_columns(schema_text):
+            have = run_pg(f"SELECT count(*) FROM defs.{pg}")
+            want = expected.get(MSSQL_NAME[pg])
+            status = "OK" if have == want else "MISMATCH"
+            print(f"{pg:16s} {have:>6s} rows (expected {want})  {status}")
+            problems += status != "OK"
+        sys.exit(1 if problems else 0)
     for pg, columns in table_columns(schema_text).items():
         ms = MSSQL_NAME[pg]
         pg_parts, ms_parts, labels = ["count(*)"], ["COUNT(*)"], ["rows"]
