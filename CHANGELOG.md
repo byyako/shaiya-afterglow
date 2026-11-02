@@ -10,6 +10,7 @@
 - `tools/setup.sh` writes `.env` with random passwords when there is none, checks Docker and the PostgreSQL port, uses the binaries in
   `target/release/` instead of building when they are all there, and on a terminal creates the first account, the game server's entry
   and starts both servers. `defs/verify.py --counts-only` checks the loaded row counts without SQL Server.
+- `tools/patch_client_ip.py <Client folder> <ip>` writes `game_local.exe` beside the client's `game.exe`, and says what build it needs when the file is another.
 - `tools/fetch-release.sh` downloads the binaries of a release (built by `.github/workflows/release.yml` when a `v*` tag is pushed).
 - The README starts with a quick start; the docs site's Run page follows it.
 

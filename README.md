@@ -39,7 +39,7 @@ the first time), reads the game definitions straight out of the original backup,
 password of your first account and the address your players use, and starts the servers. Without the build it takes about a minute.
 If it stops, it names the step; run it again after fixing the cause.
 
-Last, point the client at your server: `python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe <server ip>` writes a copy of
+Last, point the client at your server: `python3 tools/patch_client_ip.py <Client folder> <server ip>` writes a copy of
 `game.exe` that connects to it ([details](docs/original/client-login.md)). Log in with the account you made. The rest of this README
 is the same path step by step, and everything after it.
 

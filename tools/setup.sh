@@ -197,7 +197,7 @@ Left to do:
   tools/login-server.sh start
   tools/game-server.sh start
 
-Then point the client at the server: python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe ${lan_ip:-<server ip>}
+Then point the client at the server: python3 tools/patch_client_ip.py <Client folder> ${lan_ip:-<server ip>}
 EOF
 }
 
@@ -241,7 +241,7 @@ cat <<EOF
 The servers are running (tools/game-server.sh logs shows the log; stop and status work the same way).
 Now point the client at $address:
 
-  python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe $address
+  python3 tools/patch_client_ip.py <Client folder> $address
 
 and log in as $account. More: README.md, docs/original/client-login.md.
 EOF
