@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-02)
 
 **Easier install**
 - `tools/defs/read_bak.py` reads the game definitions straight out of the original `PS_GameDefs` backup, so the setup no longer needs a
