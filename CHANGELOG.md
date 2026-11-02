@@ -2,13 +2,24 @@
 
 ## Unreleased
 
+**Easier install**
+- `tools/defs/read_bak.py` reads the game definitions straight out of the original `PS_GameDefs` backup, so the setup no longer needs a
+  SQL Server container (about 20 minutes and 2 GB of memory); its output was checked byte for byte against the SQL Server export, on
+  all eight exported tables. `tools/setup.sh --sqlserver` still restores the backup in SQL Server, and a folder of already exported
+  tables is accepted in place of the backups.
+- `tools/setup.sh` writes `.env` with random passwords when there is none, checks Docker and the PostgreSQL port, uses the binaries in
+  `target/release/` instead of building when they are all there, and on a terminal creates the first account, the game server's entry
+  and starts both servers. `defs/verify.py --counts-only` checks the loaded row counts without SQL Server.
+- `tools/fetch-release.sh` downloads the binaries of a release (built by `.github/workflows/release.yml` when a `v*` tag is pushed).
+- The README starts with a quick start; the docs site's Run page follows it.
+
 **Renamed**
 - The project's names inside the setup follow the repository: the containers are `shaiya-afterglow-postgres` and
   `shaiya-afterglow-mssql`, the volumes `shaiya-afterglow-pgdata` and `shaiya-afterglow-mssql-data`, the compose database is `shaiya`
   (was `newshaiya`; the `DATABASE_URL` of `.env.example` follows), the variables are `SHAIYA_PASSWORD` and `SHAIYA_PSQL`, and the
-  edits export is `shaiya-afterglow-edits`. The old variable names and old edits files are still read, and the tools find a
-  container under its old name when only that one exists. **A setup made before this keeps its data under the old names:** put
-  `PG_CONTAINER`, `PG_VOLUME` and the old database name in its `.env`, or dump and restore into the new one.
+  edits export is `shaiya-afterglow-edits`. The old variable names and old edits files are still read. **A setup made before this keeps its data under the old names:** put
+  `PG_CONTAINER=newshaiya-postgres`, `MSSQL_CONTAINER`, `PG_VOLUME` and `MSSQL_VOLUME` (the old names) in its `.env`, and keep the old
+  database name in its `DATABASE_URL`; `compose.yaml` creates only a new `shaiya` database.
 
 **Build and tests**
 - `rust-version = "1.94"` in the workspace, so an older Rust stops with a clear message instead of a build error in `sqlx`.

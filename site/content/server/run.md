@@ -2,8 +2,8 @@
 
 ## In short
 
-- You need a Linux machine with Docker, Rust 1.94 or newer, Python 3, your own copy of the original EP4.5 server files, and the US client (patch 108) to play.
-- One script, `tools/setup.sh`, starts PostgreSQL, builds the server and imports the original files (about 25 minutes). Then you make an account, register the game server, start both servers and point the client at them.
+- You need a Linux machine with Docker, Python 3, Rust 1.94 or newer (or the binaries of a release), your own copy of the original EP4.5 server files, and the US client (patch 108) to play.
+- One script, `tools/setup.sh`, does it all: it starts PostgreSQL, builds the server, imports the original files (about a minute, plus the build), asks for your first account and starts both servers. Then you point the client at them.
 - With only `DATABASE_URL` set, the server plays as the original apart from its fixes. Everything else is a setting with a default ([Settings](settings.md)).
 - The operator works through a console tool, the GM commands in the game, and a data editor for drops, monsters, spawns and portals.
 - This page is the short path. The [README on GitHub](https://github.com/byyako/shaiya-afterglow#readme) has every step and command, and [Deploying on a VPS](deploy.md) covers a public server.
@@ -13,8 +13,8 @@
 | | |
 |---|---|
 | A machine | Linux (developed on Debian 13; any recent distribution with Docker should do). Windows hosts are not tested. Building needs about 2 GB of memory. |
-| Docker | For PostgreSQL, and for SQL Server during the import only |
-| Rust | 1.94 or newer, from [rustup](https://rustup.rs) |
+| Docker | For PostgreSQL (with the Compose plugin). SQL Server is not needed: the game definitions are read straight from the original backup. |
+| Rust | 1.94 or newer, from [rustup](https://rustup.rs); not needed if you download the binaries of a release (`tools/fetch-release.sh`) |
 | Python 3 | Standard library only, for the import scripts |
 | The original server files | The SQL Server backups in `PSM_Data/` (only `PS_GameDefs` is used) and the game server's `PS_Game/Data/` folder, from the widely shared EP4.5 server pack. They are not distributed with the server. |
 | The client | The US `game.exe`, patch 108 |
@@ -26,28 +26,22 @@ From a fresh clone:
 
 ```bash
 git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
-cp .env.example .env          # then set the passwords in it
 tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 ```
 
-`tools/setup.sh` runs the README's steps 2 to 5 in one go: it starts PostgreSQL, builds the workspace, creates the tables, restores the original database backups into a temporary SQL Server, loads and checks the game definitions, imports the world (maps, spawns, NPCs, quests, scripts) and stops SQL Server again. It stops at the first failure with the step's name, and it can be run again. The README describes each step on its own, for doing them by hand.
+`tools/setup.sh` writes a `.env` with random passwords, starts PostgreSQL in Docker, builds the workspace (a few minutes the first time), creates the tables, reads the game definitions straight out of the original `PS_GameDefs` backup, loads and checks them, and imports the world (maps, spawns, NPCs, quests, scripts). Then it asks for the name and password of your first account (and whether it is a full GM), the address players' clients connect to and the name of the game server, and starts the login and game servers. It stops at the first failure with the step's name, and it can be run again. The README describes each step on its own, for doing them by hand, and `tools/setup.sh --sqlserver` restores the backup in a SQL Server container instead, if the direct reader does not understand your backup.
 
-Then an account and the game server's entry in the server list:
+Without a terminal (a script, or `--no-account`) it ends by printing the account and server commands:
 
 ```bash
 SHAIYA_PASSWORD='secret123' target/release/create_account myname 16   # 16 = full GM; leave it out for a player
 target/release/servers add 1 MyServer 203.0.113.10                        # id, name, the address clients connect to
-```
-
-The address is the one players' clients reach: a LAN address for a home test, the public one on a VPS. Then start the servers:
-
-```bash
 tools/login-server.sh start
 tools/game-server.sh start
 tools/game-server.sh logs        # the last lines of the game server's log
 ```
 
-The game server loads the definitions and the world in a few seconds and starts reporting to the login server, which then lists it as open.
+The address is the one players' clients reach: a LAN address for a home test, the public one on a VPS. The game server loads the definitions and the world in a few seconds and starts reporting to the login server, which then lists it as open.
 
 **The client** has its login address built in. `tools/patch_client_ip.py` writes a copy of `game.exe` with your server's address (it checks the file's hash first and changes only the address), or a network redirect does the same without touching the client. Log in with the account you made. [Pointing the client at the server](../original/client-login.md) has the details: what the address is in the client, both ways to change it, and what each error on screen means.
 

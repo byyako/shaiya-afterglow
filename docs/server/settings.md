@@ -88,8 +88,8 @@ The import scripts reach the databases through `tools/dbconn.py` and `tools/dbco
 | `DATABASE_URL` | none | the user, password, host, port and database the tools use (as the servers) |
 | `SHAIYA_PASSWORD` | unset | the new account's password for `create_account` (old name `NEWSHAIYA_PASSWORD`, still read); unset, it reads one line from standard input (so the password is not in the process list) |
 | `PG_PASSWORD` | none | the password `compose.yaml` creates the PostgreSQL container with; must equal the password in `DATABASE_URL` |
-| `PG_CONTAINER` | `shaiya-afterglow-postgres` | the PostgreSQL container: its `container_name` in `compose.yaml`, and where the tools run `psql`. Unset, a copy set up before the rename keeps working: when only a container named `newshaiya-postgres` exists, the tools use it |
-| `MSSQL_CONTAINER` | `shaiya-afterglow-mssql` | the SQL Server container of the import (`compose.yaml` profile `import`); the old name `newshaiya-mssql` is found the same way |
+| `PG_CONTAINER` | `shaiya-afterglow-postgres` | the PostgreSQL container: its `container_name` in `compose.yaml`, and where the tools run `psql` |
+| `MSSQL_CONTAINER` | `shaiya-afterglow-mssql` | the SQL Server container of the import (`compose.yaml` profile `import`) |
 | `SHAIYA_PSQL` | `auto` | (old name `NEWSHAIYA_PSQL`, still read) how the tools run `psql`: `docker` inside `PG_CONTAINER`, `host` with the host's `psql "$DATABASE_URL"`, `auto` the first when that container is running, else the second when `psql` is on the PATH |
 | `PSM_DATA_DIR` | `./PSM_Data` | the folder of the original SQL Server backups, mounted read-only at `/backups` in the SQL Server container; `tools/setup.sh` sets it from its first argument |
 | `PG_PORT`, `MSSQL_PORT` | `5433`, `14333` | the host ports (on 127.0.0.1) of the two containers; `PG_PORT` must match `DATABASE_URL` |

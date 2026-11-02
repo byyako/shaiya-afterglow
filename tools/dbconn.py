@@ -3,7 +3,7 @@
 - `.env` at the repository root is read for any variable not already in the environment (`KEY=value` lines, `#` comments,
   optional quotes), as the servers read it.
 - `PG_CONTAINER` (default `shaiya-afterglow-postgres`) and `MSSQL_CONTAINER` (default `shaiya-afterglow-mssql`) name the containers;
-  an unset one falls back to the project's old name (`newshaiya-postgres`, `newshaiya-mssql`) when only that container exists.
+  a setup made under the project's old names sets `PG_CONTAINER=newshaiya-postgres` (and `MSSQL_CONTAINER`) in `.env`.
 - The PostgreSQL user, password, host, port and database come from `DATABASE_URL`.
 - `SHAIYA_PSQL` (old name `NEWSHAIYA_PSQL`) = `docker` | `host` | `auto` (default `auto`): `docker` runs psql inside `PG_CONTAINER`; `host` runs the host's
   `psql "$DATABASE_URL"`; `auto` uses `docker` when that container is running, else `host` when `psql` is on the PATH.
@@ -45,19 +45,8 @@ def _load_env() -> None:
 _load_env()
 
 
-
-def _default_container(new: str, old: str) -> str:
-    """The container name when the variable is unset: the new default, or the old one if only that container exists."""
-    if shutil.which("docker"):
-        def exists(name: str) -> bool:
-            return subprocess.run(["docker", "inspect", name], capture_output=True).returncode == 0
-        if not exists(new) and exists(old):
-            return old
-    return new
-
-
-PG_CONTAINER = os.environ.get("PG_CONTAINER") or _default_container("shaiya-afterglow-postgres", "newshaiya-postgres")
-MSSQL_CONTAINER = os.environ.get("MSSQL_CONTAINER") or _default_container("shaiya-afterglow-mssql", "newshaiya-mssql")
+PG_CONTAINER = os.environ.get("PG_CONTAINER") or "shaiya-afterglow-postgres"
+MSSQL_CONTAINER = os.environ.get("MSSQL_CONTAINER") or "shaiya-afterglow-mssql"
 
 
 def database_url() -> str:

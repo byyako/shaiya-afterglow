@@ -11,7 +11,8 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 
 | script | what it does | reads, writes | who |
 |---|---|---|---|
-| `setup.sh` | the README's setup steps 2 to 5 in one go: starts PostgreSQL, builds the workspace, creates the tables, restores the original backups into SQL Server, exports, loads and verifies the definitions, imports the world | `.env`, `compose.yaml`, the original files' `PSM_Data` and `PS_Game/Data`; the databases | operator |
+| `setup.sh` | everything from a fresh clone to a running server: writes `.env` with random passwords, starts PostgreSQL, builds the workspace (or uses the binaries in `target/release/`), reads the definitions from the backup (`defs/read_bak.py`) or an export folder, or with `--sqlserver` through SQL Server, loads and checks them, imports the world, and on a terminal creates the first account and starts the servers | `.env`, `compose.yaml`, the original files' `PSM_Data` and `PS_Game/Data`; the databases | operator |
+| `fetch-release.sh` | downloads the binaries of a release (built by `.github/workflows/release.yml`) into `target/release/`, so nothing needs building; checks the checksum | GitHub; `target/release/` | operator |
 | `restore_backups.sh` | restores every SQL Server backup in `/backups` (the original `PSM_Data`, mounted read-only) into the SQL Server container; runs inside it | the backups; SQL Server | operator (`setup.sh` calls it) |
 | `login-server.sh`, `game-server.sh`, `data-editor.sh` | start, stop, restart, status and logs of the program in the background (`game-server.sh` restarts it after any exit status but 0; 75 is the console's `restart`) | `.env`; `logs/<program>.log`, `.pid` | operator, developer |
 | `dbconn.sh`, `dbconn.py` | the shared environment of the scripts: container names, `psql` through Docker or on the host | `.env` | (sourced by the others) |
@@ -20,9 +21,10 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 
 | script | what it does | reads, writes | who |
 |---|---|---|---|
-| `defs/export_from_mssql.sh` | exports the `PS_GameDefs` tables from the restored SQL Server container to pipe-separated files | SQL Server; `data/defs-export/*.psv` (git-ignored) | operator |
+| `defs/read_bak.py` | reads the `PS_GameDefs` tables straight out of the original SQL Server backup (no SQL Server) and writes the same pipe-separated files; checked byte for byte against the SQL Server export | the backup; `data/defs-export/*.psv` (git-ignored) | operator |
+| `defs/export_from_mssql.sh` | exports the `PS_GameDefs` tables from the restored SQL Server container (the `--sqlserver` way) to pipe-separated files | SQL Server; `data/defs-export/*.psv` (git-ignored) | operator |
 | `defs/load_into_postgres.py` | loads those files into the `defs` schema (`db/defs/schema.sql`) | `data/defs-export/`; PostgreSQL | operator |
-| `defs/verify.py` | compares the loaded `defs` tables with the original database, field by field | both databases | operator, developer |
+| `defs/verify.py` | compares the loaded `defs` tables with the original database, field by field (`--counts-only`: only the row counts, against the column list, with no SQL Server) | both databases | operator, developer |
 | `defs/generate.py` | makes `db/defs/schema.sql` and the export queries (`export_queries.tsv`) from the column list `docs/original/db/PS_GameDefs.columns.txt` | the column list | developer |
 | `defs/describe_mssql.sh` | writes the three description files per original database (`docs/original/db/`), proven to reproduce them byte for byte | SQL Server (read only) | developer |
 | `defs/additions.sh` (`additions.sql`) | applies the operator's edits (`data-editor apply`) and, with `--with-additions`, the server's own added rows (the Kill Boost Stones) to `defs` | PostgreSQL | operator |

@@ -3,8 +3,8 @@
 #   psql_cmd < file.sql             # psql with -v ON_ERROR_STOP=1 -q; more psql arguments may follow
 #   docker exec "$MSSQL_CONTAINER" ...
 # - .env at the repository root is read for any variable not already in the environment (KEY=value, # comments, optional quotes);
-# - PG_CONTAINER (default shaiya-afterglow-postgres), MSSQL_CONTAINER (default shaiya-afterglow-mssql); when a variable is
-#   unset and only the container under the project's old name (newshaiya-postgres, newshaiya-mssql) exists, that one is used;
+# - PG_CONTAINER (default shaiya-afterglow-postgres), MSSQL_CONTAINER (default shaiya-afterglow-mssql); a setup made under the
+#   project's old names sets PG_CONTAINER=newshaiya-postgres (and MSSQL_CONTAINER) in .env;
 # - the PostgreSQL user and database come from DATABASE_URL;
 # - SHAIYA_PSQL (old name NEWSHAIYA_PSQL) = docker | host | auto (default auto): docker runs psql inside PG_CONTAINER, host runs the host's
 #   psql "$DATABASE_URL", auto uses docker when that container is running, else host when psql is on the PATH.
@@ -30,17 +30,8 @@ _dbconn_load_env() {
 }
 _dbconn_load_env
 
-# The default names; a copy set up before the rename keeps working: an unset variable falls back to the old name when only that
-# container exists.
-_dbconn_default_container() {   # <new name> <old name>
-    if command -v docker > /dev/null && ! docker inspect "$1" > /dev/null 2>&1 && docker inspect "$2" > /dev/null 2>&1; then
-        echo "$2"
-    else
-        echo "$1"
-    fi
-}
-PG_CONTAINER="${PG_CONTAINER:-$(_dbconn_default_container shaiya-afterglow-postgres newshaiya-postgres)}"
-MSSQL_CONTAINER="${MSSQL_CONTAINER:-$(_dbconn_default_container shaiya-afterglow-mssql newshaiya-mssql)}"
+PG_CONTAINER="${PG_CONTAINER:-shaiya-afterglow-postgres}"
+MSSQL_CONTAINER="${MSSQL_CONTAINER:-shaiya-afterglow-mssql}"
 
 # user and database name from DATABASE_URL (postgres://user:password@host:port/db)
 _dbconn_parse_url() {

@@ -11,6 +11,7 @@ The aim is the original game as it was, without its bugs: the original's rules, 
 holes and exploits fixed. Every place where the new server knowingly behaves differently is written down in the feature's analysis note
 (`docs/original/*.md`, the "deviations" lists), and the ones that change gameplay are settings (`docs/server/settings.md`).
 
+- [Quick start](#quick-start)
 - [Status](#status)
 - [What you need](#what-you-need)
 - [Setting up from a fresh clone](#setting-up-from-a-fresh-clone)
@@ -22,6 +23,25 @@ holes and exploits fixed. Every place where the new server knowingly behaves dif
 - [Layout](#layout)
 - [Documentation](#documentation)
 - [Legal](#legal)
+
+## Quick start
+
+You need a Linux machine with Docker, Python 3 and either [Rust](https://rustup.rs) 1.94 or newer or the binaries of a release, and
+your own copy of the original EP4.5 server files (see [What you need](#what-you-need)). Then:
+
+```bash
+git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
+tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
+```
+
+`tools/setup.sh` does the rest: it writes a `.env` with random passwords, starts PostgreSQL in Docker, builds the server (a few minutes
+the first time), reads the game definitions straight out of the original backup, imports the world, and then asks for the name and
+password of your first account and the address your players use, and starts the servers. Without the build it takes about a minute.
+If it stops, it names the step; run it again after fixing the cause.
+
+Last, point the client at your server: `python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe <server ip>` writes a copy of
+`game.exe` that connects to it ([details](docs/original/client-login.md)). Log in with the account you made. The rest of this README
+is the same path step by step, and everything after it.
 
 ## Status
 
@@ -47,8 +67,9 @@ the original's odds).
 ## What you need
 
 - **Linux** (developed on Debian 13; any recent distribution with Docker should do). Windows hosts are not tested.
-- **Docker**, for PostgreSQL and, during the import only, SQL Server.
-- **Rust 1.94 or newer** (edition 2024; `sqlx` 0.9 needs 1.94), from [rustup](https://rustup.rs); `rustup update` brings an older one up. Building needs about 2 GB of memory.
+- **Docker** (with the Compose plugin), for PostgreSQL. SQL Server is no longer needed: the game definitions are read directly from the backup
+  (`tools/setup.sh --sqlserver` restores them in a SQL Server container instead, about 20 minutes and 2 GB of memory).
+- **Rust 1.94 or newer** (edition 2024; `sqlx` 0.9 needs 1.94), from [rustup](https://rustup.rs); `rustup update` brings an older one up. Building needs about 2 GB of memory. Not needed if you put the binaries of a release in `target/release/` (`tools/fetch-release.sh`).
 - **Python 3** (standard library only), for the import scripts.
 - **The original EP4.5 server files**: the SQL Server backups in `PSM_Data/` (only `PS_GameDefs` is used) and the game server's data
   folder `PS_Game/Data/` (`Map.ini`, the svmaps, `NpcQuest.SData`, `Obelisk.ini`, `ItemCreate.ini`, the Lua scripts and the rest).
@@ -65,10 +86,8 @@ The commands run from the repository root. The import scripts find the databases
 container names `PG_CONTAINER` and `MSSQL_CONTAINER` (default `shaiya-afterglow-postgres` and `shaiya-afterglow-mssql`, the names below;
 `docs/server/settings.md`, "Tools").
 
-**Or all at once:** after step 1, `tools/setup.sh <PSM_Data folder> <PS_Game/Data folder>` runs steps 2 to 5 with `compose.yaml`
-(PostgreSQL, the build, the tables, SQL Server, the definitions and the world; about 25 minutes, most of it restoring the SQL Server
-backups), stops at the first failure with the step's name, and prints what is left: steps 6 and 7. It can be run again; it replaces the definitions and the
-world.
+These are the steps `tools/setup.sh` ([Quick start](#quick-start)) runs, one at a time, for doing them by hand or finding which one failed.
+`tools/setup.sh` can be run again; it replaces the definitions and the world. `--sqlserver` makes step 4 use SQL Server (see there).
 
 ### 1. Clone and configure
 
@@ -77,9 +96,9 @@ git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
 cp .env.example .env        # then set the passwords in it (letters and digits are safest in the URL)
 ```
 
-`DATABASE_URL` and `PG_PASSWORD` must hold the same password (the PostgreSQL container is created with `PG_PASSWORD`);
-`MSSQL_SA_PASSWORD` needs at least 8 characters with upper case, lower case and a digit (SQL Server refuses weaker ones). For the
-compose file, also set `PSM_DATA_DIR` to the folder of the SQL Server backups (step 4).
+`DATABASE_URL` and `PG_PASSWORD` must hold the same password (the PostgreSQL container is created with `PG_PASSWORD`). Only for the
+SQL Server alternative of step 4: `MSSQL_SA_PASSWORD` needs at least 8 characters with upper case, lower case and a digit (SQL Server
+refuses weaker ones), and `PSM_DATA_DIR` the folder of the backups.
 
 ### 2. PostgreSQL
 
@@ -114,37 +133,37 @@ target/release/servers list        # creates the tables; prints an empty list
 
 ### 4. The game definitions (`PS_GameDefs` into the `defs` schema)
 
-The definitions (items, monsters, skills, drops, ...) come from the original SQL Server backup. SQL Server runs in a container just for
-this step and can be removed afterwards. With the compose file (`PSM_DATA_DIR` set in `.env`):
+The definitions (items, monsters, skills, drops, ...) are in the original SQL Server backup `PSM_Data/PS_GameDefs`. `read_bak.py` reads that
+file directly (it is an uncompressed SQL Server 2005 backup) and writes the tables to `data/defs-export/` (git-ignored; it is the game's data):
 
 ```bash
-docker compose --profile import up -d mssql
-```
-
-or without it:
-
-```bash
-set -a; . ./.env; set +a
-docker run -d --name shaiya-afterglow-mssql \
-  -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" -e MSSQL_MEMORY_LIMIT_MB=1400 \
-  -p 127.0.0.1:14333:1433 -v /path/to/PSM_Data:/backups:ro -v shaiya-afterglow-mssql-data:/var/opt/mssql \
-  mcr.microsoft.com/mssql/server:2022-latest
-```
-
-Then (with other container names, put `$MSSQL_CONTAINER` in place of `shaiya-afterglow-mssql`):
-
-```bash
-# wait a minute or two: "An error occurred while evaluating the password" or "Login failed" means it is still starting
-docker cp tools/restore_backups.sh shaiya-afterglow-mssql:/tmp/ && docker exec shaiya-afterglow-mssql bash /tmp/restore_backups.sh   # about 20 minutes
-tools/defs/export_from_mssql.sh                                          # to data/defs-export/ (git-ignored)
+python3 tools/defs/read_bak.py /path/to/PSM_Data/PS_GameDefs data/defs-export
 python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
-python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt   # row counts and sums against SQL Server
+python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt --counts-only   # row counts against the known ones
 tools/defs/additions.sh                                                  # the operator's edits (and, with --with-additions, the server's own extra rows: docs/server/deviations.md section 1)
-docker compose stop mssql                                                # or docker stop shaiya-afterglow-mssql; docker rm once the import is checked
 ```
 
 `load_into_postgres.py` decodes the text columns as GBK, the original database's code page, and checks that every value encodes back to
-the same bytes. `docs/original/database-notes.md` describes the backups.
+the same bytes. `docs/original/database-notes.md` describes the backups. If you already have the tables as text (an earlier export, or
+a friend's), put them in `data/defs-export/` and skip the first command.
+
+**Through SQL Server instead.** If `read_bak.py` stops with a message (a backup in another version or form than the one it was written
+against; please report it), SQL Server restores the backup itself in a container used just for this step (about 20 minutes, 2 GB of memory), and
+the export is its own:
+
+```bash
+docker compose --profile import up -d mssql              # PSM_DATA_DIR in .env names the folder of the backups
+# wait a minute or two: "An error occurred while evaluating the password" or "Login failed" means it is still starting
+docker cp tools/restore_backups.sh shaiya-afterglow-mssql:/tmp/ && docker exec shaiya-afterglow-mssql bash /tmp/restore_backups.sh   # about 20 minutes
+tools/defs/export_from_mssql.sh                                          # to data/defs-export/
+python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
+python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt   # row counts and sums against SQL Server
+tools/defs/additions.sh
+docker compose stop mssql                                                # or docker stop shaiya-afterglow-mssql; docker rm once the import is checked
+```
+
+(Without the compose file, `docker run -d --name shaiya-afterglow-mssql -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" -e MSSQL_MEMORY_LIMIT_MB=1400 -p 127.0.0.1:14333:1433 -v /path/to/PSM_Data:/backups:ro -v shaiya-afterglow-mssql-data:/var/opt/mssql mcr.microsoft.com/mssql/server:2022-latest`
+starts the same container; with other container names, put `$MSSQL_CONTAINER` in place of `shaiya-afterglow-mssql`.)
 
 ### 5. The world (`PS_Game/Data` into the `world` schema)
 
