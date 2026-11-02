@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run the login server in the background.
 #   tools/login-server.sh start|stop|restart|status|logs
-# Reads .env (DATABASE_URL) from the project root. Settings can be overridden in the environment.
+# Reads .env (DATABASE_URL) from the project root. A setting can come from the environment only when .env does not set it (.env is loaded over it: docs/server/settings.md, "Run scripts").
 set -u
 root="$(cd "$(dirname "$0")/.." && pwd)"
 logfile="$root/logs/login-server.log"

@@ -1,18 +1,18 @@
 # Live tests: what one tester can do
 
-The 441 open items of `docs/testing/live-test-checklist.md` (452 with the 11 ticked), sorted by who can test them. The checklist
+The 478 open items of `docs/testing/live-test-checklist.md` (489 with the 11 ticked; section 0, the smoke list, is drawn from them), sorted by who can test them. The checklist
 page (`tools/checklist-server.sh`) reads this file: it filters by group and sitting, and lists any open item missing from it. Item numbers
 count the `- [ ]` and `- [x]` lines from the top of each section, ticked ones included (the checklist page shows them in the same order).
 
 | group | meaning | items |
 |---|---|---|
-| **A. One client** | one character at a time; switching characters or accounts in between is fine | 245 |
-| **B. Two clients, by yourself** | two accounts logged in at once, the maintainer switching windows; every step is ask/answer or one side standing still | 182 |
-| **C. Hard alone** | three clients, or two players acting at the same moment | 6 |
-| **D. Skip** | needs a modified client, Korean input, or a game state that cannot be forced | 8 |
+| **A. One client** | one character at a time; switching characters or accounts in between is fine | 266 |
+| **B. Two clients, by yourself** | two accounts logged in at once, the maintainer switching windows; every step is ask/answer or one side standing still | 193 (2.1 is in A and B: the self heal and healing another) |
+| **C. Hard alone** | three clients or more, or two players acting at the same moment | 10 |
+| **D. Skip** | needs a modified client or a packet tool, Korean input, or a game state that cannot be forced | 10 |
 
 Group B assumes two clients can run at once, as in the first sittings (the party and the trade between TestPriest and TestRanger). It is slow
-by hand; the test bots (shelved, the roadmap's "Frozen") would take the second side of these; for now the alpha's players do. Some A items
+by hand; the test bots (shelved, the roadmap's "Frozen") would take the second side of these; for now a second player does. Some A items
 end with "a second client sees it": the A part is tested alone and the rest waits for B.
 
 Character moves, gold, items and database settings for a sitting are the server side's to set up (ask; it needs the server stopped).
@@ -40,6 +40,8 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
 9. **TestVail at the Light guards, staff level set back to 0** (guards ignore staff): 33.2, 33.3, 42.5.
 10. **The data editor, TestVail on map 2 (and map 0 for the obelisk):** 53 (all; the page, the `console` tool and the game side by side).
 11. **Log checks:** 30.2; 48 (all but 6, 9, 11, 12): ordinary play, the next session reads the rows.
+12. **The audit fixes, any character, with a shell on the server beside the client:** 55 (1, 2, 4, 7, 8, 9), 56 (7, 8, 10, 13, 14,
+    16; 10 with TestMage, as sitting 5), 57 (all but 8).
 
 ## Every section
 
@@ -97,6 +99,10 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
 | 51 | 1–4, 6, 10–13 | 5, 7, 8, 9 | | 14 (after client data patch 109 is installed) | |
 | 52 | 1, 3–12, 14, 15 | 2 | | 13 (modified client) | |
 | 53 | 1–10 | | | | |
+| 54 | | | | 1 (raw chat: a packet tool or a test client) | |
+| 55 | 1, 2, 4, 7, 8, 9 | 5, 10 | 3 (eight clients on one address) | 6 (the real client sends its keepalive) | |
+| 56 | 7, 8, 10, 13, 14, 16 | 1–6, 11 | 9, 12, 15 (acting at the same moment; seven players for a guild) | | |
+| 57 | 1–7, 9, 10 | 8 (two staff accounts) | | | |
 
 ## Sitting 1 setup (applied)
 

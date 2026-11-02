@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{# A small "Buy me a coffee" link in the corner of every page; extra.css places it and hides its label on narrow screens. #}
+{% block footer %}
+  {{ super() }}
+  <a class="bmc-float" href="https://buymeacoffee.com/tylernol" target="_blank" rel="noopener" title="Buy me a coffee" aria-label="Buy me a coffee">
+    <span class="bmc-cup" aria-hidden="true">☕</span><span class="bmc-label">Buy me a coffee</span>
+  </a>
+{% endblock %}

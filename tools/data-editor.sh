@@ -3,7 +3,7 @@
 #   tools/data-editor.sh start|stop|restart|status|logs
 # Reads .env (DATABASE_URL, EDITOR_EXPORT_FILE) from the project root. EDITOR_BIND defaults to 127.0.0.1:30890: reach it from another
 # machine with  ssh -L 30890:127.0.0.1:30890 <this box>  and open http://localhost:30890/. A request must be addressed to localhost,
-# 127.0.0.1 or [::1], or to a name in EDITOR_HOSTS (docs/server/audit.md R17). Settings can be overridden in the environment.
+# 127.0.0.1 or [::1], or to a name in EDITOR_HOSTS (docs/server/audit.md R17). A setting can come from the environment only when .env does not set it (.env is loaded over it: docs/server/settings.md, "Run scripts").
 set -u
 root="$(cd "$(dirname "$0")/.." && pwd)"
 logfile="$root/logs/data-editor.log"

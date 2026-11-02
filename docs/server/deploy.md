@@ -36,20 +36,20 @@ The Debian package listens on localhost only; keep it that way.
 
 ## 2. The binaries
 
-Five binaries: `login-server`, `game-server`, the data editor `data-editor` (`docs/plans/done/data-editing.md`), and the tools `servers` and `create_account`
-(`console` and `mall` are tools too).
+Seven binaries: `login-server`, `game-server`, the data editor `data-editor` (`docs/plans/done/data-editing.md`), and the tools `servers`,
+`create_account`, `console` and `mall` (the last four are built with the `login-server` package).
 
 **Build on the VPS** (simplest; the build needs about 2 GB of memory, so add swap on a 1 GB VPS). No OpenSSL or database is needed to compile.
 
 ```bash
 sudo apt install build-essential git
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh     # Rust 1.85 or newer (edition 2024)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh     # Rust 1.94 or newer (edition 2024; sqlx 0.9 needs it)
 git clone https://github.com/byyako/shaiya-afterglow.git newshaiya && cd newshaiya
 cargo build --release -p login-server -p game-server -p data-editor
-sudo install -D -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console}
+sudo install -D -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
 ```
 
-**Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console}`. They link against the system
+**Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}`. They link against the system
 glibc, so the VPS needs the build machine's glibc version or newer (the dev machine is Debian 13, glibc 2.41: Debian 12 and Ubuntu 24.04 are
 older and will not run them). If the VPS is older, build there, or build in a container of the VPS's distribution.
 
@@ -103,8 +103,7 @@ password" answer, so the names that exist are not revealed); `LOGIN_PAIR_*`, `LO
 A player locked out this way waits it out; the operator can restart the login server to clear the counts (they are in memory only). New
 passwords (`create_account`, later the web API) have 6 to 16 characters (16 is all the client sends); accounts made with shorter ones still log in.
 
-Every other setting has a default; the full lists are in the README (`LOGIN_*` under "Running the login server", `GAME_*` under "Running the
-game server"). The file is read by systemd, not a shell: one `NAME=value` per line, no `export`, no quotes needed.
+Every other setting has a default; the full lists are in `docs/server/settings.md`. The file is read by systemd, not a shell: one `NAME=value` per line, no `export`, no quotes needed.
 
 ## 5. Register the game server and create accounts
 
@@ -208,11 +207,12 @@ SQL. It needs only `DATABASE_URL` (the same file as the servers, `/etc/newshaiya
 that reaches the database. It is not a service: run it when the data is edited.
 
 ```bash
-set -a; . /etc/newshaiya/newshaiya.env; set +a
-data-editor draft add set mob_drop 200/1 droprate 45 && data-editor apply-draft -m "raise the drop" --by me
-console 1 reload                       # drops, gold and most monster stats take effect at once
-console 1 restart 5                    # spawns, obelisks, boss groups and portal destinations need a restart (5 minutes' notice, then exit status 75)
+nsh data-editor draft add set mob_drop 200/1 droprate 45 && nsh data-editor apply-draft -m "raise the drop" --by me
+nsh console 1 reload                   # drops, gold and most monster stats take effect at once
+nsh console 1 restart 5                # spawns, obelisks, boss groups and portal destinations need a restart (5 minutes' notice, then exit status 75)
 ```
+
+(`nsh` is the helper of section 5: it runs the tool as the `shaiya` user with the settings file, which only root and that group can read.)
 
 - **Edits are kept apart from the game data.** They live in the `edits` schema (migration 0030, created at the first start of any binary),
   which no load of the original files touches; `data-editor apply` writes them into `defs` and `world` again. Run it after every restore of
@@ -261,7 +261,7 @@ between the two (some mobile and carrier-grade NAT connections) cannot enter; `G
 
 ```bash
 cd newshaiya && git pull && cargo build --release -p login-server -p game-server -p data-editor
-sudo install -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console}
+sudo install -t /opt/newshaiya/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
 sudo systemctl restart newshaiya-game newshaiya-login
 ```
 
@@ -270,14 +270,15 @@ New migrations run when the servers start. Players in the world are saved on the
 ## 10. Backups
 
 The `public` schema is the player data; `defs` and `world` can always be restored from the game data dump (then `data-editor apply`); the
-`edits` schema holds the operator's edits and their history, so include it in a dump (`-n public -n edits`) or keep the export file. A daily dump, kept for two weeks:
+`edits` schema holds the operator's edits and their history, so the dump below takes both (`-n public -n edits`); the export file of
+section 6b is a second copy of the edits. A daily dump, kept for two weeks:
 
 ```bash
 sudo install -d -o postgres /var/backups/newshaiya
 sudo tee /etc/cron.daily/newshaiya-backup >/dev/null <<'EOF'
 #!/bin/sh
 cd /var/backups/newshaiya || exit 1
-runuser -u postgres -- pg_dump -n public -Fc newshaiya > "players-$(date +%F).dump"
+runuser -u postgres -- pg_dump -n public -n edits -Fc newshaiya > "players-$(date +%F).dump"
 find . -name 'players-*.dump' -mtime +14 -delete
 EOF
 sudo chmod 755 /etc/cron.daily/newshaiya-backup

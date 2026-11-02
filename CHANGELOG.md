@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+**Documentation**
+- Building needs Rust 1.94 or newer (`sqlx` 0.9), not 1.85 as the README, the deploy guide and `tools/setup.sh` said.
+- `docs/server/settings.md`: how on/off values and numbers are read, the ranges, `NEWSHAIYA_PASSWORD` and the test variables; the run
+  scripts load `.env` over the environment.
+- `docs/server/deploy.md`: the backup also dumps the `edits` schema; `mall` is installed with the other tools; the data editor runs
+  through the `nsh` helper.
+- There is no player alpha: the roadmap and the testing pages describe testing by whoever runs a server; stale "not built" notes fixed.
+- The docs site has a "Buy me a coffee" link and the GitHub link in its footer.
+
 ## 0.1.0
 
 The first release: a Shaiya Episode 4.5 server in Rust with PostgreSQL, for the unmodified US client (patch 108).

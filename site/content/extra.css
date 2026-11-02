@@ -1,3 +1,19 @@
 .md-grid { max-width: 80rem; }
 .md-typeset table:not([class]) { font-size: .72rem; }
 .md-typeset table:not([class]) th, .md-typeset table:not([class]) td { padding: .5em .8em; }
+
+/* The "Buy me a coffee" link (overrides/main.html): small, in the bottom right corner, the label only on wide screens. */
+.bmc-float {
+  position: fixed; right: 1rem; bottom: 1rem; z-index: 3;
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .35rem .7rem; border-radius: 2rem;
+  background: #ffdd00; color: #1f1f1f; font-size: .7rem; font-weight: 600; text-decoration: none;
+  box-shadow: 0 .1rem .4rem rgba(0, 0, 0, .25); opacity: .85; transition: opacity .15s, transform .15s;
+}
+.bmc-float:hover, .bmc-float:focus-visible { opacity: 1; transform: translateY(-.1rem); color: #1f1f1f; }
+.bmc-cup { font-size: .9rem; line-height: 1; }
+@media screen and (max-width: 44.9375em) {
+  .bmc-float { padding: .45rem; right: .75rem; bottom: .75rem; }
+  .bmc-label { display: none; }
+}
+@media print { .bmc-float { display: none; } }

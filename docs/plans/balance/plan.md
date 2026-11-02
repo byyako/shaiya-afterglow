@@ -14,7 +14,8 @@ ultimate, every skill) unless a section says otherwise; "verified" as in parts 1
 Nothing here is built. The game, the database and the client are unchanged by this document.
 
 **Parked (the maintainer, 2026-10-31):** the open-source release keeps the original's numbers (`docs/plans/release.md`). This plan
-runs possibly after the player alpha, and then as extension work rather than changes to the core.
+was to run possibly after the player alpha, and then as extension work rather than changes to the core. There is no alpha (the
+maintainer, 2026-11-02): it stays parked, as extension work; read "the alpha" below as "a test server".
 
 ## 1. The answers and what follows
 

@@ -38,7 +38,8 @@ From `ps_game.exe` (EP4.5, with its PDB names), read in the Ghidra decompile (RE
 Covered: what a new item's make type and craft name are, wherever the original makes one; the random craft stats of monster drops; the
 boxes and pockets (`bySpecial` 42) with `Data/ItemCreate.ini`. **Not covered:** the administrator's item command (`CUser::PacketAdminCmdB`,
 the other caller of `CUser::ItemCreate`; `docs/original/gm-commands.md` section 7: make type `'S'` with craft stats as for
-boxes), item mall and point shop items (`PacketBilling`, `PacketPoint`; not built), personal shops (`PacketMyShop`) and the market
+boxes), item mall and point shop items (`PacketBilling`, `PacketPoint`; built since, with make type `'X'` and `'B'`:
+`docs/original/item-mall.md` sections 3 and 6), personal shops (`PacketMyShop`) and the market
 (`PacketMarket`), both built (`docs/original/personal-shop.md` section 7, `docs/original/auction.md` section 15); server-wide drop
 limits (`wDrop`, as before).
 

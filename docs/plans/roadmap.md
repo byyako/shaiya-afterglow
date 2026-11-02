@@ -2,8 +2,13 @@
 
 **The open-source release is done** (`docs/plans/release.md`, decided 2026-10-31; the public repository `byyako/shaiya-afterglow`, tag `v0.1.0`): a public repository that anyone with the
 original EP4.5 server files can clone and run, defaulting to the original's behaviour (fixes on, gameplay changes as settings with the
-original as default, additions off), with a fresh history. The player alpha below moves after the release; balance changes wait until
-after the alpha and come as extension work. Bug checks with the real client carry on alongside, not as a release gate.
+original as default, additions off), with a fresh history.
+
+**There is no player alpha (the maintainer, 2026-11-02).** A hosted alpha (a VPS, open registration, a web API, a tester client) was
+planned for after the release; instead the server files are released and the community tries them on their own servers. What people
+find comes back as issues (`CONTRIBUTING.md`, "Reporting a bug"); the live tests below are walked by whoever runs a server. The alpha's
+work items are kept under "Not scheduled" in case a part of them is wanted later. Balance changes and the extensions stay parked.
+
 
 ## The release (`docs/plans/release.md`): built
 
@@ -17,72 +22,49 @@ after the alpha and come as extension work. Bug checks with the real client carr
 | R5. LICENSE, CONTRIBUTING, SECURITY, changelog, 0.1.0, secret scan | **built** (`docs/plans/release.md` R5) | R4 |
 | R6. The release cut: public repository, one commit, tag, push, docs site link and deploy | **built** (`docs/plans/release.md` R6; `byyako/shaiya-afterglow`, tag `v0.1.0`) | R5 |
 
-## After the release: the player alpha (planned 2026-10-22, moved after the release 2026-10-31)
+## Testing
 
-### Decisions (2026-10-22)
+The automated tests cover the rules and the packets; what the real client shows is walked by hand (`docs/testing/README.md`).
 
-- **Phase 4 (extensions, rules, Lua, pets, per-player loot) is frozen** until after the alpha, including the chunk 1 spec
-  (`docs/plans/ext-1-foundation.md`, unbuilt). The core keeps its current config and database layout for the alpha.
-- **The alpha is open-ish: about 20 to 100 players, a public link, wipeable.** Registration is open with rate limits and no email; a
-  lost password means staff reset it or a new account. The server starts with a user cap (`.maxusers`) and raises it as it holds.
-- **Test bots are shelved, not dropped** (under "Frozen"). There is no load test before the alpha: the alpha is the load test,
-  so the operations step must put the numbers (players, tick time, memory, database size) where they can be watched, and the cap is the
-  safety.
-- **Web: one HTTP/JSON API with scoped keys is the only supported disconnect between the server and any web feature.** Pages are
-  separate static HTML/JS front-ends that call only the API (a player site and a staff admin), replaceable and forkable; endpoint groups
-  can be shared on their own, so someone with a PHP site can use the registration or ranking calls without our pages. No reference PHP
-  is built now (the maintainer's old PHP admin panel may be shown to the spec as a reference).
-- Public documents (the internal docs pass, the public site, the patch kit for the original files) wait for the alpha's fixes, except
-  the parts that do not depend on the server, which are done.
+- **The smoke list** (`docs/testing/smoke-list.md`, section 0 of the checklist): about a dozen things a new player does in the first
+  half hour. An operator walks it on a new server before players join, and again after an update.
+- **The long list** (`docs/testing/live-test-checklist.md`, sections 1 to 57): every item built and not yet seen working with the real
+  client, with where to try it and what should happen. `docs/testing/live-test-solo.md` sorts the items into one client, two clients,
+  hard alone and skip. A result, good or bad, is welcome as an issue naming the section and item; the maintainer folds the results
+  into the checklist and fixes what fails (a fix that needs the original binaries read again is analysis work first).
+- **On the maintainer's box**, the checklist page (`tools/checklist-server.sh`) keeps the results and `tools/checklist-server.sh report`
+  prints them for the next session.
 
-### Alpha steps
+### Work item A3. The smoke walk
 
-| step | what | needs |
-|---|---|---|
-| A3. Live tests and the smoke walk, deferred to the alpha (decided 2026-10-26): a short pre-launch smoke list is walked once before B4, the rest of `docs/testing/live-test-checklist.md` by alpha players and staff, and fixes follow | work item A3 below | A2 (built); the web registration item needs B1 |
-| B1. Web API and admin hooks: spec, then build (API, player site, staff site) | work item B1 below | none |
-| B2. Operations for the alpha: spec, then build | work item B2 below | B1's service list, so it follows B1's spec |
-| B3. Client for testers: package, updater served from the VPS, the server address; patch 109's acceptance is done (`docs/client/client-patch-0109.md`) | the client side | B2 (the host); the maintainer decides how the client is distributed |
-| B4. Go/no-go and launch: provision the VPS, deploy, soft launch to the maintainer and a few friends, then the public link | the maintainer | A2, B1, B2, B3 |
-
-Order of work: B1's spec and A3's smoke walk are independent. A2 and B1's build do not touch the same files, but if they run together, A2
-goes first on `crates/game-server`. B2 starts when B1's spec is committed. B1's spec reads `docs/server/audit.md` section 3.5 (the
-6-to-12 password rule, the NOTIFY channel, the data editor's access); A2 part 3 changes the login server's limits and
-`validate_credentials`, which B1's registration should reuse.
-
-### During the alpha
-
-C0. The checklist is the alpha's test plan: staff and willing players work through it (the checklist page can be shown to them, or its
-items turned into a tester-facing list by the staff site), and results go back into the checklist and the README status lists. C1. A weekly cadence: collect reports (a thread or the staff site's notes), fix, deploy with the restart countdown, announce. C2. Wipe
-when a change needs it: the wipe procedure is part of B2 (`public` schema reset, accounts optional). C3. Read the numbers; if the cap
-is raised past what the first hundred players show, build the shelved bot as a load test first.
-
-### After the alpha
-
-Run the public documents (internal docs pass, public site, bug page and patch kit), decide what phase 4 chunk to restart from what
-testers asked for, then the items under "Frozen" and "Later". Re-run the audit on the web API and anything built during the alpha.
-
-### Work item A3. The pre-launch smoke list
-
-**Goal**: `docs/testing/smoke-list.md` (copied as section 0 of the checklist by `tools/smoke-list-sync.sh`) is walked once, before the
-launch, and what fails is fixed. The walk is optional until then: the smoke list stays the first thing alpha staff walk after each deploy.
+**Goal**: `docs/testing/smoke-list.md` (copied as section 0 of the checklist by `tools/smoke-list-sync.sh`) is walked once on the
+maintainer's box with the real client, and what fails is fixed, so a new operator meets a server that passes it.
 
 **Inputs**: `docs/testing/smoke-list.md`, `docs/testing/live-test-solo.md` (trade needs two clients), the sections of
 `docs/testing/live-test-checklist.md` that cover each item, `docs/server/audit.md` (A2 is built, the fuzz harness included).
 
-**What to do**: about a dozen items covering login, entering the world, moving, fighting, looting, shop, trade, warehouse, a relog and
-the web registration (which waits for B1). Each item says which test setup to use (`docs/testing/live-test-checklist.md`, "Test setup"),
+**What to do**: about a dozen items covering login, entering the world, moving, fighting, looting, shop, trade, warehouse and a relog
+(the twelfth, web registration, is skipped: B1 is not scheduled). Each item says which test setup to use (`docs/testing/live-test-checklist.md`, "Test setup"),
 the steps, what should happen, and what to look at in `logs/game-server.log` or `logs/login-server.log` if it does not. After the walk,
 read the results with `tools/checklist-server.sh report` and fix what failed; a fix that needs the original binaries read again is
 analysis work first.
 
-**Done when**: every item that can run before B1 is walked, its result is in the checklist page, and each failure is fixed or listed.
+**Done when**: every item but the web registration is walked, its result is in the checklist page, and each failure is fixed or listed.
+
+## Not scheduled (written for the alpha, dropped 2026-11-02)
+
+The alpha's steps were B1 (the web API and admin hooks), B2 (operations: a VPS, backups, deploys, the wipe, monitoring), B3 (a client
+package and updater for testers) and B4 (the launch). B3 and B4 went with the alpha. B1 and B2 are kept below as they were specified,
+because an operator running a public server may want parts of them (an API for a registration page, the backup drill); their
+"alpha" means such a server. The decisions they rest on (2026-10-22): one HTTP/JSON API with scoped keys as the only disconnect between
+the server and any web feature, with static pages that call only it; registration open with rate limits and no email; a user cap
+(`.maxusers`) raised as the server holds. Nothing here is started without the maintainer asking.
 
 ### Work item B1. Web API and admin hooks
 
-**Goal**: a spec concrete enough to build in parts, for the open alpha (20 to 100 players, a public link, wipeable).
+**Goal**: a spec concrete enough to build in parts, for a public server (written for the alpha: 20 to 100 players, a public link, wipeable).
 
-**Inputs**: this roadmap's Decisions, `README.md`, `docs/server/architecture.md`, `docs/server/deploy.md`,
+**Inputs**: the decisions above, `README.md`, `docs/server/architecture.md`, `docs/server/deploy.md`,
 `docs/plans/done/data-editing.md` (the data editor is an axum service with a page: the model to build from),
 `docs/original/operator-console.md` (the `console` tool and the NOTIFY channel), `docs/original/item-mall.md` (points, premium, the
 `mall` tool), and the login-server tools (`crates/login-server/src/bin/`: `create_account`, `servers`, `console`, `mall`).
@@ -119,7 +101,7 @@ endpoints and audit trail; the player site; the staff site), each part one build
 
 **Done when**: the spec is committed and each choice the maintainer had to make is written in it as a decision.
 
-### Work item B2. Operations for the alpha
+### Work item B2. Operations for a public server
 
 **Goal**: a spec, then a build, of what running the alpha needs: an open alpha with 20 to 100 players, a public link, wipeable, on a
 rented VPS (Hetzner is likely), registration open with rate limits and no email, no load test before launch (the alpha is the load
@@ -163,8 +145,8 @@ rollback, the wipe script and one login-to-world run on the VPS have each been d
   clients, hard alone and skip; decide which two-client and hard-alone items work with a bot partner and which can be bot-only
   scenarios (a table in the spec), and which scenarios to build first. **Later**: the base of the load and soak test (hundreds of bots
   logging in, moving and fighting for hours: connection count, pacing, accounts made by `create_account`, metrics). **Done when**: a
-  spec in `docs/plans/test-bots.md` with a Build section, then the bot. Shelved because the alpha is the load test and the alpha's
-  players cover the two-player items.
+  spec in `docs/plans/test-bots.md` with a Build section, then the bot. Shelved when the alpha was to be the load test and its
+  players were to cover the two-player items.
 - **The original console's live data reloads**, the second game server (map 200), obelisk portal links: decisions in the README "Not
   built".
 
@@ -186,7 +168,7 @@ Raised by the maintainer (2026-10-22): people already running the original serve
 
 `docs/plans/ideas.md` holds what the maintainer raised (2026-10-26) and nothing is scheduled: the first extensions to design the plugin system against
 (fishing, crafting, forging, camping, monster madness), personal loot with the drop numbers and the lean, the balance project (analysis done in three parts; plan
-`docs/plans/balance/plan.md`, 2026-10-27; on 2026-10-31 the maintainer moved it to after the alpha, as extension work, not core changes), the deferred or dropped own client, and the discussion of using existing original files with this server.
+`docs/plans/balance/plan.md`, 2026-10-27; on 2026-10-31 the maintainer parked it as extension work, not core changes; it was to follow the alpha, which was dropped), the deferred or dropped own client, and the discussion of using existing original files with this server.
 
 ## Done (the old step numbers, which other documents refer to)
 
@@ -210,6 +192,6 @@ Raised by the maintainer (2026-10-22): people already running the original serve
 - **Data editor, not built** (`docs/plans/done/data-editing.md` section 10): signing in with a GM account (and `EDITOR_ALLOW` so the
   editor can be reached over the internet behind HTTPS), live reload of spawns, portals and obelisks, NPCs, shops and gatekeepers (they
   need the `NpcQuest.SData` client patch), new monsters and moved or added portals and obelisks (they need client data first).
-- **Client data patches, not built** (`docs/plans/done/client-patches.md` section 7): serving the patches (the alpha's B3), the other client data files
+- **Client data patches, not built** (`docs/plans/done/client-patches.md` section 7): serving the patches (the dropped alpha's B3), the other client data files
   (`Monster.SData`, `NpcSkill.SData`, `NpcQuest.SData`, `Cash.SData`) by the same pattern, and growing a table (a new item group, type ids past a
   group's count). They wait for the extension work and the balance plan, which need them.

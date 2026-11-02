@@ -198,7 +198,7 @@ obelisks spawn as their saved owners'. Nothing in the game sets or reads the two
 
 ## 8. Portal links
 
-Confirmed, ; not built; in full in section 11.2.
+Confirmed; not built; in full in section 11.2.
 
 A `[Portal_<n>, (<map>, <portal>)]` section with `[light] = (map, Obelisk_K), …` and `[fury] = …` (up to four each) links a map
 portal to obelisks; the link is kept only when its map and portal exist and at least one obelisk resolves. `UpdatePortalLink` opens a

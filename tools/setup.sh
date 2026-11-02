@@ -21,7 +21,7 @@ step "checking the prerequisites"
 missing=0
 need() { command -v "$1" > /dev/null || { echo "missing: $1 ($2)" >&2; missing=1; }; }
 need docker "Docker, https://docs.docker.com/engine/install/"
-need cargo "Rust 1.85 or newer, https://rustup.rs"
+need cargo "Rust 1.94 or newer, https://rustup.rs"
 need python3 "Python 3, from your distribution's packages"
 if command -v docker > /dev/null && ! docker compose version > /dev/null 2>&1; then
     echo "missing: docker compose (the Compose plugin, https://docs.docker.com/compose/install/)" >&2; missing=1

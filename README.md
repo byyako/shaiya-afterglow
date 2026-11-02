@@ -32,10 +32,13 @@ the guild bank and the ranking battle; quests and quest drops; friends and memos
 boss spawns of `Obelisk.ini`; party instance zones with their Lua bosses; personal shops and the auction house; mounts; the item mall and
 premium accounts; the gambling house; the game and chat log; the operator (GM) commands and the operator console.
 
-Not built, by decision: the second game server for map 200 (`ps_gamewar.exe`; nothing in the shipped data leads there) and the original
-console's `/reitem`-style live reloads (the `reload` console command covers monsters and drop tables).
+Not built, by decision: the second game server for map 200 (`ps_gamewar.exe`; nothing in the shipped data leads there), the original
+console's `/reitem`-style live reloads (the `reload` console command covers monsters and drop tables), the obelisks' road portal links
+(the shipped `Obelisk.ini` defines none) and a global chat without its item (`docs/server/deviations.md` section 8).
 
-Many of the systems have been tested with the real client; the rest are covered by the test suite and still wait for a test in play. `docs/testing/live-test-checklist.md` lists each untested item. With only `DATABASE_URL` set, the
+Many of the systems have been tested with the real client; the rest are covered by the test suite and still wait for a test in play.
+`docs/testing/live-test-checklist.md` lists each untested item; if you try one, a report of what happened is welcome (an issue,
+`CONTRIBUTING.md` "Reporting a bug"). With only `DATABASE_URL` set, the
 server behaves as the original apart from its fixes and the operator's tools: `docs/server/deviations.md` lists every deviation, and in its
 section 1 the settings that turn on what the original lacks (cross-faction trade, a market-map limit, the Kill Boost Stones). One
 addition is on by default: the gambling house, which the original's data places but its server never shows (`GAME_MINI_GAME`, with
@@ -45,7 +48,7 @@ the original's odds).
 
 - **Linux** (developed on Debian 13; any recent distribution with Docker should do). Windows hosts are not tested.
 - **Docker**, for PostgreSQL and, during the import only, SQL Server.
-- **Rust 1.85 or newer** (edition 2024), from [rustup](https://rustup.rs). Building needs about 2 GB of memory.
+- **Rust 1.94 or newer** (edition 2024; `sqlx` 0.9 needs 1.94), from [rustup](https://rustup.rs); `rustup update` brings an older one up. Building needs about 2 GB of memory.
 - **Python 3** (standard library only), for the import scripts.
 - **The original EP4.5 server files**: the SQL Server backups in `PSM_Data/` (only `PS_GameDefs` is used) and the game server's data
   folder `PS_Game/Data/` (`Map.ini`, the svmaps, `NpcQuest.SData`, `Obelisk.ini`, `ItemCreate.ini`, the Lua scripts and the rest).
@@ -177,7 +180,7 @@ heartbeats arrive.
 ### 8. Connect the client
 
 The client has its login address built in. `tools/patch_client_ip.py` writes a copy of `game.exe` that connects to your server (it checks
-the input's hash first and changes 10 bytes), or a network redirect does the same without touching the client. `docs/original/client-login.md`
+the input's hash first and changes only the address string, a 16-byte slot), or a network redirect does the same without touching the client. `docs/original/client-login.md`
 explains both and what each error box means. Log in with the account from step 6.
 
 To check the server without a client:

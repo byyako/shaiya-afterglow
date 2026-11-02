@@ -226,8 +226,8 @@ The effect (after the costs and cooldown of part 2 section 7):
 
 1. **Players** in the 3 × 3 cells around the field's cell: alive, on a map whose war type is not 1, **of another country than the field**, visible,
    within **`byApplyRange`** of the field (horizontal, ≤): revealed (section 6), damage (below), `CUser::Damage`, death by the field's owner,
-   **`0x0513`** (result 0, owner, player, skill, level, damage) within 60 of the field. Not built: the new server hits monsters only
-   (section 12).
+   **`0x0513`** (result 0, owner, player, skill, level, damage) within 60 of the field. Built later (`docs/original/thorns-fields-pvp.md`; at first the new server hit
+   monsters only, section 12).
 2. **Monsters** in the same cells: alive, not in state 2; **a trap (101) only hits monsters that its `byStateType` does not bounce off**: with
    `byStateType` 0 none at all, else those whose `pState[byStateType − 1]` is 0 (both trap rows have state 7); of **neutral or another country**
    than the field; within `byApplyRange`: damage (below), **`CMob::Damage(kind 1, owner, REC 0, wAggro)`**; not killed: when the owner is in the

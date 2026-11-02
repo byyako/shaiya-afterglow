@@ -1,6 +1,6 @@
 # Public docs site
 
-A MkDocs Material site built from the notes in `../docs`. Only the files listed in `mkdocs.yml`'s `nav` are published (everything else in `docs/` stays private); `content/` holds the home page and CSS.
+A MkDocs Material site built from the notes in `../docs`. Only the files listed in `mkdocs.yml`'s `nav` are published (everything else in `docs/` stays off the site, though it is in the public repository); `content/` holds the home page and CSS, and `overrides/main.html` adds the "Buy me a coffee" link in the corner of every page (styled in `content/extra.css`; the footer has it too, with the GitHub link, from `extra.social` in `mkdocs.yml`).
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once

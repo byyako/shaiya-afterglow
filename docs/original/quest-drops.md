@@ -167,7 +167,7 @@ the killer) to the game log (built, [The game log](game-log.md)).
 
 ## 5. Server-wide drop limits
 
-Confirmed, ; facts only.
+Confirmed; facts only.
 
 `CGameData::LoadItemLimit` reads `usp_Read_ItemCount_ByServer`, then `CItemDrop::Init` 0x4bde50 lists each grade's unlimited items first, then
 the limited ones; `CItemDrop::InitLimit` 0x4be3e0 gives each item with **`wDrop` 1 to 6** a period of 24 min, 4 h, 8 h, 12 h, 24 h or 72 h

@@ -322,7 +322,7 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   for good, leaving seven for about 100 players, the game-log writer, the guild and friends writers, the market pass, the heartbeat and
   every handshake. `mob_updater` awaits `obelisk_events` (`server.rs:552`, which saves owners) and `kill_count_changes` (`server.rs:575`,
   which saves counts) inside the tick. sqlx's default acquire timeout is 30 s.
-- How: R4's write packets, a flood of handshakes (R2), or plain load at the alpha's peak.
+- How: R4's write packets, a flood of handshakes (R2), or plain load at a busy server's peak.
 - Effect: every save queues. Past the acquire timeout the `?`s end players' connections, some mid-change (R14, R16). The monster
   passes, invitation and trade expiry freeze while the tick waits. A late heartbeat makes the login server list the server as closed.
 - Fix:
@@ -443,8 +443,9 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   - The refused step and the unsafe-markup line go to debug.
   - The hex dumps are cut to the first 64 bytes.
   - A per-connection limit of one such line per kind per 10 s.
-  - The scripts keep debug (they are the dev box's), but `docs/server/deploy.md` says the alpha runs under systemd at `info`.
-  - `GAME_LOG_DAYS` and a `login_log` purge go to the operations step (B2).
+  - The scripts keep debug (they are the dev box's), but `docs/server/deploy.md` runs a public server under systemd at `info`.
+  - `GAME_LOG_DAYS` is built (`docs/server/settings.md`); a `login_log` purge is not (it was left to an operations step that is not
+    scheduled: `docs/plans/roadmap.md`).
 - Player-visible: none.
 
 **R19. The idle timer restarts with every packet sent to the player; a kick can be cut mid-write.**
@@ -539,12 +540,12 @@ about 1,000,000 a call) and log the script that hit it.
 
 **R30. NOTIFY is an unauthenticated control channel.** The game server carries out any `game_console` NOTIFY for its server id (quit,
 restart, allout, reload, exp, kick) and any `account_login` / `account_points` notification (`main.rs:141-197`). PostgreSQL needs no
-privilege to NOTIFY, so any role that can connect to the database can do it. Not a fix in this audit. The planned web API gives its role no
-access to this database (or no NOTIFY-capable connection) and decides whether the console payloads carry a secret.
+privilege to NOTIFY, so any role that can connect to the database can do it. Not a fix in this audit. A web API (not scheduled) would give its role no
+access to this database (or no NOTIFY-capable connection) and would decide whether the console payloads carry a secret.
 
-### 3.5 For the planned web API
+### 3.5 For a web API, if one is built
 
-R7's 6-to-12 password rule applies to registration and password changes. R30 decides the API's database access. R17's editor access
+R7's password rule (6 to 16 characters as built, part 3) applies to registration and password changes. R30 decides the API's database access. R17's editor access
 may fold into the API's staff login. Rate limits for registration belong with R7's limits.
 
 ### 3.6 Kept as they are
@@ -553,14 +554,14 @@ may fold into the API's staff login. Rate limits for registration belong with R7
   well as on a refusal. If the connection to PostgreSQL drops after the server committed, the item is both saved and back on the ground.
   Putting back only on a refusal would lose the item in the far more common case where the error happened before the commit. Kept.
 - **N2. Value that lives only in memory.** Duel stakes (taken out of the database at `take_stakes`), gambling-table money and ground
-  items are lost by a crash or a `kill -9`; a graceful shutdown returns stakes and table money. Accepted for the alpha. A "held" table
+  items are lost by a crash or a `kill -9`; a graceful shutdown returns stakes and table money. Accepted. A "held" table
   is possible later.
 - **N3. The warehouse withdrawal fee wraps** (`inventory.rs:260`, `wrapping_mul`) as the original's 32-bit product does. Kept.
 - **N4. Lock order.** `fields` (`zone.rs` ~3768) calls `damage_mob`, which takes `ground`, while `expire_instances`
   (`zone/instance.rs:113-127`) takes `ground` then `fields`. Both hold `maps` first, so no deadlock is possible. Write the order down in
   `Zones`' doc comment: maps, instances, mobs, npcs, ground, fields, then parties, then guilds or friends; the others are leaves.
-- **N5. The monster passes hold `maps` and `mobs`** every 100 or 500 ms over every map. Measure the pass time at the alpha (operations
-  step) before splitting anything.
+- **N5. The monster passes hold `maps` and `mobs`** every 100 or 500 ms over every map. Measure the pass time on a busy server before
+  splitting anything.
 - **N6. `settle`'s `expect`** (`server.rs:3966`) cannot fire (the plan checks the money), but it runs before the parked partner's reply.
   Part 2 sends the reply first.
 
@@ -807,11 +808,12 @@ New settings: `GAME_WRITE_TIMEOUT_SECS` 20, `GAME_OUTBOX_LIMIT`
   The 12 was the original server's cut; the client sends 16 bytes of the password (`docs/original/ps_login.md` section 3). The username stays at 12.
 - R7: the address count of 20 failures in 10 minutes also counts the attempts made while an account is blocked (not the account's own
   counts, so a block cannot be kept going by trying). The settings are `LOGIN_PAIR_FAILURES`, `LOGIN_PAIR_WINDOW_SECS`,
-  `LOGIN_PAIR_LOCKOUT_SECS`, `LOGIN_ACCOUNT_FAILURES`, `LOGIN_ACCOUNT_WINDOW_SECS`, `LOGIN_TRACKED_ACCOUNTS` (README). The older
+  `LOGIN_PAIR_LOCKOUT_SECS`, `LOGIN_ACCOUNT_FAILURES`, `LOGIN_ACCOUNT_WINDOW_SECS`, `LOGIN_TRACKED_ACCOUNTS` (`docs/server/settings.md`). The older
   `LOGIN_FAILURE_*` address count no longer clears on a good login.
 - R17: `tools/checklist_server.py` takes any IP address as the `Host` as well as `localhost` (the page is opened by the box's LAN address;
   a rebinding page has a name, never an address). Extra names: `CHECKLIST_HOSTS`. The editor follows the text exactly (`EDITOR_HOSTS`).
-- R21: the height limit is `world::MAX_HEIGHT` (10,000). Hair, face and size are not clamped: client queue entry 13 (a) is still open, so
+- R21: the height limit is `world::MAX_HEIGHT` (10,000). Hair, face and size are not clamped: client queue entry 13 has since been answered (the ranges are in
+  `docs/client/research-extension-features.md`, "Input ranges"), but the clamp is not built, so
   `creation.rs` and `server/items.rs` carry the `TODO` the entry asks for. The shop title check is in `my_shop::parse_start`.
 - R22: `frame::encode` logs through `tracing`, which `shaiya-proto` now depends on. The market refresh cut is `PAGE + 1` rows.
 - R26: the order also updates `state.staff` and the occupant's flag (`Zones::set_staff`), and a demoted GM's held question is given back

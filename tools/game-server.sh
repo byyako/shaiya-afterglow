@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run the game server in the background.
 #   tools/game-server.sh start|stop|restart|status|logs
-# Reads .env (DATABASE_URL; GAME_SERVER_ID defaults to 1) from the project root. Settings can be overridden in the environment.
+# Reads .env (DATABASE_URL; GAME_SERVER_ID defaults to 1) from the project root. A setting can come from the environment only when .env does not set it (.env is loaded over it: docs/server/settings.md, "Run scripts").
 # The server runs in a loop that starts it again after any non-zero exit status: 75 is the console's `restart`
 # (docs/plans/done/data-editing.md section 7), the others are crashes. The loop gives up when the server exits more than 5 times within a
 # minute (docs/server/audit.md R5). A clean exit (status 0) and `stop` end the loop.

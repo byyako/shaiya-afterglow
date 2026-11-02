@@ -382,7 +382,7 @@ answer, as now).
 
 ## 11. Item skills on another target: `0x0559` kinds 1 and 2
 
-Confirmed, ; decided, 11.1.
+Confirmed; decided, 11.1.
 
 `0x0559` (9 bytes: `u8 bag, u8 slot, u8 kind, u32 target`; refused while riding, `docs/original/item-use.md` section 1). For an item that
 names a skill (`byRange`, `byAttackTime`) and is not an experience wheel (`CUser::ItemUse` 0x465904):

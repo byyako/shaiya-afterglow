@@ -53,7 +53,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | ps_login | passwords stored as the original's database holds them → Argon2 hashes in `accounts` | robust | |
 | ps_game 3 | the game connection's address is never compared with the login's → it must match | fix | `GAME_CHECK_IP` (`true`) |
 | R8, R9, R11, R18, R22, R26, R28, R29 | the auction and guild-bank turns held across writes; the handshake order; eight database connections; player-triggered log lines; oversize packets; the console's staff level; the Lua `os` library; the bank count fix-ups → each made safe | robust | `GAME_DB_POOL`, `GAME_DB_ACQUIRE_SECS` |
-| R21 | a NaN or huge height stored and relayed; shop titles unchecked; hair, face and size unchecked (the last still open: client queue entry 13) | fix | |
+| R21 | a NaN or huge height stored and relayed; shop titles unchecked; hair, face and size unchecked (the last still stored as sent: client queue entry 13 gave the ranges, the clamp is not built) | fix | |
 | R3, R12-R16, R20, R23-R25, R27, N6 | exchanges, rewards and saves in several writes → each one transaction, or retried; listed under their systems below | fix | |
 | client-extras 2 | a kicked connection closes silently → `0x0004 00` first, so the client says why and quits | client | |
 | client-extras 3 | a new login while the old connection is still leaving is refused → it waits for it | robust | `GAME_HANDSHAKE_WAIT_SECS` (`15`) |
@@ -136,7 +136,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | auction | 2 | the name search is case-sensitive → ignores case | gameplay | |
 | auction | 3 | `/auctionrecall` keeps the seller's deposit → returns it | tooling | |
 | guild-bank | 1-4 | the bank anywhere; bound items in by a swap; the wrong refusal text; a guild with items in its bank disbanded → each fixed | fix, client | |
-| mini-game | | the gambling house unreachable (type-5 NPCs never made) → shown, with fairer odds as settings | addition | `GAME_MINI_GAME` (`true`), `GAME_SLOT_PAYOUT_PERCENT` (`100`), `GAME_CARD_WIN_CHANCES` (`400,200,100,50,10`) |
+| mini-game | | the gambling house unreachable (type-5 NPCs never made) → shown, with the original's odds (fairer odds are settings) | addition | `GAME_MINI_GAME` (`true`), `GAME_SLOT_PAYOUT_PERCENT` (`100`), `GAME_CARD_WIN_CHANCES` (`400,200,100,50,10`) |
 
 ## 7. Parties, unions, guilds, friends, quests
 

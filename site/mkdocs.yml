@@ -6,6 +6,7 @@ use_directory_urls: true
 
 theme:
   name: material
+  custom_dir: overrides   # overrides/main.html: the "Buy me a coffee" link
   features:
     - navigation.tabs
     - navigation.sections
@@ -34,6 +35,15 @@ markdown_extensions:
 
 extra_css:
   - extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/byyako/shaiya-afterglow
+      name: The open-source server on GitHub
+    - icon: simple/buymeacoffee
+      link: https://buymeacoffee.com/tylernol
+      name: Buy me a coffee
 
 plugins:
   - search

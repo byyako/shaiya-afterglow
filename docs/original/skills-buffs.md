@@ -372,7 +372,7 @@ Confirmed, `CUser::SendDBAgentCharGetInfo` 0x46c980, `CUser::AddApplySkill(id, l
 
 ## 16. The duel and guild-war death exception
 
-Confirmed, ; approved; to build.
+Confirmed; approved; built (16.2).
 
 **The original** (`CUser::ClearApplySkillByDeath` 0x488000, the test at 0x48805a): for each applied skill without `byDontRemByDeath`,
 when `m_nDropExp` (`+0x145c`) is **−1** and the entry's skill id (`+0xc`) is **above 200** and its level (`+0x10`) is **not 100**, the

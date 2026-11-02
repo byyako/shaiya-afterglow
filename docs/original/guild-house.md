@@ -208,7 +208,7 @@ Logging in or coming back to life on a house map: the map's `RebirthMapPos` (51:
 
 ## 8. The ranking update
 
-Confirmed, ; completed in `docs/original/guild-ranking.md` sections 3 and 8.
+Confirmed; completed in `docs/original/guild-ranking.md` sections 3 and 8.
 
 `CWorldSendThread::Run` asks every 60 s whether the first map of `CreateType` R (map 50, `CreateTime (0, 21, 1)`: Sunday 21:00–22:00,
 local time; only its first **two** time entries are read) is open; **30 minutes after it closes**, `CGuildMgr::UpdateGuildPointRank`:

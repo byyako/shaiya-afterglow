@@ -6,7 +6,8 @@ and where the details are. The live plan is `docs/plans/roadmap.md`. An idea bec
 ## 1. Decisions taken in this discussion
 
 - **Live tests are deferred to the alpha** (roadmap A3). Only structural checks stay before launch: the backup restore drill, deploy and
-  rollback, the wipe script, one login-to-world run on the VPS.
+  rollback, the wipe script, one login-to-world run on the VPS. *(2026-11-02: there is no alpha; the release is the community's to
+  try, and the live tests are walked by whoever runs it: `docs/plans/roadmap.md`, "Testing".)*
 - **An own client is deferred, possibly dropped.** The DLL (`fixes.dll`, Rust) and the signed data patches may do everything wanted for
   now. Why not now: the original client is the oracle that tells whether the server is right, an own client would delay the alpha by
   months and confound bugs, and it is a larger project than the server was. If it is ever reopened: a staged track (an asset converter
@@ -14,7 +15,7 @@ and where the details are. The live plan is `docs/plans/roadmap.md`. An idea bec
   Linux, Mac, 64-bit and a browser (a browser needs a WebSocket gateway on the server), art from the original `data.saf` or a converted
   archive. Needs a feasibility spec first. The wishes behind it: new features, cross-platform or web or 64-bit, freer UI and maps.
 
-## 2. First extensions to keep in mind (frozen with phase 4 until after the alpha)
+## 2. First extensions to keep in mind (frozen with phase 4)
 
 The maintainer's candidates, "spitballing" small features that keep players interested. They are not designs; they are here so the plugin
 system's spec (`docs/plans/extensions.md`, `docs/plans/ext-1-foundation.md`) is checked against them.

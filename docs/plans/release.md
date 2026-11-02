@@ -1,8 +1,12 @@
 # Release plan: the open-source repository
 
-The next goal is a **public repository**: anyone with the original EP4.5 server files and the US client can clone it, follow the README
-and run a server. The player alpha (roadmap B1 to B4) comes after the release. Bug hunting with the real client is not part of this plan;
-it carries on as before (`docs/testing/live-test-checklist.md`) and later with the alpha's players.
+**Done: released as `byyako/shaiya-afterglow`, tag `v0.1.0`.** The goal was a **public repository**: anyone with the original EP4.5
+server files and the US client can clone it, follow the README and run a server. Bug hunting with the real client is not part of this
+plan; it carries on (`docs/testing/live-test-checklist.md`), now by anyone who runs the server.
+
+**2026-11-02, the maintainer: there is no player alpha.** The plan below was written when a hosted alpha (roadmap B1 to B4) was to
+follow the release; instead the server files are released for the community to try. The mentions of the alpha below are kept as they
+were decided at the time; `docs/plans/roadmap.md` is the current plan.
 
 ## Decisions (the maintainer, 2026-10-31)
 
@@ -542,5 +546,6 @@ R5 and R6. About eight to ten sessions in all.
 
 ## After the release
 
-The player alpha (roadmap B1 web API, B2 operations, B3 tester client, B4 launch), then the extension work: the balance plan, the
+Planned at the time: the player alpha (roadmap B1 web API, B2 operations, B3 tester client, B4 launch), dropped on 2026-11-02 (the
+release is the community's to try); then the extension work: the balance plan, the
 additions moved out in R1, pets and the rest of phase 4 (`docs/plans/roadmap.md`).

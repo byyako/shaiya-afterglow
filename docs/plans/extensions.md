@@ -1,6 +1,6 @@
 # Extensions, rules and pets (design and work plan)
 
-**Frozen (decided 2026-10-22) until after the alpha** (`docs/plans/roadmap.md`, "Frozen"). Nothing below is scheduled; the work items of section 7 are kept for when it restarts.
+**Frozen (decided 2026-10-22)** (`docs/plans/roadmap.md`, "Frozen"; it waited for an alpha that was dropped on 2026-11-02). Nothing below is scheduled; the work items of section 7 are kept for when it restarts.
 
 Not a spec. This gathers what the maintainer decided and asked for (2026-10-22) so that each chunk of work can be specified and then built
 later, one at a time. Nothing here is built. Each chunk (section 6) has a work item in section 7 (a spec first, then the build); the

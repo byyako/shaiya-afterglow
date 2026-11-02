@@ -1,10 +1,15 @@
 # Settings
 
 Every setting is an environment variable. The servers and tools read `.env` in the working directory first (git-ignored; start from
-`.env.example`), and the environment overrides it. Only `DATABASE_URL` is required. The defaults are listed here. With nothing else set
+`.env.example`), and the environment overrides it (the run scripts are the exception: they load `.env` over the environment, below).
+Only `DATABASE_URL` is required. The defaults are listed here. With nothing else set
 the server behaves as the original EP4.5 server apart from its fixes, the operator's tools and the gambling house (`GAME_MINI_GAME`);
 where a default still differs from the original, the meaning says so with "(the original: …)". `docs/server/deviations.md` lists every
 deviation, and section 1 there the settings that turn on something the original does not have.
+
+How the values are read: an on/off setting is on for `1`, `true`, `yes` or `on` (any case) and off for anything else, so a misspelt
+`ture` turns a setting off; a `_SECS` setting is whole seconds; a number out of its range, or a value that does not parse, stops the
+server at start with the setting's name.
 
 ## Login server (`login-server`)
 
@@ -26,7 +31,7 @@ deviation, and section 1 there the settings that turn on something the original 
 | variable | default | meaning |
 |---|---|---|
 | `GAME_BIND` | `0.0.0.0:30810` | listen address |
-| `GAME_SERVER_ID` | `1` | this server's id in `game_servers` |
+| `GAME_SERVER_ID` | `1` | this server's id in `game_servers` (`servers add`), at most 255 |
 | `GAME_CHECK_IP` | `true` | the game connection must come from the address the account logged in from (the original did not check) |
 | `GAME_HEARTBEAT_SECS` | `5` | how often the player count and liveness are written |
 | `GAME_HANDSHAKE_SECS`, `GAME_IDLE_SECS` | `30`, `600` | time allowed for the whole handshake from the connect (pings do not extend it), and silence allowed afterwards (counted from the client's last bytes, whatever is sent to it; the original: no handshake deadline) |
@@ -51,7 +56,7 @@ deviation, and section 1 there the settings that turn on something the original 
 | `GAME_TRADE_CHAT_MIN_LEVEL`, `GAME_TRADE_CHAT_COOLDOWN_SECS` | `10`, `5` | trade chat (`$`, faction-wide): lowest level and time between messages, as the US client limits it; 0 turns a limit off (the original server: no check) |
 | `GAME_CROSS_FACTION_TRADE_MAPS` | empty | maps (comma-separated ids) where players of both factions may trade, for example `42` (the Auction House); empty for none, as the original (an addition: `docs/server/deviations.md` section 1) |
 | `GAME_MARKET_MAPS` | empty | maps (comma-separated ids) where a personal shop may be set up, for example `35,36,42` (the capitals and the Auction House, where the client offers it); empty for every map, as the original (a limit on any map list is an addition: `docs/server/deviations.md` section 1) |
-| `GAME_GUILD_PARTY_SIZE` | `7` | the party size needed to create a guild (the original: exactly 7); 1 lets a player create one alone |
+| `GAME_GUILD_PARTY_SIZE` | `7` | the party size needed to create a guild (the original: exactly 7); 1 (or 0) lets a player create one alone |
 | `GAME_KILL_COUNT` | `true` | the factions' kill counts move with player kills (`docs/original/pvp-2.md` section 9), as the original's console default |
 | `GAME_RANKING_TIMES` | empty | the guild ranking battle's open times as `(weekday,hour,hours)` entries, e.g. `(1,14,1)` or `(1,14,1),(3,10,2)` (`docs/original/guild-ranking.md` section 10); empty keeps map 50's `CreateTime`, as the original; a test override |
 | `GAME_RANKING_UPDATE_DELAY_SECS` | `1800` | how long after the ranking battle closes the ranking is updated (as in the original) |
@@ -61,7 +66,7 @@ deviation, and section 1 there the settings that turn on something the original 
 | `GAME_MINI_GAME` | `true` | the gambling house (`docs/original/mini-game.md`): `true` places the six type-5 NPCs (maps 1, 2, 19, 20, 28, 29) and handles the `0x31xx` slot machine and card double-up with the original's odds (the two rows below); `false` hides the NPCs as the original does (an addition, on by default: `docs/server/deviations.md` section 1) |
 | `GAME_SLOT_PAYOUT_PERCENT` | `100` | each winning slot line pays multiplier × the table's bet × this / 100 (1 to 1000); 100, the original's table, gives back about 41 % of the bets, 220 about 90 % (used only with `GAME_MINI_GAME`) |
 | `GAME_CARD_WIN_CHANCES` | `400,200,100,50,10` | the double-up's chance (per mille, rounds 1 to 5) that the card falls on the guessed side; the default is the original's (fairer odds, for example `420,200,130,100,80`, are an operator's choice; used only with `GAME_MINI_GAME`) |
-| `GAME_CONSOLE_LEVEL` | `1` | staff levels 1 to this may type `.command` lines (`.help`, `.info`, `.exp 2`, …) in the game; the answers are whispers from `Server` |
+| `GAME_CONSOLE_LEVEL` | `1` | 1 to 5: staff levels 1 to this may type `.command` lines (`.help`, `.info`, `.exp 2`, …) in the game; the answers are whispers from `Server` |
 | `GAME_MAX_CONNECTIONS`, `RUST_LOG` | `5000`, `info` | total connections, log level |
 
 ## Data editor (`data-editor`)
@@ -81,6 +86,7 @@ The import scripts reach the databases through `tools/dbconn.py` and `tools/dbco
 | variable | default | meaning |
 |---|---|---|
 | `DATABASE_URL` | none | the user, password, host, port and database the tools use (as the servers) |
+| `NEWSHAIYA_PASSWORD` | unset | the new account's password for `create_account`; unset, it reads one line from standard input (so the password is not in the process list) |
 | `PG_PASSWORD` | none | the password `compose.yaml` creates the PostgreSQL container with; must equal the password in `DATABASE_URL` |
 | `PG_CONTAINER` | `newshaiya-postgres` | the PostgreSQL container: its `container_name` in `compose.yaml`, and where the tools run `psql` |
 | `MSSQL_CONTAINER` | `newshaiya-mssql` | the SQL Server container of the import (`compose.yaml` profile `import`) |
@@ -92,6 +98,16 @@ The import scripts reach the databases through `tools/dbconn.py` and `tools/dbco
 
 ## Run scripts
 
-`tools/login-server.sh`, `tools/game-server.sh` and `tools/data-editor.sh` source `.env`, then set `RUST_LOG` to
-`info,login_server=debug` / `info,game_server=debug` (the data editor: `info`) unless it is already set; `tools/data-editor.sh`
-keeps `EDITOR_BIND` at `127.0.0.1:30890`. The logs go to `logs/<name>.log`.
+`tools/login-server.sh`, `tools/game-server.sh` and `tools/data-editor.sh` source `.env` (with `set -a`, so a variable in `.env` wins over
+the same one in the shell; give a one-off value in the shell only for a variable `.env` does not set), then set `RUST_LOG` to
+`info,login_server=debug` / `info,game_server=debug` (the data editor: `info`) unless it is set by then; `tools/data-editor.sh`
+keeps `EDITOR_BIND` at `127.0.0.1:30890` unless it is set. The logs go to `logs/<name>.log`.
+
+## Tests
+
+| variable | default | meaning |
+|---|---|---|
+| `DATABASE_URL` | unset | the PostgreSQL tests use it (from `.env`) and skip themselves without it; the tests that need `defs` or `world` also skip on an empty database |
+| `PROPTEST_CASES` | `5000` | cases per property of the `#[ignore]` deep twins in `fuzz_dispatch` and `fuzz_login` (the ordinary run has fixed counts); the README's "Development" has the command (`docs/server/audit.md` section 5) |
+| `FUZZ_LOG` | unset | a `tracing` filter for `fuzz_dispatch`, e.g. `game_server=debug`, to see what the server logs while tracing a failure |
+| `FUZZ_TRACE` | unset | when set, `fuzz_dispatch` prints each case's opcodes before it runs |

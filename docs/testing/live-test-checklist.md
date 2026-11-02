@@ -4,7 +4,7 @@ Everything built but not yet tried with the real client, with where to try it an
 wrong) and the server log (`logs/game-server.log`) fills in the rest. Remove sections once they pass.
 
 **Section 0 is the pre-launch smoke list** (`docs/testing/smoke-list.md` is its master, copied here by `tools/smoke-list-sync.sh`): twelve items,
-walked once before the alpha opens. Sections 1 and up are the long list.
+walked on a new server before players join. Sections 1 and up are the long list.
 
 Which items one tester can do with one client, which need two clients, and which to skip: `docs/testing/live-test-solo.md` (with the
 one-client items grouped into sittings).
@@ -50,9 +50,9 @@ Skill numbers are the ids in `defs.skills` (the client shows the names).
 
 ## 0. Pre-launch smoke list
 
-Twelve things a new player does in the first half hour, walked once on the dev box before the alpha opens (`docs/plans/roadmap.md` step A3).
-It is short on purpose: if one of these fails, nothing else is worth testing yet. The long list (sections 1 to 57 below) is for the
-alpha's players and staff, and each item here is drawn from the section named in it.
+Twelve things a new player does in the first half hour, walked on a new server before players join, and again after an update
+(`docs/plans/roadmap.md`, "Testing"). It is short on purpose: if one of these fails, nothing else is worth testing yet. The long list
+(sections 1 to 57 below) is for anyone testing with the real client, and each item here is drawn from the section named in it.
 
 Walk the items in order; later ones use what the earlier ones left (the gold, the Apples, the position). Items 8 and 9 need two game
 clients at once (`docs/testing/live-test-solo.md`, group B). Mark each Passed, Failed or Can't test, and when it fails write what you saw in the
@@ -148,10 +148,11 @@ gold picked up, 113 buy, 114 sell, 121 and 122 warehouse, 116 and 164 trade give
       The check: `tail -n +$(grep -n "game server listening" logs/game-server.log | tail -1 | cut -d: -f1) logs/game-server.log | grep -E
       "ERROR|WARN|panic" | grep -v "slow statement\|time to acquire"`, and the same with `login server listening` on
       `logs/login-server.log`. If not: copy the lines into the note.
-- [ ] **12. Web registration (waiting for B1, not built).** Mark Can't test until the player site exists. Then: register a new account
+- [ ] **12. Web registration (not built: the web API, `docs/plans/roadmap.md` B1, is not scheduled).** Mark Can't test unless your
+      server has a registration page of its own. Then: register a new account
       on the site (an unused name, a password of 6 to 16 characters), log in with it in the client, create a character, enter the
       world and walk a few steps. Should: the account works at once, the character screen is empty, creation and entering work as for
-      any account. If not: the login server's log for "login refused" with the name, `docs/plans/roadmap.md` B1 for the API's own log.
+      any account. If not: the login server's log for "login refused" with the name, the registration page's own log.
 
 ## 1. Basics not yet seen live
 
@@ -1580,9 +1581,9 @@ needs two or three clients on one machine (several characters on one address are
 The login server counts wrong passwords per account, the data editor answers only requests addressed to localhost, and a few inputs are
 stricter. Everyday login and play must feel the same.
 
-- [ ] Login guard (login screen, a spare account `spare` and the real account `ty`): type a wrong password for `spare` five times (they
-      may be on one connection or several), then the right one: still "wrong password". On the same machine `ty` logs in at once, and
-      logging in as `ty` does not lift the wait for `spare`. After 15 minutes `spare` works again (or restart the login server, which
+- [ ] Login guard (login screen, a spare account `spare` and the GM account): type a wrong password for `spare` five times (they
+      may be on one connection or several), then the right one: still "wrong password". On the same machine the GM account logs in at
+      once, and logging in with it does not lift the wait for `spare`. After 15 minutes `spare` works again (or restart the login server, which
       forgets the counts).
 - [ ] Four wrong passwords then the right one on the same account logs in as before.
 - [ ] `create_account` (`nsh create_account name` or `cargo run -p login-server --bin create_account -- name`) refuses a password of 5
