@@ -1,0 +1,217 @@
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+GroupList|1|ServerID|tinyint|NOT NULL|||0
+GroupList|2|GroupName|varchar(50)|NOT NULL|||0
+GroupList|3|GameDB|varchar(50)|NULL|||0
+GroupList|4|LogDB|varchar(50)|NULL|||0
+GroupList|5|ChatDB|varchar(50)|NULL|||0
+GroupList|6|Unity|tinyint|NOT NULL|||0
+GroupList_Test|1|ServerID|tinyint|NOT NULL|||0
+GroupList_Test|2|GroupName|varchar(50)|NOT NULL|||0
+GroupList_Test|3|GameDB|varchar(50)|NULL|||0
+GroupList_Test|4|LogDB|varchar(50)|NULL|||0
+GroupList_Test|5|ChatDB|varchar(50)|NULL|||0
+GroupList_Test|6|Unity|tinyint|NOT NULL|||0
+GuildWar_Users|3|ServerGroup|int|NULL|||0
+GuildWar_Users|4|CharID|int|NULL|||0
+GuildWar_Users|5|CharName|varchar(30)|NULL|||0
+GuildWar_Users|6|GuildID|int|NULL|||0
+GuildWar_Users|7|GuildName|varchar(30)|NULL|||0
+GuildWar_Users|8|Status|int|NULL||(1)|0
+GuildWar_Users|9|UserUID|int|NULL|||0
+LanguageText|1|Index|int|NOT NULL|||0
+LanguageText|2|TextID|nvarchar(255)|NULL|||0
+LanguageText|3|Korean|nvarchar(255)|NULL|||0
+LanguageText|4|Chinese|nvarchar(255)|NULL|||0
+LanguageText|5|Vietnamese|nvarchar(255)|NULL|||0
+LanguageText|6|English|nvarchar(255)|NULL|||0
+LanguageText|7|Japan|nvarchar(255)|NULL|||0
+LanguageText|8|Taiwan|nvarchar(255)|NULL|||0
+LanguageText|9|Germany|nvarchar(255)|NULL|||0
+LanguageText|10|France|nvarchar(255)|NULL|||0
+LanguageText|11|Russia|nvarchar(255)|NULL|||0
+MarketCharResultItems_Backup_A|1|RowID|int|NOT NULL|||0
+MarketCharResultItems_Backup_A|2|CharID|int|NOT NULL|||0
+MarketCharResultItems_Backup_A|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems_Backup_A|4|Result|tinyint|NOT NULL|||0
+MarketCharResultItems_Backup_A|5|EndDate|datetime|NOT NULL|||0
+MarketCharResultItems_Backup_B|1|RowID|int|NOT NULL|||0
+MarketCharResultItems_Backup_B|2|CharID|int|NOT NULL|||0
+MarketCharResultItems_Backup_B|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems_Backup_B|4|Result|tinyint|NOT NULL|||0
+MarketCharResultItems_Backup_B|5|EndDate|datetime|NOT NULL|||0
+MarketCharResultItems_Backup_C|1|RowID|int|NOT NULL|||0
+MarketCharResultItems_Backup_C|2|CharID|int|NOT NULL|||0
+MarketCharResultItems_Backup_C|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems_Backup_C|4|Result|tinyint|NOT NULL|||0
+MarketCharResultItems_Backup_C|5|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney_Backup_A|1|RowID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|2|MoneyID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|3|CharID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|4|MarketID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|5|Result|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|6|Money|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|7|GuaranteeMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|8|ReturnMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_A|9|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney_Backup_A|10|Type|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|11|TypeID|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|12|Quality|smallint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|13|Gem1|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|14|Gem2|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|15|Gem3|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|16|Gem4|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|17|Gem5|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|18|Gem6|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_A|19|Craftname|varchar(20)|NOT NULL|||0
+MarketCharResultMoney_Backup_A|20|Count|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|1|RowID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|2|MoneyID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|3|CharID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|4|MarketID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|5|Result|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|6|Money|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|7|GuaranteeMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|8|ReturnMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_B|9|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney_Backup_B|10|Type|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|11|TypeID|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|12|Quality|smallint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|13|Gem1|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|14|Gem2|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|15|Gem3|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|16|Gem4|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|17|Gem5|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|18|Gem6|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_B|19|Craftname|varchar(20)|NOT NULL|||0
+MarketCharResultMoney_Backup_B|20|Count|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|1|RowID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|2|MoneyID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|3|CharID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|4|MarketID|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|5|Result|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|6|Money|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|7|GuaranteeMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|8|ReturnMoney|int|NOT NULL|||0
+MarketCharResultMoney_Backup_C|9|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney_Backup_C|10|Type|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|11|TypeID|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|12|Quality|smallint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|13|Gem1|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|14|Gem2|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|15|Gem3|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|16|Gem4|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|17|Gem5|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|18|Gem6|tinyint|NOT NULL|||0
+MarketCharResultMoney_Backup_C|19|Craftname|varchar(20)|NOT NULL|||0
+MarketCharResultMoney_Backup_C|20|Count|tinyint|NOT NULL|||0
+QuestAward|1|Type|int|NULL|||0
+QuestAward|2|TypeID|int|NULL|||0
+ServerMove|1|ServerID|tinyint|NOT NULL|||0
+ServerMove|2|UserUID|int|NOT NULL|||0
+ServerMove|3|UserID|varchar(12)|NOT NULL|||0
+TableDef|1|RowID|int|NOT NULL|||0
+TableDef|2|계정명|varchar(12)|NULL|||0
+TableDef|3|캐릭터명|varchar(30)|NULL|||0
+TableDef|4|채팅종류|tinyint|NOT NULL|||0
+TableDef|5|타겟|varchar(30)|NULL|||0
+TableDef|6|채팅데이타|varchar(128)|NULL|||0
+TableDef|7|맵아이디|smallint|NOT NULL|||0
+TableDef|8|채팅시간|datetime|NOT NULL|||0
+Test|1|RowID|int|NULL|||0
+Test|2|Value3|int|NULL|||0
+UpdateLog|1|RowID|int|NOT NULL|IDENTITY||0
+UpdateLog|2|GMID|varchar(12)|NOT NULL|||0
+UpdateLog|3|UserID|varchar(12)|NOT NULL|||0
+UpdateLog|4|GroupName|varchar(50)|NOT NULL|||0
+UpdateLog|5|CharName|varchar(30)|NOT NULL|||0
+UpdateLog|6|ModType|tinyint|NOT NULL|||0
+UpdateLog|7|ModName|varchar(50)|NOT NULL|||0
+UpdateLog|8|ID|int|NOT NULL|||0
+UpdateLog|9|UID|bigint|NULL|||0
+UpdateLog|10|ModPart|varchar(50)|NOT NULL|||0
+UpdateLog|11|BeforeData|varchar(50)|NOT NULL|||0
+UpdateLog|12|AfterData|varchar(50)|NOT NULL|||0
+UpdateLog|13|ModReasonType|tinyint|NOT NULL|||0
+UpdateLog|14|ModReasonText|varchar(100)|NULL|||0
+UpdateLog|15|ModTime|datetime|NOT NULL|||0
+UserStoredItems_Back|1|RowID|int|NOT NULL|||0
+UserStoredItems_Back|2|ServerID|tinyint|NOT NULL|||0
+UserStoredItems_Back|3|UserUID|int|NOT NULL|||0
+UserStoredItems_Back|4|ItemID|int|NOT NULL|||0
+UserStoredItems_Back|5|Type|tinyint|NOT NULL|||0
+UserStoredItems_Back|6|TypeID|tinyint|NOT NULL|||0
+UserStoredItems_Back|7|ItemUID|bigint|NOT NULL|||0
+UserStoredItems_Back|8|Slot|int|NOT NULL|||0
+UserStoredItems_Back|9|Quality|smallint|NOT NULL|||0
+UserStoredItems_Back|10|Gem1|tinyint|NOT NULL|||0
+UserStoredItems_Back|11|Gem2|tinyint|NOT NULL|||0
+UserStoredItems_Back|12|Gem3|tinyint|NOT NULL|||0
+UserStoredItems_Back|13|Gem4|tinyint|NOT NULL|||0
+UserStoredItems_Back|14|Gem5|tinyint|NOT NULL|||0
+UserStoredItems_Back|15|Gem6|tinyint|NOT NULL|||0
+UserStoredItems_Back|16|Craftname|varchar(20)|NULL|||0
+UserStoredItems_Back|17|Count|tinyint|NOT NULL|||0
+UserStoredItems_Back|18|Maketime|datetime|NOT NULL|||0
+UserStoredItems_Back|19|Maketype|char(1)|NOT NULL|||0
+UserStoredItems_Back|20|Del|bit|NOT NULL|||0
+UserStoredItems_Back2|1|RowID|int|NOT NULL|||0
+UserStoredItems_Back2|2|ServerID|tinyint|NOT NULL|||0
+UserStoredItems_Back2|3|UserUID|int|NOT NULL|||0
+UserStoredItems_Back2|4|ItemID|int|NOT NULL|||0
+UserStoredItems_Back2|5|Type|tinyint|NOT NULL|||0
+UserStoredItems_Back2|6|TypeID|tinyint|NOT NULL|||0
+UserStoredItems_Back2|7|ItemUID|bigint|NOT NULL|||0
+UserStoredItems_Back2|8|Slot|int|NOT NULL|||0
+UserStoredItems_Back2|9|Quality|smallint|NOT NULL|||0
+UserStoredItems_Back2|10|Gem1|tinyint|NOT NULL|||0
+UserStoredItems_Back2|11|Gem2|tinyint|NOT NULL|||0
+UserStoredItems_Back2|12|Gem3|tinyint|NOT NULL|||0
+UserStoredItems_Back2|13|Gem4|tinyint|NOT NULL|||0
+UserStoredItems_Back2|14|Gem5|tinyint|NOT NULL|||0
+UserStoredItems_Back2|15|Gem6|tinyint|NOT NULL|||0
+UserStoredItems_Back2|16|Craftname|varchar(20)|NULL|||0
+UserStoredItems_Back2|17|Count|tinyint|NOT NULL|||0
+UserStoredItems_Back2|18|Maketime|datetime|NOT NULL|||0
+UserStoredItems_Back2|19|Maketype|char(1)|NOT NULL|||0
+UserStoredItems_Back2|20|Del|bit|NOT NULL|||0
+UserStoredItems_Back3|1|RowID|int|NOT NULL|||0
+UserStoredItems_Back3|2|ServerID|tinyint|NOT NULL|||0
+UserStoredItems_Back3|3|UserUID|int|NOT NULL|||0
+UserStoredItems_Back3|4|ItemID|int|NOT NULL|||0
+UserStoredItems_Back3|5|Type|tinyint|NOT NULL|||0
+UserStoredItems_Back3|6|TypeID|tinyint|NOT NULL|||0
+UserStoredItems_Back3|7|ItemUID|bigint|NOT NULL|||0
+UserStoredItems_Back3|8|Slot|int|NOT NULL|||0
+UserStoredItems_Back3|9|Quality|smallint|NOT NULL|||0
+UserStoredItems_Back3|10|Gem1|tinyint|NOT NULL|||0
+UserStoredItems_Back3|11|Gem2|tinyint|NOT NULL|||0
+UserStoredItems_Back3|12|Gem3|tinyint|NOT NULL|||0
+UserStoredItems_Back3|13|Gem4|tinyint|NOT NULL|||0
+UserStoredItems_Back3|14|Gem5|tinyint|NOT NULL|||0
+UserStoredItems_Back3|15|Gem6|tinyint|NOT NULL|||0
+UserStoredItems_Back3|16|Craftname|varchar(20)|NULL|||0
+UserStoredItems_Back3|17|Count|tinyint|NOT NULL|||0
+UserStoredItems_Back3|18|Maketime|datetime|NOT NULL|||0
+UserStoredItems_Back3|19|Maketype|char(1)|NOT NULL|||0
+UserStoredItems_Back3|20|Del|bit|NOT NULL|||0
+UserStoredPointItems_Back|1|UserUID|int|NOT NULL|||0
+UserStoredPointItems_Back|2|Slot|tinyint|NOT NULL|||0
+UserStoredPointItems_Back|3|ItemID|int|NOT NULL|||0
+UserStoredPointItems_Back|4|ItemCount|tinyint|NOT NULL|||0
+UserStoredPointItems_Back|5|BuyDate|datetime|NULL|||0
+UserStoredPointItems_Back2|1|UserUID|int|NOT NULL|||0
+UserStoredPointItems_Back2|2|Slot|tinyint|NOT NULL|||0
+UserStoredPointItems_Back2|3|ItemID|int|NOT NULL|||0
+UserStoredPointItems_Back2|4|ItemCount|tinyint|NOT NULL|||0
+UserStoredPointItems_Back2|5|BuyDate|datetime|NULL|||0
+UserStoredPointItems_Back3|1|UserUID|int|NOT NULL|||0
+UserStoredPointItems_Back3|2|Slot|tinyint|NOT NULL|||0
+UserStoredPointItems_Back3|3|ItemID|int|NOT NULL|||0
+UserStoredPointItems_Back3|4|ItemCount|tinyint|NOT NULL|||0
+UserStoredPointItems_Back3|5|BuyDate|datetime|NULL|||0

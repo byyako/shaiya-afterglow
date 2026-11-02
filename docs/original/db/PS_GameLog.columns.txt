@@ -1,0 +1,59 @@
+ActionLog|1|row|int|NOT NULL|IDENTITY||0
+ActionLog|2|UserID|varchar(18)|NULL|||0
+ActionLog|3|UserUID|int|NULL|||0
+ActionLog|4|CharID|int|NULL|||0
+ActionLog|5|CharName|varchar(50)|NULL|||0
+ActionLog|6|CharLevel|tinyint|NULL|||0
+ActionLog|7|CharExp|int|NULL|||0
+ActionLog|8|MapID|smallint|NULL|||0
+ActionLog|9|PosX|real|NULL|||0
+ActionLog|10|PosY|real|NULL|||0
+ActionLog|11|PosZ|real|NULL|||0
+ActionLog|12|ActionTime|datetime|NULL|||0
+ActionLog|13|ActionType|tinyint|NULL|||0
+ActionLog|14|Value1|bigint|NULL|||0
+ActionLog|15|Value2|int|NULL|||0
+ActionLog|16|Value3|int|NULL|||0
+ActionLog|17|Value4|bigint|NULL|||0
+ActionLog|18|Value5|int|NULL|||0
+ActionLog|19|Value6|int|NULL|||0
+ActionLog|20|Value7|int|NULL|||0
+ActionLog|21|Value8|int|NULL|||0
+ActionLog|22|Value9|int|NULL|||0
+ActionLog|23|Value10|int|NULL|||0
+ActionLog|24|Text1|varchar(100)|NULL|||0
+ActionLog|25|Text2|varchar(100)|NULL|||0
+ActionLog|26|Text3|varchar(100)|NULL|||0
+ActionLog|27|Text4|varchar(100)|NULL|||0
+ActionTypeDefs|1|RowID|int|NOT NULL|IDENTITY||0
+ActionTypeDefs|2|ActionTypeID|tinyint|NOT NULL|||0
+ActionTypeDefs|3|ActionTypeName|varchar(50)|NOT NULL|||0
+ActionTypeDefs|4|BindText|varchar(500)|NULL|||0
+ActionTypeDefs|5|Value1_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|6|Value2_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|7|Value3_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|8|Value4_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|9|Value5_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|10|Value6_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|11|Value7_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|12|Value8_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|13|Value9_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|14|Value10_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|15|Text1_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|16|Text2_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|17|Text3_Desc|varchar(50)|NULL|||0
+ActionTypeDefs|18|Text4_Desc|varchar(50)|NULL|||0
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+UserLog|1|row|int|NOT NULL|IDENTITY||0
+UserLog|2|UserUID|int|NULL|||0
+UserLog|3|SessionID|bigint|NULL|||0
+UserLog|4|LogoutType|smallint|NULL|||0
+UserLog|5|ErrType|int|NULL|||0
+UserLog|6|LogType|int|NULL|||0
+UserLog|7|LogTime|datetime|NULL|||0

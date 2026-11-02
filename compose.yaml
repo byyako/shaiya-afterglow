@@ -1,0 +1,45 @@
+# PostgreSQL for the servers, and SQL Server for importing the original game definitions (README steps 2 and 4).
+#   docker compose up -d postgres
+#   docker compose --profile import up -d mssql      # only for the import; docker compose stop mssql afterwards
+# The names, ports and passwords come from .env (.env.example). The defaults are the README's names: a second copy on the same
+# machine needs its own PG_CONTAINER, MSSQL_CONTAINER, PG_VOLUME, MSSQL_VOLUME, PG_PORT, MSSQL_PORT and COMPOSE_PROJECT_NAME.
+# Both containers use Docker's default bridge, as `docker run` does: the tools reach them with `docker exec` and the ports on
+# 127.0.0.1, so they need no network of their own (and a host whose address pools are used up can still start them).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: ${PG_CONTAINER:-newshaiya-postgres}
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      POSTGRES_DB: newshaiya
+      POSTGRES_USER: shaiya
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in .env (the password of DATABASE_URL)}
+    ports:
+      - "127.0.0.1:${PG_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: [import]
+    container_name: ${MSSQL_CONTAINER:-newshaiya-mssql}
+    network_mode: bridge
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      MSSQL_MEMORY_LIMIT_MB: "1400"
+    ports:
+      - "127.0.0.1:${MSSQL_PORT:-14333}:1433"
+    volumes:
+      - ${PSM_DATA_DIR:-./PSM_Data}:/backups:ro
+      - mssql-data:/var/opt/mssql
+    mem_limit: 2200m
+
+volumes:
+  pgdata:
+    name: ${PG_VOLUME:-newshaiya-pgdata}
+  mssql-data:
+    name: ${MSSQL_VOLUME:-newshaiya-mssql-data}

@@ -1,0 +1,4 @@
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+IX_UpdateLog_GMID|UpdateLog|0|0|NONCLUSTERED
+IX_UpdateLog_ModTime|UpdateLog|0|0|NONCLUSTERED
+PK_UpdateLog|UpdateLog|1|1|CLUSTERED

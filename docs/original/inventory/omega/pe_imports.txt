@@ -1,0 +1,40 @@
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/dbgeng.dll: KERNEL32.dll, msvcrt.dll, dbghelp.dll, VERSION.dll, ADVAPI32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/dbghelp.dll: KERNEL32.dll, msvcrt.dll, ADVAPI32.dll, RPCRT4.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ggauth.dll: KERNEL32.dll, USER32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ggsrvdll.dll: KERNEL32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_dbAgent.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_game.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, dbghelp.dll, dbgeng.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_gameLog.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_gamewar.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, dbghelp.dll, dbgeng.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_login.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_session.exe: WS2_32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/Bin/ps_userLog.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/PSM_Agent.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, ole32.dll, SHELL32.dll, SHLWAPI.dll, MSWSOCK.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/PSM_AgentInstall.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/PSM_ServiceMgr.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/dbgeng.dll: KERNEL32.dll, msvcrt.dll, dbghelp.dll, VERSION.dll, ADVAPI32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Client/dbghelp.dll: KERNEL32.dll, msvcrt.dll, ADVAPI32.dll, RPCRT4.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_AgentInstall.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_LogGather.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_Mgr.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, SHELL32.dll, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_Patch.exe: ODBC32.dll, KERNEL32.dll, USER32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, ADVAPI32.dll, SHELL32.dll, COMCTL32.dll, SHLWAPI.dll, OLEAUT32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_ServiceMgr.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/PSMServer_agent.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, ole32.dll, SHELL32.dll, SHLWAPI.dll, MSWSOCK.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Common/dbgeng.dll: KERNEL32.dll, msvcrt.dll, dbghelp.dll, VERSION.dll, ADVAPI32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Common/dbghelp.dll: KERNEL32.dll, msvcrt.dll, ADVAPI32.dll, RPCRT4.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Main/PSM_Agent.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, ole32.dll, SHELL32.dll, SHLWAPI.dll, MSWSOCK.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Main/PSM_AgentInstall.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Main/PSM_ServiceMgr.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Update_ForGMTool/PSGMTool.exe: WS2_32.dll, COMCTL32.dll, USER32.dll, GDI32.dll, KERNEL32.dll, comdlg32.dll, WINSPOOL.DRV, ADVAPI32.dll, SHELL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, OLEAUT32.dll, MSWSOCK.dll, ODBC32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Update_ForGMTool/PSM_StartUpdate.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Agent/Update_ForGMTool/PSM_Update.exe: WS2_32.dll, USER32.dll, ODBC32.dll, ADVAPI32.dll, OLEAUT32.dll, KERNEL32.dll, GDI32.dll, comdlg32.dll, WINSPOOL.DRV, COMCTL32.dll, SHLWAPI.dll, oledlg.dll, ole32.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_DBAgent/ps_dbAgent.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_Game/ps_game.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, dbghelp.dll, dbgeng.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_Game/ps_gamewar.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, dbghelp.dll, dbgeng.dll, MSWSOCK.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_GameLog/ps_gameLog.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/ServerMain/PS_Login/ps_login.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/ServerMain/PS_Session/ps_session.exe: WS2_32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ShaiyaServerPatch/Server/ServerMain/PS_UserLog/ps_userLog.exe: WS2_32.dll, ODBC32.dll, KERNEL32.dll, USER32.dll, ADVAPI32.dll, OLEAUT32.dll, MSWSOCK.dll, dbghelp.dll, dbgeng.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/dbgeng.dll: KERNEL32.dll, msvcrt.dll, dbghelp.dll, VERSION.dll, ADVAPI32.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/dbghelp.dll: KERNEL32.dll, msvcrt.dll, ADVAPI32.dll, RPCRT4.dll
+OmegaFiles/ShaiyaServer/SERVER/PSM_Server/ps_passwordEnc.exe: KERNEL32.dll, USER32.dll, GDI32.dll, WINSPOOL.DRV, ADVAPI32.dll, COMCTL32.dll, SHLWAPI.dll, OLEAUT32.dll

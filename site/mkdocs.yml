@@ -1,0 +1,174 @@
+site_name: Shaiya internals
+site_description: Reverse-engineering notes on the Shaiya EP4.5 server programs, the US client, the protocol and the game rules
+docs_dir: build/docs
+site_dir: dist
+use_directory_urls: true
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+
+extra_css:
+  - extra.css
+
+plugins:
+  - search
+
+# report links to missing pages and missing #anchors
+validation:
+  unrecognized_links: warn
+  anchors: warn
+
+
+# build.py publishes exactly the files listed here, from content/ when it has the page, else from docs/ (plus extra.css,
+# and the patch kit zip it builds from tools/server-patches/).
+nav:
+  - Home: index.md
+  - Protocol and servers:
+      - Protocol notes: original/protocol-notes.md
+      - Login server (ps_login): original/ps_login.md
+      - Game server (ps_game): original/ps_game.md
+      - Entering the world: original/enter-world.md
+      - Movement, sitting, leaving: original/world.md
+      - Client-ready extras: original/client-extras.md
+      - Move speed check: original/move-check.md
+      - Operator console: original/operator-console.md
+      - "GM commands 1: staff and the world": original/gm-commands.md
+      - "GM commands 2: questions, summons, notices": original/gm-commands-2.md
+      - The game log: original/game-log.md
+      - Known bugs and fixes: original/community-fixes.md
+      - Patch kit for ps_game.exe: server-patches.md
+      - "Patch kit notes: how each fix works": original/server-patch-notes.md
+      - Deviations from the original: server/deviations.md
+      - Settings: server/settings.md
+      - Robustness audit: server/audit.md
+  - Characters and items:
+      - Character numbers: original/stats.md
+      - Moving and equipping: original/items.md
+      - Dropping items: original/item-drop.md
+      - Using items: original/item-use.md
+      - Item buffs and resurrection runes: original/item-flags.md
+      - Items that open a window: original/item-windows.md
+      - New items and crafting: original/item-origins.md
+      - Lapis and enchanting: original/lapis.md
+      - Item option skills: original/item-options.md
+      - Wear and repair: original/repair.md
+      - NPC shops: original/shop.md
+      - Item mall and premium: original/item-mall.md
+      - Personal shops: original/personal-shop.md
+      - Auction house: original/auction.md
+      - Warehouse: original/warehouse.md
+      - Trade: original/trade.md
+      - Mounts: original/vehicles.md
+      - Small features: original/small-items.md
+  - Combat and skills:
+      - Fighting monsters: original/combat.md
+      - "Skills 1: definitions and learning": original/skills.md
+      - "Skills 2: using skills": original/skills-use.md
+      - "Skills 3: buffs and debuffs": original/skills-buffs.md
+      - "Skills 4: special skills": original/skills-special.md
+      - Fire Thorns and fields on players: original/thorns-fields-pvp.md
+      - "Player kills 1": original/pvp.md
+      - "Player kills 2": original/pvp-2.md
+      - Duels: original/duel.md
+      - Guild wars: original/guild-war.md
+      - Obelisks: original/obelisks.md
+  - Social:
+      - Parties: original/party.md
+      - Union parties: original/union.md
+      - Guilds: original/guild.md
+      - Guild houses: original/guild-house.md
+      - Guild ranking battle: original/guild-ranking.md
+      - Guild bank: original/guild-bank.md
+      - Friends and block list: original/friends.md
+      - Quests: original/quest.md
+      - Gambling house: original/mini-game.md
+  - World and monsters:
+      - Maps and NPCs: original/maps-npcs.md
+      - Portals: original/portals.md
+      - Gatekeepers: original/gatekeeper.md
+      - Monsters: original/mobs.md
+      - Monsters fighting back: original/mob-fight.md
+      - "Monster drops: quest and sequence items": original/quest-drops.md
+      - Monster skills: original/mob-skills.md
+      - Monster paths (A*): original/pathing.md
+      - Monsters chasing: original/chase-smoothing.md
+      - Scripted monsters: original/scripted-mobs.md
+      - Walking NPCs and guards: original/guards.md
+      - Party instance zones: original/instances.md
+  - Client (game.exe):
+      - Start here:
+          - About these pages: client.md
+          - Client facts for server developers: client/CLIENT-FACTS.md
+          - Systems the client supports: client/client-systems.md
+      - Network:
+          - How the client talks to the servers: client/re-network.md
+          - Packet handling: client/client-packets.md
+          - Packet catalogue (generated): client/client-packets.generated.md
+          - World packets: client/client-world-packets.md
+          - Social packets: client/client-social-packets.md
+          - Packet opportunities: client/packet-opportunities.md
+      - Engine:
+          - Engine internals: client/re-engine.md
+          - Graphics and performance: client/graphics.md
+      - Gameplay systems:
+          - The client's game state: client/re-gameplay-state.md
+          - Actions and result messages: client/client-actions.md
+          - GM opcodes and commands: client/gm-and-commands.md
+          - Auction house: client/auction-house.md
+          - Personal shop: client/personal-shop.md
+          - Duels: client/duels.md
+          - Guild wars: client/guild-wars.md
+          - Obelisks and roads: client/obelisks.md
+          - Union parties: client/union-parties.md
+          - Item mall: client/item-mall.md
+          - Scripted monsters: client/scripted-monsters.md
+      - Data formats and archive:
+          - File formats: client/formats.md
+          - "The archive: data.sah and data.saf": client/data-archive.md
+          - Finding unused archive files: client/cleanup.md
+          - Custom animations: client/custom-animations.md
+          - English text pass: client/english-text.md
+          - Item.SData against the server: client/item-sdata-vs-defs.md
+          - NpcQuest.SData against the server: client/npcquest-sdata-vs-world.md
+          - Skill and Monster SData: client/skill-monster-sdata-vs-defs.md
+          - Generating the client data files: client/sdata-generation.md
+      - Patching and the companion DLL:
+          - Patch kit for game.exe: client/client-patch-kit.md
+          - The companion DLL: client/fixes-dll.md
+          - Operator chat copies (F502): client/operator-listen.md
+          - The updater and patch files: client/updater.md
+      - Tools and method:
+          - Tools and method: client/tools-and-method.md
+      - Research notes:
+          - Open items, settled and not: client/re-open-items.md
+          - Movement, storages, billing, auction rows: client/research-movement-storages-auction.md
+          - Gambling house and a kill-boost item: client/research-gambling-kill-boost.md
+          - Extension features: client/research-extension-features.md
+          - "The Priest packets 0x0F01 / 0x0F02": client/research-priest-packets.md
+          - Character window, attack timing, creation screen: client/research-balance.md
+          - Quality-of-life features: client/qol-feasibility.md

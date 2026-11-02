@@ -1,0 +1,287 @@
+BaseItemsDefs|1|RowID|int|NOT NULL|IDENTITY||24
+BaseItemsDefs|2|Family|smallint|NOT NULL|||24
+BaseItemsDefs|3|Job|smallint|NOT NULL|||24
+BaseItemsDefs|4|ItemID|int|NOT NULL|||24
+BaseItemsDefs|5|Type|tinyint|NOT NULL|||24
+BaseItemsDefs|6|TypeID|tinyint|NOT NULL|||24
+BaseItemsDefs|7|Count|int|NOT NULL|||24
+BaseItemsDefs|8|Slot|smallint|NOT NULL|||24
+BaseItemsDefs|9|Quality|int|NOT NULL|||24
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+ExpDefs|1|RowID|int|NOT NULL|IDENTITY||240
+ExpDefs|2|Level|smallint|NOT NULL|||240
+ExpDefs|3|Grow|tinyint|NOT NULL|||240
+ExpDefs|4|Exp|int|NOT NULL|||240
+Items|1|RowID|int|NOT NULL|IDENTITY||16047
+Items|2|ItemID|int|NOT NULL|||16047
+Items|3|ItemName|varchar(30)|NOT NULL|||16047
+Items|4|Type|tinyint|NOT NULL|||16047
+Items|5|TypeID|tinyint|NOT NULL|||16047
+Items|6|Reqlevel|smallint|NOT NULL|||16047
+Items|7|Country|tinyint|NOT NULL|||16047
+Items|8|Attackfighter|tinyint|NOT NULL|||16047
+Items|9|Defensefighter|tinyint|NOT NULL|||16047
+Items|10|Patrolrogue|tinyint|NOT NULL|||16047
+Items|11|Shootrogue|tinyint|NOT NULL|||16047
+Items|12|Attackmage|tinyint|NOT NULL|||16047
+Items|13|Defensemage|tinyint|NOT NULL|||16047
+Items|14|Grow|tinyint|NOT NULL|||16047
+Items|15|ReqStr|smallint|NOT NULL|||16047
+Items|16|ReqDex|smallint|NOT NULL|||16047
+Items|17|ReqRec|smallint|NOT NULL|||16047
+Items|18|ReqInt|smallint|NOT NULL|||16047
+Items|19|ReqWis|smallint|NOT NULL|||16047
+Items|20|Reqluc|smallint|NOT NULL|||16047
+Items|21|ReqVg|smallint|NOT NULL|||16047
+Items|22|ReqOg|tinyint|NOT NULL|||16047
+Items|23|ReqIg|tinyint|NOT NULL|||16047
+Items|24|Range|smallint|NOT NULL|||16047
+Items|25|AttackTime|tinyint|NOT NULL|||16047
+Items|26|Attrib|tinyint|NOT NULL|||16047
+Items|27|Special|tinyint|NOT NULL|||16047
+Items|28|Slot|tinyint|NOT NULL|||16047
+Items|29|Quality|smallint|NOT NULL|||16047
+Items|30|Effect1|smallint|NOT NULL|||16047
+Items|31|Effect2|smallint|NOT NULL|||16047
+Items|32|Effect3|smallint|NOT NULL|||16047
+Items|33|Effect4|smallint|NOT NULL|||16047
+Items|34|ConstHP|smallint|NOT NULL|||16047
+Items|35|ConstSP|smallint|NOT NULL|||16047
+Items|36|ConstMP|smallint|NOT NULL|||16047
+Items|37|ConstStr|smallint|NOT NULL|||16047
+Items|38|ConstDex|smallint|NOT NULL|||16047
+Items|39|ConstRec|smallint|NOT NULL|||16047
+Items|40|ConstInt|smallint|NOT NULL|||16047
+Items|41|ConstWis|smallint|NOT NULL|||16047
+Items|42|ConstLuc|smallint|NOT NULL|||16047
+Items|43|Speed|tinyint|NOT NULL|||16047
+Items|44|Exp|tinyint|NOT NULL|||16047
+Items|45|Buy|int|NOT NULL|||16047
+Items|46|Sell|int|NOT NULL|||16047
+Items|47|Grade|smallint|NOT NULL|||16047
+Items|48|Drop|smallint|NOT NULL|||16047
+Items|49|Server|tinyint|NOT NULL|||16047
+Items|50|Count|tinyint|NOT NULL|||16047
+MobItems|1|RowID|int|NOT NULL|IDENTITY||24723
+MobItems|2|MobID|smallint|NOT NULL|||24723
+MobItems|3|ItemOrder|tinyint|NOT NULL|||24723
+MobItems|4|Grade|smallint|NOT NULL|||24723
+MobItems|5|DropRate|int|NOT NULL|||24723
+Mobs|1|RowID|int|NOT NULL|IDENTITY||2747
+Mobs|2|MobID|smallint|NOT NULL|||2747
+Mobs|3|MobName|varchar(40)|NOT NULL|||2747
+Mobs|4|Level|smallint|NOT NULL|||2747
+Mobs|5|Exp|smallint|NOT NULL|||2747
+Mobs|6|AI|tinyint|NOT NULL|||2747
+Mobs|7|Money1|smallint|NOT NULL|||2747
+Mobs|8|Money2|smallint|NOT NULL|||2747
+Mobs|9|QuestItemID|int|NOT NULL|||2747
+Mobs|10|HP|int|NOT NULL|||2747
+Mobs|11|SP|smallint|NOT NULL|||2747
+Mobs|12|MP|smallint|NOT NULL|||2747
+Mobs|13|Dex|smallint|NOT NULL|||2747
+Mobs|14|Wis|smallint|NOT NULL|||2747
+Mobs|15|Luc|smallint|NOT NULL|||2747
+Mobs|16|Day|tinyint|NOT NULL|||2747
+Mobs|17|Size|tinyint|NOT NULL|||2747
+Mobs|18|Attrib|tinyint|NOT NULL|||2747
+Mobs|19|Defense|smallint|NOT NULL|||2747
+Mobs|20|Magic|smallint|NOT NULL|||2747
+Mobs|21|ResistState1|tinyint|NOT NULL|||2747
+Mobs|22|ResistState2|tinyint|NOT NULL|||2747
+Mobs|23|ResistState3|tinyint|NOT NULL|||2747
+Mobs|24|ResistState4|tinyint|NOT NULL|||2747
+Mobs|25|ResistState5|tinyint|NOT NULL|||2747
+Mobs|26|ResistState6|tinyint|NOT NULL|||2747
+Mobs|27|ResistState7|tinyint|NOT NULL|||2747
+Mobs|28|ResistState8|tinyint|NOT NULL|||2747
+Mobs|29|ResistState9|tinyint|NOT NULL|||2747
+Mobs|30|ResistState10|tinyint|NOT NULL|||2747
+Mobs|31|ResistState11|tinyint|NOT NULL|||2747
+Mobs|32|ResistState12|tinyint|NOT NULL|||2747
+Mobs|33|ResistState13|tinyint|NOT NULL|||2747
+Mobs|34|ResistState14|tinyint|NOT NULL|||2747
+Mobs|35|ResistState15|tinyint|NOT NULL|||2747
+Mobs|36|ResistSkill1|tinyint|NOT NULL|||2747
+Mobs|37|ResistSkill2|tinyint|NOT NULL|||2747
+Mobs|38|ResistSkill3|tinyint|NOT NULL|||2747
+Mobs|39|ResistSkill4|tinyint|NOT NULL|||2747
+Mobs|40|ResistSkill5|tinyint|NOT NULL|||2747
+Mobs|41|ResistSkill6|tinyint|NOT NULL|||2747
+Mobs|42|NormalTime|int|NOT NULL|||2747
+Mobs|43|NormalStep|tinyint|NOT NULL|||2747
+Mobs|44|ChaseTime|int|NOT NULL|||2747
+Mobs|45|ChaseStep|tinyint|NOT NULL|||2747
+Mobs|46|ChaseRange|tinyint|NOT NULL|||2747
+Mobs|47|AttackType1|smallint|NOT NULL|||2747
+Mobs|48|AttackTime1|int|NOT NULL|||2747
+Mobs|49|Attackrange1|tinyint|NOT NULL|||2747
+Mobs|50|Attack1|smallint|NOT NULL|||2747
+Mobs|51|Attackplus1|smallint|NOT NULL|||2747
+Mobs|52|Attackattrib1|tinyint|NOT NULL|||2747
+Mobs|53|Attackspecial1|tinyint|NOT NULL|||2747
+Mobs|54|Attackok1|tinyint|NOT NULL|||2747
+Mobs|55|Attacktype2|smallint|NOT NULL|||2747
+Mobs|56|Attacktime2|int|NOT NULL|||2747
+Mobs|57|Attackrange2|tinyint|NOT NULL|||2747
+Mobs|58|Attack2|smallint|NOT NULL|||2747
+Mobs|59|Attackplus2|smallint|NOT NULL|||2747
+Mobs|60|Attackattrib2|tinyint|NOT NULL|||2747
+Mobs|61|Attackspecial2|tinyint|NOT NULL|||2747
+Mobs|62|Attackok2|tinyint|NOT NULL|||2747
+Mobs|63|Attacktype3|smallint|NOT NULL|||2747
+Mobs|64|Attacktime3|int|NOT NULL|||2747
+Mobs|65|Attackrange3|tinyint|NOT NULL|||2747
+Mobs|66|Attack3|smallint|NOT NULL|||2747
+Mobs|67|Attackplus3|smallint|NOT NULL|||2747
+Mobs|68|Attackattrib3|tinyint|NOT NULL|||2747
+Mobs|69|Attackspecial3|tinyint|NOT NULL|||2747
+Mobs|70|Attackok3|tinyint|NOT NULL|||2747
+ProductList|1|RowID|int|NULL|||84
+ProductList|2|ProductName|varchar(50)|NOT NULL|||84
+ProductList|3|ProductCode|varchar(20)|NOT NULL|||84
+ProductList|4|BuyCost|int|NOT NULL|||84
+ProductList|5|ItemID1|int|NOT NULL|||84
+ProductList|6|ItemCount1|tinyint|NOT NULL|||84
+ProductList|7|ItemID2|int|NULL|||84
+ProductList|8|ItemCount2|tinyint|NULL|||84
+ProductList|9|ItemID3|int|NULL|||84
+ProductList|10|ItemCount3|tinyint|NULL|||84
+ProductList|11|ItemID4|int|NULL|||84
+ProductList|12|ItemCount4|tinyint|NULL|||84
+ProductList|13|ItemID5|int|NULL|||84
+ProductList|14|ItemCount5|tinyint|NULL|||84
+ProductList|15|ItemID6|int|NULL|||84
+ProductList|16|ItemCount6|tinyint|NULL|||84
+ProductList|17|ItemID7|int|NULL|||84
+ProductList|18|ItemCount7|tinyint|NULL|||84
+ProductList|19|ItemID8|int|NULL|||84
+ProductList|20|ItemCount8|tinyint|NULL|||84
+ProductList|21|ItemID9|int|NULL|||84
+ProductList|22|ItemCount9|tinyint|NULL|||84
+ProductList|23|ItemID10|int|NULL|||84
+ProductList|24|ItemCount10|tinyint|NULL|||84
+ProductList|25|ItemID11|int|NULL|||84
+ProductList|26|ItemCount11|tinyint|NULL|||84
+ProductList|27|ItemID12|int|NULL|||84
+ProductList|28|ItemCount12|tinyint|NULL|||84
+ProductList|29|ItemID13|int|NULL|||84
+ProductList|30|ItemCount13|tinyint|NULL|||84
+ProductList|31|ItemID14|int|NULL|||84
+ProductList|32|ItemCount14|tinyint|NULL|||84
+ProductList|33|ItemID15|int|NULL|||84
+ProductList|34|ItemCount15|tinyint|NULL|||84
+ProductList|35|ItemID16|int|NULL|||84
+ProductList|36|ItemCount16|tinyint|NULL|||84
+ProductList|37|ItemID17|int|NULL|||84
+ProductList|38|ItemCount17|tinyint|NULL|||84
+ProductList|39|ItemID18|int|NULL|||84
+ProductList|40|ItemCount18|tinyint|NULL|||84
+ProductList|41|ItemID19|int|NULL|||84
+ProductList|42|ItemCount19|tinyint|NULL|||84
+ProductList|43|ItemID20|int|NULL|||84
+ProductList|44|ItemCount20|tinyint|NULL|||84
+ProductList|45|ItemID21|int|NULL|||84
+ProductList|46|ItemCount21|tinyint|NULL|||84
+ProductList|47|ItemID22|int|NULL|||84
+ProductList|48|ItemCount22|tinyint|NULL|||84
+ProductList|49|ItemID23|int|NULL|||84
+ProductList|50|ItemCount23|tinyint|NULL|||84
+ProductList|51|ItemID24|int|NULL|||84
+ProductList|52|ItemCount24|tinyint|NULL|||84
+Skills|1|RowID|int|NOT NULL|IDENTITY||1333
+Skills|2|SkillID|smallint|NOT NULL|||1333
+Skills|3|SkillLevel|tinyint|NOT NULL|||1333
+Skills|4|SkillName|varchar(30)|NOT NULL|||1333
+Skills|5|Country|tinyint|NOT NULL|||1333
+Skills|6|Attackfighter|tinyint|NOT NULL|||1333
+Skills|7|Defensefighter|tinyint|NOT NULL|||1333
+Skills|8|Patrolrogue|tinyint|NOT NULL|||1333
+Skills|9|Shootrogue|tinyint|NOT NULL|||1333
+Skills|10|Attackmage|tinyint|NOT NULL|||1333
+Skills|11|Defensemage|tinyint|NOT NULL|||1333
+Skills|12|PrevSkillID|smallint|NOT NULL|||1333
+Skills|13|ReqLevel|smallint|NOT NULL|||1333
+Skills|14|Grow|tinyint|NOT NULL|||1333
+Skills|15|SkillPoint|tinyint|NOT NULL|||1333
+Skills|16|TypeShow|tinyint|NOT NULL|||1333
+Skills|17|TypeAttack|tinyint|NOT NULL|||1333
+Skills|18|TypeEffect|tinyint|NOT NULL|||1333
+Skills|19|TypeDetail|smallint|NOT NULL|||1333
+Skills|20|NeedWeapon1|tinyint|NOT NULL|||1333
+Skills|21|NeedWeapon2|tinyint|NOT NULL|||1333
+Skills|22|NeedWeapon3|tinyint|NOT NULL|||1333
+Skills|23|NeedWeapon4|tinyint|NOT NULL|||1333
+Skills|24|NeedWeapon5|tinyint|NOT NULL|||1333
+Skills|25|NeedWeapon6|tinyint|NOT NULL|||1333
+Skills|26|NeedWeapon7|tinyint|NOT NULL|||1333
+Skills|27|NeedWeapon8|tinyint|NOT NULL|||1333
+Skills|28|NeedWeapon9|tinyint|NOT NULL|||1333
+Skills|29|NeedWeapon10|tinyint|NOT NULL|||1333
+Skills|30|NeedWeapon11|tinyint|NOT NULL|||1333
+Skills|31|NeedWeapon12|tinyint|NOT NULL|||1333
+Skills|32|NeedWeapon13|tinyint|NOT NULL|||1333
+Skills|33|NeedWeapon14|tinyint|NOT NULL|||1333
+Skills|34|NeedWeapon15|tinyint|NOT NULL|||1333
+Skills|35|Shield|tinyint|NOT NULL|||1333
+Skills|36|SP|smallint|NOT NULL|||1333
+Skills|37|MP|smallint|NOT NULL|||1333
+Skills|38|ReadyTime|tinyint|NOT NULL|||1333
+Skills|39|ResetTime|smallint|NOT NULL|||1333
+Skills|40|AttackRange|tinyint|NOT NULL|||1333
+Skills|41|StateType|tinyint|NOT NULL|||1333
+Skills|42|AttrType|tinyint|NOT NULL|||1333
+Skills|43|Disable|smallint|NOT NULL|||1333
+Skills|44|SuccessType|tinyint|NOT NULL|||1333
+Skills|45|SuccessValue|tinyint|NOT NULL|||1333
+Skills|46|TargetType|tinyint|NOT NULL|||1333
+Skills|47|ApplyRange|tinyint|NOT NULL|||1333
+Skills|48|MultiAttack|tinyint|NOT NULL|||1333
+Skills|49|KeepTime|smallint|NOT NULL|||1333
+Skills|50|Weapon1|tinyint|NOT NULL|||1333
+Skills|51|Weapon2|tinyint|NOT NULL|||1333
+Skills|52|Weaponvalue|tinyint|NOT NULL|||1333
+Skills|53|Bag|tinyint|NOT NULL|||1333
+Skills|54|Arrow|smallint|NOT NULL|||1333
+Skills|55|DamageType|tinyint|NOT NULL|||1333
+Skills|56|DamageHP|smallint|NOT NULL|||1333
+Skills|57|DamageSP|smallint|NOT NULL|||1333
+Skills|58|DamageMP|smallint|NOT NULL|||1333
+Skills|59|TimeDamageType|tinyint|NOT NULL|||1333
+Skills|60|TimeDamageHP|smallint|NOT NULL|||1333
+Skills|61|TimeDamageSP|smallint|NOT NULL|||1333
+Skills|62|TimeDamageMP|smallint|NOT NULL|||1333
+Skills|63|AddDamageHP|smallint|NOT NULL|||1333
+Skills|64|AddDamageSP|smallint|NOT NULL|||1333
+Skills|65|AddDamageMP|smallint|NOT NULL|||1333
+Skills|66|AbilityType1|tinyint|NULL|||1333
+Skills|67|AbilityValue1|smallint|NULL|||1333
+Skills|68|AbilityType2|tinyint|NULL|||1333
+Skills|69|AbilityValue2|smallint|NULL|||1333
+Skills|70|AbilityType3|tinyint|NULL|||1333
+Skills|71|AbilityValue3|smallint|NULL|||1333
+Skills|72|HealHP|smallint|NOT NULL|||1333
+Skills|73|HealSP|smallint|NOT NULL|||1333
+Skills|74|HealMP|smallint|NOT NULL|||1333
+Skills|75|TimeHealHP|smallint|NOT NULL|||1333
+Skills|76|TimeHealSP|smallint|NOT NULL|||1333
+Skills|77|TimeHealMP|smallint|NOT NULL|||1333
+Skills|78|DefenceType|tinyint|NOT NULL|||1333
+Skills|79|DefenceValue|tinyint|NOT NULL|||1333
+Skills|80|LimitHP|tinyint|NOT NULL|||1333
+Skills|81|FixRange|tinyint|NOT NULL|||1333
+Skills|82|ChangeType|smallint|NOT NULL|||1333
+Skills|83|ChangeLevel|smallint|NOT NULL|||1333
+Skills|84|UpdateDate|datetime|NOT NULL||(getdate())|1333
+StatusDefs|1|RowID|int|NOT NULL|IDENTITY||360
+StatusDefs|2|Level|smallint|NOT NULL|||360
+StatusDefs|3|Job|tinyint|NOT NULL|||360
+StatusDefs|4|HP|smallint|NOT NULL|||360
+StatusDefs|5|SP|smallint|NOT NULL|||360
+StatusDefs|6|MP|smallint|NOT NULL|||360

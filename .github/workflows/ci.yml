@@ -1,0 +1,44 @@
+# Format, lints and the tests on every push and pull request. The PostgreSQL suites run against an empty database here: the
+# tests that need the imported definitions (defs) or world files (world) skip themselves without them.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: newshaiya
+          POSTGRES_USER: shaiya
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shaiya -d newshaiya"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://shaiya:ci-only@localhost:5432/newshaiya
+    steps:
+      - uses: actions/checkout@v5
+      - name: links and paths
+        run: python3 tools/check_links.py
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: tests
+        run: cargo test --workspace

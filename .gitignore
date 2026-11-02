@@ -1,0 +1,10 @@
+reference/
+/original/
+.env
+target/
+db/edits/
+notes/
+logs/
+__pycache__/
+*.pyc
+data/

@@ -1,0 +1,8 @@
+PK_CharStat_ByDay|CharStat_ByDay|1|1|NONCLUSTERED
+PK_CharStat_RichChar_ByDay|CharStat_RichChar_ByDay|1|1|NONCLUSTERED
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+PK_ServerStat_ByDefTerm|ServerStat_ByDefTerm|1|1|NONCLUSTERED
+PK_UserStat_ByAge|UserStat_ByAge|1|1|CLUSTERED
+PK_UserStat_ByDay|UserStat_ByDay|1|1|CLUSTERED
+PK_UserStat_ByRegion|UserStat_ByRegion|1|1|CLUSTERED
+PK_UserStat_BySex|UserStat_BySex|1|1|CLUSTERED

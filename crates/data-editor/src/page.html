@@ -1,0 +1,1332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NewShaiya data editor</title>
+<style>
+:root {
+  --bg: #f4f5f7; --panel: #ffffff; --line: #d5d9e0; --text: #1c2330; --dim: #667085; --accent: #2f6fed; --accent-text: #ffffff;
+  --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --input: #ffffff; --edited: #fff3cd; --pending: #dbeafe; --canvas: #20242c;
+  --live: #1f8a4c; --next: #b7791f; --restart: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171c; --panel: #1c2027; --line: #333a45; --text: #e4e8ef; --dim: #8b95a5; --accent: #5b8def; --accent-text: #0b1020;
+    --ok: #4cc380; --warn: #e0a84a; --bad: #ef6a5b; --input: #12151a; --edited: #4a3f17; --pending: #1b3355; --canvas: #0e1014;
+    --live: #4cc380; --next: #e0a84a; --restart: #ef6a5b;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+header { display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 15px; margin: 0 8px 0 0; }
+header .sp { flex: 1; }
+button, input, select { font: inherit; color: var(--text); }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+input, select { background: var(--input); border: 1px solid var(--line); border-radius: 4px; padding: 2px 5px; }
+input[type=number] { width: 90px; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+main { flex: 1; display: grid; grid-template-columns: 190px minmax(300px, 1fr) 540px; min-height: 0; }
+#maplist { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#maplist input { margin: 6px; }
+#maprows { overflow: auto; flex: 1; }
+.maprow { padding: 3px 8px; cursor: pointer; display: flex; gap: 6px; border-left: 3px solid transparent; }
+.maprow:hover { background: var(--bg); }
+.maprow.sel { background: var(--pending); border-left-color: var(--accent); }
+.maprow .id { width: 24px; text-align: right; color: var(--dim); }
+.maprow .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.maprow .meta { color: var(--dim); font-size: 11px; }
+#center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+#toolbar label { display: inline-flex; gap: 3px; align-items: center; cursor: pointer; }
+#toolbar .grp { display: inline-flex; gap: 6px; align-items: center; padding-right: 10px; border-right: 1px solid var(--line); }
+#toolbar .tool.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+#mapname { font-weight: 600; }
+#canvaswrap { flex: 1; position: relative; min-height: 0; background: var(--canvas); }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#tip { position: absolute; pointer-events: none; background: rgba(15,18,25,.92); color: #fff; padding: 3px 7px; border-radius: 4px; font-size: 12px; display: none; max-width: 340px; z-index: 5; white-space: pre-wrap; }
+#status { padding: 2px 8px; color: var(--dim); background: var(--panel); border-top: 1px solid var(--line); font-size: 12px; min-height: 22px; }
+#panel { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+#tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 9px; background: none; }
+#tabs button.on { border-bottom-color: var(--accent); font-weight: 600; }
+#body { flex: 1; overflow: auto; padding: 8px 10px; min-height: 0; }
+footer { display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+footer .sp { flex: 1; }
+footer .count { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--bg); }
+tr.sel td { background: var(--pending); }
+.dim { color: var(--dim); }
+.small { font-size: 12px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+h3 { margin: 12px 0 4px; font-size: 13px; }
+h3:first-child { margin-top: 0; }
+.note { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; margin: 6px 0; }
+.warn { border-color: var(--warn); }
+.fgrid { display: grid; grid-template-columns: max-content 1fr; gap: 3px 8px; align-items: center; }
+.fgrid label { color: var(--dim); display: flex; gap: 4px; align-items: center; }
+.fgrid .cell { display: flex; gap: 4px; align-items: center; }
+.fgrid input { width: 100%; max-width: 190px; }
+input.edited { background: var(--edited); }
+input.pending { background: var(--pending); border-style: dashed; }
+input.bad { border-color: var(--bad); }
+.eff { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.eff.live { background: var(--live); } .eff.next { background: var(--next); } .eff.restart { background: var(--restart); }
+.pill { font-size: 11px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--line); }
+.pill.live { color: var(--live); border-color: var(--live); } .pill.next { color: var(--next); border-color: var(--next); } .pill.restart { color: var(--restart); border-color: var(--restart); }
+a.link, .link { color: var(--accent); cursor: pointer; text-decoration: none; }
+a.link:hover { text-decoration: underline; }
+.reset { padding: 0 4px; line-height: 1.2; }
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; padding-top: 6vh; z-index: 20; }
+#modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; width: min(760px, 94vw); max-height: 86vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+#modal .box h2 { margin: 0 0 8px; font-size: 15px; }
+#modal .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+#modal .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#toast { position: fixed; left: 50%; bottom: 56px; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+#toast div { background: #20242c; color: #fff; padding: 7px 14px; border-radius: 6px; max-width: 80vw; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+#toast div.err { background: #8e2a20; }
+@media (max-width: 1000px) { main { grid-template-columns: 150px 1fr; } #panel { grid-column: 1 / -1; height: 45vh; border-left: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>NewShaiya data editor</h1>
+  <label class="small dim">Your name <input id="who" size="12" placeholder="web"></label>
+  <span class="sp"></span>
+  <span class="small dim">changes take effect:</span>
+  <span class="small"><span class="eff live"></span> live</span>
+  <span class="small"><span class="eff next"></span> next spawn</span>
+  <span class="small"><span class="eff restart"></span> restart</span>
+  <button id="b-servers">Servers</button>
+  <button id="b-history">History</button>
+  <a class="link small" href="/api/export" download="edits.json">Export</a>
+</header>
+<main>
+  <aside id="maplist"><input id="mapfilter" placeholder="Filter maps"><div id="maprows"></div></aside>
+  <section id="center">
+    <div id="toolbar"></div>
+    <div id="canvaswrap"><canvas id="cv"></canvas><div id="tip"></div></div>
+    <div id="status"></div>
+  </section>
+  <aside id="panel"><nav id="tabs"></nav><div id="body"></div></aside>
+</main>
+<footer id="draftbar"></footer>
+<div id="modal"><div class="box" id="modalbox"></div></div>
+<div id="toast"></div>
+<script>
+'use strict';
+// ---------------------------------------------------------------- state and helpers
+const S = {
+  targets: {}, maps: [], mapId: null, map: null, edits: { fields: [], rows: [] }, draft: [],
+  view: null, layers: { image: true, blocked: true, grid: true, areas: true, npcs: true, portals: true, binds: true, obelisks: true, bosses: true },
+  opacity: 1, tab: 'monsters', sel: null, mobId: null, gradeOpen: null, itemQ: '', itemResults: null, tool: 'select', marker: null,
+  img: null, blocked: null, mobCache: {}, gradeCache: {}, drag: null, drawRect: null, filter: '',
+};
+let D = {}, R = {}, E = {}, ADDS = [];   // draft: last set per field / removed rows / edits in force / added rows
+const $ = (s) => document.querySelector(s);
+
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return e;
+}
+
+async function api(method, path, body) {
+  const opt = { method, headers: {} };
+  if (method !== 'GET') { opt.headers['Content-Type'] = 'application/json'; opt.headers['X-Editor'] = '1'; opt.body = JSON.stringify(body ?? {}); }
+  const r = await fetch('/api' + path, opt);
+  const t = await r.text();
+  let j = null; try { j = JSON.parse(t); } catch (e) { /* not JSON */ }
+  if (!r.ok) throw new Error(j && j.error ? j.error : r.status + ' ' + t.slice(0, 200));
+  return j;
+}
+
+function toast(text, bad) {
+  const d = h('div', { class: bad ? 'err' : '' }, text);
+  $('#toast').append(d);
+  setTimeout(() => d.remove(), bad ? 9000 : 6000);
+}
+
+function who() { return ($('#who').value || '').trim() || 'web'; }
+const mapName = (id) => { const m = S.maps.find((m) => m.id === id); return m && m.name ? m.name : 'map ' + id; };
+const fmt = (n) => (typeof n === 'number' && !Number.isInteger(n)) ? String(Math.round(n * 100) / 100) : String(n);
+const r1 = (v) => Math.round(v * 10) / 10;
+function fmtSecs(s) {
+  if (s == null) return '?';
+  if (s < 60) return s + ' s';
+  if (s < 3600) return fmt(s / 60) + ' min';
+  if (s < 86400) return fmt(s / 3600) + ' h';
+  return fmt(s / 86400) + ' d';
+}
+const effClass = (e) => e === 'live' ? 'live' : e === 'next spawn' ? 'next' : 'restart';
+const effDot = (e) => h('span', { class: 'eff ' + effClass(e), title: e === 'live' ? 'live: after a reload' : e === 'next spawn' ? 'next spawn: after a reload, for monsters spawned later' : 'needs a restart' });
+
+function modal(title, content, buttons) {
+  const box = $('#modalbox');
+  box.replaceChildren(h('h2', {}, title), content, h('div', { class: 'btns' }, buttons || [h('button', { onclick: closeModal }, 'Close')]));
+  $('#modal').style.display = 'flex';
+}
+function closeModal() { $('#modal').style.display = 'none'; $('#modalbox').replaceChildren(); }
+$('#modal').addEventListener('mousedown', (e) => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+function confirmBox(title, content, okText, danger) {
+  return new Promise((resolve) => {
+    modal(title, content, [
+      h('button', { onclick: () => { closeModal(); resolve(false); } }, 'Cancel'),
+      h('button', { class: danger ? 'primary danger' : 'primary', onclick: () => { closeModal(); resolve(true); } }, okText || 'OK'),
+    ]);
+  });
+}
+
+// ---------------------------------------------------------------- the draft, the edits in force
+function indexDraft() {
+  D = {}; R = {}; ADDS = [];
+  for (const l of S.draft) {
+    if (l.action === 'set') D[`${l.target}|${l.key}|${l.field}`] = { value: l.value, seq: l.seq };
+    else if (l.action === 'unset') D[`${l.target}|${l.key}|${l.field}`] = { unset: true, seq: l.seq };
+    else if (l.action === 'remove') R[`${l.target}|${l.key}`] = l.seq;
+    else if (l.action === 'add') ADDS.push(l);
+  }
+  E = {};
+  for (const f of S.edits.fields) E[`${f.target}|${f.key}|${f.field}`] = f;
+}
+function ov(t, key, field, base) {
+  const d = D[`${t}|${key}|${field}`];
+  if (!d) return base;
+  if (d.unset) { const e = E[`${t}|${key}|${field}`]; return e ? e.original : base; }
+  return d.value;
+}
+const pend = (t, key, field) => !!D[`${t}|${key}|${field}`];
+
+async function refreshDraft() {
+  S.draft = await api('GET', '/draft');
+  indexDraft();
+}
+async function refreshEdits() {
+  S.edits = await api('GET', '/edits');
+  indexDraft();
+}
+
+async function stage(lines) {
+  try {
+    await api('POST', '/draft', { by: who(), lines });
+    await refreshDraft();
+  } catch (e) {
+    toast(e.message, true);
+  }
+  renderAll();
+}
+
+// ---------------------------------------------------------------- field editing
+function fmtVal(v) { return v == null ? '' : Array.isArray(v) ? v.map(fmt).join(',') : fmt(v); }
+function parseVal(f, text) {
+  const k = f.kind.type;
+  if (k === 'mobs' || k === 'spots') {
+    const parts = text.split(/[\s,]+/).filter((p) => p !== '').map(Number);
+    return parts.length && parts.every((n) => Number.isFinite(n)) ? parts : undefined;
+  }
+  if (text.trim() === '') return undefined;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : undefined;
+}
+function fieldMeta(tname, name) { return S.targets[tname].fields.find((f) => f.name === name); }
+function kindHint(f) {
+  const k = f.kind;
+  switch (k.type) {
+    case 'int': return `whole number ${k.min} to ${k.max}`;
+    case 'coord': return k.axis === 'y' ? 'height' : `${k.axis} inside the map`;
+    case 'radius': return 'greater than 0';
+    case 'mob': return 'a monster id that can spawn';
+    case 'map': return 'a map id';
+    case 'drop_rate': return '0 to 100 (entries 1 to 6, a percent) or 0 to 1,000,000 (entries 7 to 9, per million)';
+    case 'portal_country': return '0 everyone, 1 Light, 2 Fury, above 1000 an instance portal';
+    case 'mobs': return 'monster ids, comma separated' + (k.first_required ? ' (the first must spawn)' : ' (0 = none)');
+    case 'spots': return 'nine numbers: three spots of x, y, z';
+  }
+  return '';
+}
+
+// One input for a field of a row: shows the draft's value when there is one, marks edits in force, resets to the original.
+function fieldInput(tname, key, f, base, opts) {
+  opts = opts || {};
+  const cur = ov(tname, key, f.name, base);
+  const d = D[`${tname}|${key}|${f.name}`];
+  const e = E[`${tname}|${key}|${f.name}`];
+  const text = fmtVal(cur);
+  const input = h('input', {
+    value: text, class: d ? 'pending' : e ? 'edited' : '', disabled: f.nullable && cur == null,
+    title: `${f.name}: ${kindHint(f)}` + (e ? `\nedited; original ${fmtVal(e.original)}` : '') + (d ? '\nin the draft' : ''),
+    size: opts.size || (f.kind.type === 'mobs' || f.kind.type === 'spots' ? 24 : 9),
+  });
+  input.addEventListener('change', () => {
+    const v = parseVal(f, input.value);
+    if (v === undefined) { input.classList.add('bad'); toast(`${f.name}: not a valid value (${kindHint(f)})`, true); return; }
+    input.classList.remove('bad');
+    stage([{ target: tname, key, action: 'set', field: f.name, value: v }]);
+  });
+  const cell = h('span', { class: 'cell' }, input);
+  if (d || e) {
+    cell.append(h('button', {
+      class: 'reset', title: d ? 'take this change out of the draft' : `back to the original (${fmtVal(e.original)})`,
+      onclick: async () => {
+        if (d) { try { await api('DELETE', '/draft/' + d.seq); await refreshDraft(); } catch (err) { toast(err.message, true); } renderAll(); }
+        else stage([{ target: tname, key, action: 'unset', field: f.name }]);
+      },
+    }, '↺'));
+  }
+  return cell;
+}
+
+// Labelled inputs for some fields of a row; `groups` = [[title, [field names]]].
+function rowEditor(tname, key, row, groups) {
+  const T = S.targets[tname];
+  const out = [];
+  for (const [title, names] of groups) {
+    if (title) out.push(h('h3', {}, title));
+    const grid = h('div', { class: 'fgrid' });
+    for (const n of names) {
+      const f = fieldMeta(tname, n);
+      if (!f) { grid.append(h('label', {}, n), h('span', { class: 'dim' }, fmtVal(row[n]))); continue; }
+      grid.append(h('label', { title: kindHint(f) }, effDot(f.effect), f.name), fieldInput(tname, key, f, row[n]));
+    }
+    out.push(grid);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- monsters
+function mobName(id) {
+  if (!id) return '-';
+  const info = S.map && S.map.mob_info[id];
+  if (info) return info.name;
+  const m = S.mobCache[id];
+  if (m === undefined) { S.mobCache[id] = null; api('GET', '/mobs/' + id).then((r) => { S.mobCache[id] = r; renderPanel(); }).catch(() => { S.mobCache[id] = false; }); return '…'; }
+  return m ? m.def.mobname : '?';
+}
+const mobLevel = (id) => { const i = S.map && S.map.mob_info[id]; return i ? i.level : null; };
+
+async function openMob(id) {
+  S.mobId = id; S.tab = 'monsters'; S.gradeOpen = null;
+  try { S.mobCache[id] = await api('GET', '/mobs/' + id); } catch (e) { toast(e.message, true); S.mobId = null; }
+  renderAll();
+}
+async function loadGrade(g) {
+  if (S.gradeCache[g] === undefined) {
+    S.gradeCache[g] = null;
+    api('GET', '/grades/' + g).then((r) => { S.gradeCache[g] = r; renderPanel(); }).catch(() => { S.gradeCache[g] = false; });
+  }
+  return S.gradeCache[g];
+}
+async function openGrade(g) {
+  S.tab = 'items'; S.gradeOpen = g;
+  try { S.gradeCache[g] = await api('GET', '/grades/' + g); } catch (e) { toast(e.message, true); S.gradeOpen = null; }
+  renderAll();
+}
+
+function monstersTab(b) {
+  if (S.mobId != null) return mobDetail(b);
+  const open = h('input', { type: 'number', placeholder: 'monster id', style: 'width:110px' });
+  b.append(h('div', { class: 'row small' }, 'Open any monster: ', open, h('button', { onclick: () => open.value && openMob(+open.value) }, 'Open')));
+  if (!S.map) return;
+  const ms = S.map.monsters;
+  b.append(h('p', { class: 'dim small' }, `${ms.length} different monsters spawn on this map. Drops belong to the monster everywhere, not to the map.`));
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['id', 'name', 'lvl', 'HP', 'EXP', 'gold', 'respawn', 'here', 'also on'].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const m of ms) {
+    const other = m.other_maps.length ? m.other_maps.slice(0, 6).join(', ') + (m.other_maps.length > 6 ? ' …' : '') : '';
+    tb.append(h('tr', { class: 'click', onclick: () => openMob(m.mobid) },
+      h('td', { class: 'num' }, m.mobid), h('td', {}, m.name), h('td', { class: 'num' }, m.level), h('td', { class: 'num' }, m.hp), h('td', { class: 'num' }, m.exp),
+      h('td', { class: 'num' }, m.money1 || m.money2 ? `${m.money1}+${m.money2}` : ''), h('td', {}, fmtSecs(m.respawn_secs)),
+      h('td', { class: 'num', title: `${m.here} monsters in ${m.areas} areas` }, `${m.here}/${m.areas}`), h('td', { class: 'dim small' }, other)));
+  }
+  t.append(tb); b.append(t);
+}
+
+function mobDetail(b) {
+  const id = S.mobId, r = S.mobCache[id];
+  b.append(h('div', { class: 'row' }, h('a', { class: 'link', onclick: () => { S.mobId = null; renderAll(); } }, '← monsters')));
+  if (!r) { b.append('loading…'); return; }
+  const def = r.def;
+  b.append(h('h3', {}, `${id} ${def.mobname}`, h('span', { class: 'dim' }, `  level ${def.level}, respawn ${fmtSecs(def.respawn_secs)}`)));
+  if (r.maps.length) {
+    const other = r.maps.filter((m) => m.map !== S.mapId);
+    b.append(h('div', { class: 'note small' }, `Spawns on ${r.maps.map((m) => `${mapName(m.map)} (${m.count} in ${m.areas} areas)`).join('; ')}.`,
+      other.length ? h('div', { class: 'warn' }, ' Its drops are the same on every map: a change here applies to maps ' + r.maps.map((m) => m.map).join(', ') + '.') : ''));
+  }
+  b.append(h('h3', {}, 'Drops'));
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['#', 'grade', 'chance', 'of the grade', 'per item', ''].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const dr of r.drops) {
+    const key = `${id}/${dr.order}`;
+    const gf = fieldMeta('mob_drop', 'grade'), rf = fieldMeta('mob_drop', 'droprate');
+    const grade = ov('mob_drop', key, 'grade', dr.grade), rate = ov('mob_drop', key, 'droprate', dr.droprate);
+    const gi = grade ? S.gradeCache[grade] : null;
+    if (grade && gi === undefined) loadGrade(grade);
+    const items = gi ? gi.items : [];
+    const pct = dr.order <= 6 ? rate : rate / 10000;
+    const per = items.length ? pct / items.length : 0;
+    const sample = items.slice(0, 12).map((i) => i.name + (i.limited ? ' (limited: never drops)' : '')).join('\n') + (items.length > 12 ? '\n…' : '');
+    tb.append(h('tr', {},
+      h('td', { class: 'num dim' }, dr.order), h('td', {}, fieldInput('mob_drop', key, gf, dr.grade, { size: 5 })),
+      h('td', {}, fieldInput('mob_drop', key, rf, dr.droprate, { size: 8 }), h('span', { class: 'dim small', title: kindHint(rf) }, dr.order <= 6 ? ' %' : ' /1M')),
+      h('td', { class: 'small', title: sample }, grade === 0 ? h('span', { class: 'dim' }, 'off') : gi === undefined || gi === null ? '…' : h('a', { class: 'link', onclick: () => openGrade(grade) }, `${items.length} items`)),
+      h('td', { class: 'num small', title: `${fmt(pct)} % for the grade, one item of ${items.length}` }, grade && items.length ? fmt(Math.round(per * 10000) / 10000) + ' %' : ''),
+      h('td', {}, effDot('live'))));
+  }
+  t.append(tb); b.append(t);
+  b.append(h('p', { class: 'dim small' }, 'Entries 1 to 6 are percents; 7 to 9 are per million (10,000 = 1 %). One random item of the grade drops. Grade 0 = entry off. Limited items count in the grade but never drop.'));
+  b.append(h('h3', {}, 'Gold'), h('p', { class: 'dim small' }, '30 % chance of money1 to money1 + money2 − 1 gold at each kill.'));
+  b.append(...rowEditor('mob', String(id), def, [['', ['money1', 'money2', 'questitemid']]]));
+  const groups = [
+    ['Life', ['hp', 'sp', 'mp']], ['Stats', ['exp', 'dex', 'wis', 'luc', 'size', 'attrib', 'ai']], ['Defence', ['defense', 'magic']],
+    ['Respawn', ['attackspecial3']], ['Movement', ['normaltime', 'normalstep', 'chasetime', 'chasestep', 'chaserange']],
+    ['Resistances to states', Array.from({ length: 15 }, (_, i) => 'resiststate' + (i + 1))], ['Resistances to skills', Array.from({ length: 6 }, (_, i) => 'resistskill' + (i + 1))],
+  ];
+  for (const n of [1, 2, 3]) groups.push([`Attack ${n}` + (n === 3 ? ' (also: recovery per 5 s = attack, defence bonus = time, obelisk guard = plus)' : ''), ['attacktype', 'attacktime', 'attackrange', 'attack', 'attackplus', 'attackattrib', 'attackspecial', 'attackok'].map((x) => x + n)]);
+  b.append(...rowEditor('mob', String(id), def, groups));
+  b.append(h('p', { class: 'dim small' }, `The name and level cannot be edited (the client shows them from Monster.SData). attackspecial1/2 and attackattrib1/2 are read by nothing.`));
+}
+
+// ---------------------------------------------------------------- spawn areas
+function effAreas() {
+  if (!S.map) return [];
+  const m = S.mapId, out = [];
+  const adds = (key) => ADDS.filter((l) => l.target === 'spawn_mob' && l.key.startsWith(key + '/')).map((l) => ({ seq: +l.key.split('/')[2], mob_id: l.value.mob_id, count: l.value.count, added: true, key: l.key }));
+  const build = (a, key, added) => {
+    const g = {};
+    for (const f of ['x1', 'y1', 'z1', 'x2', 'y2', 'z2']) g[f] = ov('spawn_area', key, f, a[f]);
+    const mobs = [];
+    for (const mb of a.mobs || []) {
+      const mk = `${key}/${mb.seq}`;
+      mobs.push({ seq: mb.seq, key: mk, mob_id: ov('spawn_mob', mk, 'mob_id', mb.mob_id), count: ov('spawn_mob', mk, 'count', mb.count), removed: !!R[`spawn_mob|${mk}`], pending: pend('spawn_mob', mk, 'mob_id') || pend('spawn_mob', mk, 'count') });
+    }
+    for (const x of adds(key)) { x.mob_id = ov('spawn_mob', x.key, 'mob_id', x.mob_id); x.count = ov('spawn_mob', x.key, 'count', x.count); mobs.push(x); }
+    return { seq: +key.split('/')[1], key, ...g, mobs, removed: !!R[`spawn_area|${key}`], added, pending: added || ['x1', 'y1', 'z1', 'x2', 'y2', 'z2'].some((f) => pend('spawn_area', key, f)) };
+  };
+  for (const a of S.map.areas) out.push(build(a, `${m}/${a.seq}`, false));
+  for (const l of ADDS) if (l.target === 'spawn_area' && l.key.startsWith(m + '/')) out.push(build({ ...l.value, mobs: [] }, l.key, true));
+  return out;
+}
+const areaTotal = (a) => a.mobs.filter((x) => !x.removed).reduce((n, x) => n + x.count, 0);
+function areaLevel(a) {
+  let n = 0, sum = 0;
+  for (const x of a.mobs) { if (x.removed) continue; const lv = mobLevel(x.mob_id); if (lv != null) { n += x.count; sum += lv * x.count; } }
+  return n ? sum / n : null;
+}
+const areaSummary = (a) => a.mobs.filter((x) => !x.removed).map((x) => `${mobName(x.mob_id)}×${x.count}`).join(', ');
+function nextAreaSeq() {
+  let top = 99999;
+  for (const a of effAreas()) top = Math.max(top, a.seq);
+  return top + 1;
+}
+
+function selectObj(kind, key) {
+  S.sel = { kind, key };
+  S.tab = { area: 'spawns', portal: 'portals', npc: 'npcs', obelisk: 'bosses', guard: 'bosses', boss: 'bosses', follower: 'bosses' }[kind] || S.tab;
+  renderAll();
+  $('#body').scrollTop = 0;
+}
+
+function spawnsTab(b) {
+  if (!S.map) return;
+  const areas = effAreas();
+  const sel = S.sel && S.sel.kind === 'area' ? areas.find((a) => a.key === S.sel.key) : null;
+  b.append(h('div', { class: 'row small' }, h('button', { class: S.tool === 'newarea' ? 'primary' : '', onclick: () => { S.tool = S.tool === 'newarea' ? 'select' : 'newarea'; renderAll(); } }, 'New area (draw on the map)'),
+    h('span', { class: 'dim' }, `${areas.length} areas. Click an area on the map, then drag it or its handles.`)));
+  if (sel) b.append(areaEditor(sel));
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['seq', 'size', 'lvl', 'monsters'].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const a of areas) {
+    const lv = areaLevel(a);
+    tb.append(h('tr', { class: 'click' + (sel && sel.key === a.key ? ' sel' : ''), onclick: () => { selectObj('area', a.key); centerOn((a.x1 + a.x2) / 2, (a.z1 + a.z2) / 2); } },
+      h('td', { class: 'num' }, a.seq + (a.added ? ' +' : a.removed ? ' −' : '')), h('td', { class: 'dim small' }, `${Math.round(Math.abs(a.x2 - a.x1))}×${Math.round(Math.abs(a.z2 - a.z1))}`),
+      h('td', { class: 'num' }, lv == null ? '' : Math.round(lv)), h('td', { class: 'small' }, areaSummary(a))));
+  }
+  t.append(tb); b.append(t);
+}
+
+function areaEditor(a) {
+  const wrap = h('div', { class: 'note' });
+  wrap.append(h('b', {}, `Area ${a.seq}`), h('span', { class: 'dim' }, a.added ? ' (new, in the draft)' : ''));
+  if (a.removed) wrap.append(h('div', { class: 'small', style: 'color:var(--bad)' }, 'Removal is in the draft.'));
+  const row = S.map.areas.find((x) => `${S.mapId}/${x.seq}` === a.key) || ADDS.find((l) => l.target === 'spawn_area' && l.key === a.key).value;
+  wrap.append(...rowEditor('spawn_area', a.key, row, [['Box', ['x1', 'z1', 'x2', 'z2', 'y1', 'y2']]]));
+  wrap.append(h('h3', {}, 'Monsters'));
+  const t = h('table');
+  for (const m of a.mobs) {
+    const mk = m.key;
+    const mf = fieldMeta('spawn_mob', 'mob_id'), cf = fieldMeta('spawn_mob', 'count');
+    const base = (S.map.areas.find((x) => `${S.mapId}/${x.seq}` === a.key) || { mobs: [] }).mobs.find((x) => x.seq === m.seq) || (ADDS.find((l) => l.key === mk) || { value: {} }).value;
+    t.append(h('tr', { style: m.removed ? 'opacity:.5;text-decoration:line-through' : '' },
+      h('td', {}, fieldInput('spawn_mob', mk, mf, base.mob_id, { size: 6 })), h('td', { class: 'small' }, mobName(m.mob_id), h('span', { class: 'dim' }, mobLevel(m.mob_id) != null ? ` lvl ${mobLevel(m.mob_id)}` : '')),
+      h('td', {}, '×', fieldInput('spawn_mob', mk, cf, base.count, { size: 4 })),
+      h('td', {}, m.removed ? h('button', { onclick: async () => { await api('DELETE', '/draft/' + R[`spawn_mob|${mk}`]).catch((e) => toast(e.message, true)); await refreshDraft(); renderAll(); } }, 'keep')
+        : h('button', { class: 'danger', onclick: () => stage([{ target: 'spawn_mob', key: mk, action: 'remove' }]) }, 'remove'))));
+  }
+  wrap.append(t);
+  const mobIn = h('input', { type: 'number', placeholder: 'monster id', style: 'width:100px' }), cnt = h('input', { type: 'number', value: 1, style: 'width:60px' });
+  wrap.append(h('div', { class: 'row small' }, 'Add: ', mobIn, '×', cnt, h('button', {
+    onclick: () => {
+      if (!mobIn.value) return;
+      let seq = a.added ? 0 : 999;
+      for (const m of a.mobs) seq = Math.max(seq, m.seq);
+      stage([{ target: 'spawn_mob', key: `${a.key}/${seq + 1}`, action: 'add', value: { mob_id: +mobIn.value, count: +cnt.value } }]);
+    },
+  }, 'add monster')));
+  const discardNew = async () => {
+    for (const l of S.draft) if ((l.target === 'spawn_area' && l.key === a.key) || (l.target === 'spawn_mob' && l.key.startsWith(a.key + '/'))) await api('DELETE', '/draft/' + l.seq).catch((e) => toast(e.message, true));
+    S.sel = null; await refreshDraft(); renderAll();
+  };
+  wrap.append(h('div', { class: 'row' }, a.removed ? '' : a.added ? h('button', { class: 'danger', onclick: discardNew }, 'Discard this new area') : h('button', { class: 'danger', onclick: () => stage([{ target: 'spawn_area', key: a.key, action: 'remove' }]) }, 'Remove this area'),
+    h('span', { class: 'pill restart' }, 'restart')));
+  return wrap;
+}
+
+// ---------------------------------------------------------------- portals
+function portalsTab(b) {
+  if (!S.map) return;
+  const ps = S.map.portals;
+  if (!ps.length) { b.append(h('p', { class: 'dim' }, 'No portals on this map.')); return; }
+  b.append(h('p', { class: 'dim small' }, 'Where a portal stands is fixed (the client draws it from its own files); who may pass and where it leads can change.'));
+  const sel = S.sel && S.sel.kind === 'portal' ? S.sel.key : null;
+  const countryName = (c) => c === 0 ? 'all' : c === 1 ? 'Light' : c === 2 ? 'Fury' : 'instance ' + c;
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['#', 'at', 'who', 'levels', 'leads to'].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const p of ps) {
+    const key = `${S.mapId}/${p.seq}`;
+    const tm = ov('portal', key, 'to_map', p.to_map);
+    tb.append(h('tr', { class: 'click' + (sel === key ? ' sel' : ''), onclick: () => selectObj('portal', key) },
+      h('td', { class: 'num' }, p.seq), h('td', { class: 'small dim' }, `${Math.round(p.pos_x)}, ${Math.round(p.pos_z)}`), h('td', {}, countryName(ov('portal', key, 'country', p.country))),
+      h('td', { class: 'small' }, (ov('portal', key, 'level_min', p.level_min) || ov('portal', key, 'level_max', p.level_max)) ? `${ov('portal', key, 'level_min', p.level_min)}–${ov('portal', key, 'level_max', p.level_max)}` : ''),
+      h('td', { class: 'small' }, `${mapName(tm)} (${Math.round(ov('portal', key, 'to_x', p.to_x))}, ${Math.round(ov('portal', key, 'to_z', p.to_z))})`)));
+  }
+  t.append(tb); b.append(t);
+  const p = sel && ps.find((x) => `${S.mapId}/${x.seq}` === sel);
+  if (p) {
+    const wrap = h('div', { class: 'note' }, h('b', {}, `Portal ${p.seq}`));
+    wrap.append(...rowEditor('portal', sel, p, [['Who may pass', ['country', 'level_min', 'level_max']], ['Destination', ['to_map', 'to_x', 'to_y', 'to_z']]]));
+    const tm = ov('portal', sel, 'to_map', p.to_map);
+    wrap.append(h('div', { class: 'row' }, h('button', { onclick: () => gotoSpot(tm, ov('portal', sel, 'to_x', p.to_x), ov('portal', sel, 'to_z', p.to_z)) }, `Go to ${mapName(tm)}`)));
+    b.append(wrap);
+  }
+}
+
+async function gotoSpot(map, x, z) {
+  if (map !== S.mapId) await loadMap(map);
+  S.marker = { map, x, z };
+  centerOn(x, z, true);
+  renderAll();
+}
+
+// ---------------------------------------------------------------- obelisks and bosses
+function bossesTab(b) {
+  if (!S.map) return;
+  const m = S.map;
+  if (!m.obelisks.length && !m.bosses.length) { b.append(h('p', { class: 'dim' }, 'No obelisks or boss groups on this map.')); return; }
+  const sel = S.sel;
+  const isSel = (kind, key) => sel && sel.kind === kind && sel.key === key;
+  const mobsText = (ids) => ids.map((i) => i ? `${i} ${mobName(i)}` : '-').join(', ');
+  for (const o of m.obelisks) {
+    const key = String(o.seq);
+    const box = h('div', { class: 'note' + (isSel('obelisk', key) ? ' sel' : '') });
+    box.append(h('b', { class: 'link', onclick: () => { selectObj('obelisk', key); centerOn(ov('obelisk', key, 'pos_x', o.pos_x), ov('obelisk', key, 'pos_z', o.pos_z)); } }, `Obelisk ${o.number}`), h('span', { class: 'dim' }, ` (seq ${o.seq}), ${o.guards.length} guard groups`));
+    if (isSel('obelisk', key) || o.guards.some((g) => isSel('guard', `${o.seq}/${g.seq}`))) {
+      box.append(...rowEditor('obelisk', key, o, [['', ['pos_x', 'pos_y', 'pos_z', 'mob_neutral', 'mob_light', 'mob_fury', 'country']]]));
+      box.append(h('div', { class: 'small dim' }, 'Guards when neutral / Light / Fury own it: ', [o.mob_neutral, o.mob_light, o.mob_fury].map((i) => ov('obelisk', key, 'mob_' + ['neutral', 'light', 'fury'][[o.mob_neutral, o.mob_light, o.mob_fury].indexOf(i)], i)).map((i) => `${i} ${mobName(i)}`).join(' / ')));
+    }
+    const t = h('table');
+    for (const g of o.guards) {
+      const gk = `${o.seq}/${g.seq}`;
+      const removed = R[`obelisk_guard|${gk}`];
+      t.append(h('tr', { class: 'click' + (isSel('guard', gk) ? ' sel' : ''), style: removed ? 'opacity:.5;text-decoration:line-through' : '', onclick: () => { selectObj('guard', gk); centerOn(ov('obelisk_guard', gk, 'pos_x', g.pos_x), ov('obelisk_guard', gk, 'pos_z', g.pos_z)); } },
+        h('td', { class: 'dim' }, 'guard ' + g.seq), h('td', { class: 'small' }, `${mobName(ov('obelisk_guard', gk, 'mob_neutral', g.mob_neutral))} ×${ov('obelisk_guard', gk, 'count', g.count)}`),
+        h('td', { class: 'small dim' }, `r ${fmt(ov('obelisk_guard', gk, 'radius', g.radius))}`)));
+    }
+    box.append(t);
+    const gsel = o.guards.find((g) => isSel('guard', `${o.seq}/${g.seq}`));
+    if (gsel) {
+      const gk = `${o.seq}/${gsel.seq}`;
+      const w = h('div', { class: 'note' }, h('b', {}, `Guard group ${gsel.seq}`));
+      w.append(...rowEditor('obelisk_guard', gk, gsel, [['', ['pos_x', 'pos_y', 'pos_z', 'radius', 'count', 'mob_neutral', 'mob_light', 'mob_fury']]]));
+      w.append(h('div', { class: 'row' }, h('button', { class: 'danger', onclick: () => stage([{ target: 'obelisk_guard', key: gk, action: 'remove' }]) }, 'Remove this guard group')));
+      box.append(w);
+    }
+    box.append(h('div', { class: 'row' }, h('button', {
+      onclick: () => {
+        const whole = (g) => g.mob_neutral && g.mob_light && g.mob_fury;
+        const last = [...o.guards].reverse().find(whole) || { pos_x: o.pos_x, pos_y: o.pos_y, pos_z: o.pos_z, radius: 5, mob_neutral: o.mob_neutral, mob_light: o.mob_light, mob_fury: o.mob_fury, count: 1 };
+        let seq = 999;
+        for (const g of o.guards) seq = Math.max(seq, g.seq);
+        for (const l of ADDS) if (l.target === 'obelisk_guard' && l.key.startsWith(o.seq + '/')) seq = Math.max(seq, +l.key.split('/')[1]);
+        const { pos_x, pos_y, pos_z, radius, mob_neutral, mob_light, mob_fury, count } = last;
+        stage([{ target: 'obelisk_guard', key: `${o.seq}/${seq + 1}`, action: 'add', value: { pos_x: r1(pos_x + 2), pos_y, pos_z: r1(pos_z + 2), radius, mob_neutral, mob_light, mob_fury, count } }]);
+      },
+    }, 'Add a guard group (copy of the last)')));
+    b.append(box);
+  }
+  for (const g of m.bosses) {
+    const key = String(g.seq);
+    const box = h('div', { class: 'note' + (isSel('boss', key) ? ' sel' : '') });
+    box.append(h('b', { class: 'link', onclick: () => { selectObj('boss', key); centerOn(ov('boss_group', key, 'pos_x', g.pos_x), ov('boss_group', key, 'pos_z', g.pos_z)); } }, `Boss group ${g.number}`),
+      h('span', { class: 'dim' }, ` (seq ${g.seq}): ${mobsText(ov('boss_group', key, 'mobs', g.mobs))}; respawn ${fmtSecs(ov('boss_group', key, 'respawn_secs', g.respawn_secs))}`));
+    if (isSel('boss', key) || g.followers.some((f) => isSel('follower', `${g.seq}/${f.seq}`))) {
+      const names = ['respawn_secs', 'pos_x', 'pos_y', 'pos_z', 'mobs'];
+      if (g.random_min != null) names.push('random_min', 'random_max', 'random_spots');
+      box.append(...rowEditor('boss_group', key, g, [['', names]]));
+    }
+    const t = h('table');
+    for (const f of g.followers) {
+      const fk = `${g.seq}/${f.seq}`;
+      const removed = R[`boss_follower|${fk}`];
+      t.append(h('tr', { class: 'click' + (isSel('follower', fk) ? ' sel' : ''), style: removed ? 'opacity:.5;text-decoration:line-through' : '', onclick: () => { selectObj('follower', fk); centerOn(ov('boss_follower', fk, 'pos_x', f.pos_x), ov('boss_follower', fk, 'pos_z', f.pos_z)); } },
+        h('td', { class: 'dim' }, 'followers ' + f.seq), h('td', { class: 'small' }, `${mobsText(ov('boss_follower', fk, 'mobs', f.mobs))} ×${ov('boss_follower', fk, 'count', f.count)}`)));
+    }
+    box.append(t);
+    const fsel = g.followers.find((f) => isSel('follower', `${g.seq}/${f.seq}`));
+    if (fsel) {
+      const fk = `${g.seq}/${fsel.seq}`;
+      const w = h('div', { class: 'note' }, h('b', {}, `Follower group ${fsel.seq}`));
+      w.append(...rowEditor('boss_follower', fk, fsel, [['', ['pos_x', 'pos_y', 'pos_z', 'radius', 'count', 'mobs']]]));
+      w.append(h('div', { class: 'row' }, h('button', { class: 'danger', onclick: () => stage([{ target: 'boss_follower', key: fk, action: 'remove' }]) }, 'Remove this follower group')));
+      box.append(w);
+    }
+    if (g.followers.length) {
+      box.append(h('div', { class: 'row' }, h('button', {
+        onclick: () => {
+          const last = g.followers[g.followers.length - 1];
+          let seq = 999;
+          for (const f of g.followers) seq = Math.max(seq, f.seq);
+          for (const l of ADDS) if (l.target === 'boss_follower' && l.key.startsWith(g.seq + '/')) seq = Math.max(seq, +l.key.split('/')[1]);
+          stage([{ target: 'boss_follower', key: `${g.seq}/${seq + 1}`, action: 'add', value: { pos_x: r1(last.pos_x + 2), pos_y: last.pos_y, pos_z: r1(last.pos_z + 2), radius: last.radius, mobs: last.mobs, count: last.count } }]);
+        },
+      }, 'Add a follower group (copy of the last)')));
+    }
+    b.append(box);
+  }
+}
+
+// ---------------------------------------------------------------- NPCs
+function npcsTab(b) {
+  if (!S.map) return;
+  b.append(h('p', { class: 'dim small' }, 'NPCs are shown for orientation only (their shops and quests live in the client).'));
+  const sel = S.sel && S.sel.kind === 'npc' ? S.sel.key : null;
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['#', 'type', 'name', 'at'].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const n of S.map.npcs) {
+    const p = n.positions[0] || [0, 0, 0];
+    tb.append(h('tr', { class: 'click' + (sel === String(n.seq) ? ' sel' : ''), onclick: () => { selectObj('npc', String(n.seq)); centerOn(p[0], p[2]); } },
+      h('td', { class: 'num' }, n.seq), h('td', { class: 'small' }, `${n.type}/${n.type_id}`), h('td', {}, n.name || ''), h('td', { class: 'small dim' }, `${Math.round(p[0])}, ${Math.round(p[2])}`)));
+  }
+  t.append(tb); b.append(t);
+}
+
+// ---------------------------------------------------------------- items and grades
+function itemsTab(b) {
+  if (S.gradeOpen != null) return gradeView(b);
+  const q = h('input', { value: S.itemQ, placeholder: 'item id or part of the name', size: 28 });
+  const go = async () => {
+    S.itemQ = q.value;
+    try { S.itemResults = await api('GET', '/items?q=' + encodeURIComponent(q.value)); } catch (e) { toast(e.message, true); }
+    renderPanel();
+  };
+  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  b.append(h('div', { class: 'row' }, q, h('button', { onclick: go }, 'Search'), h('span', { class: 'row small dim' }, 'Grade:'), (() => { const g = h('input', { type: 'number', style: 'width:70px', min: 0, max: 1024 }); g.addEventListener('keydown', (e) => { if (e.key === 'Enter' && g.value !== '') openGrade(+g.value); }); return g; })()));
+  if (!S.itemResults) { b.append(h('p', { class: 'dim small' }, 'Drops name a grade; one random item of the grade drops. Find an item to see its grade, or to make it drop from one monster only.')); return; }
+  if (!S.itemResults.length) { b.append(h('p', { class: 'dim' }, 'No item found.')); return; }
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['id', 'name', 'grade', ''].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const it of S.itemResults) {
+    const key = String(it.id);
+    const gf = fieldMeta('item_grade', 'grade');
+    const cur = ov('item_grade', key, 'grade', it.grade);
+    const inp = fieldInput('item_grade', key, gf, it.grade, { size: 5 });
+    const input = inp.querySelector('input');
+    // Changing a grade moves the item between the users of the two grades: say so before it goes into the draft.
+    const clone = input.cloneNode(true);
+    clone.addEventListener('change', async () => {
+      const v = parseVal(gf, clone.value);
+      if (v === undefined) { clone.classList.add('bad'); return; }
+      const ok = await gradeChangeNotice(it, cur, v);
+      if (ok) stage([{ target: 'item_grade', key, action: 'set', field: 'grade', value: v }]); else clone.value = fmtVal(cur);
+    });
+    input.replaceWith(clone);
+    tb.append(h('tr', {}, h('td', { class: 'num' }, it.id), h('td', {}, it.name, it.limited ? h('span', { class: 'dim small', title: 'a limited item counts in its grade but never drops' }, ' (limited)') : ''),
+      h('td', {}, inp, ' ', it.grade ? h('a', { class: 'link small', onclick: () => openGrade(it.grade) }, 'users') : ''),
+      h('td', {}, h('button', { onclick: () => dropHelper(it.id), title: 'give it a grade of its own and put it in one monster\'s drop table' }, 'drop this one item…'))));
+  }
+  t.append(tb); b.append(t);
+}
+
+function usersSummary(g) {
+  const mobs = new Set(g.entries.map((e) => e.mobid));
+  return `${g.entries_total} drop entries of ${mobs.size}${g.entries_total > g.entries.length ? '+' : ''} monsters, ${g.box_sets.length} box set lines, ${g.sequence_groups.length} sequence groups`;
+}
+
+async function gradeChangeNotice(item, from, to) {
+  const parts = [];
+  for (const g of [from, to]) {
+    if (!g) continue;
+    parts.push(await api('GET', '/grades/' + g));
+  }
+  const body = h('div', {}, h('p', {}, `${item.name} (${item.id}) moves from grade ${from} to grade ${to}.`));
+  const old = from ? parts[0] : null, nu = to ? parts[from ? 1 : 0] : null;
+  if (old) body.append(h('div', { class: 'note warn' }, h('b', {}, `Grade ${from} stops giving it: `), usersSummary(old), '. ', old.items.length <= 1 ? 'It is the only item of that grade: those entries give nothing afterwards.' : ''));
+  if (nu) body.append(h('div', { class: 'note warn' }, h('b', {}, `Grade ${to} starts giving it: `), usersSummary(nu), '.'));
+  if (!old && !nu) body.append(h('p', { class: 'dim' }, 'Neither grade is used by a drop.'));
+  return confirmBox('Change an item\'s grade', body, 'Put in the draft');
+}
+
+function gradeView(b) {
+  const g = S.gradeOpen, r = S.gradeCache[g];
+  b.append(h('div', { class: 'row' }, h('a', { class: 'link', onclick: () => { S.gradeOpen = null; renderAll(); } }, '← items'), h('b', { style: 'margin-left:10px' }, `Grade ${g}`)));
+  if (!r) { b.append('loading…'); return; }
+  b.append(h('div', { class: 'note small' }, usersSummary(r)), h('h3', {}, `Items (${r.items.length})`));
+  const t = h('table');
+  for (const i of r.items) t.append(h('tr', {}, h('td', { class: 'num' }, i.id), h('td', {}, i.name, i.limited ? h('span', { class: 'dim small' }, ' (limited: never drops)') : ''), h('td', {}, h('button', { onclick: () => dropHelper(i.id) }, 'drop this one item…'))));
+  b.append(t);
+  if (r.ignored_items.length) b.append(h('p', { class: 'dim small' }, `${r.ignored_items.length} more items carry this grade but the drop tables ignore them (no type, or real type 27): ${r.ignored_items.slice(0, 6).map((i) => i.name).join(', ')}${r.ignored_items.length > 6 ? ' …' : ''}`));
+  b.append(h('h3', {}, `Monster drop entries (${r.entries_total})`));
+  if (r.entries.length) {
+    const t2 = h('table', {}, h('thead', {}, h('tr', {}, ['monster', 'lvl', 'entry', 'chance'].map((x) => h('th', {}, x)))));
+    const tb = h('tbody');
+    for (const e of r.entries) tb.append(h('tr', { class: 'click', onclick: () => openMob(e.mobid) }, h('td', {}, `${e.mobid} ${e.name || ''}`), h('td', { class: 'num' }, e.level), h('td', { class: 'num' }, e.order), h('td', { class: 'num' }, e.order <= 6 ? e.droprate + ' %' : fmt(e.droprate / 10000) + ' %')));
+    t2.append(tb); b.append(t2);
+    if (r.entries_total > r.entries.length) b.append(h('p', { class: 'dim small' }, `… and ${r.entries_total - r.entries.length} more.`));
+  } else b.append(h('p', { class: 'dim small' }, 'No monster uses this grade.'));
+  b.append(h('h3', {}, 'Box sets'));
+  b.append(r.box_sets.length ? h('p', { class: 'small' }, r.box_sets.map((x) => `set ${x.set} (weight ${x.weight} of ${x.total})`).join('; ')) : h('p', { class: 'dim small' }, 'None.'));
+  b.append(h('h3', {}, 'Sequence groups'));
+  b.append(r.sequence_groups.length ? h('p', { class: 'small' }, r.sequence_groups.map((x) => `group ${x.group} (sequence ${x.sequence})`).join('; ')) : h('p', { class: 'dim small' }, 'None.'));
+}
+
+// "Drop this one item": the item gets a grade of its own and one monster's drop entry names it.
+async function dropHelper(itemId) {
+  let r;
+  try { r = await api('GET', `/items/${itemId}/helper`); } catch (e) { toast(e.message, true); return; }
+  if (r.new_grade == null) { toast('every grade from 1 to 1024 is in use', true); return; }
+  const it = r.item, old = r.old_grade;
+  let mobId = S.mobId != null ? S.mobId : '';
+  const mobIn = h('input', { type: 'number', value: mobId, style: 'width:100px' });
+  const entrySel = h('select'), rate = h('input', { type: 'number', value: 10, style: 'width:90px' }), info = h('div', { class: 'small dim' });
+  const nameOf = h('span', { class: 'small' });
+  let mobData = null;
+  const unit = () => (+entrySel.value <= 6 ? '% (0 to 100)' : 'per million (0 to 1,000,000)');
+  const unitSpan = h('span', { class: 'small dim' });
+  const loadMob = async () => {
+    entrySel.replaceChildren(); nameOf.textContent = ''; mobData = null;
+    if (!mobIn.value) return;
+    try { mobData = await api('GET', '/mobs/' + mobIn.value); } catch (e) { nameOf.textContent = e.message; return; }
+    nameOf.textContent = `${mobData.def.mobid} ${mobData.def.mobname} (level ${mobData.def.level})`;
+    let firstOff = null;
+    for (const d of mobData.drops) {
+      const dr = ov('mob_drop', `${mobData.def.mobid}/${d.order}`, 'grade', d.grade);
+      if (dr === 0 && firstOff == null) firstOff = d.order;
+      entrySel.append(h('option', { value: d.order }, `entry ${d.order}: ` + (dr === 0 ? 'off' : `replaces grade ${dr}, ${d.order <= 6 ? ov('mob_drop', `${mobData.def.mobid}/${d.order}`, 'droprate', d.droprate) + ' %' : fmt(ov('mob_drop', `${mobData.def.mobid}/${d.order}`, 'droprate', d.droprate) / 10000) + ' %'}`)));
+    }
+    if (firstOff != null) entrySel.value = firstOff;
+    unitSpan.textContent = unit();
+  };
+  mobIn.addEventListener('change', loadMob); entrySel.addEventListener('change', () => { unitSpan.textContent = unit(); });
+  const body = h('div', {},
+    h('p', {}, h('b', {}, `${it.name} (${it.id})`), old.grade ? ` is in grade ${old.grade}, with ${old.items.length} items.` : ' is in no drop grade.'),
+    old.grade ? h('div', { class: 'note warn' }, h('b', {}, `The item leaves grade ${old.grade}. `), `Those stop giving it: ${usersSummary(old)}.`,
+      old.items.length <= 1 ? h('div', {}, 'It is the only item of that grade: those entries give nothing afterwards.') : '',
+      old.entries.length ? h('div', { class: 'small' }, 'Monsters (first ones): ' + old.entries.slice(0, 8).map((e) => `${e.mobid} ${e.name || ''}`).join(', ') + (old.entries_total > 8 ? ' …' : '')) : '') : '',
+    h('p', {}, `It gets the new grade ${r.new_grade} (nothing else uses it).`),
+    h('div', { class: 'row' }, 'Monster id: ', mobIn, nameOf), h('div', { class: 'row' }, 'Entry: ', entrySel), h('div', { class: 'row' }, 'Chance: ', rate, unitSpan), info);
+  await loadMob();
+  const ok = await confirmBox('Drop this one item', body, 'Put in the draft');
+  if (!ok) return;
+  if (!mobData) { toast('give a monster that exists', true); return; }
+  const mid = mobData.def.mobid;
+  stage([
+    { target: 'item_grade', key: String(it.id), action: 'set', field: 'grade', value: r.new_grade },
+    { target: 'mob_drop', key: `${mid}/${entrySel.value}`, action: 'set', field: 'grade', value: r.new_grade },
+    { target: 'mob_drop', key: `${mid}/${entrySel.value}`, action: 'set', field: 'droprate', value: +rate.value },
+  ]);
+}
+
+// ---------------------------------------------------------------- the draft, Apply
+function summarizeEffects(lines) {
+  const c = { live: 0, 'next spawn': 0, restart: 0 };
+  for (const l of lines) c[l.effect] = (c[l.effect] || 0) + 1;
+  return c;
+}
+function drawDraftBar() {
+  const bar = $('#draftbar');
+  const n = S.draft.length;
+  if (!n) { bar.replaceChildren(h('span', { class: 'dim' }, 'No pending changes. Edit a value or drag something on the map; changes wait here until you apply them.'), h('span', { class: 'sp' }), h('span', { class: 'small dim' }, 'Everything is stored in the database with its history and can be undone.')); return; }
+  const c = summarizeEffects(S.draft);
+  bar.replaceChildren(h('span', { class: 'count' }, `${n} change${n === 1 ? '' : 's'}`),
+    h('span', { class: 'small' }, [c.live ? `${c.live} live` : '', c['next spawn'] ? `${c['next spawn']} next spawn` : '', c.restart ? `${c.restart} restart` : ''].filter(Boolean).join(' · ')),
+    h('span', { class: 'sp' }), h('button', { onclick: reviewDraft }, 'Review'), h('button', { class: 'danger', onclick: discardDraft }, 'Discard all'), h('button', { class: 'primary', onclick: reviewDraft }, 'Apply…'));
+}
+async function discardDraft() {
+  if (!(await confirmBox('Discard the draft', h('p', {}, `Throw away ${S.draft.length} pending changes?`), 'Discard', true))) return;
+  try { await api('DELETE', '/draft'); await refreshDraft(); } catch (e) { toast(e.message, true); }
+  renderAll();
+}
+function lineLabel(l) {
+  const f = l.field ? ' ' + l.field : '';
+  return `${l.target} ${l.key}${l.name ? ' (' + l.name + ')' : ''}${f}`;
+}
+async function reviewDraft() {
+  await refreshDraft();
+  if (!S.draft.length) { closeModal(); renderAll(); return; }
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['what', 'now', '', 'new', 'takes effect', ''].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  for (const l of S.draft) {
+    const nv = l.action === 'set' ? fmtVal(l.value) : l.action === 'unset' ? '(original)' : l.action === 'add' ? 'new row ' + JSON.stringify(l.value) : 'removed';
+    tb.append(h('tr', {}, h('td', { class: 'small' }, lineLabel(l)), h('td', { class: 'small dim' }, l.action === 'set' || l.action === 'unset' ? fmtVal(l.now) : ''), h('td', {}, '→'), h('td', { class: 'small' }, nv),
+      h('td', {}, h('span', { class: 'pill ' + effClass(l.effect) }, l.effect)),
+      h('td', {}, h('button', { class: 'reset', title: 'take out of the draft', onclick: async () => { await api('DELETE', '/draft/' + l.seq).catch((e) => toast(e.message, true)); await reviewDraft(); renderAll(); } }, '✕'))));
+  }
+  t.append(tb);
+  const msg = h('input', { placeholder: 'what and why (required)', style: 'width:100%' });
+  const doApply = async () => {
+    if (!msg.value.trim()) { msg.classList.add('bad'); msg.focus(); return; }
+    try {
+      const r = await api('POST', '/apply', { message: msg.value, by: who() });
+      await Promise.all([refreshDraft(), refreshEdits(), S.mapId != null ? reloadMap() : null]);
+      S.mobCache = {}; S.gradeCache = {};
+      if (S.mobId != null) openMob(S.mobId); else renderAll();
+      afterApply(r);
+    } catch (e) { toast(e.message, true); }
+  };
+  msg.addEventListener('keydown', (e) => { if (e.key === 'Enter') doApply(); });
+  modal('Apply the draft', h('div', {}, t, h('div', { class: 'row' }, 'Message: ', h('span', { style: 'flex:1' }, msg)), h('div', { class: 'small dim' }, 'The whole draft becomes one change set in the history. You can undo it from there.')), [
+    h('button', { onclick: closeModal }, 'Close'), h('button', { class: 'danger', onclick: async () => { closeModal(); discardDraft(); } }, 'Discard all'), h('button', { class: 'primary', onclick: doApply }, 'Apply')]);
+  msg.focus();
+}
+function afterApply(r) {
+  const eff = r.effects || [];
+  const body = h('div', {}, h('p', {}, `Change set #${r.change_set}: ${r.changes} changes written.`));
+  for (const p of r.problems || []) body.append(h('div', { class: 'note warn small' }, `${p.target} ${p.key}${p.field ? ' ' + p.field : ''}: ${p.text}`));
+  if (r.export_error) body.append(h('div', { class: 'note warn small' }, r.export_error));
+  if (eff.includes('live') || eff.includes('next spawn')) body.append(h('p', {}, h('span', { class: 'pill live' }, 'live / next spawn'), ' The game server reads these after a reload (players are not disconnected).'));
+  if (eff.includes('restart')) body.append(h('p', {}, h('span', { class: 'pill restart' }, 'restart'), ' Spawns, obelisks, bosses and portals are read when the game server starts.'));
+  modal('Applied', body, [h('button', { onclick: closeModal }, 'Later'), (eff.length ? h('button', { class: 'primary', onclick: () => openServers() }, 'Servers…') : '')]);
+}
+
+// ---------------------------------------------------------------- history
+async function openHistory() {
+  let list;
+  try { list = await api('GET', '/history'); } catch (e) { toast(e.message, true); return; }
+  const t = h('table', {}, h('thead', {}, h('tr', {}, ['#', 'when', 'who', 'message', 'changes', ''].map((x) => h('th', {}, x)))));
+  const tb = h('tbody');
+  const detail = h('div');
+  for (const c of list) {
+    const note = c.undoes ? ` (undoes #${c.undoes})` : c.undone_by ? ` (undone by #${c.undone_by})` : '';
+    tb.append(h('tr', { class: 'click', onclick: () => showChange(c, detail) },
+      h('td', { class: 'num' }, c.id), h('td', { class: 'small dim' }, c.made_at.slice(0, 16)), h('td', {}, c.made_by), h('td', { style: c.undone_by ? 'text-decoration:line-through' : '' }, c.message + note), h('td', { class: 'num' }, c.changes),
+      h('td', {}, c.undone_by || c.undoes ? '' : h('button', { onclick: (e) => { e.stopPropagation(); undoChange(c); } }, 'Undo'))));
+  }
+  t.append(tb);
+  modal('History', h('div', {}, list.length ? t : h('p', { class: 'dim' }, 'No change sets yet.'), detail));
+}
+async function showChange(c, host) {
+  host.replaceChildren(h('h3', {}, `Change set #${c.id}: ${c.message}`));
+  try {
+    const lines = await api('GET', '/history/' + c.id);
+    const t = h('table');
+    const clip = (v) => { const s = v == null ? '-' : JSON.stringify(v); return s.length > 90 ? s.slice(0, 90) + '…' : s; };
+    for (const l of lines) t.append(h('tr', {}, h('td', { class: 'small' }, `${l.target} ${l.key}${l.field ? ' ' + l.field : ''}`), h('td', { class: 'small dim' }, l.action), h('td', { class: 'small' }, clip(l.before) + ' → ' + clip(l.after))));
+    host.append(t);
+  } catch (e) { host.append(h('p', { class: 'dim' }, e.message)); }
+}
+async function undoChange(c) {
+  if (!(await confirmBox('Undo a change set', h('p', {}, `Undo #${c.id}: ${c.message}?`), 'Undo'))) { openHistory(); return; }
+  try {
+    const r = await api('POST', `/history/${c.id}/undo`, { by: who() });
+    await Promise.all([refreshEdits(), S.mapId != null ? reloadMap() : null]);
+    S.mobCache = {}; S.gradeCache = {};
+    if (S.mobId != null) await openMob(S.mobId); else renderAll();
+    afterApply(r);
+  } catch (e) { toast(e.message, true); openHistory(); }
+}
+
+// ---------------------------------------------------------------- servers
+async function openServers() {
+  const box = h('div', {}, 'asking the game servers…');
+  modal('Game servers', box);
+  let list;
+  try { list = await api('GET', '/servers'); } catch (e) { box.replaceChildren(e.message); return; }
+  box.replaceChildren();
+  if (!list.length) box.append(h('p', { class: 'dim' }, 'No game server is registered in the database.'));
+  for (const s of list) {
+    const players = s.info ? s.info.split(',')[0] : null;
+    const sure = (what, danger) => confirmBox(what, h('div', {}, h('p', {}, players ? `Server ${s.id} ${s.name}: ${players}.` : `Server ${s.id} ${s.name} did not say who is online.`), h('p', {}, what.startsWith('Reload') ? 'The monsters and drops are read again; nobody is disconnected.' : 'Everyone online gets the shutdown notices of the countdown and is disconnected at its end; the server then starts again by itself (if it runs under tools/game-server.sh or a service).')), 'Go', danger);
+    const out = h('div', { class: 'small' });
+    // the confirmation replaced this window, so the answer comes as a notice and the window opens again
+    const run = async (path, body) => { try { const r = await api('POST', path, body); toast(`server ${s.id}: ${r.answer}`); } catch (e) { toast(`server ${s.id}: ${e.message}`, true); } openServers(); };
+    box.append(h('div', { class: 'note' }, h('b', {}, `${s.id} ${s.name}`), h('span', { class: 'dim' }, `  ${s.address}  ${s.enabled ? '' : '(disabled) '}`),
+      h('div', { class: 'small' }, s.info ? s.info : h('span', { style: 'color:var(--bad)' }, 'no answer — is it running?')),
+      h('div', { class: 'row' }, h('button', { disabled: !s.info, onclick: async () => { if (await sure('Reload drops and monsters')) run(`/servers/${s.id}/reload`); else openServers(); } }, 'Reload drops and monsters'),
+        [1, 5, 15].map((m) => h('button', { disabled: !s.info, class: 'danger', onclick: async () => { if (await sure(`Restart in ${m} minute${m > 1 ? 's' : ''}`, true)) run(`/servers/${s.id}/restart`, { minutes: m }); else openServers(); } }, `Restart in ${m} min`)),
+        h('button', { disabled: !s.info, onclick: () => run(`/servers/${s.id}/cancel`) }, 'Cancel countdown')), out));
+  }
+}
+
+// ---------------------------------------------------------------- the map
+async function loadMap(id) {
+  S.mapId = id; S.map = null; S.sel = null; S.img = null; S.blocked = null; S.view = null; S.drag = null;
+  try { localStorage.setItem('editor.map', String(id)); } catch (e) { /* storage may be blocked */ }
+  renderAll();
+  try {
+    S.map = await api('GET', '/maps/' + id);
+  } catch (e) { toast(e.message, true); return; }
+  loadPictures(id);
+  fitView(); renderAll();
+}
+async function reloadMap() {
+  const id = S.mapId;
+  const prev = S.view;
+  S.map = await api('GET', '/maps/' + id);
+  S.maps = await api('GET', '/maps');
+  S.view = prev;
+}
+function loadPictures(id) {
+  if (S.map && S.map.image) {
+    const img = new Image();
+    img.onload = () => { if (S.mapId === id) { S.img = img; fitView(); drawMap(); } };
+    img.src = `/api/maps/${id}/image?t=${encodeURIComponent(S.map.image.added_at)}`;
+  }
+  fetch(`/api/maps/${id}/blocked`).then(async (r) => {
+    if (!r.ok) return;
+    const size = +r.headers.get('x-map-size'), bits = new Uint8Array(await r.arrayBuffer());
+    const cv = document.createElement('canvas'); cv.width = cv.height = size;
+    const ctx = cv.getContext('2d'), data = ctx.createImageData(size, size);
+    let count = 0;
+    for (let i = 0; i < size * size; i++) if ((bits[i >> 3] >> (i & 7)) & 1) { const o = i * 4; data.data[o] = 255; data.data[o + 1] = 120; data.data[o + 2] = 60; data.data[o + 3] = 110; count++; }
+    ctx.putImageData(data, 0, 0);
+    if (S.mapId === id) { S.blocked = { canvas: cv, count, size }; drawMap(); }
+  }).catch(() => { /* the layer is optional */ });
+}
+
+const cv = $('#cv'), ctx = cv.getContext('2d');
+function orient() {
+  const im = S.map && S.map.image;
+  return { xRight: im ? im.x1 < im.x2 : true, zUp: im ? im.z1 > im.z2 : true };
+}
+function canvasSize() { const r = cv.getBoundingClientRect(); return [r.width, r.height]; }
+function fitView() {
+  if (!S.map) return;
+  const [W, H] = canvasSize(), size = S.map.map.size, o = orient();
+  const s = Math.min(W, H) / size * 0.96;
+  S.view = { s, tx: W / 2 - (o.xRight ? 1 : -1) * size / 2 * s, tz: H / 2 - (o.zUp ? -1 : 1) * size / 2 * s };
+}
+function w2s(x, z) { const o = orient(), v = S.view; return [v.tx + (o.xRight ? 1 : -1) * x * v.s, v.tz + (o.zUp ? -1 : 1) * z * v.s]; }
+function s2w(px, py) { const o = orient(), v = S.view; return [(px - v.tx) / ((o.xRight ? 1 : -1) * v.s), (py - v.tz) / ((o.zUp ? -1 : 1) * v.s)]; }
+function centerOn(x, z, zoomIn) {
+  if (!S.view) return;
+  const [W, H] = canvasSize();
+  if (zoomIn) S.view.s = Math.max(S.view.s, 4);
+  const o = orient();
+  S.view.tx = W / 2 - (o.xRight ? 1 : -1) * x * S.view.s; S.view.tz = H / 2 - (o.zUp ? -1 : 1) * z * S.view.s;
+  drawMap();
+}
+
+function levelColor(lv, a) { const hue = lv == null ? 210 : 130 - Math.min(lv, 90) / 90 * 130; return `hsla(${hue},70%,50%,${a})`; }
+
+// Everything with a place on the map, in the form the drawing and the hit test share.
+function geometry() {
+  const m = S.map, mapId = S.mapId, out = { areas: effAreas(), points: [] };
+  const P = (kind, key, x, z, label, extra) => out.points.push({ kind, key, x, z, label, ...extra });
+  for (const n of m.npcs) { const p = n.positions[0]; if (p) P('npc', String(n.seq), p[0], p[2], `NPC ${n.seq}: ${n.name || ''} (type ${n.type})`, { npcType: n.type }); }
+  for (const p of m.portals) {
+    const k = `${mapId}/${p.seq}`;
+    P('portal', k, p.pos_x, p.pos_z, `Portal ${p.seq} → ${mapName(ov('portal', k, 'to_map', p.to_map))}`, { country: ov('portal', k, 'country', p.country), to: ov('portal', k, 'to_map', p.to_map) === mapId ? [ov('portal', k, 'to_x', p.to_x), ov('portal', k, 'to_z', p.to_z)] : null });
+  }
+  for (const o of m.obelisks) {
+    const ok = String(o.seq), x = ov('obelisk', ok, 'pos_x', o.pos_x), z = ov('obelisk', ok, 'pos_z', o.pos_z);
+    P('obelisk', ok, x, z, `Obelisk ${o.number}`, { movable: true, target: 'obelisk', pending: pend('obelisk', ok, 'pos_x') || pend('obelisk', ok, 'pos_z') });
+    for (const g of o.guards) {
+      const gk = `${o.seq}/${g.seq}`;
+      if (R[`obelisk_guard|${gk}`]) continue;
+      P('guard', gk, ov('obelisk_guard', gk, 'pos_x', g.pos_x), ov('obelisk_guard', gk, 'pos_z', g.pos_z), `Obelisk ${o.number} guards: ${mobName(ov('obelisk_guard', gk, 'mob_neutral', g.mob_neutral))} ×${ov('obelisk_guard', gk, 'count', g.count)}`, { radius: ov('obelisk_guard', gk, 'radius', g.radius), movable: true, target: 'obelisk_guard', pending: pend('obelisk_guard', gk, 'pos_x') || pend('obelisk_guard', gk, 'pos_z') });
+    }
+  }
+  for (const l of ADDS) if (l.target === 'obelisk_guard') {
+    const o = m.obelisks.find((o) => String(o.seq) === l.key.split('/')[0]);
+    if (o) P('guard', l.key, ov('obelisk_guard', l.key, 'pos_x', l.value.pos_x), ov('obelisk_guard', l.key, 'pos_z', l.value.pos_z), 'new guard group (draft)', { radius: l.value.radius, movable: true, target: 'obelisk_guard', pending: true });
+  }
+  for (const g of m.bosses) {
+    const bk = String(g.seq);
+    P('boss', bk, ov('boss_group', bk, 'pos_x', g.pos_x), ov('boss_group', bk, 'pos_z', g.pos_z), `Boss group ${g.number}: ${mobName(ov('boss_group', bk, 'mobs', g.mobs)[0])}`, { movable: true, target: 'boss_group', pending: pend('boss_group', bk, 'pos_x') || pend('boss_group', bk, 'pos_z') });
+    for (const f of g.followers) {
+      const fk = `${g.seq}/${f.seq}`;
+      if (R[`boss_follower|${fk}`]) continue;
+      P('follower', fk, ov('boss_follower', fk, 'pos_x', f.pos_x), ov('boss_follower', fk, 'pos_z', f.pos_z), `Boss ${g.number} followers ×${ov('boss_follower', fk, 'count', f.count)}`, { radius: ov('boss_follower', fk, 'radius', f.radius), movable: true, target: 'boss_follower', pending: pend('boss_follower', fk, 'pos_x') || pend('boss_follower', fk, 'pos_z') });
+    }
+  }
+  for (const l of ADDS) if (l.target === 'boss_follower') P('follower', l.key, l.value.pos_x, l.value.pos_z, 'new follower group (draft)', { radius: l.value.radius, movable: true, target: 'boss_follower', pending: true });
+  // while dragging, the dragged thing is where the pointer put it
+  if (S.drag && S.drag.point) { const p = out.points.find((p) => p.kind === S.drag.kind && p.key === S.drag.key); if (p) { p.x = S.drag.x; p.z = S.drag.z; p.pending = true; } }
+  if (S.drag && S.drag.area) { const a = out.areas.find((a) => a.key === S.drag.key); if (a) { Object.assign(a, S.drag.box); a.pending = true; } }
+  return out;
+}
+
+function drawMap() {
+  const dpr = window.devicePixelRatio || 1, [W, H] = canvasSize();
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!S.map || !S.view) { S.hits = null; return; }
+  const m = S.map, size = m.map.size, v = S.view, o = orient(), L = S.layers;
+  const sx = (o.xRight ? 1 : -1) * v.s, sz = (o.zUp ? -1 : 1) * v.s;
+  // the map's square
+  const [ax, ay] = w2s(0, 0), [bx, by] = w2s(size, size);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--canvas') === '' ? '#20242c' : '#2a2f39';
+  ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
+  if (L.image && S.img && m.image) {
+    const im = m.image;
+    ctx.save(); ctx.globalAlpha = S.opacity;
+    ctx.transform(sx * (im.x2 - im.x1) / S.img.width, 0, 0, sz * (im.z2 - im.z1) / S.img.height, v.tx + sx * im.x1, v.tz + sz * im.z1);
+    ctx.drawImage(S.img, 0, 0);
+    ctx.restore();
+  }
+  if (L.blocked && S.blocked) { ctx.save(); ctx.imageSmoothingEnabled = false; ctx.transform(sx, 0, 0, sz, v.tx, v.tz); ctx.drawImage(S.blocked.canvas, 0, 0); ctx.restore(); }
+  if (L.grid) {
+    ctx.lineWidth = 1;
+    for (const [step, color] of [[64, 'rgba(255,255,255,.10)'], [256, 'rgba(255,255,255,.25)']]) {
+      if (step * v.s < 7) continue;
+      ctx.strokeStyle = color; ctx.beginPath();
+      for (let g = 0; g <= size; g += step) { const [x] = w2s(g, 0); const [, y] = w2s(0, g); ctx.moveTo(x, Math.min(ay, by)); ctx.lineTo(x, Math.max(ay, by)); ctx.moveTo(Math.min(ax, bx), y); ctx.lineTo(Math.max(ax, bx), y); }
+      ctx.stroke();
+    }
+    if (256 * v.s > 40) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '10px sans-serif'; for (let g = 0; g < size; g += 256) { const [x] = w2s(g, 0); const [, y] = w2s(0, g); ctx.fillText(g, x + 2, Math.max(ay, by) - 3); ctx.fillText(g, Math.min(ax, bx) + 2, y - 2); } }
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.strokeRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay));
+  const geo = geometry();
+  S.hits = geo;
+  if (L.binds) {
+    ctx.strokeStyle = 'rgba(190,120,255,.8)'; ctx.lineWidth = 1;
+    for (const bd of m.binds) for (let i = 0; i + 5 < bd.boxes.length; i += 6) { const [x1, y1] = w2s(bd.boxes[i], bd.boxes[i + 2]), [x2, y2] = w2s(bd.boxes[i + 3], bd.boxes[i + 5]); ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)); }
+  }
+  const selA = S.sel && S.sel.kind === 'area' ? S.sel.key : null;
+  if (L.areas) for (const a of geo.areas) {
+    const [x1, y1] = w2s(a.x1, a.z1), [x2, y2] = w2s(a.x2, a.z2);
+    const lx = Math.min(x1, x2), ly = Math.min(y1, y2), lw = Math.abs(x2 - x1), lh = Math.abs(y2 - y1);
+    const lv = areaLevel(a);
+    ctx.fillStyle = a.removed ? 'rgba(220,60,50,.35)' : levelColor(lv, a.key === selA ? 0.5 : 0.28);
+    ctx.fillRect(lx, ly, Math.max(lw, 1), Math.max(lh, 1));
+    ctx.lineWidth = a.key === selA ? 2.5 : 1;
+    ctx.strokeStyle = a.removed ? '#ff6a5b' : a.key === selA ? '#ffffff' : levelColor(lv, 0.9);
+    ctx.setLineDash(a.pending || a.removed ? [5, 3] : []);
+    ctx.strokeRect(lx, ly, Math.max(lw, 1), Math.max(lh, 1));
+    ctx.setLineDash([]);
+    if (lw > 22 && lh > 14) { ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(areaTotal(a), lx + lw / 2, ly + lh / 2); ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic'; }
+  }
+  if (selA) {
+    const a = geo.areas.find((a) => a.key === selA);
+    if (a) for (const hd of handlesOf(a)) { ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2f6fed'; ctx.lineWidth = 1.5; ctx.fillRect(hd.px - 4, hd.py - 4, 8, 8); ctx.strokeRect(hd.px - 4, hd.py - 4, 8, 8); }
+  }
+  const selK = S.sel && S.sel.key;
+  for (const p of geo.points) {
+    const [x, y] = w2s(p.x, p.z), isSel = S.sel && S.sel.kind === p.kind && selK === p.key;
+    if (p.kind === 'npc' && !L.npcs) continue;
+    if (p.kind === 'portal' && !L.portals) continue;
+    if ((p.kind === 'obelisk' || p.kind === 'guard') && !L.obelisks) continue;
+    if ((p.kind === 'boss' || p.kind === 'follower') && !L.bosses) continue;
+    if (p.radius) {
+      ctx.beginPath(); ctx.arc(x, y, Math.max(p.radius * v.s, 3), 0, 7);
+      ctx.strokeStyle = p.kind === 'guard' ? 'rgba(255,200,60,.9)' : 'rgba(255,90,160,.9)'; ctx.fillStyle = p.kind === 'guard' ? 'rgba(255,200,60,.12)' : 'rgba(255,90,160,.12)';
+      ctx.lineWidth = isSel ? 2.5 : 1; ctx.setLineDash(p.pending ? [4, 3] : [2, 2]); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.lineWidth = isSel ? 3 : 1.5; ctx.setLineDash(p.pending ? [3, 2] : []);
+    if (p.kind === 'portal') {
+      if (p.to) { const [tx, ty] = w2s(p.to[0], p.to[1]); ctx.strokeStyle = 'rgba(120,200,255,.7)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tx, ty); ctx.stroke(); ctx.beginPath(); ctx.arc(tx, ty, 3, 0, 7); ctx.stroke(); }
+      ctx.fillStyle = p.country === 1 ? '#5aa9ff' : p.country === 2 ? '#ff6a5b' : p.country > 2 ? '#c58bff' : '#e8e8e8'; ctx.strokeStyle = isSel ? '#fff' : '#111';
+      ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 7); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (p.kind === 'npc') {
+      ctx.fillStyle = p.npcType === 8 ? '#8fd6a0' : '#ffe08a'; ctx.strokeStyle = isSel ? '#fff' : '#111'; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.strokeRect(x - 3, y - 3, 6, 6);
+    } else if (p.kind === 'obelisk') {
+      ctx.fillStyle = '#ffcb3c'; ctx.strokeStyle = isSel ? '#fff' : '#111'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.stroke();
+    } else if (p.kind === 'boss') {
+      ctx.fillStyle = '#ff5aa0'; ctx.strokeStyle = isSel ? '#fff' : '#111'; ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + 8, y + 6); ctx.lineTo(x - 8, y + 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.fillStyle = isSel ? '#fff' : p.kind === 'guard' ? '#ffcb3c' : '#ff5aa0'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill();
+    }
+    ctx.setLineDash([]);
+  }
+  if (S.marker && S.marker.map === S.mapId) {
+    const [x, y] = w2s(S.marker.x, S.marker.z);
+    ctx.strokeStyle = '#00ffd0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y); ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14); ctx.stroke();
+  }
+  if (S.drawRect) {
+    const r = S.drawRect, [x1, y1] = w2s(r.x1, r.z1), [x2, y2] = w2s(r.x2, r.z2);
+    ctx.strokeStyle = '#00ffd0'; ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)); ctx.setLineDash([]);
+  }
+}
+
+function handlesOf(a) {
+  const [ax, ay] = w2s(a.x1, a.z1), [bx, by] = w2s(a.x2, a.z2);
+  const x1 = Math.min(ax, bx), x2 = Math.max(ax, bx), y1 = Math.min(ay, by), y2 = Math.max(ay, by), mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  return [['nw', x1, y1], ['n', mx, y1], ['ne', x2, y1], ['e', x2, my], ['se', x2, y2], ['s', mx, y2], ['sw', x1, y2], ['w', x1, my]].map(([name, px, py]) => ({ name, px, py }));
+}
+// Which edges of the box (in world terms) a screen handle moves: 'nw' is the screen's top left.
+function resizeBox(box, name, wx, wz) {
+  const b = { ...box }, o = orient();
+  const left = o.xRight ? 'x1' : 'x2', right = o.xRight ? 'x2' : 'x1';
+  const top = o.zUp ? 'z2' : 'z1', bottom = o.zUp ? 'z1' : 'z2';
+  if (name.includes('w')) b[left] = wx;
+  if (name.includes('e')) b[right] = wx;
+  if (name.includes('n')) b[top] = wz;
+  if (name.includes('s')) b[bottom] = wz;
+  return b;
+}
+
+function hitTest(px, py, preferSelected) {
+  const geo = S.hits;
+  if (!geo) return null;
+  const L = S.layers;
+  const selA = S.sel && S.sel.kind === 'area' ? geo.areas.find((a) => a.key === S.sel.key) : null;
+  if (selA && L.areas) for (const hd of handlesOf(selA)) if (Math.abs(hd.px - px) <= 6 && Math.abs(hd.py - py) <= 6) return { kind: 'handle', handle: hd.name, area: selA };
+  const visible = (p) => !((p.kind === 'npc' && !L.npcs) || (p.kind === 'portal' && !L.portals) || ((p.kind === 'obelisk' || p.kind === 'guard') && !L.obelisks) || ((p.kind === 'boss' || p.kind === 'follower') && !L.bosses));
+  const near = (p) => { const [x, y] = w2s(p.x, p.z); return Math.abs(x - px) <= 8 && Math.abs(y - py) <= 8; };
+  // the selected point wins when pressed again (to drag it), then the big markers, then the small ones
+  const rank = { obelisk: 0, boss: 0, portal: 1, npc: 2, guard: 3, follower: 3 };
+  const cand = geo.points.filter((p) => visible(p) && near(p));
+  cand.sort((a, b) => (preferSelected && S.sel && S.sel.kind === b.kind && S.sel.key === b.key ? 1 : 0) - (preferSelected && S.sel && S.sel.kind === a.kind && S.sel.key === a.key ? 1 : 0) || rank[a.kind] - rank[b.kind]);
+  if (cand.length) return { kind: cand[0].kind, key: cand[0].key, point: cand[0] };
+  if (L.areas) {
+    const [wx, wz] = s2w(px, py);
+    let best = null, bestArea = Infinity;
+    for (const a of geo.areas) {
+      if (wx >= Math.min(a.x1, a.x2) && wx <= Math.max(a.x1, a.x2) && wz >= Math.min(a.z1, a.z2) && wz <= Math.max(a.z1, a.z2)) {
+        const ar = Math.abs(a.x2 - a.x1) * Math.abs(a.z2 - a.z1);
+        if (preferSelected && S.sel && S.sel.kind === 'area' && S.sel.key === a.key) return { kind: 'area', key: a.key, area: a };
+        if (ar < bestArea) { best = a; bestArea = ar; }
+      }
+    }
+    if (best) return { kind: 'area', key: best.key, area: best };
+  }
+  return null;
+}
+
+function tipText(hit) {
+  if (!hit) return '';
+  if (hit.kind === 'area') { const a = hit.area; return `Area ${a.seq}${a.added ? ' (new)' : ''}: ${Math.round(Math.abs(a.x2 - a.x1))}×${Math.round(Math.abs(a.z2 - a.z1))}\n${areaSummary(a) || 'no monsters'}`; }
+  if (hit.point) return hit.point.label;
+  return '';
+}
+
+// ---- mouse
+let press = null;
+cv.addEventListener('mousedown', (e) => {
+  if (!S.view) return;
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const hit = e.button === 0 && !e.shiftKey ? hitTest(px, py, true) : null;
+  const [wx, wz] = s2w(px, py);
+  press = { px, py, hit, moved: false, view: { ...S.view }, start: [wx, wz] };
+  if (S.tool === 'newarea' && e.button === 0) { press.draw = true; S.drawRect = { x1: wx, z1: wz, x2: wx, z2: wz }; }
+});
+window.addEventListener('mousemove', (e) => {
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (!S.view) return;
+  const [wx, wz] = s2w(px, py);
+  const inside = px >= 0 && py >= 0 && px <= r.width && py <= r.height;
+  if (inside) $('#status').textContent = `${S.map ? mapName(S.mapId) : ''}   x ${Math.round(wx)}   z ${Math.round(wz)}   ${S.tool === 'newarea' ? 'drag a rectangle for the new area' : 'click to select; drag the selection to move it; drag empty ground to pan; wheel zooms'}`;
+  if (press) {
+    const dx = px - press.px, dy = py - press.py;
+    if (!press.moved && Math.hypot(dx, dy) > 3) press.moved = true;
+    if (!press.moved) return;
+    if (press.draw) { S.drawRect.x2 = wx; S.drawRect.z2 = wz; drawMap(); return; }
+    const hit = press.hit, sel = S.sel;
+    if (hit && hit.kind === 'handle') {
+      const b = resizeBox(hit.area, hit.handle, wx, wz);
+      S.drag = { area: true, key: hit.area.key, box: { x1: b.x1, z1: b.z1, x2: b.x2, z2: b.z2 } };
+    } else if (hit && hit.kind === 'area' && sel && sel.kind === 'area' && sel.key === hit.key) {
+      const ddx = wx - press.start[0], ddz = wz - press.start[1], a = hit.area;
+      S.drag = { area: true, key: a.key, box: { x1: a.x1 + ddx, x2: a.x2 + ddx, z1: a.z1 + ddz, z2: a.z2 + ddz } };
+    } else if (hit && hit.point && hit.point.movable && sel && sel.kind === hit.kind && sel.key === hit.key) {
+      S.drag = { point: true, kind: hit.kind, key: hit.key, x: wx, z: wz };
+    } else {
+      S.view.tx = press.view.tx + dx; S.view.tz = press.view.tz + dy;
+    }
+    drawMap();
+    return;
+  }
+  const hit = inside ? hitTest(px, py) : null;
+  const tip = $('#tip');
+  const text = tipText(hit);
+  if (text) { tip.textContent = text; tip.style.display = 'block'; tip.style.left = Math.min(px + 14, r.width - 200) + 'px'; tip.style.top = py + 14 + 'px'; } else tip.style.display = 'none';
+  cv.style.cursor = hit ? (hit.kind === 'handle' ? 'nwse-resize' : 'pointer') : S.tool === 'newarea' ? 'crosshair' : 'default';
+});
+window.addEventListener('mouseup', async (e) => {
+  if (!press) return;
+  const p = press; press = null;
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (p.draw) {
+    const rect = S.drawRect; S.drawRect = null;
+    if (p.moved) await newAreaDialog(rect); else drawMap();
+    return;
+  }
+  if (!p.moved) {
+    const hit = p.hit && p.hit.kind === 'handle' ? p.hit : hitTest(px, py, false);
+    if (hit && hit.kind !== 'handle') selectObj(hit.kind, hit.key);
+    else if (!hit) { S.sel = null; renderAll(); }
+    return;
+  }
+  const d = S.drag; S.drag = null;
+  if (!d) { drawMap(); return; }
+  const size = S.map.map.size, clamp = (v) => Math.min(Math.max(r1(v), 0), size - 0.1);
+  if (d.area) {
+    let { x1, z1, x2, z2 } = d.box;
+    [x1, x2] = [clamp(Math.min(x1, x2)), clamp(Math.max(x1, x2))]; [z1, z2] = [clamp(Math.min(z1, z2)), clamp(Math.max(z1, z2))];
+    if (x2 - x1 < 1) x2 = x1 + 1; if (z2 - z1 < 1) z2 = z1 + 1;
+    const a = effAreas().find((a) => a.key === d.key);
+    const lines = [];
+    for (const [f, v] of [['x1', x1], ['z1', z1], ['x2', x2], ['z2', z2]]) if (Math.abs(a[f] - v) > 0.001) lines.push({ target: 'spawn_area', key: d.key, action: 'set', field: f, value: v });
+    if (lines.length) {
+      // moving changes both edges; x1 < x2 must hold at every step, so the dry run takes them as one request
+      await stage(lines);
+    } else drawMap();
+  } else if (d.point) {
+    const t = S.hits.points.find((q) => q.kind === d.kind && q.key === d.key);
+    await stage([{ target: t.target, key: d.key, action: 'set', field: 'pos_x', value: clamp(d.x) }, { target: t.target, key: d.key, action: 'set', field: 'pos_z', value: clamp(d.z) }]);
+  }
+});
+cv.addEventListener('wheel', (e) => {
+  if (!S.view) return;
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const [wx, wz] = s2w(px, py), f = Math.exp(-e.deltaY * 0.0015), o = orient();
+  const s = Math.min(Math.max(S.view.s * f, 0.05), 60);
+  S.view.s = s; S.view.tx = px - (o.xRight ? 1 : -1) * wx * s; S.view.tz = py - (o.zUp ? -1 : 1) * wz * s;
+  drawMap();
+}, { passive: false });
+cv.addEventListener('mouseleave', () => { $('#tip').style.display = 'none'; });
+window.addEventListener('resize', () => { if (S.map) { drawMap(); } });
+
+async function newAreaDialog(rect) {
+  const x1 = Math.min(rect.x1, rect.x2), x2 = Math.max(rect.x1, rect.x2), z1 = Math.min(rect.z1, rect.z2), z2 = Math.max(rect.z1, rect.z2);
+  const size = S.map.map.size, c = (v) => Math.min(Math.max(r1(v), 0), size - 0.1);
+  const box = { x1: c(x1), z1: c(z1), x2: c(x2), z2: c(z2) };
+  if (box.x2 - box.x1 < 1 || box.z2 - box.z1 < 1) { toast('the area is too small', true); drawMap(); return; }
+  // the height of the nearest existing area is a good guess
+  let y = 0, best = Infinity;
+  for (const a of effAreas()) { const d = Math.hypot((a.x1 + a.x2) / 2 - (box.x1 + box.x2) / 2, (a.z1 + a.z2) / 2 - (box.z1 + box.z2) / 2); if (d < best) { best = d; y = a.y1; } }
+  const mobIn = h('input', { type: 'number', placeholder: 'monster id', style: 'width:110px' }), cnt = h('input', { type: 'number', value: 3, style: 'width:70px' }), nm = h('span', { class: 'small dim' });
+  mobIn.addEventListener('change', async () => { try { const r = await api('GET', '/mobs/' + mobIn.value); nm.textContent = `${r.def.mobname} (level ${r.def.level})`; } catch (e) { nm.textContent = e.message; } });
+  const body = h('div', {}, h('p', {}, `A new spawn area from (${box.x1}, ${box.z1}) to (${box.x2}, ${box.z2}) on ${mapName(S.mapId)}. It takes effect at the next restart.`), h('div', { class: 'row' }, 'Monster: ', mobIn, ' × ', cnt, nm));
+  const ok = await confirmBox('New spawn area', body, 'Put in the draft');
+  S.tool = 'select';
+  if (!ok || !mobIn.value) { renderAll(); return; }
+  const seq = nextAreaSeq();
+  await stage([
+    { target: 'spawn_area', key: `${S.mapId}/${seq}`, action: 'add', value: { x1: box.x1, y1: y, z1: box.z1, x2: box.x2, y2: y + 2, z2: box.z2 } },
+    { target: 'spawn_mob', key: `${S.mapId}/${seq}/1`, action: 'add', value: { mob_id: +mobIn.value, count: +cnt.value } },
+  ]);
+  selectObj('area', `${S.mapId}/${seq}`);
+}
+
+// ---------------------------------------------------------------- the lists and panels
+function drawMapList() {
+  const rows = $('#maprows'), f = S.filter.toLowerCase();
+  rows.replaceChildren(...S.maps.filter((m) => !f || String(m.id) === f || (m.name || '').toLowerCase().includes(f) || ('map ' + m.id).includes(f)).map((m) =>
+    h('div', { class: 'maprow' + (m.id === S.mapId ? ' sel' : ''), onclick: () => loadMap(m.id), title: `${m.map_type === 'D' ? 'dungeon' : 'field'}, size ${m.size}, ${m.areas} spawn areas, ${m.monsters} different monsters, ${m.portals} portals` },
+      h('span', { class: 'id' }, m.id), h('span', { class: 'nm' }, m.name || (m.map_type === 'D' ? 'dungeon' : 'field')), h('span', { class: 'meta' }, m.monsters, m.has_image ? ' 🖼' : ''))));
+}
+
+function drawToolbar() {
+  const tb = $('#toolbar');
+  tb.replaceChildren();
+  if (!S.map) { tb.append(h('span', { class: 'dim' }, S.mapId == null ? 'Pick a map on the left.' : 'loading…')); return; }
+  const m = S.map.map;
+  tb.append(h('span', { class: 'grp' }, h('span', { id: 'mapname' }, `${m.id} ${m.name || ''}`), h('button', { title: 'name this map (shown here only)', onclick: renameMap }, '✎'), h('span', { class: 'dim small' }, `${m.map_type === 'D' ? 'dungeon' : 'field'} ${m.size}`)));
+  tb.append(h('span', { class: 'grp' }, [['image', 'picture'], ['blocked', 'blocked'], ['grid', 'grid'], ['areas', 'spawns'], ['npcs', 'NPCs'], ['portals', 'portals'], ['binds', 'bind'], ['obelisks', 'obelisks'], ['bosses', 'bosses']].map(([k, label]) =>
+    h('label', {}, h('input', { type: 'checkbox', checked: S.layers[k], onchange: (e) => { S.layers[k] = e.target.checked; drawMap(); } }), label))));
+  if (m && S.map.image) tb.append(h('span', { class: 'grp small' }, 'opacity ', h('input', { type: 'range', min: 0.1, max: 1, step: 0.05, value: S.opacity, oninput: (e) => { S.opacity = +e.target.value; drawMap(); } })));
+  tb.append(h('span', { class: 'grp' }, h('button', { class: 'tool' + (S.tool === 'newarea' ? ' on' : ''), onclick: () => { S.tool = S.tool === 'newarea' ? 'select' : 'newarea'; renderAll(); } }, 'New area'), h('button', { onclick: () => { fitView(); drawMap(); } }, 'Fit'),
+    h('button', { onclick: pictureDialog }, S.map.image ? 'Picture…' : 'Set picture…')));
+  if (S.blocked) tb.append(h('span', { class: 'dim small' }, `${(S.blocked.count / (S.blocked.size * S.blocked.size) * 100).toFixed(1)} % blocked`));
+}
+async function renameMap() {
+  const inp = h('input', { value: S.map.map.name || '', size: 30, maxlength: 60 });
+  const ok = await confirmBox('Name this map', h('div', {}, h('p', { class: 'dim small' }, 'The server has no map names (the client shows them). This name is kept for the page only and changes nothing in the game.'), inp), 'Save');
+  if (!ok) return;
+  try { await api('POST', `/maps/${S.mapId}/name`, { name: inp.value }); await reloadMap(); } catch (e) { toast(e.message, true); }
+  renderAll(); drawMapList();
+}
+async function pictureDialog() {
+  const im = S.map.image, size = S.map.map.size;
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg' });
+  const f = {}; for (const [k, d] of [['x1', im ? im.x1 : 0], ['z1', im ? im.z1 : 0], ['x2', im ? im.x2 : size], ['z2', im ? im.z2 : size]]) f[k] = h('input', { type: 'number', value: d, style: 'width:90px', step: 'any' });
+  const body = h('div', {}, h('p', { class: 'small dim' }, 'A PNG or JPEG up to 8 MB. Say which world rectangle it shows: its left edge is x1, its right edge x2, its top z1 and its bottom z2 (swap them to flip an axis). Then check that the spawn areas and NPCs line up with it.'),
+    h('div', { class: 'row' }, file), h('div', { class: 'row' }, 'x1 ', f.x1, ' x2 ', f.x2, ' z1 (top) ', f.z1, ' z2 (bottom) ', f.z2), im ? h('p', { class: 'small dim' }, `Now: from ${im.source}, ${String(im.added_at).slice(0, 16)}`) : '');
+  const buttons = [h('button', { onclick: closeModal }, 'Cancel')];
+  if (im) buttons.push(h('button', { class: 'danger', onclick: async () => { try { await api('DELETE', `/maps/${S.mapId}/image`); closeModal(); await reloadMap(); S.img = null; renderAll(); } catch (e) { toast(e.message, true); } } }, 'Remove picture'));
+  buttons.push(h('button', { class: 'primary', onclick: async () => {
+    const rect = Object.fromEntries(Object.entries(f).map(([k, i]) => [k, +i.value]));
+    try {
+      let data;
+      if (file.files[0]) {
+        if (file.files[0].size > 8 * 1024 * 1024) throw new Error('the file is larger than 8 MB');
+        data = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1]); rd.onerror = () => rej(new Error('cannot read the file')); rd.readAsDataURL(file.files[0]); });
+      } else if (im) {
+        // only the rectangle changes: fetch the stored picture again
+        const blob = await (await fetch(`/api/maps/${S.mapId}/image`)).blob();
+        data = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1]); rd.readAsDataURL(blob); });
+      } else throw new Error('choose a picture');
+      await api('POST', `/maps/${S.mapId}/image`, { data, ...rect, source: file.files[0] ? file.files[0].name : im.source });
+      closeModal(); await reloadMap(); S.img = null; fitView(); loadPictures(S.mapId); renderAll();
+    } catch (e) { toast(e.message, true); }
+  } }, 'Save'));
+  modal('Background picture', body, buttons);
+}
+
+const TABS = [['monsters', 'Monsters'], ['spawns', 'Spawns'], ['portals', 'Portals'], ['bosses', 'Obelisks & bosses'], ['npcs', 'NPCs'], ['items', 'Items & grades']];
+function renderPanel() {
+  const tabs = $('#tabs'), body = $('#body');
+  const top = body.scrollTop;
+  tabs.replaceChildren(...TABS.map(([k, label]) => h('button', { class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; renderPanel(); } }, label)));
+  const b = h('div');
+  ({ monsters: monstersTab, spawns: spawnsTab, portals: portalsTab, bosses: bossesTab, npcs: npcsTab, items: itemsTab })[S.tab](b);
+  body.replaceChildren(b);
+  body.scrollTop = top;
+}
+function renderAll() {
+  drawMapList(); drawToolbar(); renderPanel(); drawDraftBar(); drawMap();
+}
+
+// ---------------------------------------------------------------- start
+$('#who').value = (() => { try { return localStorage.getItem('editor.who') || ''; } catch (e) { return ''; } })();
+$('#who').addEventListener('change', () => { try { localStorage.setItem('editor.who', $('#who').value); } catch (e) { /* ignore */ } });
+$('#mapfilter').addEventListener('input', (e) => { S.filter = e.target.value.trim(); drawMapList(); });
+$('#b-servers').addEventListener('click', openServers);
+$('#b-history').addEventListener('click', openHistory);
+(async function start() {
+  try {
+    const [targets, maps, edits, draft] = await Promise.all([api('GET', '/targets'), api('GET', '/maps'), api('GET', '/edits'), api('GET', '/draft')]);
+    for (const t of targets) S.targets[t.name] = t;
+    S.maps = maps; S.edits = edits; S.draft = draft; indexDraft();
+  } catch (e) { document.body.prepend(h('div', { class: 'note warn' }, 'Cannot reach the editor: ' + e.message)); return; }
+  let last = null; try { last = +localStorage.getItem('editor.map'); } catch (e) { /* ignore */ }
+  const initial = new URLSearchParams(location.search).get('map');
+  const id = initial != null ? +initial : S.maps.some((m) => m.id === last) ? last : 2;
+  renderAll();
+  await loadMap(S.maps.some((m) => m.id === id) ? id : S.maps[0].id);
+  if (new URLSearchParams(location.search).get('mob')) openMob(+new URLSearchParams(location.search).get('mob'));
+})();
+</script>
+</body>
+</html>

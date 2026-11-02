@@ -1,0 +1,390 @@
+<title>Shaiya Live Tests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column; a sticky bar with the totals and filters; sections fold, items are rows with a result switch. */
+:root {
+  --bg: #f3f4f7; --panel: #ffffff; --ink: #1b1f2a; --muted: #5d6475; --line: #dde0e8; --tint: #eceef4;
+  --accent: #8a5a12; --accent-soft: #f4e8d3;
+  --pass: #1f7a4a; --pass-soft: #dcf0e4; --fail: #b3261e; --fail-soft: #f8dedb; --skip: #6b7080; --skip-soft: #e6e8ee;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12141b; --panel: #1a1d26; --ink: #e6e8ef; --muted: #9aa1b2; --line: #2c3040; --tint: #222634;
+  --accent: #dcaa55; --accent-soft: #3a2e1a;
+  --pass: #5cc98c; --pass-soft: #183326; --fail: #f08079; --fail-soft: #3d1c1b; --skip: #a3a8b8; --skip-soft: #2a2e3b;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12141b; --panel: #1a1d26; --ink: #e6e8ef; --muted: #9aa1b2; --line: #2c3040; --tint: #222634;
+  --accent: #dcaa55; --accent-soft: #3a2e1a;
+  --pass: #5cc98c; --pass-soft: #183326; --fail: #f08079; --fail-soft: #3d1c1b; --skip: #a3a8b8; --skip-soft: #2a2e3b;
+  color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel) }
+.wrap { max-width: 920px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+code { font: 0.86em var(--f-mono); background: var(--tint); padding: 0.05em 0.3em; border-radius: 3px; overflow-wrap: anywhere }
+button { font: inherit; color: inherit; cursor: pointer }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line) }
+.bar .wrap { display: grid; gap: 10px; padding-block: 12px }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px }
+h1 { font: 700 1.5rem/1.1 var(--f-display); margin: 0; letter-spacing: 0.01em; text-wrap: balance }
+.save { margin-left: auto; font-size: 0.82rem; color: var(--muted) }
+.save.bad { color: var(--fail) }
+.meter { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--tint) }
+.meter i { display: block; height: 100% }
+.meter .p { background: var(--pass) } .meter .f { background: var(--fail) } .meter .s { background: var(--skip) }
+.counts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.counts b { color: var(--ink); font-weight: 600 }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 12px; font-size: 0.85rem }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600 }
+.tools .lbl { font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em }
+#sit { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 0.85rem; max-width: 100% }
+#sit.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600 }
+.tag { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 0.75rem; line-height: 1.5; white-space: nowrap }
+.tag.gA { color: var(--pass); border-color: var(--pass) } .tag.gB { color: var(--accent); border-color: var(--accent) }
+.tag.gC, .tag.gD { color: var(--skip) }
+.sitting { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px }
+.sitting h2 { font: 600 1.15rem/1.2 var(--f-display); margin: 0 }
+.sitting .prose { color: var(--ink) }
+.sitting details summary { cursor: pointer; font-weight: 600; font-size: 0.9rem }
+.problems { border: 1px solid var(--fail); background: var(--fail-soft); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem }
+.problems ul { margin: 4px 0 0; padding-left: 1.2em }
+#q { flex: 1 1 180px; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 0.9rem }
+
+main .wrap { display: grid; gap: 14px; padding-block: 18px 48px }
+details.intro { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px }
+details.intro summary { cursor: pointer; font-weight: 600 }
+.prose { color: var(--muted); font-size: 0.92rem; display: grid; gap: 8px; min-width: 0 }
+.prose p, .prose ul { margin: 0 } .prose ul { padding-left: 1.2em }
+.prose strong { color: var(--ink) }
+.table { overflow-x: auto }
+table { border-collapse: collapse; font-size: 0.86rem }
+th, td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top }
+th { color: var(--ink); font-weight: 600 }
+
+section.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.sec-head { width: 100%; display: grid; grid-template-columns: 2.6em 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; background: none; border: 0; text-align: left }
+.num { font: 600 0.95rem var(--f-mono); color: var(--accent) }
+.sec-title { font: 600 1.1rem/1.2 var(--f-display); min-width: 0 }
+.sec-count { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; display: grid; gap: 4px; justify-items: end }
+.sec-count .meter { width: 90px; height: 5px }
+.sec-body { border-top: 1px solid var(--line); padding: 10px 14px 6px; display: grid; gap: 10px }
+.sec.closed .sec-body { display: none }
+.sec.complete .sec-title { color: var(--muted) }
+.sec-note summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); font-weight: 500 }
+.sec-note .prose { padding-top: 6px }
+
+ol.items { list-style: none; margin: 0; padding: 0; display: grid }
+li.item { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding: 10px 0; border-top: 1px solid var(--line) }
+li.item:first-child { border-top: 0 }
+li.item[hidden] { display: none }
+.switch { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; height: fit-content }
+.switch button { border: 0; background: var(--panel); padding: 4px 9px; font-size: 0.8rem; font-weight: 600; color: var(--muted); min-width: 2.6em }
+.switch button + button { border-left: 1px solid var(--line) }
+.switch button[aria-pressed="true"][data-s="pass"] { background: var(--pass-soft); color: var(--pass) }
+.switch button[aria-pressed="true"][data-s="fail"] { background: var(--fail-soft); color: var(--fail) }
+.switch button[aria-pressed="true"][data-s="skip"] { background: var(--skip-soft); color: var(--skip) }
+.text { min-width: 0; overflow-wrap: anywhere }
+.item.st-pass .text, .item.st-skip .text { color: var(--muted) }
+.meta { display: flex; gap: 12px; align-items: center; font-size: 0.8rem; color: var(--muted); margin-top: 4px }
+.meta button { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 500 }
+textarea { grid-column: 2; width: 100%; min-height: 3.2em; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; font-size: 0.9rem; padding: 6px 8px }
+.item.st-fail textarea { border-color: var(--fail) }
+.empty { color: var(--muted); text-align: center; padding: 24px 0 }
+.export { display: grid; gap: 6px }
+.export textarea { grid-column: auto; min-height: 9em; font-size: 0.8rem }
+.export p { margin: 0; font-size: 0.8rem; color: var(--muted) }
+@media (max-width: 560px) {
+  li.item { grid-template-columns: 1fr }
+  textarea { grid-column: 1 }
+  .sec-count .meter { display: none }
+}
+@media (prefers-reduced-motion: no-preference) { .meter i { transition: width 0.3s ease } }
+</style>
+
+<header class="bar"><div class="wrap">
+  <div class="top"><h1>Shaiya Live Tests</h1><span class="save" id="save">Connecting…</span></div>
+  <div class="meter" id="meter"><i class="p"></i><i class="f"></i><i class="s"></i></div>
+  <div class="counts" id="counts"></div>
+  <div class="tools" role="group" aria-label="Show">
+    <button class="chip" data-f="todo" aria-pressed="true">To test</button>
+    <button class="chip" data-f="fail" aria-pressed="false">Failed</button>
+    <button class="chip" data-f="done" aria-pressed="false">Done</button>
+    <button class="chip" data-f="all" aria-pressed="false">All</button>
+    <input id="q" type="search" placeholder="Find an item (map, skill, NPC…)" aria-label="Find an item">
+    <button class="chip" id="copy" type="button">Copy results</button>
+  </div>
+  <div class="tools" id="who" role="group" aria-label="Who can test it" hidden>
+    <span class="lbl">Who</span>
+    <button class="chip" data-g="" aria-pressed="true">Anyone</button>
+    <select id="sit" aria-label="Sitting"><option value="">Any sitting</option></select>
+  </div>
+  <div class="export" id="export" hidden>
+    <p id="export-said">Everything marked, to copy:</p>
+    <textarea id="export-text" readonly aria-label="Results to paste"></textarea>
+  </div>
+</div></header>
+<main><div class="wrap" id="list"></div></main>
+
+<script type="application/json" id="data">/*DATA*/null</script>
+<script>
+(() => {
+  const DATA = JSON.parse(document.getElementById("data").textContent);
+  const API = DATA.api || null;     // set by tools/checklist_server.py; a stand-alone copy has none and does not save results
+  const LABELS = { pass: "Passed", fail: "Failed", skip: "Can't test" };
+  const results = new Map();        // item id -> {status, note}
+  const items = new Map();          // item id -> {item, section, li}
+  let filter = "todo", query = "";
+  // Who can test it and the one-client sittings, from docs/testing/live-test-solo.md (DATA.groups, DATA.sittings, each item's groups and sitting).
+  const GROUPS = DATA.groups || {}; const SITTINGS = DATA.sittings || [];
+  let group = "", sitting = "";
+  const queue = new Map();          // item id -> promise of the last write
+  const saveEl = document.getElementById("save");
+  const store = { get(k) { try { return localStorage.getItem(k) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, v) } catch {} } };
+  let closed = new Set(JSON.parse(store.get("closed") || "[]"));
+
+  const status = (id) => results.get(id)?.status ?? (items.get(id).item.done ? "pass" : "");
+  const note = (id) => results.get(id)?.note ?? "";
+
+  function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+
+  function build() {
+    const list = document.getElementById("list");
+    if (DATA.intro) {
+      const d = el("details", "intro");
+      d.append(el("summary", null, "Accounts, characters and how to use this list"));
+      const p = el("div", "prose", DATA.intro);
+      p.prepend(el("p", null, "Mark each item <strong>Passed</strong>, <strong>Failed</strong> or <strong>Can't test</strong>, and add a note for anything odd. Results save as you go; the server log fills in the rest."));
+      d.append(p);
+      list.append(d);
+    }
+    if (DATA.problems && DATA.problems.length) {
+      const p = el("div", "problems", "<strong>docs/testing/live-test-solo.md is out of step with the checklist</strong> (fix them there):");
+      const ul = el("ul"); for (const t of DATA.problems) ul.append(el("li", null, t.replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;"))); p.append(ul);
+      list.append(p);
+    }
+    list.append(Object.assign(el("section", "sitting"), { id: "sitting", hidden: true }));
+    for (const s of DATA.sections) {
+      const sec = el("section", "sec"); sec.dataset.num = s.num;
+      if (closed.has(s.num)) sec.classList.add("closed");
+      const head = el("button", "sec-head");
+      head.setAttribute("aria-expanded", String(!closed.has(s.num)));
+      head.append(el("span", "num", String(s.num)), el("span", "sec-title", s.title));
+      const count = el("span", "sec-count"); count.append(el("span", "n"), el("span", "meter", '<i class="p"></i><i class="f"></i><i class="s"></i>'));
+      head.append(count);
+      head.addEventListener("click", () => {
+        const now = sec.classList.toggle("closed");
+        head.setAttribute("aria-expanded", String(!now));
+        now ? closed.add(s.num) : closed.delete(s.num);
+        store.set("closed", JSON.stringify([...closed]));
+      });
+      const body = el("div", "sec-body");
+      if (s.intro) {
+        const d = el("details", "sec-note"); d.append(el("summary", null, "Setup and notes"), el("div", "prose", s.intro)); body.append(d);
+      }
+      const ol = el("ol", "items");
+      for (const it of s.items) {
+        const li = el("li", "item"); li.dataset.id = it.id;
+        const sw = el("div", "switch"); sw.setAttribute("role", "group"); sw.setAttribute("aria-label", "Result");
+        for (const k of ["pass", "fail", "skip"]) {
+          const b = el("button", null, { pass: "✓", fail: "✗", skip: "–" }[k]);
+          b.dataset.s = k; b.title = LABELS[k]; b.setAttribute("aria-label", LABELS[k]); b.setAttribute("aria-pressed", "false");
+          b.addEventListener("click", () => choose(it.id, k));
+          sw.append(b);
+        }
+        const text = el("div", "text", it.html);
+        const meta = el("div", "meta");
+        if (it.groups && it.groups.length) {
+          const tag = el("span", "tag g" + it.groups[0], it.groups.map(g => GROUPS[g] || g).join(" / ") + (it.sitting ? ` · sitting ${it.sitting}` : ""));
+          meta.append(tag);
+        }
+        const nb = el("button", null, "Add note"); nb.addEventListener("click", () => { showNote(it.id, true); li.querySelector("textarea").focus(); });
+        meta.append(el("span", "when"), nb); text.append(meta);
+        const ta = el("textarea"); ta.id = "note-" + it.id; ta.placeholder = "What happened (optional)"; ta.hidden = true; ta.setAttribute("aria-label", "Note");
+        let timer = null;
+        ta.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => saveNote(it.id, ta.value), 900); });
+        ta.addEventListener("blur", () => { clearTimeout(timer); saveNote(it.id, ta.value); });
+        li.append(sw, text, ta);
+        ol.append(li);
+        items.set(it.id, { item: it, section: s, li });
+      }
+      body.append(ol);
+      sec.append(head, body);
+      list.append(sec);
+    }
+    list.append(Object.assign(el("p", "empty"), { hidden: true, id: "empty" }));
+  }
+
+  function showNote(id, on) { const ta = items.get(id).li.querySelector("textarea"); ta.hidden = !on; items.get(id).li.querySelector(".meta button").hidden = on; }
+
+  function paintItem(id) {
+    const { li } = items.get(id); const st = status(id); const n = note(id);
+    li.className = "item" + (st ? " st-" + st : "");
+    li.querySelectorAll(".switch button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s === st)));
+    const ta = li.querySelector("textarea");
+    if (document.activeElement !== ta) ta.value = n;
+    showNote(id, !!n || st === "fail" || document.activeElement === ta);
+    const r = results.get(id);
+    li.querySelector(".when").textContent = r?.at ? LABELS[r.status] ? `${LABELS[r.status]} ${new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "" : (items.get(id).item.done ? "Passed (in the file)" : "");
+  }
+
+  function visible(id) {
+    const st = status(id);
+    if (filter === "todo" && st) return false;
+    if (filter === "fail" && st !== "fail") return false;
+    if (filter === "done" && !st) return false;
+    const it0 = items.get(id).item;
+    if (group && !(it0.groups || []).includes(group)) return false;
+    if (sitting && String(it0.sitting) !== sitting) return false;
+    if (query) { const it = items.get(id); const hay = (it.item.text + " " + it.section.title + " " + note(id)).toLowerCase(); if (!query.split(/\s+/).every(w => hay.includes(w))) return false; }
+    return true;
+  }
+
+  function tally(ids) { const t = { pass: 0, fail: 0, skip: 0, todo: 0 }; for (const id of ids) t[status(id) || "todo"]++; return t; }
+  function meter(m, t, total) { const [p, f, s] = m.querySelectorAll("i"); p.style.width = (100 * t.pass / total) + "%"; f.style.width = (100 * t.fail / total) + "%"; s.style.width = (100 * t.skip / total) + "%"; }
+
+  function paint() {
+    let shown = 0;
+    for (const s of DATA.sections) {
+      const sec = document.querySelector(`section.sec[data-num="${s.num}"]`);
+      const ids = s.items.map(i => i.id); const t = tally(ids);
+      let any = 0;
+      for (const id of ids) { const v = visible(id); items.get(id).li.hidden = !v; any += v; }
+      sec.hidden = any === 0; shown += any;
+      sec.classList.toggle("complete", t.todo === 0 && t.fail === 0);
+      sec.querySelector(".sec-count .n").textContent = `${ids.length - t.todo} of ${ids.length}` + (t.fail ? ` · ${t.fail} failed` : "");
+      meter(sec.querySelector(".sec-count .meter"), t, ids.length || 1);
+    }
+    const all = [...items.keys()]; const t = tally(all);
+    meter(document.getElementById("meter"), t, all.length || 1);
+    document.getElementById("counts").innerHTML = `<span><b>${t.todo}</b> to test</span><span><b>${t.pass}</b> passed</span><span><b>${t.fail}</b> failed</span><span><b>${t.skip}</b> can't test</span><span>${all.length} items in ${DATA.sections.length} sections</span>`;
+    const empty = document.getElementById("empty");
+    empty.hidden = shown > 0;
+    empty.textContent = filter === "fail" ? "Nothing has failed." : filter === "todo" && !query ? "Everything has a result." : "No items match.";
+  }
+
+  function setSave(text, bad) { saveEl.textContent = text; saveEl.classList.toggle("bad", !!bad); }
+
+  function write(id) {
+    const it = items.get(id); const r = results.get(id) || {};
+    const body = { status: r.status || "", note: r.note || "", at: new Date().toISOString(), section: `${it.section.num}. ${it.section.title}`, item: it.item.text.slice(0, 600) };
+    results.set(id, { ...r, at: body.at });
+    if (API) {
+      setSave("Saving…");
+      const prev = queue.get(id) || Promise.resolve();
+      const next = prev.then(() => fetch(`${API}/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }))
+        .then((res) => { if (!res.ok) throw new Error(res.status); setSave("Saved"); }, () => { throw new Error("offline"); })
+        .catch(() => setSave("Not saved: is the checklist server running? Try again", true));
+      queue.set(id, next);
+      return;
+    }
+    setSave("Not saved: this copy of the page does not save results (use Copy results)", true);
+  }
+
+  function choose(id, k) {
+    const r = results.get(id) || {}; const cur = status(id);
+    results.set(id, { ...r, status: cur === k ? "" : k, note: r.note ?? "" });
+    write(id); paintItem(id); paint();
+    if (results.get(id).status === "fail") { const ta = items.get(id).li.querySelector("textarea"); showNote(id, true); if (!ta.value) ta.focus(); }
+  }
+
+  function saveNote(id, value) {
+    const r = results.get(id) || {};
+    if ((r.note || "") === value) return;
+    results.set(id, { ...r, status: r.status ?? status(id), note: value });
+    write(id); paint();
+  }
+
+  // Every marked item as plain text (section, result, the item, the note), to copy out.
+  function exportText() {
+    const lines = [];
+    for (const s of DATA.sections) {
+      for (const it of s.items) {
+        const r = results.get(it.id); if (!r || !r.status) continue;
+        const text = it.text.replace(/\s+/g, " ").slice(0, 200);
+        lines.push(`${s.num}. ${LABELS[r.status]}: ${text}` + (r.note ? `\n   Note: ${r.note.replace(/\s+/g, " ")}` : ""));
+      }
+    }
+    return lines.length ? lines.join("\n") : "Nothing marked yet.";
+  }
+  document.getElementById("copy").addEventListener("click", async () => {
+    const box = document.getElementById("export"), ta = document.getElementById("export-text"), said = document.getElementById("export-said");
+    ta.value = exportText(); box.hidden = false; ta.focus(); ta.select();
+    try { await navigator.clipboard.writeText(ta.value); said.textContent = "Copied (the text is here too):"; }
+    catch { said.textContent = "Select the text below and copy it (the clipboard is not available here):"; }
+  });
+
+  document.querySelectorAll(".chip[data-f]").forEach(c => c.addEventListener("click", () => {
+    filter = c.dataset.f; document.querySelectorAll(".chip[data-f]").forEach(x => x.setAttribute("aria-pressed", String(x === c))); paint();
+  }));
+  // The "Who" row: one chip per group, the sitting picker, and the chosen sitting's description and setup above the list.
+  function paintSitting() {
+    const box = document.getElementById("sitting"); const st = SITTINGS.find(x => String(x.num) === sitting);
+    box.hidden = !st; document.getElementById("sit").classList.toggle("on", !!st);
+    if (!st) return;
+    box.innerHTML = "";
+    box.append(el("h2", null, `Sitting ${st.num}: ${st.title.replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;")}`), el("div", "prose", st.html));
+    if (st.setup) { const d = el("details"); d.open = true; d.append(el("summary", null, st.setup_title || "Setup"), el("div", "prose", st.setup)); box.append(d); }
+    else box.append(el("p", "prose", "Not set up yet: this sitting has no setup in docs/testing/live-test-solo.md."));
+  }
+  if (Object.keys(GROUPS).length) {
+    const who = document.getElementById("who"); who.hidden = false;
+    const sel = document.getElementById("sit");
+    for (const [g, name] of Object.entries(GROUPS)) {
+      const b = el("button", "chip", name); b.dataset.g = g; b.setAttribute("aria-pressed", "false");
+      who.insertBefore(b, sel);
+    }
+    for (const st of SITTINGS) { const o = el("option", null, `Sitting ${st.num}: ${st.title}`); o.value = String(st.num); o.textContent = `Sitting ${st.num}: ${st.title}`; sel.append(o); }
+    const pressGroup = () => who.querySelectorAll(".chip[data-g]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.g === group)));
+    who.querySelectorAll(".chip[data-g]").forEach(c => c.addEventListener("click", () => {
+      group = c.dataset.g; if (group && group !== "A") { sitting = ""; sel.value = ""; }
+      store.set("group", group); store.set("sitting", sitting); pressGroup(); paintSitting(); paint();
+    }));
+    sel.addEventListener("change", () => {
+      sitting = sel.value; if (sitting) group = "A";
+      store.set("group", group); store.set("sitting", sitting); pressGroup(); paintSitting(); paint();
+    });
+    group = GROUPS[store.get("group")] ? store.get("group") : "";
+    sitting = SITTINGS.some(x => String(x.num) === store.get("sitting")) ? store.get("sitting") : "";
+    sel.value = sitting; pressGroup();
+  }
+  let qt = null;
+  document.getElementById("q").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { query = e.target.value.trim().toLowerCase(); paint(); }, 150); });
+
+  build();
+  paintSitting();
+  for (const id of items.keys()) paintItem(id);
+  paint();
+
+  // Served by tools/checklist_server.py: results in a file on the dev box, read again every 15 s so other devices' marks show.
+  async function loadLocal(first) {
+    const res = await fetch(API, { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const all = await res.json();
+    const busy = document.activeElement && document.activeElement.tagName === "TEXTAREA" ? document.activeElement.id.slice(5) : null;
+    for (const [id, d] of Object.entries(all)) {
+      const mine = results.get(id);
+      // Skip the note being typed, and a mark of ours newer than what the file holds (its write is still on the way).
+      if (!items.has(id) || id === busy || mine?.at && d.at && mine.at > d.at) continue;
+      results.set(id, { status: d.status || "", note: d.note || "", at: d.at });
+      paintItem(id);
+    }
+    paint();
+    if (first) setSave(Object.keys(all).length ? "Up to date" : "Ready: nothing marked yet");
+  }
+  if (API) {
+    setSave("Loading results…");
+    loadLocal(true).catch(() => setSave("Can't reach the checklist server; reload", true));
+    setInterval(() => loadLocal(false).catch(() => setSave("Lost the checklist server; reload", true)), 15000);
+    return;
+  }
+
+  setSave("This copy of the page does not save results: use Copy results", true);
+})();
+</script>

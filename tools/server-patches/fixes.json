@@ -1,0 +1,974 @@
+{
+  "target": {
+    "name": "ps_game.exe",
+    "sha256": "0fb7c9f13b5bcf186118f8bfe73ab214226b93e8aa502b8e6fded4a8312bc547",
+    "size": 1323008,
+    "built": "2009-07-14",
+    "note": "EP4.5 game server. VA = file offset + 0x400000 in .text."
+  },
+  "header": {
+    "va": 4194816,
+    "off": 512,
+    "original": "44f21100",
+    "patched": "00001200",
+    "note": ".text VirtualSize, raised to map the code cave explicitly"
+  },
+  "cave": {
+    "start": 5374544,
+    "end": 5378048,
+    "next_free": 5376019
+  },
+  "fixes": [
+    {
+      "id": "mob-speed-id",
+      "title": "Monster speed packet carries the monster's id",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "CMob::SendSpeed builds 0x0609 without the monster id; nearby players get stack garbage as the id when a monster resets its speed.",
+      "credit": "NewShaiya analysis (docs/original/mob-fight.md section 5)",
+      "inplace": [
+        {
+          "va": 4785986,
+          "off": 591682,
+          "patched": "e909fb08009090",
+          "original": "83c050884c2407"
+        },
+        {
+          "va": 5374544,
+          "off": 1180240,
+          "patched": "83c0508b500c89542402884c2407e9e604f7ff",
+          "fill": "cc",
+          "original": "00000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "gatekeeper-logout",
+      "title": "Gatekeeper takes no fare when a logout is pending",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "With a logout pending the gatekeeper subtracts the fare and the player does not move.",
+      "credit": "NewShaiya analysis (docs/original/gatekeeper.md section 2)",
+      "inplace": [
+        {
+          "va": 4624807,
+          "off": 430503,
+          "patched": "e9b7700b0090909090",
+          "original": "83bddc570000007530"
+        },
+        {
+          "va": 5374563,
+          "off": 1180259,
+          "patched": "83bddc570000000f85af90f4ffe93b8ff4ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "time-damage-player",
+      "title": "Damage over time on players multiplies, as on monsters",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "A damage-over-time debuff on a player adds elapsed/3000 to the base instead of multiplying, unlike the monster version.",
+      "credit": "NewShaiya analysis (docs/original/mob-skills.md section 8)",
+      "inplace": [
+        {
+          "va": 4744438,
+          "off": 550134,
+          "original": "442410",
+          "patched": "4c2410"
+        },
+        {
+          "va": 4744487,
+          "off": 550183,
+          "original": "442410",
+          "patched": "4c2410"
+        },
+        {
+          "va": 4744537,
+          "off": 550233,
+          "original": "442410",
+          "patched": "4c2410"
+        }
+      ]
+    },
+    {
+      "id": "illusion-save",
+      "title": "Illusion is not saved across a relog",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "Illusion (change type 102) is saved with the character but its copied monster is not; after login the player has shape 102 with monster 0 and item attack/defence drop to 0 until it ends.",
+      "credit": "NewShaiya analysis (docs/original/skills-special.md section 5.4)",
+      "inplace": [
+        {
+          "va": 4639682,
+          "off": 445378,
+          "patched": "e9ae360b00909090909090909090",
+          "original": "6683bb98000000640f84af000000"
+        },
+        {
+          "va": 5374581,
+          "off": 1180277,
+          "patched": "6683bb98000000640f84fcc9f4ff6683bb98000000660f84eec9f4ffe93ac9f4ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "myshop-visit-cleanup",
+      "title": "Leaving a personal-shop visit clears the seller's list",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "Leaving the zone while visiting a personal shop removes the visitor from its own shop, not the seller's, so the seller's list keeps dead visitors and fills up.",
+      "credit": "NewShaiya analysis (docs/original/personal-shop.md section 6)",
+      "inplace": [
+        {
+          "va": 4501294,
+          "off": 306990,
+          "patched": "e963530d009090",
+          "original": "8bc5e86bd50200"
+        },
+        {
+          "va": 5374614,
+          "off": 1180310,
+          "patched": "8d80dc150000e8ff81f5ffe98facf2ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "learn-skill-level",
+      "title": "Only the next skill level can be learnt",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "0x0209 accepts any level above the one known, so a modified client jumps skill levels; a passive then drifts for good.",
+      "credit": "NewShaiya analysis (docs/original/skills.md sections 3 and 7)",
+      "inplace": [
+        {
+          "va": 4736176,
+          "off": 541872,
+          "patched": "e9f1bd090090909090",
+          "original": "395910897424107c29"
+        },
+        {
+          "va": 5374630,
+          "off": 1180326,
+          "patched": "897424108b41104039d80f850342f6ffe92742f6ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "enchant-material-bounds",
+      "title": "The enchant material's place is bounds-checked",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "0x0805's material bag and slot index the item table without bounds, so a bad place reads outside it (a crash, or a stray object as material).",
+      "credit": "NewShaiya analysis (docs/original/lapis.md section 5)",
+      "inplace": [
+        {
+          "va": 4586419,
+          "off": 392115,
+          "patched": "e903070c0090909090909090909090909090909090",
+          "original": "0fb645048d14400fb645058d0cd08b8c8fc4010000"
+        },
+        {
+          "va": 5374651,
+          "off": 1180347,
+          "patched": "0fb645043b870413000077180fb64d0583f918730f8d14408d0cd18b8c8fc4010000eb0231c9e9e2f8f3ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "cloak-lapis",
+      "title": "Cloaks take no lapis (link)",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "EnableGemAdd says yes for a cloak before checking the lapis, so any item can be linked into a cloak for the price of its grade (usually free).",
+      "credit": "NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      "inplace": [
+        {
+          "va": 4586089,
+          "off": 391785,
+          "patched": "e978080c00",
+          "original": "83fd187505"
+        },
+        {
+          "va": 5374694,
+          "off": 1180390,
+          "patched": "83fd180f8428f8f3ffe97ff7f3ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "cloak-lapisia",
+      "title": "Cloaks take no Lapisia (enchant)",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "EnableLapisianAdd says yes for a cloak before checking the Lapisia, so any item can enchant a cloak (an apple to +20 absorption, free).",
+      "credit": "NewShaiya analysis (docs/original/lapis.md sections 3 and 5)",
+      "inplace": [
+        {
+          "va": 4585849,
+          "off": 391545,
+          "patched": "e976090c00",
+          "original": "83ff187505"
+        },
+        {
+          "va": 5374708,
+          "off": 1180404,
+          "patched": "83ff180f8448f7f3ffe981f6f3ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "nan-pos",
+      "title": "NaN positions are refused",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "CMap::IsSafePos lets NaN coordinates pass its x87 range checks.",
+      "credit": "NewShaiya analysis (docs/original/maps-npcs.md section 2)",
+      "inplace": [
+        {
+          "va": 4281184,
+          "off": 86880,
+          "patched": "e99daf10009090909090",
+          "original": "d9442408d81d28a45300"
+        },
+        {
+          "va": 5374722,
+          "off": 1180418,
+          "patched": "d9442408dde8dfe0f6c4447519d944240cdde8dfe0f6c444750cd9442408d81d28a45300eb0530c0c20c0090e93750efff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "bound-trade",
+      "title": "Bound items cannot be traded",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "PacketExchange checks only real type 27, not byOG, so a modified client can trade account/character-bound items.",
+      "credit": "NewShaiya analysis (docs/original/trade.md section 2.3)",
+      "inplace": [
+        {
+          "va": 4649018,
+          "off": 454714,
+          "patched": "e9f4120b009090909090909090909090",
+          "original": "8b703083bea00000001b0f8490020000"
+        },
+        {
+          "va": 5374771,
+          "off": 1180467,
+          "patched": "8b703083bea00000001b0f8497eff4ff807e31000f858deff4ffe9f8ecf4ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "bound-duel",
+      "title": "Bound items cannot be staked in a duel",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "The duel stakes window checks only real type 27, not byOG, as the trade window does.",
+      "credit": "NewShaiya analysis (docs/original/duel.md section 4)",
+      "inplace": [
+        {
+          "va": 4708196,
+          "off": 513892,
+          "patched": "e9e92b0a009090909090909090909090",
+          "original": "8b703083bea00000001b0f84a5020000"
+        },
+        {
+          "va": 5374802,
+          "off": 1180498,
+          "patched": "8b703083bea00000001b0f84b7d6f5ff807e31000f85add6f5ffe903d4f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "fire-thorns-aggro",
+      "title": "Fire Thorns / Mass Taunt aggro works",
+      "category": "design",
+      "default": false,
+      "status": "verified in disassembly",
+      "symptom": "A self buff with an aggro value should anger the monster the caster is fighting, but the server only does it when the caster is not attacking, which an instant skill never is.",
+      "credit": "NewShaiya analysis (docs/original/skills-buffs.md section 4)",
+      "inplace": [
+        {
+          "va": 4525221,
+          "off": 330917,
+          "original": "7432",
+          "patched": "9090"
+        }
+      ]
+    },
+    {
+      "id": "op-exclusive",
+      "title": "Hammers of 1000% or more always link",
+      "category": "design",
+      "default": false,
+      "status": "verified in disassembly",
+      "symptom": "The staff Linking Hammer multiplies the rate like any hammer and the 50% cap then holds it at 50%, though it was meant to be certain.",
+      "credit": "NewShaiya analysis (docs/original/lapis.md section 3)",
+      "inplace": [
+        {
+          "va": 4593402,
+          "off": 399098,
+          "patched": "e972ec0b009090909090",
+          "original": "83fb327e05bb32000000"
+        },
+        {
+          "va": 5374833,
+          "off": 1180529,
+          "patched": "81fbe80300007c07bb64000000eb0a83fb327e05bb3200000090e97413f4ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "party-exp-levelup",
+      "title": "The full-party experience bonus is paid on a level-up",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "In a party of 7 each gain counts the bonus twice except a gain that levels the player up, which counts it once.",
+      "credit": "NewShaiya analysis (docs/original/party.md section 8)",
+      "inplace": [
+        {
+          "va": 4555615,
+          "off": 361311,
+          "patched": "e92c800c0090",
+          "original": "3bf0733d03f3"
+        },
+        {
+          "va": 5374864,
+          "off": 1180560,
+          "patched": "01de39c67305e9ca7ff3ff90e9ff7ff3ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "stealth-equip",
+      "title": "Equipment counts normally in Stealth",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "An item moved while hidden (Stealth, shape 13) keeps or doubles its attack and defence, because the equip code skips its numbers while any shape is set and Stealth never recomputes them.",
+      "credit": "NewShaiya analysis (docs/original/skills-buffs.md section 5); the community's own fix is a code cave by Bowie (kreon800/shaiya) that skips item moves in shape 13, and an earlier ItemBagToBag cave of unnamed authorship; this kit instead counts the items.",
+      "inplace": [
+        {
+          "va": 5374881,
+          "off": 1180577,
+          "original": "0000000000000000000000000000000000",
+          "patched": "80bf5413000000740780bf541300000dc3",
+          "fill": "00"
+        },
+        {
+          "va": 5374898,
+          "off": 1180594,
+          "original": "0000000000000000000000000000000000",
+          "patched": "80b85413000000740780b8541300000dc3",
+          "fill": "00"
+        },
+        {
+          "va": 4541725,
+          "off": 347421,
+          "original": "80bf5413000000",
+          "patched": "e87fb60c009090"
+        },
+        {
+          "va": 4541985,
+          "off": 347681,
+          "original": "80bf5413000000",
+          "patched": "e87bb50c009090"
+        },
+        {
+          "va": 4542411,
+          "off": 348107,
+          "original": "80bf5413000000",
+          "patched": "e8d1b30c009090"
+        },
+        {
+          "va": 4542976,
+          "off": 348672,
+          "original": "80bf5413000000",
+          "patched": "e89cb10c009090"
+        },
+        {
+          "va": 4543564,
+          "off": 349260,
+          "original": "80bf5413000000",
+          "patched": "e850af0c009090"
+        },
+        {
+          "va": 4543845,
+          "off": 349541,
+          "original": "80bf5413000000",
+          "patched": "e837ae0c009090"
+        },
+        {
+          "va": 4544202,
+          "off": 349898,
+          "original": "80bf5413000000",
+          "patched": "e8d2ac0c009090"
+        },
+        {
+          "va": 4545259,
+          "off": 350955,
+          "original": "80bf5413000000",
+          "patched": "e8b1a80c009090"
+        },
+        {
+          "va": 4546870,
+          "off": 352566,
+          "original": "80b85413000000",
+          "patched": "e877a20c009090"
+        },
+        {
+          "va": 4547318,
+          "off": 353014,
+          "original": "80b85413000000",
+          "patched": "e8b7a00c009090"
+        }
+      ]
+    },
+    {
+      "id": "bound-shop",
+      "title": "Bound items cannot be sold in a personal shop",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "The personal-shop place handler stores a slot without checking the item, so a modified client can sell quest or bound items.",
+      "credit": "NewShaiya analysis (docs/original/personal-shop.md sections 3.3 and 5)",
+      "inplace": [
+        {
+          "va": 4689565,
+          "off": 495261,
+          "patched": "e921750a009090",
+          "original": "898cbde4150000"
+        },
+        {
+          "va": 5374915,
+          "off": 1180611,
+          "patched": "5089c88d04400fb6d38d04c28b8485c401000085c0741f8b403083b8a00000001b741380783100750d58898cbde4150000e9ab8af5ff58e9be8df5ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "character-name-filter",
+      "title": "Character create and rename names replace quotes with spaces",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "The database agent inserts create and rename names directly into Usp_Create_Char_R and usp_Save_Char_Name_E SQL text.",
+      "credit": "NewShaiya analysis (docs/original/ps_game.md; docs/original/server-patch-notes.md)",
+      "inplace": [
+        {
+          "va": 4636678,
+          "off": 442374,
+          "patched": "e9f4430b00",
+          "original": "e845020000"
+        },
+        {
+          "va": 5374975,
+          "off": 1180671,
+          "patched": "e84cbef4ff9c608d7500b914000000803e00740b803e277503c6062046e2f0619de9e6bbf4ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4637043,
+          "off": 442739,
+          "patched": "e9ad420b00",
+          "original": "e8d8000000"
+        },
+        {
+          "va": 5375013,
+          "off": 1180709,
+          "patched": "e826bef4ff9c608d7500b914000000803e00740b803e277503c6062046e2f0619de92dbdf4ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "guild-text-filter",
+      "title": "Guild names and remarks replace quotes with spaces",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "Guild create formats the name and remark into SQL text; remark updates reject a quote instead of normalizing it. Normalize before both paths.",
+      "credit": "NewShaiya analysis (CUser::PacketGuild; docs/original/server-patch-notes.md)",
+      "inplace": [
+        {
+          "va": 4678919,
+          "off": 484615,
+          "patched": "e93f9f0a00",
+          "original": "e8f452fbff"
+        },
+        {
+          "va": 5375051,
+          "off": 1180747,
+          "patched": "9c608d7302b918000000803e00740b803e277503c6062046e2f0619d9c608d731bb940000000803e00740b803e277503c6062046e2f0619de878b3f0ffe97f60f5ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4681986,
+          "off": 487682,
+          "patched": "e986930a00",
+          "original": "83c3028bcb"
+        },
+        {
+          "va": 5375117,
+          "off": 1180813,
+          "patched": "83c30289d99c608d33b940000000803e00740b803e277503c6062046e2f0619de9556cf5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "gift-target-filter",
+      "title": "Gift target names replace quotes with spaces",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "PacketPoint copies the gift target into the database request used in the gift item and notification SQL statements without escaping it.",
+      "credit": "NewShaiya analysis (CUser::PacketPoint; docs/original/server-patch-notes.md)",
+      "inplace": [
+        {
+          "va": 4693834,
+          "off": 499530,
+          "patched": "e963650a00",
+          "original": "e811ad0800"
+        },
+        {
+          "va": 5375154,
+          "off": 1180850,
+          "patched": "9c608d7500b914000000803e00740b803e277503c6062046e2f0619de88d47feffe9779af5ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "gm-notice-filter",
+      "title": "GM notice log text replaces quotes with spaces",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly",
+      "symptom": "SendLogAdmin copies notice/detail text into 0x0C03 and the game log formats it directly into usp_Insert_Action_Log_E SQL text.",
+      "credit": "NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      "inplace": [
+        {
+          "va": 4660392,
+          "off": 466088,
+          "patched": "e92be80a00",
+          "original": "8a08880c02"
+        },
+        {
+          "va": 5375192,
+          "off": 1180888,
+          "patched": "9c8a0880f9277502b120880c029de9c217f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "myshop-price-wrap",
+      "title": "Personal-shop prices that wrap past 2^32 are refused",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "Buying from a personal shop multiplies count by price in 32 bits; a large price wraps to a small one, so the item sells for almost nothing.",
+      "credit": "NewShaiya analysis (docs/original/personal-shop.md section 5); the same refusal as ScreaM's GoldBugFix.CT for NPC shops",
+      "inplace": [
+        {
+          "va": 4690157,
+          "off": 495853,
+          "patched": "e9f9730a00909090909090",
+          "original": "0fb6d10faf948344160000"
+        },
+        {
+          "va": 5375211,
+          "off": 1180907,
+          "patched": "0fb6c98b848344160000f7e10f82198cf5ff89c2e9f48bf5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "npc-shop-price-wrap",
+      "title": "NPC-shop prices that wrap past 2^32 are refused",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "Buying from an NPC multiplies count by price in 32 bits; a large count times a large price wraps to a small one.",
+      "credit": "NewShaiya analysis (docs/original/shop.md); ScreaM's GoldBugFix.CT makes the same refusal in the running process (Cheat Engine)",
+      "inplace": [
+        {
+          "va": 4633946,
+          "off": 439642,
+          "patched": "e9a54f0b00909090909090",
+          "original": "0fb643070faf8680000000"
+        },
+        {
+          "va": 5375236,
+          "off": 1180932,
+          "patched": "520fb64307f7a6800000005a7205e94eb0f4ff8b6c241066c74424200207e957b0f4ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "remake-distinct",
+      "title": "Remaking needs three different items",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "A remake request may name the same place three times: one item becomes a new one with fresh craft stats, and its object is freed three times.",
+      "credit": "NewShaiya analysis (docs/original/lapis.md section 7)",
+      "inplace": [
+        {
+          "va": 4589955,
+          "off": 395651,
+          "patched": "e99ffb0b0090",
+          "original": "8a5e6880fb51"
+        },
+        {
+          "va": 5375271,
+          "off": 1180967,
+          "patched": "39ce0f84e40af4ff39d60f84dc0af4ff39d10f84d40af4ff8a5e6880fb51e93f04f4ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "enchant-seed",
+      "title": "Each enchant roll gets its own seed",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "The enchant roll is seeded with the time in seconds xor the session id, so two enchants within a second roll the same number.",
+      "credit": "NewShaiya analysis (docs/original/lapis.md section 5)",
+      "inplace": [
+        {
+          "va": 4586638,
+          "off": 392334,
+          "patched": "e9b7080c00909090",
+          "original": "8bf833bb5c570000"
+        },
+        {
+          "va": 5375306,
+          "off": 1181002,
+          "patched": "89c733bb5c5700000f3131c7e93bf7f3ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "quest-end-npc",
+      "title": "Quests that name an end NPC are handed in at it",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "A quest end request with NPC id 0 skips the end NPC, so item, monster and player-kill quests can be handed in anywhere.",
+      "credit": "NewShaiya analysis (docs/original/quest.md sections 7 and 11)",
+      "inplace": [
+        {
+          "va": 4715260,
+          "off": 520956,
+          "patched": "e95a120a00",
+          "original": "83f8037757"
+        },
+        {
+          "va": 5375323,
+          "off": 1181019,
+          "patched": "837c2418000f84f2edf5ff83f8030f87e9edf5ffe98dedf5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "chat-markup-filter",
+      "title": "Malformed chat colour markers are broken up",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "A colour marker whose length runs past the text crashes every client that shows the line; the server relays it in chat, GM chat and notices, memos and shop titles.",
+      "credit": "NewShaiya analysis (docs/client/client-packets.md, the chat markup crash)",
+      "inplace": [
+        {
+          "va": 5375348,
+          "off": 1181044,
+          "patched": "9c6089f785c97473803f00740347e2f88d460139f8736466813e3c3c755a8d460839f8775031dbba020000000fb6041683e83083f809773d6bdb0a01c34283fa0572e9807e0563752c0fb6460683e83083f80977200fb6460783e83083f809771485db741089f829f083e80839c3770583c608eb9bc6062046eb95619dc3",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4654383,
+          "off": 460079,
+          "patched": "e9be000b00909090",
+          "original": "0fb70605ffeeffff"
+        },
+        {
+          "va": 5375474,
+          "off": 1181170,
+          "patched": "51560fb7063d0211000075090fb64e1783c618eb1b2d0111000083f811771eb9df0003000fa3c173140fb64e0283c60381f9800000007705e845ffffff5e590fb70605ffeeffffe9f9fef4ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4656986,
+          "off": 462682,
+          "patched": "e9dff60a00909090",
+          "original": "0fb70705ff0effff"
+        },
+        {
+          "va": 5375550,
+          "off": 1181246,
+          "patched": "515689fe0fb7072d01f1000083f809774d83f80175090fb64e1783c618eb3283f805751c0fb74e0281f9d0070000772e83f90272294983c604e8f8feffffeb1eb99d0200000fa3c173140fb64e0283c60381f9800000007705e8d8feffff5e590fb70705ff0effffe9b708f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4667862,
+          "off": 473558,
+          "patched": "e9d0cc0a00909090",
+          "original": "0fb70305ff06ffff"
+        },
+        {
+          "va": 5375659,
+          "off": 1181355,
+          "patched": "51560fb7032d06f9000083f805772b8d730285c074138d731983f802740b8d730583f80474038d73040fb60e4681f9800000007705e88ffeffff5e590fb70305ff06ffffe9ea32f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4675750,
+          "off": 481446,
+          "patched": "e949ae0a009090",
+          "original": "ff248580624700"
+        },
+        {
+          "va": 5375732,
+          "off": 1181428,
+          "patched": "83f804740583f809751151568d7307b932000000e867feffff5e59ff248580624700",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4689162,
+          "off": 494858,
+          "patched": "e9077a0a0090909090",
+          "original": "8d46038db578160000"
+        },
+        {
+          "va": 5375766,
+          "off": 1181462,
+          "patched": "8d4603565189c6b978000000e84dfeffff595e8db578160000e9df85f5ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "guild-bank-bound",
+      "title": "Bound items cannot enter the guild bank by a swap",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "Taking an item out of the guild bank onto a taken bag place puts the bag item into the bank unchecked, so a bound or quest item can pass to another member.",
+      "credit": "NewShaiya analysis (docs/original/guild-bank.md section 13)",
+      "inplace": [
+        {
+          "va": 4390891,
+          "off": 196587,
+          "patched": "e944070f0090",
+          "original": "0f8444020000"
+        },
+        {
+          "va": 5375796,
+          "off": 1181492,
+          "patched": "0f84fbfaf0ff8b0e8b493083b9a00000001b740b807931007505e99ef8f0ffff74242cff15d0105200e9c2fef0ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "gm-target-filter",
+      "title": "GM log target names replace quotes with spaces",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "SendLogAdmin copies the GM's typed target name into 0x0C02/0x0C03 and the game log formats it directly into usp_Insert_Action_Log_E SQL text.",
+      "credit": "NewShaiya analysis (docs/original/game-log.md section 3.8)",
+      "inplace": [
+        {
+          "va": 4660116,
+          "off": 465812,
+          "patched": "e9c9eb0a00",
+          "original": "8a08880c02"
+        },
+        {
+          "va": 5375842,
+          "off": 1181538,
+          "patched": "9c8a0880f9277502b120880c029de92414f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000"
+        },
+        {
+          "va": 4660372,
+          "off": 466068,
+          "patched": "e9dcea0a00",
+          "original": "8a08880c02"
+        },
+        {
+          "va": 5375861,
+          "off": 1181557,
+          "patched": "9c8a0880f9277502b120880c029de91115f5ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "exchange-count-guard",
+      "title": "A trade or duel stake that shrank is skipped",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "A trade or duel stake hands over the count offered and subtracts it from whatever is in the slot by then; a count lowered after the offer wraps round and duplicates the item.",
+      "credit": "NewShaiya analysis (docs/original/trade.md sections 3 and 6, docs/original/duel.md section 4)",
+      "inplace": [
+        {
+          "va": 4651483,
+          "off": 457179,
+          "patched": "e9a80d0b0090909090909090",
+          "original": "8a47023a45420f853a010000"
+        },
+        {
+          "va": 5375880,
+          "off": 1181576,
+          "patched": "8a47023a45420f8453f2f4ff0f874cf9f4ffe982f3f4ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4705467,
+          "off": 511163,
+          "patched": "e9df3a0a00909090",
+          "original": "8a4b023a4d42754c"
+        },
+        {
+          "va": 5375903,
+          "off": 1181599,
+          "patched": "8a4b023a4d420f8418c5f5ff0f87a1c8f5ffe959c5f5ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "party-kick-leader",
+      "title": "Kicking a party member keeps the leader and the loot turn",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "Kicking a member who came before the leader in the party silently makes the next member the leader on the server while every client still shows the old one; a leader kicking itself does the same.",
+      "credit": "NewShaiya analysis (docs/original/party.md section 4)",
+      "inplace": [
+        {
+          "va": 4485517,
+          "off": 291213,
+          "patched": "e924960d0090",
+          "original": "8b87dc000000"
+        },
+        {
+          "va": 5375926,
+          "off": 1181622,
+          "patched": "3b5d0c0f84b069f2ff8b87dc000000e9c969f2ff",
+          "fill": "00",
+          "original": "0000000000000000000000000000000000000000"
+        },
+        {
+          "va": 4485588,
+          "off": 291284,
+          "patched": "e9f1950d009090",
+          "original": "834510ff8b4510"
+        },
+        {
+          "va": 5375946,
+          "off": 1181642,
+          "patched": "8b8d080100008d430139c17e0749898d080100008b450c39c37d044889450c834510ff8b4510e9e669f2ff",
+          "fill": "00",
+          "original": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "id": "repair-shield-slot",
+      "title": "Repairing one item updates that item's saved quality",
+      "category": "clear",
+      "default": true,
+      "status": "verified in disassembly and emulation",
+      "symptom": "After repairing a single item, the server records the new quality for the shield's slot whatever was repaired, so the shield's own quality change may later go unsaved or be saved twice.",
+      "credit": "NewShaiya analysis (docs/original/repair.md section 5)",
+      "inplace": [
+        {
+          "va": 4606415,
+          "off": 412111,
+          "patched": "e921be0b0090909090909090",
+          "original": "66897e446689bc55aa010000"
+        },
+        {
+          "va": 5375989,
+          "off": 1181685,
+          "patched": "66897e4485db750f8b9424dc0000006689bc55aa01000085dbe9c841f4ff",
+          "fill": "00",
+          "original": "000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    }
+  ]
+}

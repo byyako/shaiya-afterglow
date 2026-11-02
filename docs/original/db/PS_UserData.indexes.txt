@@ -1,0 +1,3 @@
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+PK_UserLoginStatus|UserLoginStatus|1|1|CLUSTERED
+PK_WebPointLog|WebPointLog|1|1|CLUSTERED
