@@ -149,16 +149,16 @@ rollback, the wipe script and one login-to-world run on the VPS have each been d
 
 ## Next: extensions (decided 2026-11-02, `docs/plans/extensions.md` section 2a)
 
-Goal: grow what the server can do. Order: chunk 1 foundation (spec `docs/plans/ext-1-foundation.md`, to be reconciled with the
-install work, then built), chunk 2 rules and hooks, chunk 5 Lua (**release 0.3.0**), chunk 3 item effects, chunk 4 pets (**release
+Goal: grow what the server can do. Order: chunk 1 foundation (spec `docs/plans/ext-1-foundation.md`, reconciled with the install
+work on 2026-11-02, its section 1a), chunk 2 rules and hooks, chunk 5 Lua (**release 0.3.0**), chunk 3 item effects, chunk 4 pets (**release
 0.4.0**). Breaking changes are accepted in 0.x; Lua gets the game API only; the first scripts are a welcome notice and advert banner
 with custom commands, boss and kill rewards, event spawns and a kill streak with bounty. Chunks 6 to 9 follow when asked for. The web
 API and operations (B1, B2) wait; a first run of the install on a fresh machine is still open.
 
 | step | state |
 |---|---|
-| Reconcile the chunk 1 spec with 0.2.0 and ask the open questions | **next** |
-| Chunk 1 foundation (build) | not started |
+| Reconcile the chunk 1 spec with 0.2.0 and ask the open questions | done 2026-11-02 (seven decisions, spec section 1a) |
+| Chunk 1 foundation (build: part A, then part B; the dev box moves to a worktree of the clone first) | **next** |
 | Chunk 2 rules and hooks (spec, build) | not started |
 | Chunk 5 Lua (spec, build), release 0.3.0 | not started |
 | Chunk 3 item effects, chunk 4 pets (spec, build), release 0.4.0 | not started |
