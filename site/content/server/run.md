@@ -77,7 +77,7 @@ Drops, gold and monster stats take effect with the console's `reload`; spawns, o
 
 ```bash
 git pull
-cargo build --release --workspace
+cargo build --release --workspace      # or, without Rust: git checkout <release tag> && tools/fetch-release.sh <release tag>
 target/release/console 1 restart 5     # warns the players, saves them, restarts
 tools/login-server.sh restart
 ```

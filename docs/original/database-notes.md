@@ -153,3 +153,28 @@ SELECT at, character_name, action, value1, value2, value3, text2, text3 FROM gam
 and a duplicate shows as a `uid` (or a count) that appears without the record that made it: a new `uid` has an action 111 with `text2`
 `'ItemCreate'` (made by the server), 113 (bought), 115 (traded), 118/111 (picked up), 213 and so on. The gem records (119, 120, 212) hold the
 lapis's item id and unique id in `value3` and `value4`. Two rows with one `uid` cannot exist (`character_items.uid` is unique).
+
+## Reading a backup without SQL Server
+
+`tools/defs/read_bak.py` reads `PS_GameDefs` straight out of the backup file; `tools/setup.sh` uses it, so the import needs no SQL Server.
+Its output was compared with the SQL Server export, table by table, and is byte for byte the same for all eight exported tables
+(`tools/defs/export_queries.tsv`). What it relies on, found by reading the file:
+
+- The backup is a Microsoft Tape Format file (it starts with `TAPE`) holding the database's 8 KB pages, uncompressed. The first page, the
+  file header page (type 15, page 0), is at offset 6656 in this backup; the pages follow in 8192-byte steps, the extents the backup
+  skipped are zero pages, and the page numbers come from the page headers, not from the position.
+- These pages have torn-page detection on: the low two bits of the last byte of sectors 1 to 15 of each page are replaced by a
+  marker, and the real bits are kept in the 32-bit field at offset 60 of the page header (two bits per sector). Without putting them
+  back, every 512-byte sector has one damaged byte (a string character, a slot offset). A page with checksums (flag 0x200) would not
+  need this; the flag 0x100 says which.
+- The table list and columns are in the database's own catalogue: `sysschobjs` (object 34: id, name, type `U ` for a user table),
+  `syscolpars` (object 41: column id, type, length, name), and where each column sits in the record in `sysrowsets` (object 5, rowset
+  to table) and `syshobtcolumns` (object 13, the 16-bit leaf offset at byte 27: a positive offset is a fixed column's position from
+  the start of the record, `-1`, `-2`, ... is the variable column's slot).
+- Records are the usual SQL Server 2005 layout: status bytes, the fixed part, the column count, the null bitmap, the variable column
+  count with the end offsets, the variable data. Some tables carry an extra variable slot ahead of the real one (`Items`: slot 1 holds
+  the name, slot 0 something left from an earlier column), which only the leaf offsets resolve; reading variable columns in order
+  gets the wrong text.
+- Only the types the definitions use are read (`tinyint`, `smallint`, `int`, `bigint`, `bit`, `datetime`, `char` and `varchar`,
+  `nchar`, `nvarchar`, a few more); another type stops the reader with a message. Text is passed on as bytes (hex in the export);
+  the GBK decoding stays in `load_into_postgres.py`.

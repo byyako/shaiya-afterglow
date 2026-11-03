@@ -2,7 +2,8 @@
 # Everything from a fresh clone to a running server, in one go:
 #   tools/setup.sh <PSM_Data folder> <PS_Game Data folder>
 # - writes .env with random passwords when there is none;
-# - starts PostgreSQL (compose.yaml) and builds the workspace (or uses the binaries already in target/release/);
+# - starts PostgreSQL (compose.yaml) and builds the workspace; with the binaries already in target/release/ it uses them, and
+#   without Rust it downloads the release that matches this checkout (tools/fetch-release.sh);
 # - reads the game definitions: straight from the PS_GameDefs backup (tools/defs/read_bak.py, no SQL Server), or from a folder of
 #   already exported tables (the first argument holds items.psv and the others), or, with --sqlserver, through a SQL Server
 #   container (compose profile `import`; the way when the direct reader does not understand your backup);
@@ -65,8 +66,15 @@ fi
 binaries=(login-server game-server servers create_account console data-editor mall)
 have_binaries=1
 for b in "${binaries[@]}"; do [ -x "target/release/$b" ] || have_binaries=0; done
-if [ "$have_binaries" = 0 ]; then
-    need cargo "Rust 1.94 or newer, https://rustup.rs (or take the binaries of a release: tools/fetch-release.sh)"
+if [ "$have_binaries" = 0 ] && ! command -v cargo > /dev/null; then
+    # no Rust: take the binaries of the release that matches this checkout
+    version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+    echo "Rust (cargo) is not installed: downloading the binaries of release v$version instead (tools/fetch-release.sh)"
+    if tools/fetch-release.sh "v$version"; then
+        have_binaries=1
+        for b in "${binaries[@]}"; do [ -x "target/release/$b" ] || have_binaries=0; done
+    fi
+    [ "$have_binaries" = 1 ] || need cargo "Rust 1.94 or newer, https://rustup.rs; no release v$version could be downloaded either"
 fi
 [ "$missing" = 0 ] || fail "install what is missing above, then run $0 again"
 

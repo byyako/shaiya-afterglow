@@ -6,12 +6,18 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:            # Actions > Release > Run workflow: rewrites the text of an existing release from CHANGELOG.md
+    inputs:
+      tag:
+        description: "The release to update, for example v0.2.0"
+        required: true
 
 permissions:
   contents: write
 
 jobs:
   linux:
+    if: github.event_name == 'push'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
@@ -28,11 +34,26 @@ jobs:
           done
           tar -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+      - name: release text
+        run: tools/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md \
             "shaiya-afterglow-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" "shaiya-afterglow-${GITHUB_REF_NAME}-linux-x86_64.tar.gz.sha256" \
             || gh release upload "$GITHUB_REF_NAME" --clobber \
             "shaiya-afterglow-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" "shaiya-afterglow-${GITHUB_REF_NAME}-linux-x86_64.tar.gz.sha256"
+
+  notes:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: rewrite the release text
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          tools/release-notes.sh "$TAG" > release-notes.md
+          gh release edit "$TAG" --notes-file release-notes.md

@@ -49,7 +49,7 @@ cargo build --release -p login-server -p game-server -p data-editor
 sudo install -D -t /opt/shaiya-afterglow/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
 ```
 
-**Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}`. They link against the system
+**Or download them** without installing Rust: after the `git clone`, `tools/fetch-release.sh v0.2.0` (the release that matches the checkout; `git checkout v0.2.0` first) puts the same binaries in `target/release/`, and the `sudo install` line above installs them. **Or copy them** from a machine that built them: `target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}`. They link against the system
 glibc, so the VPS needs the build machine's glibc version or newer (a build on Debian 13, glibc 2.41, will not run on Debian 12 or Ubuntu 24.04,
 which are older). If the VPS is older, build there, or build in a container of the VPS's distribution.
 
@@ -260,7 +260,7 @@ between the two (some mobile and carrier-grade NAT connections) cannot enter; `G
 ## 9. Updating
 
 ```bash
-cd shaiya-afterglow && git pull && cargo build --release -p login-server -p game-server -p data-editor
+cd shaiya-afterglow && git pull && cargo build --release -p login-server -p game-server -p data-editor   # or: git checkout <release tag> && tools/fetch-release.sh <release tag>
 sudo install -t /opt/shaiya-afterglow/bin target/release/{login-server,game-server,data-editor,servers,create_account,console,mall}
 sudo systemctl restart shaiya-afterglow-game shaiya-afterglow-login
 ```

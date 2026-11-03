@@ -269,6 +269,8 @@ def main() -> int:
     try:
         pages = find_pages(backup.read_bytes())
         tables = catalogue(pages)
+        if not tables:
+            raise BackupError("the table catalogue could not be read: the file is cut short, damaged or another SQL Server version")
         out_dir.mkdir(parents=True, exist_ok=True)
         for line in queries.read_text(encoding="utf-8").splitlines():
             if not line.strip():
@@ -290,6 +292,10 @@ def main() -> int:
             print(f"{name}: {len(rows)} rows")
     except BackupError as error:
         print(f"read_bak.py: {error}", file=sys.stderr)
+        return 1
+    except (struct.error, IndexError, KeyError, ValueError, UnicodeDecodeError, OSError) as error:
+        print(f"read_bak.py: the backup is not laid out as this reader expects ({type(error).__name__}: {error}); "
+              "a damaged or different backup. Use tools/setup.sh --sqlserver instead.", file=sys.stderr)
         return 1
     return 0
 

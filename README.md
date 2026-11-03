@@ -26,8 +26,8 @@ holes and exploits fixed. Every place where the new server knowingly behaves dif
 
 ## Quick start
 
-You need a Linux machine with Docker, Python 3 and either [Rust](https://rustup.rs) 1.94 or newer or the binaries of a release, and
-your own copy of the original EP4.5 server files (see [What you need](#what-you-need)). Then:
+You need a Linux machine with Docker (and its Compose plugin) and Python 3, and your own copy of the original EP4.5 server files
+(see [What you need](#what-you-need)). Rust is not needed: without it, the setup downloads the binaries of the matching release. Then:
 
 ```bash
 git clone https://github.com/byyako/shaiya-afterglow.git && cd shaiya-afterglow
@@ -35,7 +35,7 @@ tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 ```
 
 `tools/setup.sh` does the rest: it writes a `.env` with random passwords, starts PostgreSQL in Docker, builds the server (a few minutes
-the first time), reads the game definitions straight out of the original backup, imports the world, and then asks for the name and
+the first time; with no Rust installed it downloads the release's binaries instead), reads the game definitions straight out of the original backup, imports the world, and then asks for the name and
 password of your first account and the address your players use, and starts the servers. Without the build it takes about a minute.
 If it stops, it names the step; run it again after fixing the cause.
 
@@ -45,7 +45,7 @@ is the same path step by step, and everything after it.
 
 ## Status
 
-Pre-release. Every game system of the original EP4.5 server is built: login and the server list; the character screen; the world, maps,
+Version 0.2.0 ([changelog](CHANGELOG.md)). Every game system of the original EP4.5 server is built: login and the server list; the character screen; the world, maps,
 portals and gatekeepers; chat; NPCs and shops; items, the warehouse, repair, lapis and enchanting; stats, experience and death; monsters
 with their AI, paths, skills and scripted bosses; combat and every skill type; parties and union parties; trade; guilds, guild houses,
 the guild bank and the ranking battle; quests and quest drops; friends and memos; PvP, kill counts, duels and guild wars; obelisks and the
@@ -274,7 +274,7 @@ target/release/data-editor export edits.json | import edits.json [--replace]
 
 ```bash
 git pull
-cargo build --release --workspace
+cargo build --release --workspace        # or, without Rust: git checkout <release tag> && tools/fetch-release.sh <release tag>
 target/release/console 1 restart 5     # or: tools/game-server.sh restart (players are saved, but not warned)
 tools/login-server.sh restart
 ```
