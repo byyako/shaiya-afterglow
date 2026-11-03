@@ -40,11 +40,29 @@ pub struct Schemas {
     pub defs: String,
     pub world: String,
     pub edits: String,
+    /// `docs/plans/ext-1-foundation.md` section 3.1: imports, extensions, client rows, the patch ledger.
+    pub content: String,
+    /// The frozen copies of the originals (same DDL as `defs` and `world`), written by the importers only.
+    pub original_defs: String,
+    pub original_world: String,
+    /// The client's Item.SData and Skill.SData as shipped (a developer's box only).
+    pub client: String,
+    /// The start of the name of an extension's own schema (`ext_` + the extension's name with underscores).
+    pub ext_prefix: String,
 }
 
 impl Default for Schemas {
     fn default() -> Self {
-        Self { defs: "defs".into(), world: "world".into(), edits: "edits".into() }
+        Self {
+            defs: "defs".into(),
+            world: "world".into(),
+            edits: "edits".into(),
+            content: "content".into(),
+            original_defs: "original_defs".into(),
+            original_world: "original_world".into(),
+            client: "client".into(),
+            ext_prefix: "ext_".into(),
+        }
     }
 }
 
@@ -53,6 +71,14 @@ impl Schemas {
         match side {
             Side::Defs => &self.defs,
             Side::World => &self.world,
+        }
+    }
+
+    /// The frozen copy of a side's originals.
+    pub fn original_of(&self, side: Side) -> &str {
+        match side {
+            Side::Defs => &self.original_defs,
+            Side::World => &self.original_world,
         }
     }
 

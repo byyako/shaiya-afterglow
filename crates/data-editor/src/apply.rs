@@ -72,7 +72,7 @@ pub async fn ensure_applied(conn: &mut PgConnection, s: &Schemas) -> Result<Vec<
     Ok(Vec::new())
 }
 
-async fn apply_side(conn: &mut PgConnection, s: &Schemas, side: Side, report: &mut Report) -> Result<()> {
+pub(crate) async fn apply_side(conn: &mut PgConnection, s: &Schemas, side: Side, report: &mut Report) -> Result<()> {
     let schema = s.of(side).to_owned();
     let exists: bool = sqlx::query_scalar("SELECT to_regnamespace($1::text) IS NOT NULL").bind(&schema).fetch_one(&mut *conn).await?;
     if !exists {
@@ -249,7 +249,7 @@ async fn refresh(
             Some(row) => {
                 let now = canon(row.get(field).unwrap_or(&Value::Null));
                 if now != canon(original) {
-                    report.problem(Some(*cs), target, key_text, Some(field), format!("the import changed {field} {original} -> {now} under your edit to {value}; the edit stays, its original is now {now}"));
+                    report.problem(Some(*cs), target, key_text, Some(field), format!("the content under your edit changed {field} {original} -> {now} (your edit sets {value}); the edit stays, its original is now {now}"));
                     sqlx::query(sql(format!("UPDATE {}.fields SET original = $4 WHERE target = $1 AND key = $2 AND field = $3", s.edits)))
                         .bind(target)
                         .bind(key_text)

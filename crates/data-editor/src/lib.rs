@@ -4,7 +4,9 @@
 pub mod api;
 pub mod apply;
 pub mod console;
+pub mod content;
 pub mod export;
+pub mod ext;
 pub mod images;
 pub mod registry;
 pub mod serve;

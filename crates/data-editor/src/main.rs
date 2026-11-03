@@ -25,6 +25,13 @@ const USAGE: &str = "usage: data-editor <command>
   draft add unset <target> <key> <field>
   draft add add <target> <key> <json object of every field>
   draft add remove <target> <key>
+  content status                     what is imported and installed, and whether a client patch is due
+  content hashes [schema...]         schema.table|rows|md5 per table (default: defs world client), the proof of a build
+  content rebuild [defs|world|all] [--into PREFIX]
+                                     defs and world again from the frozen originals, the extensions' rows and the edits
+                                     (--into: into scratch schemas PREFIX_defs and PREFIX_world, rolled back)
+  content check                      the frozen copies, the live tables against a rebuild, the extensions' ids and settings
+  content origin <table> <key>       the layers of one row: original, extension, edits
 
 Environment: DATABASE_URL (required), EDITOR_BIND (the page's address), EDITOR_EXPORT_FILE (written after every Apply and Undo when set),
 EDITOR_HOSTS (extra host names a request may be addressed to; localhost, 127.0.0.1 and [::1] always may).";
@@ -193,7 +200,69 @@ async fn run(command: &str, mut args: Vec<String>) -> Result<()> {
             _ => bail!("usage: data-editor images import <folder>"),
         },
         "draft" => draft(&editor, &args, &by).await?,
+        "content" => content(&editor, args).await?,
         other => bail!("unknown command {other:?}\n\n{USAGE}"),
+    }
+    Ok(())
+}
+
+async fn content(editor: &Editor, mut args: Vec<String>) -> Result<()> {
+    use data_editor::registry::Side;
+    let sub = if args.is_empty() { String::new() } else { args.remove(0) };
+    match sub.as_str() {
+        "status" => {
+            for line in editor.content_status().await? {
+                println!("{line}");
+            }
+        }
+        "hashes" => {
+            for line in editor.content_hashes(&args).await? {
+                println!("{line}");
+            }
+        }
+        "rebuild" => {
+            let into = take_value(&mut args, &["--into"])?;
+            let parts = match args.first().map(String::as_str) {
+                None | Some("all") => vec![Side::Defs, Side::World],
+                Some("defs") => vec![Side::Defs],
+                Some("world") => vec![Side::World],
+                Some(other) => bail!("content rebuild takes defs, world or all, not {other:?}"),
+            };
+            let results = match &into {
+                Some(prefix) => editor.content_rebuild_into(&parts, prefix).await?,
+                None => editor.content_rebuild(&parts).await?,
+            };
+            for r in &results {
+                let rows: i64 = r.tables.iter().map(|(_, n)| n).sum();
+                let created = if r.created { " (the schema was created from its DDL)" } else { "" };
+                println!("{}: {} tables, {rows} original rows, {} extension rows{created}", r.part, r.tables.len(), r.ext_rows);
+                print_report(&r.report);
+            }
+            if into.is_some() {
+                println!("(into scratch schemas: rolled back, nothing written)");
+            }
+        }
+        "check" => {
+            let findings = editor.content_check().await?;
+            for f in &findings {
+                println!("{f}");
+            }
+            if findings.is_empty() {
+                println!("content check: clean");
+            } else {
+                println!("content check: {} findings", findings.len());
+                std::process::exit(1);
+            }
+        }
+        "origin" => match args.as_slice() {
+            [table, key] => {
+                for line in editor.content_origin(table, key).await? {
+                    println!("{line}");
+                }
+            }
+            _ => bail!("usage: data-editor content origin <table> <key>"),
+        },
+        _ => bail!("usage: data-editor content status | hashes [schema...] | rebuild [defs|world|all] [--into PREFIX] | check | origin <table> <key>"),
     }
     Ok(())
 }

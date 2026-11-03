@@ -218,7 +218,7 @@ async fn a_fresh_load_gets_the_edits_back_and_the_differences_reported() {
     let texts: Vec<String> =
         report.problems.iter().map(|p| format!("{} {} {}: {}", p.target, p.key, p.field.clone().unwrap_or_default(), p.text)).collect();
     let has = |needle: &str| texts.iter().any(|t| t.contains(needle));
-    assert!(has("mob 10 hp: the import changed hp 100 -> 120 under your edit to 150"), "{texts:#?}");
+    assert!(has("mob 10 hp: the content under your edit changed hp 100 -> 120 (your edit sets 150)"), "{texts:#?}");
     assert!(has("mob 11 money1: the row does not exist in the new files"), "{texts:#?}");
     assert!(has("spawn_area 2/100000 : the import has a row with this key now"), "{texts:#?}");
     assert!(report.problems.iter().all(|p| p.change_set.is_some()));

@@ -12,6 +12,7 @@ use sqlx::{AssertSqlSafe, PgPool};
 const DEFS_SCHEMA: &str = include_str!("../../../../db/defs/schema.sql");
 const WORLD_SCHEMA: &str = include_str!("../../../../db/world/schema.sql");
 const EDITS_MIGRATION: &str = include_str!("../../../../db/migrations/0030_data_edits.sql");
+const CONTENT_MIGRATION: &str = include_str!("../../../../db/migrations/0031_content.sql");
 
 pub struct Db {
     pub pool: PgPool,
@@ -38,13 +39,29 @@ impl Db {
             return None;
         };
         let tag = format!("t{:08x}", rand::random::<u32>());
-        let s = Schemas { defs: format!("{tag}_defs"), world: format!("{tag}_world"), edits: format!("{tag}_edits") };
+        let s = Schemas {
+            defs: format!("{tag}_defs"),
+            world: format!("{tag}_world"),
+            edits: format!("{tag}_edits"),
+            content: format!("{tag}_content"),
+            original_defs: format!("{tag}_original_defs"),
+            original_world: format!("{tag}_original_world"),
+            client: format!("{tag}_client"),
+            ext_prefix: format!("{tag}_ext_"),
+        };
         let pool = PgPoolOptions::new().max_connections(4).connect(&url).await.unwrap();
         run(
             &pool,
             EDITS_MIGRATION
                 .replace("CREATE SCHEMA IF NOT EXISTS edits;", &format!("CREATE SCHEMA {};", s.edits))
                 .replace("edits.", &format!("{}.", s.edits)),
+        )
+        .await;
+        run(
+            &pool,
+            CONTENT_MIGRATION
+                .replace("CREATE SCHEMA IF NOT EXISTS content;", &format!("CREATE SCHEMA {};", s.content))
+                .replace("content.", &format!("{}.", s.content)),
         )
         .await;
         let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s };
@@ -153,8 +170,80 @@ impl Db {
     pub async fn drop(self) {
         self.pool.close().await;
         let admin = PgPoolOptions::new().max_connections(1).connect(&std::env::var("DATABASE_URL").unwrap()).await.unwrap();
-        for schema in [&self.s.defs, &self.s.world, &self.s.edits] {
+        let s = &self.s;
+        for schema in [&s.defs, &s.world, &s.edits, &s.content, &s.original_defs, &s.original_world, &s.client] {
             run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
+        }
+        let ext: Vec<String> = sqlx::query_scalar("SELECT nspname::text FROM pg_namespace WHERE nspname LIKE $1")
+            .bind(format!("{}%", s.ext_prefix.replace('_', "\\_")))
+            .fetch_all(&admin)
+            .await
+            .unwrap();
+        for schema in ext {
+            run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
+        }
+    }
+
+    /// A frozen `original_defs` made from the real DDL (every column NOT NULL) with two rows in `exp_defs`, recorded as imported: what a
+    /// live schema made from the DDL can be filled from.
+    pub async fn freeze_from_ddl(&self) {
+        let s = &self.s;
+        let ddl = DEFS_SCHEMA.replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {};", s.original_defs)).replace("defs.", &format!("{}.", s.original_defs));
+        run(&self.pool, format!("DROP SCHEMA IF EXISTS {} CASCADE", s.original_defs)).await;
+        run(&self.pool, ddl).await;
+        run(&self.pool, format!("INSERT INTO {}.exp_defs (rowid, level, grow, exp) VALUES (1, 1, 0, 100), (2, 2, 0, 250)", s.original_defs)).await;
+        let mut conn = self.pool.acquire().await.unwrap();
+        let mut recorded = serde_json::Map::new();
+        for table in data_editor::content::tables_of(&mut conn, &s.original_defs).await.unwrap() {
+            let (rows, md5) = data_editor::content::table_hash(&mut conn, &s.original_defs, &table).await.unwrap();
+            recorded.insert(table, json!({"rows": rows, "md5": md5}));
+        }
+        sqlx::query(AssertSqlSafe(format!("INSERT INTO {}.imports (part, source, files, tables) VALUES ('defs', 'test', '{{}}', $1)", s.content)))
+            .bind(Value::Object(recorded))
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+
+    /// An extension row: the extension (made when missing) owns `tbl` `key`, written as `action` with the whole row `row`.
+    pub async fn ext_row(&self, extension: &str, tbl: &str, key: &str, action: &str, row: Value) {
+        let c = &self.s.content;
+        run(&self.pool, format!("INSERT INTO {c}.extensions (name, version, title, description, manifest) VALUES ('{extension}', '1.0.0', 't', 'd', '{{}}') ON CONFLICT DO NOTHING")).await;
+        let seq: i64 = self.count(format!("SELECT count(*) FROM {c}.ext_rows")).await;
+        sqlx::query(AssertSqlSafe(format!("INSERT INTO {c}.ext_rows (extension, tbl, key, action, row, seq) VALUES ($1, $2, $3, $4, $5, {seq})")))
+            .bind(extension)
+            .bind(tbl)
+            .bind(key)
+            .bind(action)
+            .bind(row)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+
+    /// "Imports" what the scratch `defs` and `world` hold now: copies them as the frozen `original_defs` / `original_world` and records
+    /// the import in `content.imports` as the importers do (`part` is `defs`, `world` or `both`).
+    pub async fn freeze(&self, part: &str) {
+        let s = &self.s;
+        let parts: Vec<(&str, &String, &String)> = [("defs", &s.defs, &s.original_defs), ("world", &s.world, &s.original_world)]
+            .into_iter()
+            .filter(|(p, _, _)| part == "both" || part == *p)
+            .collect();
+        for (name, live, frozen) in parts {
+            run(&self.pool, format!("DROP SCHEMA IF EXISTS {frozen} CASCADE; CREATE SCHEMA {frozen}")).await;
+            let mut conn = self.pool.acquire().await.unwrap();
+            let mut recorded = serde_json::Map::new();
+            for table in data_editor::content::tables_of(&mut conn, live).await.unwrap() {
+                run(&self.pool, format!("CREATE TABLE {frozen}.{table} (LIKE {live}.{table} INCLUDING ALL); INSERT INTO {frozen}.{table} SELECT * FROM {live}.{table}")).await;
+                let (rows, md5) = data_editor::content::table_hash(&mut conn, frozen, &table).await.unwrap();
+                recorded.insert(table, json!({"rows": rows, "md5": md5}));
+            }
+            sqlx::query(AssertSqlSafe(format!("INSERT INTO {}.imports (part, source, files, tables) VALUES ($1, 'test', '{{}}', $2) ON CONFLICT (part) DO UPDATE SET tables = EXCLUDED.tables, rebuilt_at = NULL", s.content)))
+                .bind(name)
+                .bind(Value::Object(recorded))
+                .execute(&self.pool)
+                .await
+                .unwrap();
         }
     }
 
