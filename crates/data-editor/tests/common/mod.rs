@@ -81,7 +81,7 @@ impl Db {
         let pool = if full {
             let admin = PgPoolOptions::new().max_connections(1).connect(&url).await.unwrap();
             run(&admin, format!("CREATE SCHEMA {pub_schema}")).await;
-            let path = format!("{pub_schema}");
+            let path = pub_schema.clone();
             let pool = PgPoolOptions::new()
                 .max_connections(4)
                 .after_connect(move |conn, _| {

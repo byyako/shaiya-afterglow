@@ -197,9 +197,9 @@ async fn compute(
     if action == "add" {
         // The place must exist in the client and be free in the live table.
         if e.kind == Kind::Item {
-            ids::check_ceilings(&IdRange { major: e.key[0] / 1000, low: e.key[0] % 1000, high: e.key[0] % 1000 }, false).map_err(&fail)?;
+            ids::check_ceilings(&IdRange { major: e.key[0] / 1000, low: e.key[0] % 1000, high: e.key[0] % 1000 }, false).map_err(fail)?;
         } else if e.kind == Kind::Skill {
-            ids::check_ceilings(&IdRange { major: e.key[0], low: e.key[1], high: e.key[1] }, true).map_err(&fail)?;
+            ids::check_ceilings(&IdRange { major: e.key[0], low: e.key[1], high: e.key[1] }, true).map_err(fail)?;
         }
         if fetch_row(conn, s.of(t.side), t, &e.key).await?.is_some() {
             return Err(fail(format!("{} exists in {} already (it is not an original row, so an edit or another extension made it)", e.id, t.tbl)));
@@ -803,7 +803,7 @@ fn next_steps(plan: &Plan, wrote_items_or_skills: bool, wrote_drops: bool, clien
 
 impl Editor {
     fn read_plan(dir: &Path) -> Result<Plan> {
-        read_folder(dir).or_else(|e| refuse(e))
+        read_folder(dir).or_else(refuse)
     }
 
     async fn require_defs_import(&self, conn: &mut PgConnection) -> Result<()> {
