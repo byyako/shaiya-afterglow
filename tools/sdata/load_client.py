@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Import the client's Item.SData and Skill.SData (the encrypted originals, US patch 108) into Postgres schema `client`.
 
-usage: load_client.py [<Item.SData> <Skill.SData>]
+usage: load_client.py [--reset | --adopt] [<Item.SData> <Skill.SData>]
        (default: the two files in the folder CLIENT_ORIGINALS; unset, the client's original files in the checkout's git-ignored `reference` folder)
 
 Refuses any file that is not the shipped one (SHA-256 of the encrypted file), decrypts it (SEED constants from Parsec's
 SEEDConstants.cs, `seed_sdata.py`), parses it with the readers of `parse_item.py` / `client_sdata.py` (every byte explained), decodes the
 text as cp1252 checking it encodes back to the same bytes, then replaces the schema `client` (db/client/schema.sql) and copies both
-tables in. The schema's other tables (item_rows, skill_rows, server_only) are filled by tools/sdata/client_rows.sql, not here.
-docs/plans/done/client-patches.md sections 2 and 3.
+tables in, recording the import in content.imports in the same transaction. The schema's other tables (item_rows, skill_rows,
+server_only) are filled by tools/sdata/client_rows.sql, not here. docs/plans/done/client-patches.md sections 2 and 3.
+
+Imported once (docs/plans/ext-1-foundation.md section 3.2): run again it does nothing (the two files' SHA-256 are fixed, so other files
+cannot pass the check above anyway); --reset replaces the schema and the record. --adopt checks the two files, checks that client.items
+and client.skills restore them (client_patch.restored()), and records the import without touching the tables.
 """
 import csv
 import hashlib
@@ -22,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client_sdata
-import dbconn
+import content_import
 import parse_item
 import seed_sdata
 
@@ -42,13 +46,6 @@ PLAIN_SHA256 = {
     "Skill.SData": "a7bca7064b86438107fca7a72befad67e9d585b156cfe5befaacad12a0ebc0fa",
 }
 ENCODING = "cp1252"
-
-
-def psql(sql=None, stdin=None):
-    result = subprocess.run(dbconn.psql_cmd() + (["-c", sql] if sql else []), input=stdin, capture_output=True, text=True)
-    if result.returncode != 0:
-        sys.exit(f"psql failed: {result.stderr.strip()}")
-    return result.stdout
 
 
 def decode(raw):
@@ -102,27 +99,41 @@ def schema_columns(table):
     return [line.split()[0] for line in body.split("\n") if line.strip() and not line.strip().startswith("PRIMARY")]
 
 
-def copy_in(table, columns, rows):
+def copy_text(table, columns, rows):
     out = io.StringIO()
     csv.writer(out, lineterminator="\n").writerows(rows)
-    psql(f"\\copy client.{table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv, NULL '\\N')", stdin=out.getvalue())
+    return f"COPY client.{table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv, NULL '\\N');\n{out.getvalue()}\\."
 
 
 def main():
-    paths = sys.argv[1:] or [ORIGINALS / "Item.SData", ORIGINALS / "Skill.SData"]
-    if len(paths) != 2:
+    args = sys.argv[1:]
+    reset, adopt = "--reset" in args, "--adopt" in args
+    args = [a for a in args if a not in ("--reset", "--adopt")]
+    paths = args or [ORIGINALS / "Item.SData", ORIGINALS / "Skill.SData"]
+    if len(paths) != 2 or (reset and adopt):
         sys.exit(__doc__)
+    files = {name: hashlib.sha256(Path(path).read_bytes()).hexdigest() for name, path in zip(("Item.SData", "Skill.SData"), paths)}
+    if content_import.decide("client", files, None, reset=reset, adopt=adopt) == "skip":
+        return
     items = item_rows(original(paths[0], "Item.SData"))
     skills = skill_rows(original(paths[1], "Skill.SData"))
     item_columns = ["grp", "idx", "name", "description", *(n for n, _ in parse_item.FIX)]
     skill_columns = ["skill_id", "slot", "name", "description", *(n for n, _ in client_sdata.SKILL_FIELDS)]
     assert schema_columns("items") == item_columns, "db/client/schema.sql: client.items is not parse_item.py's layout"
     assert schema_columns("skills") == skill_columns, "db/client/schema.sql: client.skills is not client_sdata.py's layout"
-    psql("DROP SCHEMA IF EXISTS client CASCADE")
-    psql(stdin=SCHEMA.read_text())
-    copy_in("items", item_columns, items)
-    copy_in("skills", skill_columns, skills)
-    print(f"client.items: {len(items)} rows, client.skills: {len(skills)} rows")
+    source = str(Path(paths[0]).resolve().parent)
+    record = content_import.record_sql("client", "client", ["items", "skills"], source, files, adopted=adopt)
+    if adopt:
+        import client_patch
+        client_patch.check_restore(client_patch.restored())
+        print("client.items and client.skills restore both shipped files byte for byte")
+        content_import.run_psql(stdin=f"BEGIN;\n{record}COMMIT;\n")
+        print("adopted: the import is recorded (content.imports 'client'); the tables were left as they are")
+        return
+    script = ["BEGIN;", "DROP SCHEMA IF EXISTS client CASCADE;", SCHEMA.read_text(), copy_text("items", item_columns, items),
+              copy_text("skills", skill_columns, skills), record, "COMMIT;"]
+    content_import.run_psql(stdin="\n".join(script) + "\n")
+    print(f"client.items: {len(items)} rows, client.skills: {len(skills)} rows (recorded in content.imports 'client')")
 
 
 if __name__ == "__main__":

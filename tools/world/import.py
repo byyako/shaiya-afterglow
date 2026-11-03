@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Import the original server's maps and NPCs into PostgreSQL schema `world` (db/world/schema.sql).
+"""Import the original server's maps and NPCs into PostgreSQL schema `original_world`, the frozen copy (db/world/schema.sql).
 
-usage: import.py <PS_Game Data folder> [--dry-run]
+usage: import.py <PS_Game Data folder> [--dry-run] [--source TEXT] [--reset | --adopt]
 
 Reads Map.ini, Map/<id>.svmap for every map Map.ini lists, NpcQuest.SData (NPCs and quests), with the parsers in tools/svmap.py
 and tools/npcquest.py (docs/original/maps-npcs.md, docs/original/quest.md), and ItemCreate.ini (the boxes' sets,
@@ -9,10 +9,15 @@ docs/original/item-origins.md section 5.1), KillStatus.SData (the factions' kill
 section 8), Obelisk.ini (the obelisks and their guards, and the boss groups, docs/original/obelisks.md sections 1 and 11.1), mob_ai.ini with the AI files it names
 and kr_string.DB (the scripted monsters, docs/original/scripted-mobs.md section 2), Lua/*.lua (the Lua monsters,
 docs/original/instances.md section 9), GuildHouse.ini (the guild houses, docs/original/guild-house.md section 2), the item -> quest links of NpcQuest.SData and
-SequenceItemCreate.ini (docs/original/quest-drops.md sections 1.3 and 4.1). Existing `world`
-data is replaced. Runs psql as tools/dbconn.py says (the PostgreSQL container by default), like
-tools/defs/load_into_postgres.py. Everything is imported as it is; the game server applies the original's
+SequenceItemCreate.ini (docs/original/quest-drops.md sections 1.3 and 4.1). Runs psql as tools/dbconn.py says (the PostgreSQL
+container by default), like tools/defs/load_into_postgres.py. Everything is imported as it is; the game server applies the original's
 rules (which NPCs are created) when it loads the tables, so edited rows follow the same rules.
+
+The original data is imported once (docs/plans/ext-1-foundation.md section 3.2), as tools/defs/load_into_postgres.py does it: the import
+is recorded in content.imports with the SHA-256 of every file read, in the transaction that fills the frozen copy; the same files again
+do nothing; other files are refused unless --reset, which replaces the copy and rebuilds the live `world` from it, the installed
+extensions and the data editor's edits (`data-editor content rebuild world`, which ends the import). --adopt records a copy loaded
+from the same files on a box whose `world` already holds them. --source is the text recorded as where the files came from.
 """
 import csv
 import io
@@ -23,23 +28,17 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import dbconn  # noqa: E402
+import content_import  # noqa: E402
 import npcquest  # noqa: E402
 import svmap  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / "db" / "world" / "schema.sql"
+FROZEN = "original_world"
 # The server's text files and NpcQuest.SData are Korean (code page 949).
 ENCODING = "cp949"
 # Map.ini CreateType letters as CMap::LoadConfig numbers them; anything else is 0.
 CREATE_TYPES = {"S": 1, "F": 2, "P": 3, "G": 4, "R": 5, "H": 6}
-
-
-def psql(sql=None, stdin=None):
-    result = subprocess.run(dbconn.psql_cmd() + (["-c", sql] if sql else []), input=stdin, capture_output=True, text=True)
-    if result.returncode != 0:
-        sys.exit(f"psql failed: {result.stderr.strip()}")
-    return result.stdout
 
 
 def read_ini(path):
@@ -405,18 +404,48 @@ def pg_array(values):
     return "{" + ",".join(repr(v) for v in values) + "}" if values is not None else None
 
 
+COPIES = []  # the COPY statements, run in one transaction with the schema and the import record
+
+
 def copy(table, columns, rows):
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     for row in rows:
         writer.writerow(["\\N" if v is None else v for v in row])
-    psql(stdin=f"COPY world.{table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv, NULL '\\N');\n{buffer.getvalue()}\\.\n")
+    COPIES.append((table, f"COPY {FROZEN}.{table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv, NULL '\\N');\n{buffer.getvalue()}\\.\n"))
     return len(rows)
 
 
+def read_recorder(data_dir):
+    """Records the SHA-256 of every file under data_dir that is read through Path.read_bytes (all the importer's reads go through it)."""
+    seen = {}
+    plain = Path.read_bytes
+
+    def recording(self):
+        data = plain(self)
+        try:
+            seen[self.resolve().relative_to(data_dir.resolve()).as_posix()] = content_import.sha256_bytes(data)
+        except ValueError:
+            pass  # not under the Data folder
+        return data
+
+    Path.read_bytes = recording
+    return seen
+
+
 def main():
-    data_dir = Path(sys.argv[1])
-    dry_run = "--dry-run" in sys.argv
+    args = sys.argv[1:]
+    dry_run, reset, adopt = "--dry-run" in args, "--reset" in args, "--adopt" in args
+    source = None
+    if "--source" in args:
+        at = args.index("--source")
+        source = args[at + 1] if at + 1 < len(args) else sys.exit("--source needs a text")
+        del args[at:at + 2]
+    args = [a for a in args if a not in ("--dry-run", "--reset", "--adopt")]
+    if len(args) != 1 or (reset and adopt):
+        sys.exit(__doc__)
+    data_dir = Path(args[0])
+    files = read_recorder(data_dir)
     ini = read_ini(data_dir / "Map.ini")
     map_count = int(ini["BASE"]["MapCount"])
     defaults = ini.get("DEFAULT_SET_ZONE", {})
@@ -514,8 +543,8 @@ def main():
     if dry_run:
         return
 
-    psql("DROP SCHEMA IF EXISTS world CASCADE")
-    psql(stdin=SCHEMA.read_text())
+    if content_import.decide("world", files, "world", reset=reset, adopt=adopt) == "skip":
+        return
     copy("maps", ["id", "size", "map_type", "create_type", "war_type", "blocked", "rebirth_map", "rebirth_pos", "rebirth_light_map", "rebirth_light_pos",
                   "rebirth_fury_map", "rebirth_fury_pos", "weather_state", "weather_rate", "weather_power", "weather_delay",
                   "weather_none_delay", "create_time", "create_min_user", "enter_max_user", "expire_time", "source_file"], maps)
@@ -551,21 +580,17 @@ def main():
     copy("guild_house", ["id", "buy_money", "keep_etin", *GUILD_HOUSE_RATES], [house_row])
     copy("guild_house_npcs", ["npc_key", "keep_etin", "upgrade_etin"], house_npc_rows)
     copy("guild_house_levels", ["country", "kind", "level", "npc_type_id"], house_level_rows)
-    for table in ("map_npcs", "mob_areas"):
-        psql(f"SELECT setval(pg_get_serial_sequence('world.{table}', 'id'), (SELECT coalesce(max(id), 1) FROM world.{table}))")
-    print(psql("SELECT (SELECT count(*) FROM world.maps) maps, (SELECT count(*) FROM world.map_npcs) map_npcs, "
-               "(SELECT count(*) FROM world.npcs) npcs, (SELECT count(*) FROM world.mob_areas) mob_areas, "
-               "(SELECT count(*) FROM world.quests) quests"))
-    apply_edits()
-
-
-def apply_edits():
-    """The operator's edits go back into the fresh `world` (docs/plans/done/data-editing.md section 3)."""
-    editor = ROOT / "target/release/data-editor"
-    if not editor.exists():
-        print("data-editor is not built: run 'cargo build --release -p data-editor' and then 'target/release/data-editor apply' to write the edits back")
-        return
-    subprocess.run([str(editor), "apply"], cwd=ROOT, check=True)
+    script = ["BEGIN;", f"DROP SCHEMA IF EXISTS {FROZEN} CASCADE;",
+              SCHEMA.read_text().replace("CREATE SCHEMA world;", f"CREATE SCHEMA {FROZEN};").replace("world.", f"{FROZEN}.")]
+    script += [text for _, text in COPIES]
+    script.append(content_import.record_sql("world", FROZEN, re.findall(r"CREATE TABLE world\.(\w+)", SCHEMA.read_text()), source or str(data_dir), files, adopted=adopt))
+    script.append("COMMIT;")
+    content_import.run_psql(stdin="\n".join(script) + "\n")
+    print(f"{FROZEN}: the frozen copy is loaded and recorded (content.imports 'world'; {len(files)} files read)")
+    if adopt:
+        print("adopted: world was left as it is (compare it with the frozen copy: docs/plans/ext-1-foundation.md section 9 step 4)")
+    else:
+        content_import.rebuild("world")
 
 
 if __name__ == "__main__":

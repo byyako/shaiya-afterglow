@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Compare the loaded Postgres `defs` tables with the original SQL Server database.
+"""Compare the frozen Postgres copy of the definitions (`original_defs`) with the original SQL Server database.
 
-usage: verify.py <schema.sql> <PS_GameDefs.columns.txt> [--counts-only]
+usage: verify.py <schema.sql> <PS_GameDefs.columns.txt> [--schema original_defs] [--counts-only]
+
+The live `defs` tables differ from the original database on purpose (extensions, the data editor's edits); `data-editor content check`
+accounts for every difference (docs/plans/ext-1-foundation.md section 3.4). --schema names another schema to compare.
 
 With --counts-only (the import that read the backup directly, with no SQL Server to compare against) it only checks each table's
 row count against the count recorded in the column list. Otherwise, for every table it compares the row count, the sum of each numeric column, and the total byte
@@ -35,21 +38,27 @@ def run_mssql(sql):
 
 
 def main():
-    schema_text = open(sys.argv[1]).read()
+    argv = sys.argv[1:]
+    schema = "original_defs"
+    if "--schema" in argv:
+        at = argv.index("--schema")
+        schema = argv[at + 1] if at + 1 < len(argv) else sys.exit("--schema needs a name")
+        del argv[at:at + 2]
+    schema_text = open(argv[0]).read()
     names = {}  # lowercased -> original-case names from the SQL Server column list
-    for line in open(sys.argv[2]):
+    for line in open(argv[1]):
         parts = line.split("|")
         if len(parts) >= 8:
             names[(parts[0], parts[2].lower())] = parts[2]
     problems = 0
-    if "--counts-only" in sys.argv:
+    if "--counts-only" in argv:
         expected = {}
-        for line in open(sys.argv[2]):
+        for line in open(argv[1]):
             parts = line.rstrip("\n").split("|")
             if len(parts) >= 8:
                 expected[parts[0]] = parts[7]
         for pg in table_columns(schema_text):
-            have = run_pg(f"SELECT count(*) FROM defs.{pg}")
+            have = run_pg(f"SELECT count(*) FROM {schema}.{pg}")
             want = expected.get(MSSQL_NAME[pg])
             status = "OK" if have == want else "MISMATCH"
             print(f"{pg:16s} {have:>6s} rows (expected {want})  {status}")
@@ -73,7 +82,7 @@ def main():
                 ms_parts.append(f"SUM(CAST([{original}] AS bigint))")
                 labels.append(col)
         # one query per side, one column per output line to keep parsing simple
-        pg_row = run_pg(f"SELECT {', '.join(pg_parts)} FROM defs.{pg}").split("|")
+        pg_row = run_pg(f"SELECT {', '.join(pg_parts)} FROM {schema}.{pg}").split("|")
         ms_row = run_mssql(f"SELECT {', '.join(ms_parts)} FROM [{ms}]").split("|")
         bad = [(l, a, b) for l, a, b in zip(labels, pg_row, ms_row) if a != b]
         status = "OK" if not bad and len(pg_row) == len(ms_row) == len(labels) else "MISMATCH"
