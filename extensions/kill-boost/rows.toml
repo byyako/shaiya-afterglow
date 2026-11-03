@@ -1,0 +1,48 @@
+# Skill 200 levels 1 to 3 (empty "??" in both copies): copies of the Mini Sun EXP Stone's buff 250/1 (a kind-4 buff, detail 82)
+# without its ability, one hour, kept on death (fixrange 1: keeptime in hours, counting down while offline). They do nothing by
+# themselves: the multipliers are the setting kill_boost_skills (extension.toml).
+
+[[skill]]
+id = "200/1"
+copy = { from = "250/1" }
+set = { skillname = "Kill Boost", keeptime = 1, fixrange = 1, abilitytype1 = 0, abilityvalue1 = 0, abilitytype2 = 0, abilityvalue2 = 0, abilitytype3 = 0, abilityvalue3 = 0 }
+client = { name = "Kill Boost", look = "250/1", description = "Player kills count double for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost buff level 1, icon and look of the Mini Sun EXP Stone buff 250/1"
+
+[[skill]]
+id = "200/2"
+copy = { from = "250/1" }
+set = { skillname = "Kill Boost Lv2", keeptime = 1, fixrange = 1, abilitytype1 = 0, abilityvalue1 = 0, abilitytype2 = 0, abilityvalue2 = 0, abilitytype3 = 0, abilityvalue3 = 0 }
+client = { name = "Kill Boost Lv2", look = "250/1", description = "Player kills count 5 times for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost buff level 2, icon and look of the Mini Sun EXP Stone buff 250/1"
+
+[[skill]]
+id = "200/3"
+copy = { from = "250/1" }
+set = { skillname = "Kill Boost Lv3", keeptime = 1, fixrange = 1, abilitytype1 = 0, abilityvalue1 = 0, abilitytype2 = 0, abilityvalue2 = 0, abilitytype3 = 0, abilityvalue3 = 0 }
+client = { name = "Kill Boost Lv3", look = "250/1", description = "Player kills count 10 times for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost buff level 3, icon and look of the Mini Sun EXP Stone buff 250/1"
+
+# Items 100/212 to 214 (the empty "???177" in both copies): the Mini Sun EXP Stone 100/108's trade and use columns; range = the skill
+# id, attacktime = its level.
+
+[[item]]
+id = "100/212"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "grade", "drop", "server", "count"] }
+set = { itemname = "Kill Boost Stone", range = 200, attacktime = 1 }
+client = { name = "Kill Boost Stone", look = "100/108", description = "Player kills count double for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost stone level 1, looks like the Mini Sun EXP Stone 100/108"
+
+[[item]]
+id = "100/213"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "grade", "drop", "server", "count"] }
+set = { itemname = "Kill Boost Stone Lv2", range = 200, attacktime = 2 }
+client = { name = "Kill Boost Stone Lv2", look = "100/108", description = "Player kills count 5 times for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost stone level 2, looks like the Mini Sun EXP Stone 100/108"
+
+[[item]]
+id = "100/214"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "grade", "drop", "server", "count"] }
+set = { itemname = "Kill Boost Stone Lv3", range = 200, attacktime = 3 }
+client = { name = "Kill Boost Stone Lv3", look = "100/108", description = "Player kills count 10 times for 1 hour. The effect remains after the character dies, and the hour keeps running while logged out." }
+note = "kill-boost stone level 3, looks like the Mini Sun EXP Stone 100/108"
