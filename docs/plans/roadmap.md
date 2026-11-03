@@ -1,8 +1,15 @@
 # Roadmap
 
-**The open-source release is done** (`docs/plans/release.md`, decided 2026-10-31; the public repository `byyako/shaiya-afterglow`, tag `v0.1.0`): a public repository that anyone with the
+**The open-source release is done** (`docs/plans/release.md`, decided 2026-10-31; the public repository `byyako/shaiya-afterglow`, first tag `v0.1.0`): a public repository that anyone with the
 original EP4.5 server files can clone and run, defaulting to the original's behaviour (fixes on, gameplay changes as settings with the
 original as default, additions off), with a fresh history.
+
+**Version 0.2.0 (2026-11-02) made the install short** (`docs/plans/install.md`, decided with the maintainer the same day): the setup reads
+the game definitions straight out of the original backup, so SQL Server is only a fallback (`tools/setup.sh --sqlserver`);
+`tools/setup.sh` writes the `.env`, builds or (without Rust) downloads the release's binaries, imports, and offers the first account
+and the start; releases are built by `.github/workflows/release.yml` and fetched by `tools/fetch-release.sh`; the setup's names follow
+the project (`shaiya-afterglow-*`, `SHAIYA_PASSWORD`). Drills covered the no-Rust path, the direct reader and `--sqlserver`. **Open:** a
+first run on a machine that has never seen the project (postponed by the maintainer), and a real client against a fresh install.
 
 **There is no player alpha (the maintainer, 2026-11-02).** A hosted alpha (a VPS, open registration, a web API, a tester client) was
 planned for after the release; instead the server files are released and the community tries them on their own servers. What people
@@ -21,6 +28,18 @@ work items are kept under "Not scheduled" in case a part of them is wanted later
 | R4. Repository review and organisation: every file checked, `docs/` in folders, links fixed, personal details and workflow notes out | **built** (`docs/plans/release.md` R4: the decisions, the table of every file, the move map, and what was built) | R1 to R3 |
 | R5. LICENSE, CONTRIBUTING, SECURITY, changelog, 0.1.0, secret scan | **built** (`docs/plans/release.md` R5) | R4 |
 | R6. The release cut: public repository, one commit, tag, push, docs site link and deploy | **built** (`docs/plans/release.md` R6; `byyako/shaiya-afterglow`, tag `v0.1.0`) | R5 |
+
+## The install (`docs/plans/install.md`): built
+
+| step | state |
+|---|---|
+| I1. The setup's names follow the project; the old variable names still read | **built** |
+| I2, I3. Definitions from an export folder, or read straight from the backup (`tools/defs/read_bak.py`, identical to the SQL Server export) | **built** |
+| I4. Releases: the Linux binaries on each `v*` tag, `tools/fetch-release.sh`, the release text from the changelog | **built**, v0.2.0 released |
+| I5, I6. One command (`tools/setup.sh`) and the README's quick start | **built** |
+| I7. The client patch takes the client folder | **built** |
+| A first run on a fresh machine; a real client against a fresh install | **open** (the maintainer postponed the first) |
+| Windows hosts (WSL2), a published Docker image | not planned |
 
 ## Testing
 
