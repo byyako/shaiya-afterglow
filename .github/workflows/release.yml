@@ -32,6 +32,12 @@ jobs:
           for bin in login-server game-server servers create_account console data-editor mall; do
             install -m 755 "target/release/$bin" "$name/"
           done
+          # what a machine given only the tarball needs: the bundled extensions and the sample of every game setting
+          cp -r extensions "$name/extensions"
+          if [ -f config/game.toml.example ]; then   # exists from the settings work of chunk 1 (part B)
+            mkdir "$name/config"
+            cp config/game.toml.example "$name/config/"
+          fi
           tar -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
       - name: release text

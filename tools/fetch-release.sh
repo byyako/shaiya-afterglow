@@ -1,7 +1,9 @@
 #!/bin/bash
 # Downloads the Linux binaries of a release into target/release/, so that nothing has to be built:
-#   tools/fetch-release.sh [tag]        # no tag: the latest release
-# The binaries are the ones tools/setup.sh and the run scripts look for. The checksum of the download is checked.
+#   tools/fetch-release.sh [--keep DIR] [tag]        # no tag: the latest release
+# The binaries are the ones tools/setup.sh and the run scripts look for; only the tarball's top-level files go into target/release/
+# (a checkout has its extensions/ and config/ folders already). --keep DIR unpacks the whole tarball into DIR as well (its extensions/
+# and config/game.toml.example, for a machine that has no checkout). The checksum of the download is checked.
 # The release is built by .github/workflows/release.yml when a version tag is pushed.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,6 +13,11 @@ for tool in curl tar sha256sum python3; do
 done
 [ "$(uname -m)" = x86_64 ] && [ "$(uname -s)" = Linux ] || { echo "the releases are built for Linux on x86-64 only; build from source (cargo build --release --workspace)" >&2; exit 1; }
 
+keep=""
+if [ "${1:-}" = "--keep" ]; then
+    [ -n "${2:-}" ] || { echo "usage: $0 [--keep DIR] [tag]" >&2; exit 2; }
+    keep="$2"; shift 2
+fi
 tag="${1:-}"
 if [ -z "$tag" ]; then
     api="https://api.github.com/repos/$repo/releases/latest"
@@ -31,6 +38,17 @@ curl -fsSL -o "$work/$asset.sha256" "$base/$asset.sha256"
 (cd "$work" && sha256sum -c "$asset.sha256")
 tar -xzf "$work/$asset" -C "$work"
 mkdir -p "$root/target/release"
-install -m 755 "$work/shaiya-afterglow-$tag-linux-x86_64"/* "$root/target/release/"
-echo "installed into target/release/: $(ls "$work/shaiya-afterglow-$tag-linux-x86_64" | tr '\n' ' ')"
+unpacked="$work/shaiya-afterglow-$tag-linux-x86_64"
+installed=""
+for file in "$unpacked"/*; do
+    [ -f "$file" ] || continue          # the tarball's folders (extensions/, config/) are not binaries
+    install -m 755 "$file" "$root/target/release/"
+    installed="$installed $(basename "$file")"
+done
+echo "installed into target/release/:$installed"
+if [ -n "$keep" ]; then
+    mkdir -p "$keep"
+    cp -r "$unpacked"/. "$keep"/
+    echo "the whole tarball is in $keep (extensions/, config/game.toml.example when the release has them)"
+fi
 echo "note: the release matches its own source; if you cloned a different commit, run 'git checkout $tag' so the database migrations agree"

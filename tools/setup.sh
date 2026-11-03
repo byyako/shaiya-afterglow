@@ -7,26 +7,39 @@
 # - reads the game definitions: straight from the PS_GameDefs backup (tools/defs/read_bak.py, no SQL Server), or from a folder of
 #   already exported tables (the first argument holds items.psv and the others), or, with --sqlserver, through a SQL Server
 #   container (compose profile `import`; the way when the direct reader does not understand your backup);
-# - loads and checks them, applies the operator's edits (tools/defs/additions.sh, without --with-additions) and imports the world;
+# - imports the original data ONCE into frozen copies (original_defs, original_world), checks the definitions, and builds the live `defs`
+#   and `world` tables from them, the installed extensions and the data editor's edits (data-editor content rebuild);
+# - installs the extensions named with --extension, and writes config/game.toml when it is missing;
 # - on a terminal, offers to create the first account and the game server's entry and to start both servers.
 # Options: --sqlserver  use the SQL Server container for the definitions
 #          --no-account  do not offer the account, server entry and start at the end
-# Stops at the first failure and names the step. Safe to run again: the `defs` and `world` schemas are replaced.
+#          --reset  import the original files again (corrected files): replaces the frozen copies and rebuilds `defs` and `world` from
+#                   them, the extensions and the edits (stop the game server first)
+#          --extension <folder>  install the extension in that folder after the import (repeatable); skipped when that version is installed
+# Stops at the first failure and names the step. Safe to run again: what is imported from the same files is skipped ("already imported,
+# nothing to do"), other files are refused until --reset, an extension already installed is skipped, config/game.toml is kept.
+# docs/plans/ext-1-foundation.md sections 3.2 and 7.2.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-usage() { echo "usage: $0 [--sqlserver] [--no-account] <PSM_Data folder | exported definitions folder> <PS_Game/Data folder>" >&2; exit 2; }
-use_sqlserver=0 offer_account=1 args=()
-for arg in "$@"; do
-    case "$arg" in
+usage() { echo "usage: $0 [--sqlserver] [--no-account] [--reset] [--extension <folder>]... <PSM_Data folder | exported definitions folder> <PS_Game/Data folder>" >&2; exit 2; }
+use_sqlserver=0 offer_account=1 reset=0 args=() extensions=()
+while [ $# -gt 0 ]; do
+    case "$1" in
         --sqlserver) use_sqlserver=1 ;;
         --no-account) offer_account=0 ;;
+        --reset) reset=1 ;;
+        --extension) [ $# -ge 2 ] || usage; extensions+=("$2"); shift ;;
         -*) usage ;;
-        *) args+=("$arg") ;;
+        *) args+=("$1") ;;
     esac
+    shift
 done
 [ ${#args[@]} -eq 2 ] || usage
+for folder in "${extensions[@]+"${extensions[@]}"}"; do
+    [ -f "$folder/extension.toml" ] || { echo "$folder: not an extension folder (no extension.toml)" >&2; exit 2; }
+done
 
 current="checking the prerequisites"
 trap 'echo >&2; echo "setup failed at: $current" >&2; echo "(run it again after fixing the cause; finished steps are repeated safely)" >&2' ERR
@@ -99,9 +112,9 @@ if [ "$use_sqlserver" = 1 ]; then
     [ -n "${MSSQL_SA_PASSWORD:-}" ] || fail ".env: MSSQL_SA_PASSWORD is not set (needed for --sqlserver)"
     export PSM_DATA_DIR="$first"
 fi
-if [ "$source_kind" = export ]; then how="the exported tables"
-elif [ "$use_sqlserver" = 1 ]; then how="the backup, through SQL Server"
-else how="the backup, read directly"; fi
+if [ "$source_kind" = export ]; then how="the exported tables"; source_text="export folder $first"
+elif [ "$use_sqlserver" = 1 ]; then how="the backup, through SQL Server"; source_text="PS_GameDefs backup $(sha256sum "$first/PS_GameDefs" | cut -d' ' -f1), through SQL Server"
+else how="the backup, read directly"; source_text="PS_GameDefs backup $(sha256sum "$first/PS_GameDefs" | cut -d' ' -f1), read directly (tools/defs/read_bak.py)"; fi
 echo "ok (PostgreSQL container $PG_CONTAINER; definitions from $how)"
 
 # --- PostgreSQL --------------------------------------------------------------------------------------------------------------
@@ -166,26 +179,50 @@ if [ "$use_sqlserver" = 1 ]; then
     tools/defs/export_from_mssql.sh
 fi
 
-step "loading the game definitions (tools/defs/load_into_postgres.py)"
-python3 tools/defs/load_into_postgres.py "$export_dir" db/defs/schema.sql
+reset_flag=()
+if [ "$reset" = 1 ]; then
+    reset_flag=(--reset)
+    echo "--reset: the original files are imported again; stop the game server first (tools/game-server.sh stop)"
+fi
+# When the importer wrote a new import record (rather than finding the same files imported), the checks run.
+import_stamp() { psql_cmd -At -c "SELECT coalesce((SELECT imported_at::text FROM content.imports WHERE part = '$1'), '')"; }
 
-if [ "$use_sqlserver" = 1 ]; then
-    step "verifying the game definitions against SQL Server (tools/defs/verify.py)"
-    python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt
-else
-    step "checking the row counts of the game definitions (tools/defs/verify.py --counts-only)"
-    python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt --counts-only
+step "importing the game definitions once (tools/defs/load_into_postgres.py)"
+stamp="$(import_stamp defs)"
+python3 tools/defs/load_into_postgres.py "$export_dir" db/defs/schema.sql --source "$source_text" "${reset_flag[@]+"${reset_flag[@]}"}"
+if [ "$(import_stamp defs)" != "$stamp" ]; then
+    if [ "$use_sqlserver" = 1 ]; then
+        step "verifying the game definitions against SQL Server (tools/defs/verify.py)"
+        python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt
+    else
+        step "checking the row counts of the game definitions (tools/defs/verify.py --counts-only)"
+        python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt --counts-only
+    fi
 fi
 
-step "applying the operator's edits (tools/defs/additions.sh)"
-tools/defs/additions.sh
-
-step "importing the world (tools/world/import.py)"
-python3 tools/world/import.py "$game_data"
+step "importing the world once (tools/world/import.py)"
+python3 tools/world/import.py "$game_data" --source "$game_data" "${reset_flag[@]+"${reset_flag[@]}"}"
 
 if [ "$use_sqlserver" = 1 ]; then
     step "stopping SQL Server (docker compose stop mssql)"
     docker compose stop mssql
+fi
+
+for folder in "${extensions[@]+"${extensions[@]}"}"; do
+    step "installing the extension $folder (data-editor ext install)"
+    target/release/data-editor ext install --skip-installed "$folder"
+done
+
+# config/game.toml: the game server's settings (docs/server/settings.md); written once, never overwritten
+if [ ! -f config/game.toml ]; then
+    mkdir -p config
+    cat > config/game.toml <<'TOML'
+# The game server's settings (docs/server/settings.md). With nothing set here, the server behaves as the original.
+# Every setting with its default and meaning: config/game.toml.example (or: target/release/game-server config --example).
+# What is in force and where each value comes from: target/release/game-server config.
+# Changes take effect at the next start: tools/game-server.sh restart.
+TOML
+    echo "wrote config/game.toml (settings are comments in it until you set them)"
 fi
 
 trap - ERR
@@ -207,6 +244,21 @@ Left to do:
 
 Then point the client at the server: python3 tools/patch_client_ip.py <Client folder> ${lan_ip:-<server ip>}
 EOF
+    bundled_extensions
+}
+
+# One line per extension folder of this checkout that is not installed yet, with its manifest's title and description.
+bundled_extensions() {
+    local folder name title description first=1
+    for folder in extensions/*/; do
+        [ -f "$folder/extension.toml" ] || continue
+        name="$(sed -n 's/^name = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
+        if target/release/data-editor ext list 2> /dev/null | grep -q "^$name "; then continue; fi
+        title="$(sed -n 's/^title = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
+        description="$(sed -n 's/^description = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
+        if [ "$first" = 1 ]; then echo; echo "Extensions you can install (each then needs a restart of the game server):"; echo; first=0; fi
+        echo "  target/release/data-editor ext install ${folder%/}   # $title: $description"
+    done
 }
 
 if [ "$offer_account" = 0 ] || [ ! -t 0 ]; then
