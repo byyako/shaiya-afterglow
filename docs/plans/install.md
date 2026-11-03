@@ -26,6 +26,8 @@ reading and the fewest places to go wrong.
 | I6 | **A short README:** a ten-line quick start at the top, the long manual below it; the site's Run page the same | built 2026-11-02 |
 | I7 | **The client:** a one-line client patch with a clearer result message, and a check that the patched `game.exe` is the right build | |
 
+Tested 2026-11-02 in drills with their own container names and ports: the no-Rust path (the release binaries downloaded by `setup.sh`), the direct reader, and `--sqlserver` (19 minutes 38 seconds, verified field by field against SQL Server; its export is identical to the direct reader's).
+
 I2 and I3 produce the same folder (`data/defs-export/`) from different sources, so `setup.sh` can take any of three inputs: the
 backups (SQL Server container), the backups (direct reader, once it passes its check) or an export folder.
 
