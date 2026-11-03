@@ -27,7 +27,7 @@ built 2010-04-26, MSVC 7.1, not packed, no PDB). Nothing was executed. The clien
 Two options. Neither modifies the original files.
 
 1. **Patched copy (needs no network setup).**
-   `python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe <server ip>` writes a copy whose region-6 address is your server. The tool checks the
+   `python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_local.exe <server ip>` (or `python3 tools/patch_client_ip.py <Client folder> <server ip>`, which names the copy `game_local.exe` itself) writes a copy whose region-6 address is your server. The tool checks the
    input hash and the original bytes first and changes 10 bytes. Run the copy with the same arguments and files as the original.
 2. **Network redirect.** Make `174.142.118.105:30800` reach the server (router/firewall DNAT, or a port proxy on the client machine). No client change.
 
