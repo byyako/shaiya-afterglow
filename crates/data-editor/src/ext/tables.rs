@@ -11,12 +11,15 @@ pub struct ExtTable {
     pub table: &'static str,
     /// The key columns, in the order of the key text (`100212`, `200/1`, `2133/4`).
     pub key_cols: &'static [&'static str],
+    /// Columns an entry's `set` may not name and a default `copy` does not take: the key's columns (an item's `type` and `typeid` spell
+    /// its `itemid`) and `rowid`.
+    pub locked_cols: &'static [&'static str],
 }
 
 pub static TABLES: &[ExtTable] = &[
-    ExtTable { tbl: "defs.items", side: Side::Defs, table: "items", key_cols: &["itemid"] },
-    ExtTable { tbl: "defs.skills", side: Side::Defs, table: "skills", key_cols: &["skillid", "skilllevel"] },
-    ExtTable { tbl: "defs.mob_items", side: Side::Defs, table: "mob_items", key_cols: &["mobid", "itemorder"] },
+    ExtTable { tbl: "defs.items", side: Side::Defs, table: "items", key_cols: &["itemid"], locked_cols: &["rowid", "itemid", "type", "typeid"] },
+    ExtTable { tbl: "defs.skills", side: Side::Defs, table: "skills", key_cols: &["skillid", "skilllevel"], locked_cols: &["rowid", "skillid", "skilllevel"] },
+    ExtTable { tbl: "defs.mob_items", side: Side::Defs, table: "mob_items", key_cols: &["mobid", "itemorder"], locked_cols: &["rowid", "mobid", "itemorder"] },
 ];
 
 /// The extendable table named `defs.items` (or just `items`).

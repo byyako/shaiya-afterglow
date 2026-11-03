@@ -167,6 +167,30 @@ impl Config {
     }
 }
 
+/// Whether `name` is a game setting (an old `GAME_` variable's name without the prefix, in lowercase: `trade_chat_min_level`) and `value`
+/// passes the parser the server reads it with. Used by `data-editor ext` for an extension's setting defaults
+/// (`docs/plans/ext-1-foundation.md` section 5.7); part B turns the match into the registry of settings (section 7.3). The start-up
+/// variables (`DATABASE_URL`, `GAME_BIND`, `GAME_SERVER_ID`, `GAME_CONFIG`) are not game settings.
+pub fn check_setting(name: &str, value: &str) -> Result<()> {
+    let number = |text: &str| -> Result<()> { text.trim().parse::<u64>().map(drop).with_context(|| format!("{text:?} is not a whole number")) };
+    match name {
+        "check_ip" | "kill_count" | "smooth_chase" | "move_check" | "item_mall" | "log" | "chat_log" | "mini_game" => Ok(()),
+        "heartbeat_secs" | "handshake_secs" | "idle_secs" | "delete_delay_secs" | "logout_secs" | "linger_secs" | "kick_notice_secs"
+        | "town_secs" | "handshake_wait_secs" | "trade_chat_cooldown_secs" | "ranking_update_delay_secs" | "write_timeout_secs"
+        | "db_acquire_secs" | "trade_chat_min_level" | "guild_party_size" | "log_days" | "max_connections" | "max_per_ip"
+        | "connects_per_minute" | "outbox_limit" | "chat_per_sec" | "chat_burst" | "packets_per_sec" | "db_pool" => number(value),
+        "cross_faction_trade_maps" | "market_maps" => maps(value).map(drop),
+        "ranking_times" => ranking_times(value).map(drop),
+        "exp_rate" => exp_rate(value).map(drop),
+        "kill_rate" => kill_rate(value).map(drop),
+        "kill_boost_skills" => kill_boosts(value).map(drop),
+        "slot_payout_percent" => slot_payout_percent(value).map(drop),
+        "card_win_chances" => card_win_chances(value).map(drop),
+        "console_level" => console_level(value).map(drop),
+        other => anyhow::bail!("{other:?} is not a game setting (docs/server/settings.md)"),
+    }
+}
+
 /// The experience factor: a number of 0 or more (`/exp2xenable` refuses less than 0).
 fn exp_rate(text: &str) -> Result<f64> {
     let rate: f64 = text.trim().parse()?;
@@ -271,6 +295,22 @@ mod tests {
         assert!(config.market_maps.is_empty(), "empty: a shop on every map");
         assert!(config.kill_boost_skills.is_empty());
         assert!(Config::from_lookup(|_| None).is_err(), "DATABASE_URL is required");
+    }
+
+    #[test]
+    fn check_setting_takes_the_servers_own_parsers() {
+        assert!(check_setting("kill_boost_skills", "200/1:2,200/2:5,200/3:10").is_ok());
+        assert!(check_setting("kill_boost_skills", "200/1:101").is_err() && check_setting("kill_boost_skills", "x").is_err());
+        assert!(check_setting("market_maps", "35,36,42").is_ok() && check_setting("market_maps", "35,x").is_err());
+        assert!(check_setting("guild_party_size", "2").is_ok() && check_setting("guild_party_size", "two").is_err());
+        assert!(check_setting("slot_payout_percent", "220").is_ok() && check_setting("slot_payout_percent", "0").is_err());
+        assert!(check_setting("card_win_chances", "420,200,130,100,80").is_ok() && check_setting("card_win_chances", "1,2").is_err());
+        assert!(check_setting("mini_game", "true").is_ok() && check_setting("exp_rate", "-1").is_err());
+        assert!(check_setting("trade_chat_min_level", "10").is_ok() && check_setting("ranking_times", "(1,14,1)").is_ok());
+        for start_up in ["database_url", "bind", "server_id", "config", "kill_boost", ""] {
+            let message = format!("{:#}", check_setting(start_up, "1").unwrap_err());
+            assert!(message.contains("not a game setting"), "{start_up:?}: {message}");
+        }
     }
 
     #[test]

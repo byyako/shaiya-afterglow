@@ -32,6 +32,14 @@ const USAGE: &str = "usage: data-editor <command>
                                      (--into: into scratch schemas PREFIX_defs and PREFIX_world, rolled back)
   content check                      the frozen copies, the live tables against a rebuild, the extensions' ids and settings
   content origin <table> <key>       the layers of one row: original, extension, edits
+  ext list | show <name>             the installed extensions; one extension's ids, rows, client rows and settings
+  ext check <folder>                 everything an install checks, writing nothing
+  ext install [--skip-installed] <folder>
+  ext upgrade <folder>               a folder with a higher version of an installed extension
+  ext remove <name> [--force [--yes]]
+                                     puts every row back to the original; refuses while players hold its items
+                                     or other data points at its rows (--force deletes the held items after a confirmation)
+  ext enable <name> | disable <name> its settings defaults count, or stop counting (its rows stay)
 
 Environment: DATABASE_URL (required), EDITOR_BIND (the page's address), EDITOR_EXPORT_FILE (written after every Apply and Undo when set),
 EDITOR_HOSTS (extra host names a request may be addressed to; localhost, 127.0.0.1 and [::1] always may).";
@@ -201,7 +209,49 @@ async fn run(command: &str, mut args: Vec<String>) -> Result<()> {
         },
         "draft" => draft(&editor, &args, &by).await?,
         "content" => content(&editor, args).await?,
+        "ext" => ext(&editor, args).await?,
         other => bail!("unknown command {other:?}\n\n{USAGE}"),
+    }
+    Ok(())
+}
+
+async fn ext(editor: &Editor, mut args: Vec<String>) -> Result<()> {
+    let sub = if args.is_empty() { String::new() } else { args.remove(0) };
+    let print = |lines: Vec<String>| lines.iter().for_each(|l| println!("{l}"));
+    let folder = |args: &[String]| -> Result<PathBuf> { Ok(PathBuf::from(args.first().context("this needs the extension's folder")?)) };
+    match sub.as_str() {
+        "list" => print(editor.ext_list().await?),
+        "show" => print(editor.ext_show(args.first().context("ext show needs a name")?).await?),
+        "check" => print(editor.ext_check(&folder(&args)?).await?),
+        "install" => {
+            let skip = take_flag(&mut args, "--skip-installed");
+            print(editor.ext_install(&folder(&args)?, skip).await?)
+        }
+        "upgrade" => print(editor.ext_upgrade(&folder(&args)?).await?),
+        "remove" => {
+            let force = take_flag(&mut args, "--force");
+            let yes = take_flag(&mut args, "--yes");
+            let name = args.first().context("ext remove needs a name")?.clone();
+            let confirm = |held: &[String]| -> Result<bool> {
+                println!("--force deletes these (logged):");
+                held.iter().take(40).for_each(|l| println!("  {l}"));
+                if held.len() > 40 {
+                    println!("  … and {} more", held.len() - 40);
+                }
+                if yes {
+                    return Ok(true);
+                }
+                print!("type the extension's name ({name}) to confirm: ");
+                std::io::Write::flush(&mut std::io::stdout())?;
+                let mut line = String::new();
+                std::io::stdin().read_line(&mut line)?;
+                Ok(line.trim() == name)
+            };
+            print(editor.ext_remove(&name, force, confirm).await?)
+        }
+        "enable" => print(editor.ext_set_enabled(args.first().context("ext enable needs a name")?, true).await?),
+        "disable" => print(editor.ext_set_enabled(args.first().context("ext disable needs a name")?, false).await?),
+        _ => bail!("usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"),
     }
     Ok(())
 }

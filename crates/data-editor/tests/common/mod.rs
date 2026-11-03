@@ -18,6 +18,8 @@ pub struct Db {
     pub pool: PgPool,
     pub editor: Editor,
     pub s: Schemas,
+    /// The schema of the game's own tables, with [`Db::create_full`].
+    pub pub_schema: Option<String>,
 }
 
 /// What a fresh load of the original files looks like in a test.
@@ -27,12 +29,38 @@ pub struct Files {
     pub changed: bool,
 }
 
+/// Drops the NOT NULL of every column outside the primary key of the tables of a schema, so that a test inserts the few columns it cares about.
+pub async fn relax(pool: &PgPool, schema: &str) {
+    run(
+        pool,
+        format!(
+            "DO $$ DECLARE r record; BEGIN
+               FOR r IN SELECT n.nspname, c.relname, a.attname FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = '{schema}' AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped AND a.attnotnull
+                          AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY (i.indkey))
+               LOOP EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN %I DROP NOT NULL', r.nspname, r.relname, r.attname); END LOOP;
+             END $$"
+        ),
+    )
+    .await;
+}
+
 pub async fn run(pool: &PgPool, text: String) {
     sqlx::raw_sql(AssertSqlSafe(text)).execute(pool).await.unwrap();
 }
 
 impl Db {
     pub async fn create() -> Option<Self> {
+        Self::create_with(false).await
+    }
+
+    /// As [`Db::create`], and the editor's connections also see a throwaway copy of the game's own tables (`character_items` …), made by
+    /// running every migration in a schema of its own: what the holder and reference checks of `ext remove` read.
+    pub async fn create_full() -> Option<Self> {
+        Self::create_with(true).await
+    }
+
+    async fn create_with(full: bool) -> Option<Self> {
         dotenvy::dotenv().ok();
         let Ok(url) = std::env::var("DATABASE_URL") else {
             eprintln!("DATABASE_URL not set: skipping the PostgreSQL tests");
@@ -49,7 +77,29 @@ impl Db {
             client: format!("{tag}_client"),
             ext_prefix: format!("{tag}_ext_"),
         };
-        let pool = PgPoolOptions::new().max_connections(4).connect(&url).await.unwrap();
+        let pub_schema = format!("{tag}_pub");
+        let pool = if full {
+            let admin = PgPoolOptions::new().max_connections(1).connect(&url).await.unwrap();
+            run(&admin, format!("CREATE SCHEMA {pub_schema}")).await;
+            let path = format!("{pub_schema}");
+            let pool = PgPoolOptions::new()
+                .max_connections(4)
+                .after_connect(move |conn, _| {
+                    let path = path.clone();
+                    Box::pin(async move {
+                        sqlx::query(AssertSqlSafe(format!("SET search_path TO {path}"))).execute(conn).await?;
+                        Ok(())
+                    })
+                })
+                .connect(&url)
+                .await
+                .unwrap();
+            sqlx::migrate!("../../db/migrations").run(&pool).await.unwrap();
+            relax(&pool, &pub_schema).await;
+            pool
+        } else {
+            PgPoolOptions::new().max_connections(4).connect(&url).await.unwrap()
+        };
         run(
             &pool,
             EDITS_MIGRATION
@@ -64,7 +114,7 @@ impl Db {
                 .replace("content.", &format!("{}.", s.content)),
         )
         .await;
-        let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s };
+        let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s, pub_schema: full.then_some(pub_schema) };
         db.load(Files::default()).await;
         Some(db)
     }
@@ -88,18 +138,7 @@ impl Db {
         )
         .await;
         for schema in [&s.defs, &s.world] {
-            run(
-                &self.pool,
-                format!(
-                    "DO $$ DECLARE r record; BEGIN
-                       FOR r IN SELECT n.nspname, c.relname, a.attname FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-                                WHERE n.nspname = '{schema}' AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped AND a.attnotnull
-                                  AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY (i.indkey))
-                       LOOP EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN %I DROP NOT NULL', r.nspname, r.relname, r.attname); END LOOP;
-                     END $$"
-                ),
-            )
-            .await;
+            relax(&self.pool, schema).await;
         }
         let (d, w) = (&s.defs, &s.world);
         let hp10 = if files.changed { 120 } else { 100 };
@@ -174,6 +213,9 @@ impl Db {
         for schema in [&s.defs, &s.world, &s.edits, &s.content, &s.original_defs, &s.original_world, &s.client] {
             run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
         }
+        if let Some(schema) = &self.pub_schema {
+            run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
+        }
         let ext: Vec<String> = sqlx::query_scalar("SELECT nspname::text FROM pg_namespace WHERE nspname LIKE $1")
             .bind(format!("{}%", s.ext_prefix.replace('_', "\\_")))
             .fetch_all(&admin)
@@ -182,6 +224,26 @@ impl Db {
         for schema in ext {
             run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
         }
+    }
+
+    /// The rows an extension like the Kill Boost Stone works on, in the live `defs` (before [`Db::freeze`]): the Mini Sun EXP Stone
+    /// 100/108 and its buff 250/1, the empty placeholders 100/212 to 214 and 200/1 to 3, and a mall product.
+    pub async fn seed_kill_boost(&self) {
+        let d = &self.s.defs;
+        run(&self.pool, format!(
+            "INSERT INTO {d}.items (rowid, itemid, itemname, type, typeid, reqlevel, country, grow, special, slot, quality, buy, sell, grade, drop, server, count, range, attacktime)
+             VALUES (10, 100108, 'Mini Sun EXP Stone', 100, 108, 1, 2, 0, 0, 0, 0, 100, 10, 3, 0, 0, 1, 250, 1),
+                    (11, 100212, '???177', 100, 212, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+                    (12, 100213, '???177', 100, 213, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+                    (13, 100214, '???177', 100, 214, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)")).await;
+        run(&self.pool, format!(
+            "INSERT INTO {d}.skills (rowid, skillid, skilllevel, skillname, keeptime, fixrange, abilitytype1, abilityvalue1, abilitytype2, abilityvalue2, abilitytype3, abilityvalue3, typedetail, updatedate)
+             VALUES (50, 250, 1, 'Mini Sun EXP', 2, 0, 5, 100, 6, 7, 0, 0, 82, '2012-03-04 05:06:07'),
+                    (51, 200, 1, '??', 0, 0, 0, 0, 0, 0, 0, 0, 0, '2001-01-01 00:00:01'),
+                    (52, 200, 2, '??', 0, 0, 0, 0, 0, 0, 0, 0, 0, '2001-01-01 00:00:02'),
+                    (53, 200, 3, '??', 0, 0, 0, 0, 0, 0, 0, 0, 0, '2001-01-01 00:00:03')")).await;
+        run(&self.pool, format!(
+            "INSERT INTO {d}.product_list (rowid, productname, productcode, buycost, itemid1, itemcount1) VALUES (1, 'Stone Pack', 'P1', 100, 100108, 1)")).await;
     }
 
     /// A frozen `original_defs` made from the real DDL (every column NOT NULL) with two rows in `exp_defs`, recorded as imported: what a
@@ -263,6 +325,11 @@ impl Db {
         row["v"].clone()
     }
 
+    /// One text value of a fully named table: `value_text("content.extensions", "version", "name = 'kb'")`.
+    pub async fn value_text(&self, table: &str, column: &str, filter: &str) -> String {
+        sqlx::query_scalar::<_, String>(AssertSqlSafe(format!("SELECT {column}::text FROM {table} WHERE {filter}"))).fetch_one(&self.pool).await.unwrap()
+    }
+
     pub async fn count(&self, query: String) -> i64 {
         sqlx::query_scalar(AssertSqlSafe(query)).fetch_one(&self.pool).await.unwrap()
     }
@@ -278,6 +345,10 @@ impl Db {
 
 pub fn set(target: &str, key: &str, field: &str, value: Value) -> Line {
     Line { target: target.into(), key: key.into(), op: Op::Set { field: field.into(), value } }
+}
+
+pub fn unset(target: &str, key: &str, field: &str) -> Line {
+    Line { target: target.into(), key: key.into(), op: Op::Unset { field: field.into() } }
 }
 
 pub fn add(target: &str, key: &str, fields: Value) -> Line {
