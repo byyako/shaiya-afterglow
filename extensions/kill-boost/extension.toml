@@ -1,5 +1,5 @@
 # The Kill Boost Stones: the server's own definition rows (docs/plans/ext-1-foundation.md section 6; they were
-# tools/defs/additions.sql and tools/sdata/client_rows.sql before version 0.3.0).
+# additions.sql and client_rows.sql before version 0.3.0).
 #
 # Items 100/212, 100/213 and 100/214 (the empty "???177" of both copies of Item.SData) give skill 200 levels 1, 2 and 3 (empty "??";
 # 200/100 stays the monsters' Weakening Curse). Each skill is a copy of the Mini Sun EXP Stone's 250/1 (a kind-4 buff, detail 82)

@@ -6,8 +6,9 @@ systemd; paths and names (`/opt/shaiya-afterglow`, `/etc/shaiya-afterglow`, user
 What the servers need at runtime:
 
 - **The binaries only.** The schema migrations are compiled in and run at start; neither server reads files at runtime.
-- **The game data in PostgreSQL**: the `defs` schema (items, monsters, skills, ...) and the `world` schema (maps, NPCs, spawns, quests, scripts).
-  Copy both from a working database (step 3); the VPS needs no original files, no MSSQL and none of the import tools.
+- **The game data in PostgreSQL**: the `defs` schema (items, monsters, skills, ...) and the `world` schema (maps, NPCs, spawns, quests, scripts),
+  with the frozen copies of the original files, the `content` records and your `edits` that rebuild and check them (six schemas in all).
+  Copy them from a working database (step 3); the VPS needs no original files, no MSSQL and none of the import tools.
 - **The `public` schema** (accounts, characters, sessions, guilds, ...) is created by the migrations and is the data to back up.
 
 ## Sizing
@@ -57,21 +58,28 @@ which are older). If the VPS is older, build there, or build in a container of t
 
 On the machine with the working database (with the README's setup, it runs in the `shaiya-afterglow-postgres` container):
 
+The game data is six schemas (`docs/original/database-notes.md`): the live tables `defs` and `world`, the frozen copies of the original files
+`original_defs` and `original_world`, `content` (what was imported, the installed extensions and the rows each owns) and `edits` (the data
+editor's edits). A VPS restored from `defs` and `world` alone could not rebuild or install an extension, so the dump takes all six:
+
 ```bash
-docker exec shaiya-afterglow-postgres pg_dump -U shaiya -n defs -n world -Fc shaiya > gamedata.dump    # about 1.2 MB
+docker exec shaiya-afterglow-postgres pg_dump -U shaiya -n defs -n world -n original_defs -n original_world -n content -n edits -Fc shaiya > gamedata.dump    # a few MB
 ```
 
-Without Docker: `pg_dump -h <host> -p <port> -U shaiya -n defs -n world -Fc shaiya > gamedata.dump`. Copy it to the VPS and restore:
+Without Docker: the same with `pg_dump -h <host> -p <port> -U shaiya … -Fc shaiya > gamedata.dump`. Copy it to the VPS and restore:
 
 ```bash
 pg_restore -h 127.0.0.1 -U shaiya -d shaiya --no-owner gamedata.dump
 ```
 
-The migrations do not touch `defs` or `world`, so the order of this step and the first start does not matter. To update the game data later,
-stop the game server, drop the two schemas (`DROP SCHEMA defs, world CASCADE`), restore a new dump, run `data-editor apply` (it writes the
-operator's edits, which live in the `edits` schema and are not in the dump, back into the fresh tables and reports what the new files
-changed under an edit) and start the game server again. A dump taken with `-n defs -n world` already holds the edits of the machine it
-came from; to move the edits themselves, export and import them (below).
+Or skip the dump: with the original files on the VPS, `tools/setup.sh <PSM_Data> <PS_Game/Data>` (from a checkout) imports them there
+(`--extension extensions/kill-boost` installs the Kill Boost Stones on the way).
+
+The migrations do not touch `defs` or `world`, so the order of this step and the first start does not matter (migration 0031 creates the
+empty `content` schema, which the restore then fills). To update the game data later, stop the game server and either restore a new
+dump of all six schemas (`DROP SCHEMA defs, world, original_defs, original_world, content, edits CASCADE` first, so that the dump's
+history replaces the old) or, with corrected original files, run `tools/setup.sh --reset`: it imports them again and rebuilds `defs` and `world`
+from the originals, the installed extensions and the data editor's edits, in that order. To move only the edits, export and import them (below).
 
 ## 4. Settings
 
@@ -215,9 +223,17 @@ nsh console 1 restart 5                # spawns, obelisks, boss groups and porta
 (`nsh` is the helper of section 5: it runs the tool as the `shaiya` user with the settings file, which only root and that group can read.)
 
 - **Edits are kept apart from the game data.** They live in the `edits` schema (migration 0030, created at the first start of any binary),
-  which no load of the original files touches; `data-editor apply` writes them into `defs` and `world` again. Run it after every restore of
-  a game data dump or import of the original files (the repository's loaders, `tools/defs/additions.sh` and `tools/world/import.py`, end
-  with it when `target/release/data-editor` exists).
+  which no load of the original files touches. The live tables are always built in one order, originals → installed extensions → edits:
+  `data-editor content rebuild [defs|world|all]` does it (the importers, `tools/world/import.py` and `tools/defs/load_into_postgres.py`,
+  end with it when `target/release/data-editor` exists), `data-editor apply` writes the edits alone into tables that already hold the rest.
+  `data-editor content check` proves the live tables are exactly that (it names every row that was changed by hand), `content status` says
+  what is imported and installed, `content origin <table> <key>` shows the layers of one row.
+- **Extensions** (`extensions/` in the repository and in the release tarball): `data-editor ext list`, `ext install <folder>`, `ext upgrade <folder>`,
+  `ext disable <name>` / `ext enable <name>` and `ext remove <name>`. Installing writes the extension's rows into `defs` (items and skills; drop
+  chances) and keeps them in the database, so a server runs, and the extension can be removed, without its folder; restart the game servers
+  afterwards. Removing puts every row back to the original and is refused while players hold the extension's items or skills, or other data
+  (a mall product, a shop, a quest, an edit of yours) points at its rows, listing each; `--force` deletes the held items and buffs after a
+  confirmation, logged, and only while no game server reports players. `ext check <folder>` shows what an install would change without writing.
 - **Moving edits to another server, backup, sharing**: `data-editor export edits.json` on one machine, `data-editor import edits.json` on the
   other (`--replace` first reverts the edits in force there). The file holds the history too. Set `EDITOR_EXPORT_FILE=/path/edits.json` and every
   Apply and Undo writes it; keep that file in git or in the backups. `--images` adds the map pictures of the page.
@@ -267,9 +283,14 @@ sudo systemctl restart shaiya-afterglow-game shaiya-afterglow-login
 
 New migrations run when the servers start. Players in the world are saved on the game server's stop and must log in again.
 
+**From 0.2.0 to 0.3.0** changes how the game data is kept and how the game server is set up; the steps are the migration note of
+`CHANGELOG.md` ("Upgrading from 0.2.0"): run `tools/setup.sh` again with the same two original folders (it imports the originals once into the frozen
+copies and rebuilds `defs` and `world`), install the Kill Boost Stones as an extension if you used `--with-additions`, and dump six schemas where
+section 3 says `defs` and `world`.
+
 ## 10. Backups
 
-The `public` schema is the player data; `defs` and `world` can always be restored from the game data dump (then `data-editor apply`); the
+The `public` schema is the player data; `defs` and `world` can always be restored from the game data dump (then `data-editor content check`); the
 `edits` schema holds the operator's edits and their history, so the dump below takes both (`-n public -n edits`); the export file of
 section 6b is a second copy of the edits. A daily dump, kept for two weeks:
 

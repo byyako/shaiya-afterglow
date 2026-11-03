@@ -41,7 +41,7 @@ the server docs named were updated at the time.
    both copies, an id below 256 so the client's one-byte item link holds it), one hour, kept on death, no ability;
    `GAME_KILL_BOOST_SKILLS` takes `id/level` (the monsters' 200/100 must not count); since the release it is empty by
    default, the Stones' entries being `200/1:2,200/2:5,200/3:10` (`docs/server/settings.md`). Server rows in
-   `tools/defs/additions.sql`; recorded in `docs/original/operator-console.md` decision 3; the client's copy is the first client data
+   `extensions/kill-boost` (before 0.3.0 `additions.sql`); recorded in `docs/original/operator-console.md` decision 3; the client's copy is the first client data
    patch (`docs/plans/roadmap.md` step 1b).
 8. **A picture of each map, lined up with world positions** (for the data editor). Answered in `docs/client/research-extension-features.md`,
    "Map pictures". The converted pictures for `data/map-images/` are still to be made (roadmap, "Open work items").

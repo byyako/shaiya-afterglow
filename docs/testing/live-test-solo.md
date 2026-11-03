@@ -1,12 +1,12 @@
 # Live tests: what one tester can do
 
-The 478 open items of `docs/testing/live-test-checklist.md` (489 with the 11 ticked; section 0, the smoke list, is drawn from them), sorted by who can test them. The checklist
+The 479 open items of `docs/testing/live-test-checklist.md` (490 with the 11 ticked; section 0, the smoke list, is drawn from them), sorted by who can test them. The checklist
 page (`tools/checklist-server.sh`) reads this file: it filters by group and sitting, and lists any open item missing from it. Item numbers
 count the `- [ ]` and `- [x]` lines from the top of each section, ticked ones included (the checklist page shows them in the same order).
 
 | group | meaning | items |
 |---|---|---|
-| **A. One client** | one character at a time; switching characters or accounts in between is fine | 266 |
+| **A. One client** | one character at a time; switching characters or accounts in between is fine | 267 |
 | **B. Two clients, by yourself** | two accounts logged in at once, the maintainer switching windows; every step is ask/answer or one side standing still | 193 (2.1 is in A and B: the self heal and healing another) |
 | **C. Hard alone** | three clients or more, or two players acting at the same moment | 10 |
 | **D. Skip** | needs a modified client or a packet tool, Korean input, or a game state that cannot be forced | 10 |
@@ -36,7 +36,7 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
    window), 40.1 to 40.5, 40.9, 40.11 (an
    auction left 7 hours), 40.12 to 40.14, 40.16, 40.17.
 8. **Staff alone (TestVail):** 37.7, 37.14, 38.15, 41.4, 41.7, 41.10, 41.11, 41.13, 49.7, 49.8, 51 (1 to 4, 6, 10 to 13; the "not seen
-   by a second client" half of 51.1 and "also on another map" in 51.3 wait for B).
+   by a second client" half of 51.1 and "also on another map" in 51.3 wait for B), 58.1.
 9. **TestVail at the Light guards, staff level set back to 0** (guards ignore staff): 33.2, 33.3, 42.5.
 10. **The data editor, TestVail on map 2 (and map 0 for the obelisk):** 53 (all; the page, the `console` tool and the game side by side).
 11. **Log checks:** 30.2; 48 (all but 6, 9, 11, 12): ordinary play, the next session reads the rows.
@@ -103,6 +103,7 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
 | 55 | 1, 2, 4, 7, 8, 9 | 5, 10 | 3 (eight clients on one address) | 6 (the real client sends its keepalive) | |
 | 56 | 7, 8, 10, 13, 14, 16 | 1–6, 11 | 9, 12, 15 (acting at the same moment; seven players for a guild) | | |
 | 57 | 1–7, 9, 10 | 8 (two staff accounts) | | | |
+| 58 | 1 | | | | |
 
 ## Sitting 1 setup (applied)
 

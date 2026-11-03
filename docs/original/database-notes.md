@@ -100,27 +100,51 @@ Reproduce (needs the SQL Server and PostgreSQL containers, `MSSQL_CONTAINER` and
 ```
 python3 tools/defs/generate.py docs/original/db/PS_GameDefs.columns.txt db/defs/schema.sql tools/defs/export_queries.tsv
 tools/defs/export_from_mssql.sh                       # bcp export, 1 second
-python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
-python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt
-tools/defs/additions.sh                               # the server's own rows, after the check; ends with `data-editor apply` (the operator's edits)
+python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql   # once: the frozen copy original_defs, then `data-editor content rebuild defs`
+python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt   # compares original_defs with the original database
 ```
 
-- **The server's own rows** (`tools/defs/additions.sql`): changes to the original definitions that the client's data must carry too (each
-  names its client patch); updates only, so it can run again. Now: the three Kill Boost Stones 100/212 to 214 and their buffs 200/1 to 3
-  (`docs/original/operator-console.md` decision 3; the client's side is `tools/sdata/client_rows.sql`, `docs/plans/done/client-patches.md`). The load replaces the schema, so run it after every load; `verify.py` compares the
-  original, so run that before it.
+- **The data is imported once, into frozen copies.** (Since 0.3.0; `docs/plans/ext-1-foundation.md` section 3.) The importers write the
+  original data exactly as it came into `original_defs`, `original_world` and (a developer's box only) `client`, and record in `content.imports`
+  what they read: the SHA-256 of every file, the rows and md5 of every table, and where it came from. A second run with **the same files
+  does nothing** ("already imported on …; nothing to do"); with **other files it is refused**, naming the files that differ; `--reset`
+  (`tools/setup.sh --reset`, or the importer's own flag) replaces the frozen copy and rebuilds the live tables. `--adopt` records a copy loaded
+  from the same files on a box whose live tables already hold them (the dev box; not for operators).
+- **The live tables are built, not loaded.** `defs` and `world` are what the servers read; `data-editor content rebuild [defs|world|all]`
+  builds them in one transaction as **originals → installed extensions → edits**: the frozen tables are copied in, the rows of every installed
+  extension (`content.ext_rows`, enabled or not) are written over them, then the data editor's edits are applied (below). A database from
+  before 0.3.0 (a `defs` schema with no import record) is imported by running `tools/setup.sh` again with the same two folders; changes made by
+  hand in SQL are replaced, as on any re-run before. `data-editor content check` proves the live tables equal such a rebuild (every difference
+  is printed as `defs.items 100212: hand edit? itemname live 'X', expected 'Y'`), `content status` says what is imported and installed,
+  `content hashes` prints `schema.table|rows|md5` per table (`tools/content/table_hashes.sql` does the same in psql: the proof that a change
+  wrote no byte), and `content origin <table> <key>` prints the layers of one row.
+- **Schemas of the game data:** `original_defs`, `original_world` (the originals, written by the importers only; same DDL as `defs` and
+  `world`), `client` (the client's own files, a developer's box), `defs` and `world` (live), `content` (migration 0031: imports, installed
+  extensions with the rows, ids, settings and client rows each owns, the client-patch ledger, the editor's settings layer), `edits`, and one
+  `ext_<name>` per installed extension that has migrations. Which origin a row has is in `content.ext_rows` (an extension owns it) and in
+  `edits.fields` / `edits.rows` (an edit changed it), not in a column.
+- **The server's own rows are an extension.** The three Kill Boost Stones 100/212 to 214 and their buffs 200/1 to 3 (once
+  `additions.sql`, now `extensions/kill-boost`, installed with `data-editor ext install extensions/kill-boost`) change rows that
+  exist in the originals as empty placeholders; they are not in the originals, so an import never brings them back, and an install or a
+  rebuild writes them (`docs/original/operator-console.md` decision 3, `docs/plans/done/client-patches.md`).
 - **The `edits` schema** (migration `0030_data_edits.sql`, `docs/plans/done/data-editing.md` section 3): the data editor's draft, change sets, log,
   the edits in force (`edits.fields` per row key and field with the value and the original, `edits.rows` for rows added or removed) and
   the map pictures and names of its page. A load of the original files replaces `defs` or `world` but never `edits`; `data-editor apply`
   writes the edits back. Each loaded schema gets a one-row marker table `edits_applied` (`applied_at`, `skipped`) from the first apply
   after a load: a schema without it is fresh, so apply first refreshes every edit's original from the new tables and reports what the
   files changed under an edit, rows that are gone, and added rows whose key the import uses now (those stay unwritten, listed in `skipped`).
-  **The order after a load**: `load_into_postgres.py`, `verify.py`, `tools/defs/additions.sh` (ends with `data-editor apply`); for `world`,
-  `tools/world/import.py` (ends with it too); then restart the game server.
-- **The `client` schema** (`db/client/schema.sql`, created by `tools/sdata/load_client.py`, which replaces it): the client's own
-  `Item.SData` and `Skill.SData` as shipped (`client.items`, `client.skills`) and what a data patch changes (`client.item_rows`,
-  `client.skill_rows`, `client.server_only`, loaded from `tools/sdata/client_rows.sql` by `tools/sdata/client_patch.py`). Not a migration;
-  the server never reads it. `docs/plans/done/client-patches.md` sections 2 and 3.
+  **The order after an import** is `load_into_postgres.py`, `verify.py` (counts, or the full check with SQL Server), then for `world`
+  `tools/world/import.py`; each ends with `data-editor content rebuild` for its part (which applies the edits last); then restart the game
+  server. `tools/setup.sh` does all of it and is safe to run again.
+- **The `client` schema** (`db/client/schema.sql`, created by `tools/sdata/load_client.py`, once): the client's own `Item.SData` and
+  `Skill.SData` as shipped (`client.items`, `client.skills`). What a data patch changes is in `content.client_items`,
+  `content.client_skills`, `content.server_only` and the patch ledger `content.client_patches` / `client_patch_files`, written by
+  extensions and by `tools/sdata/client_patch.py`. Not a migration; the server never reads it. `docs/plans/done/client-patches.md` sections 2 and 3.
+- **Rollback of a change to the game data** (the 0.3.0 upgrade of a dev box, `docs/plans/ext-1-foundation.md` section 9): take a dump of the
+  whole database first (`pg_dump -Fc` to `data/backups/pre-ext1-<date>.dump`) and the table hashes (`tools/content/table_hashes.sql` to
+  `…hashes`); rehearse on a copy restored from the dump; to give up before the install, drop the schemas `content`, `original_defs` and
+  `original_world` and delete migration 31's row from `_sqlx_migrations`, then run the previous binaries; after the install, stop the game
+  server, `pg_restore --clean --if-exists` the dump and run the previous binaries.
 
 - **Text encoding.** The original stores GBK (Chinese code page 936) bytes in `varchar` columns. Text is exported as hex, decoded as GBK, and every value is
   checked to re-encode to the identical bytes before loading. SQL Server's own conversion would have mangled it.

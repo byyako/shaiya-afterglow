@@ -191,9 +191,14 @@ key into the row's `WHERE` (for `spawn_mob`: `mob_area_id = (SELECT id FROM worl
   ("the import changed mob 2133 hp 5000 → 5200 under your edit to 8000").
 - **Marker present**: write all edits again (idempotent; it repairs a hand edit made with psql to an edited field).
 
-Order after a load: `load_into_postgres.py` → `verify.py` → `tools/defs/additions.sh` (which now ends with `data-editor apply`);
-`import.py` ends with `data-editor apply`. Both call it only when `target/release/data-editor` exists and print the command
-otherwise. `additions.sql` therefore runs before the edits, and an edit wins over an addition on the same field.
+Order after a load (changed in 0.3.0, `docs/plans/ext-1-foundation.md` sections 3.2 and 8): the importers fill the frozen copies
+(`original_defs`, `original_world`) and end with `data-editor content rebuild defs` / `world`, which builds the live tables as **originals →
+installed extensions → edits** and drops the part's marker so that the edits are applied fresh; they call it only when
+`target/release/data-editor` exists and print the command otherwise. `data-editor apply` is unchanged and still writes the edits alone into
+tables that hold the rest. An edit wins over an extension's row on the same field (the editor's `item_grade` on a Kill Boost Stone works as on
+any item); `ext install`, `upgrade` and `remove` drop the marker and apply the edits again, which refreshes each edit's original ("the content
+under your edit changed", where this document used to say "the import changed"). Before 0.3.0 the order was `load_into_postgres.py` →
+`verify.py` → `tools/defs/additions.sh` → `data-editor apply`.
 
 ## 4. Apply, Undo, Export and Import
 

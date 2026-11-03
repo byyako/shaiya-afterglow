@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased (0.3.0 in the making)
+
+**The game data is built from the originals, extensions and edits** (extensions chunk 1, part A; `docs/plans/ext-1-foundation.md`)
+- The original data is imported **once**, into frozen copies (`original_defs`, `original_world`, and `client` on a developer's box), and
+  `content.imports` records the SHA-256 of every file read. A second run of an importer or of `tools/setup.sh` with the same files does
+  nothing; other files are refused until `--reset`, which re-imports and rebuilds. The live tables `defs` and `world` are built by
+  `data-editor content rebuild` as originals → installed extensions → the data editor's edits.
+- `data-editor content status | hashes | rebuild | check | origin`: what is imported and installed; `schema.table|rows|md5` per table; the
+  rebuild (also `--into` scratch schemas); a check that names every row changed by hand; the layers of one row.
+- **Extensions**: a folder with `extension.toml` and `rows.toml` (and optionally migrations in its own schema). `data-editor ext list | show |
+  check | install | upgrade | remove | enable | disable`. An extension adds or changes items, skills (levels 1 to 3) and drop chances, declares
+  the ids it owns (checked against the client's ceilings and other extensions), may give defaults for game settings and carries the client
+  fields (names, text, look-alike) of its rows. Removing one puts every row back to the original and is refused while players hold its
+  items or skills or other data points at its rows; `--force` deletes the held items after a confirmation, logged.
+- **The Kill Boost Stones are the first extension** (`extensions/kill-boost`), no longer `additions.sql` and
+  `client_rows.sql` (deleted). Installing it on a database that already had the stones changes no byte of any table.
+- `tools/sdata/client_patch.py` reads the database only (the client rows are `content.client_items` / `client_skills`), keeps a ledger of the
+  patches it generates (`content.client_patches`), and has `adopt`, `rebuild --patch N` (regenerates a patch from the database; patch 109
+  matches byte for byte) and `record`.
+- `tools/setup.sh` has `--reset` and `--extension <folder>`, writes `config/game.toml` when it is missing and lists the bundled extensions;
+  the release tarball carries `extensions/`; `tools/fetch-release.sh --keep <dir>` unpacks the whole tarball.
+- Migration 0031 (the `content` schema).
+
+**Upgrading from 0.2.0** (breaking changes; nothing is converted automatically; the settings step comes with the settings work of this release):
+1. **Game data**: run `tools/setup.sh` again with the same two folders. It imports the original data once into new schemas
+   (`original_defs`, `original_world`) and rebuilds `defs` and `world` from them plus your data editor's edits; changes made by hand
+   in SQL are replaced, as before on every re-run. Later re-runs skip the import; `--reset` re-imports corrected files. Until then the game
+   server runs as before and `data-editor ext install` refuses, saying so.
+2. **The Kill Boost Stones**: `additions.sh` is gone. If you used `--with-additions`, install the extension instead
+   (`target/release/data-editor ext install extensions/kill-boost`, or `tools/setup.sh --extension extensions/kill-boost`) before
+   the game server starts, so held stones stay stones.
+3. **Moving game data to a VPS**: dump `defs`, `world`, `original_defs`, `original_world`, `content` and `edits`
+   (`docs/server/deploy.md` section 3).
+
 ## 0.2.0 (2026-11-02)
 
 **Easier install**

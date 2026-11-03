@@ -11,11 +11,13 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 
 | script | what it does | reads, writes | who |
 |---|---|---|---|
-| `setup.sh` | everything from a fresh clone to a running server: writes `.env` with random passwords, starts PostgreSQL, builds the workspace (or uses the binaries in `target/release/`), reads the definitions from the backup (`defs/read_bak.py`) or an export folder, or with `--sqlserver` through SQL Server, loads and checks them, imports the world, and on a terminal creates the first account and starts the servers | `.env`, `compose.yaml`, the original files' `PSM_Data` and `PS_Game/Data`; the databases | operator |
+| `setup.sh` | everything from a fresh clone to a running server: writes `.env` with random passwords, starts PostgreSQL, builds the workspace (or uses the binaries in `target/release/`), reads the definitions from the backup (`defs/read_bak.py`) or an export folder, or with `--sqlserver` through SQL Server, imports the originals once and builds the live tables (a re-run skips what is imported from the same files; `--reset` imports corrected files; `--extension <folder>` installs an extension), writes `config/game.toml` when missing, and on a terminal creates the first account and starts the servers | `.env`, `compose.yaml`, the original files' `PSM_Data` and `PS_Game/Data`; the databases | operator |
 | `fetch-release.sh` | downloads the binaries of a release (built by `.github/workflows/release.yml`) into `target/release/`, so nothing needs building; checks the checksum | GitHub; `target/release/` | operator |
 | `release-notes.sh` | prints the text of a release: its section of `CHANGELOG.md` and how to start (used by the release workflow) | `CHANGELOG.md` | developer, CI |
 | `restore_backups.sh` | restores every SQL Server backup in `/backups` (the original `PSM_Data`, mounted read-only) into the SQL Server container; runs inside it | the backups; SQL Server | operator (`setup.sh` calls it) |
 | `login-server.sh`, `game-server.sh`, `data-editor.sh` | start, stop, restart, status and logs of the program in the background (`game-server.sh` restarts it after any exit status but 0; 75 is the console's `restart`) | `.env`; `logs/<program>.log`, `.pid` | operator, developer |
+| `content/table_hashes.sql` | one line (table, rows, md5, separated by pipes) per table of `defs`, `world` and `client` (`psql -At -f`): the baseline before a change to the game data and its proof afterwards; `data-editor content hashes` prints the same | PostgreSQL (read only) | developer |
+| `content_import.py` | what the three importers share: the import record, the same-files / other-files / `--reset` / `--adopt` rule, the rebuild call | `content.imports` | (imported by the importers) |
 | `dbconn.sh`, `dbconn.py` | the shared environment of the scripts: container names, `psql` through Docker or on the host | `.env` | (sourced by the others) |
 
 ## Importing the original data
@@ -24,11 +26,11 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 |---|---|---|---|
 | `defs/read_bak.py` | reads the `PS_GameDefs` tables straight out of the original SQL Server backup (no SQL Server) and writes the same pipe-separated files; checked byte for byte against the SQL Server export | the backup; `data/defs-export/*.psv` (git-ignored) | operator |
 | `defs/export_from_mssql.sh` | exports the `PS_GameDefs` tables from the restored SQL Server container (the `--sqlserver` way) to pipe-separated files | SQL Server; `data/defs-export/*.psv` (git-ignored) | operator |
-| `defs/load_into_postgres.py` | loads those files into the `defs` schema (`db/defs/schema.sql`) | `data/defs-export/`; PostgreSQL | operator |
+| `defs/load_into_postgres.py` | loads those files once into the frozen copy `original_defs` (`db/defs/schema.sql`), records the import in `content.imports`, and ends with `data-editor content rebuild defs`; the same files again do nothing, other files are refused (`--reset` imports again, `--adopt` records a copy on a box that already holds the data, `--source` says where the files came from) | `data/defs-export/`; PostgreSQL | operator |
 | `defs/verify.py` | compares the loaded `defs` tables with the original database, field by field (`--counts-only`: only the row counts, against the column list, with no SQL Server) | both databases | operator, developer |
 | `defs/generate.py` | makes `db/defs/schema.sql` and the export queries (`export_queries.tsv`) from the column list `docs/original/db/PS_GameDefs.columns.txt` | the column list | developer |
 | `defs/describe_mssql.sh` | writes the three description files per original database (`docs/original/db/`), proven to reproduce them byte for byte | SQL Server (read only) | developer |
-| `world/import.py` | imports the maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua, and the quests from the original server's `Data` folder into the `world` schema (`--dry-run` only reports) | the `Data` folder; PostgreSQL. It uses `svmap.py` and `npcquest.py` from this folder | operator |
+| `world/import.py` | imports the maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua, and the quests from the original server's `Data` folder once into the frozen copy `original_world`, records every file read with its SHA-256, and ends with `data-editor content rebuild world`; the same flags as the definitions' loader (`--dry-run` only reports) | the `Data` folder; PostgreSQL. It uses `svmap.py` and `npcquest.py` from this folder | operator |
 | `sdata/` | the client's data files: see below | | developer |
 
 ## The live-test page

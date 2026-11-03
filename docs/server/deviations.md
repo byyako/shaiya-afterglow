@@ -33,7 +33,7 @@ A setting written as `NAME` (`value`) gives its release default. `docs/server/se
 | `GAME_CROSS_FACTION_TRADE_MAPS` | `42` | empty | no trade between factions anywhere (`docs/original/trade.md` deviation 1) | addition |
 | `GAME_MARKET_MAPS` | `35,36,42` | empty | the server allows a personal shop on any map; the unpatched client offers it only where its own map table allows (`docs/original/personal-shop.md` deviation 1) | addition |
 | `GAME_KILL_BOOST_SKILLS` | `200/1:2,200/2:5,200/3:10` | empty | no kill-boost item (`docs/original/operator-console.md`) | addition |
-| `tools/defs/additions.sql` (the Kill Boost Stone rows, items 100/212-214 and skill 200/1-3) | loaded by `additions.sh` | loaded only with `additions.sh --with-additions` | items 100/212-214 and skill 200/1-3 are empty `???` rows | addition |
+| the Kill Boost Stone rows (items 100/212-214 and skill 200/1-3) | loaded by `additions.sh --with-additions` (0.2.0) | the extension `extensions/kill-boost`, installed with `data-editor ext install extensions/kill-boost` (or `tools/setup.sh --extension extensions/kill-boost`); not installed by default; its multipliers are the setting above (the extension carries `200/1:2,200/2:5,200/3:10` as its default, which the game server reads once settings come in layers) | items 100/212-214 and skill 200/1-3 are empty `???` rows | addition |
 
 Unchanged on purpose, though they differ from the original: `GAME_SMOOTH_CHASE` (`true`, kept as a display fix, section 9),
 `GAME_CHECK_IP` (`true`, a security fix), `GAME_KICK_NOTICE_SECS` (`3`, so the client shows the notice), the trade chat limits (`10`,
@@ -163,7 +163,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | operator-console | | the console window of `ps_game.exe` → the `console` tool through PostgreSQL `NOTIFY`, and `.commands` in the game for staff | tooling | `GAME_CONSOLE_LEVEL` (`1`) |
 | operator-console | | `reload` (monsters and drop tables) and `restart` with a countdown | tooling | |
 | operator-console | | `[NEW_SERVER]` (double kills, half-price Lapisia): **rejected**; the kill rate instead | tooling | `GAME_KILL_RATE` (`1`), `GAME_EXP_RATE` (`1`) |
-| operator-console | | the Kill Boost Stones (2×, 5×, 10× kills for an hour) | addition | `GAME_KILL_BOOST_SKILLS` (empty), `additions.sh --with-additions` |
+| operator-console | | the Kill Boost Stones (2×, 5×, 10× kills for an hour) | addition | `GAME_KILL_BOOST_SKILLS` (empty), `data-editor ext install extensions/kill-boost` |
 | gm-commands | 1-13, 18-24 | unknown commands close the staff connection; `/apower` unusable with this client; `/set` on the wrong character; moves through a deferred pass; bans lost at relog; summons, guild and NPC commands; `/server off` still listed; `/cwatch` links → each fixed for this client | tooling, fix, client | |
 | gm-commands | 14-17 | `/aban`, `/ban` and their cancels; `/pvpon`/`/pvpoff`; `/queston`/`/questoff`; `/eventadd`/`/eventrem`, in the client but unhandled → built | tooling | |
 | gm-commands-2 | 1-15 | user questions saved (migration 0023), answers delivered, at most 3 open each; names not found refused; kicks announced; staff protected from lower staff; safe quest and strip commands; summons → each fixed or built | tooling, fix | |

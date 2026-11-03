@@ -95,9 +95,11 @@ The source files named in this section are under `crates/game-server/src/`.
 | schema | holds | made by | written by |
 |---|---|---|---|
 | `public` | accounts, sessions, game servers, characters and everything a player owns (items, skills, quests, guilds and their banks and houses, friends, the auction house, the item mall's points, the game log, the GM tools' records) | the migrations (`db/migrations`, 0001 onward) | the login server (accounts, sessions), the game server (the rest), the `servers`, `create_account` and `mall` tools |
-| `defs` | the game's definitions: items, skills, monsters, drops, the level and status tables | `db/defs/schema.sql` | `tools/defs/load_into_postgres.py` (the import of the original database), `data-editor apply` |
-| `world` | maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua scripts, quests | `db/world/schema.sql` | `tools/world/import.py` (the import of the original files), `data-editor apply` |
-| `client` | the client's `Item.SData` and `Skill.SData` as shipped, and what a client data patch changes | `db/client/schema.sql` | `tools/sdata/load_client.py`, `tools/sdata/client_rows.sql`; read by `tools/sdata/client_patch.py` |
+| `defs` | the game's definitions: items, skills, monsters, drops, the level and status tables (live: the originals, the installed extensions' rows and the editor's edits) | `db/defs/schema.sql` | `data-editor content rebuild` (from `original_defs`, filled by `tools/defs/load_into_postgres.py`), `ext …`, `data-editor apply` |
+| `world` | maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua scripts, quests (live, built the same way) | `db/world/schema.sql` | `data-editor content rebuild` (from `original_world`, filled by `tools/world/import.py`), `data-editor apply` |
+| `client` | the client's `Item.SData` and `Skill.SData` as shipped (a developer's box) | `db/client/schema.sql` | `tools/sdata/load_client.py`, once; read by `tools/sdata/client_patch.py` |
+| `original_defs`, `original_world` | the original data exactly as imported, never changed: what `defs` and `world` are rebuilt from | `db/defs/schema.sql`, `db/world/schema.sql` | the importers, once (`--reset` to bring in corrected files) |
+| `content` | what was imported, the installed extensions and the rows, ids, settings and client rows each owns, the client-patch ledger, the editor's settings layer | migration `0031_content.sql` | `data-editor content …` and `ext …`, `tools/sdata/client_patch.py` |
 | `edits` | every change made through the data editor, with its history, the draft, and the map pictures | migration `0030_data_edits.sql` | `data-editor` only |
 
 `defs`, `world` and `client` hold the original's data and are not part of the migrations: the importers replace them, and `data-editor apply` writes the

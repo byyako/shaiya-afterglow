@@ -15,7 +15,10 @@ client side never edits the database or `tools/`.
 ## 1. The maintainer's decisions (2026-10-22)
 
 Since release step R1 the stones are an addition, off by default: `GAME_KILL_BOOST_SKILLS` is empty unless set, and their
-server rows load only with `tools/defs/additions.sh --with-additions` (`docs/server/deviations.md` section 1).
+server rows exist only where the extension `extensions/kill-boost` is installed (`data-editor ext install`; before 0.3.0:
+`tools/defs/additions.sh --with-additions`; `docs/server/deviations.md` section 1). **Since 0.3.0 (extensions chunk 1,
+`docs/plans/ext-1-foundation.md`)** the server's rows and the client's rows of an addition both come from an extension's `rows.toml`
+into the database, and this tool reads the database only: sections 2 and 4 say how, and where they differ from the text below.
 
 1. **Three kill-boost stones**, not one: the Kill Boost Stone (100/212, skill 200/1) counts each player kill **2×**, a **Lv2** stone
    **5×**, a **Lv3** stone **10×**. The two new items take the next unused slots, **100/213** and **100/214** (the empty "???177" in both
@@ -46,24 +49,31 @@ Each byte of a generated record comes from exactly one place:
 
 | What | Where | Edited by |
 |---|---|---|
-| The server's fields (every column of `defs.items` / `defs.skills`: prices, stacks, levels, effects, durations, the item's skill byte) | `defs.items`, `defs.skills` | `tools/defs/additions.sql` only (as now) |
-| The client's own copy of every record, as shipped in US patch 108 (all fields, text included) | `client.items`, `client.skills` (new schema `client`) | nobody: imported from the original files by `tools/sdata/load_client.py`, replaced on each import |
-| The client-only fields of each record a patch changes (name, description; items: model, icon, `type2`, `type3`; skills: icon, animation, toggle byte, sound) and the patch that first shipped it | `client.item_rows`, `client.skill_rows` | `tools/sdata/client_rows.sql` (in git), loaded by the generator before every run |
-| Server changes that need nothing in the client (none yet) | `client.server_only` | `tools/sdata/client_rows.sql` |
+| The server's fields (every column of `defs.items` / `defs.skills`: prices, stacks, levels, effects, durations, the item's skill byte) | `defs.items`, `defs.skills` | the originals, an extension's rows (`data-editor ext install`) and the data editor, in that order |
+| The client's own copy of every record, as shipped in US patch 108 (all fields, text included) | `client.items`, `client.skills` (schema `client`) | nobody: imported once from the original files by `tools/sdata/load_client.py` (`--reset` replaces it) |
+| The client-only fields of each record a patch changes (name, description; items: model, icon, `type2`, `type3`; skills: icon, animation, toggle byte, sound), the look-alike that gives the rest, and the patch that first shipped it | `content.client_items`, `content.client_skills` | the extension's `rows.toml` (`client = { … }` of an `[[item]]` / `[[skill]]`), written by `ext install`; `since_patch` stamped by `generate` |
+| Server changes that need nothing in the client | `content.server_only` | the extension's `server_only = "reason"` |
+
+A client row keeps its look-alike as a reference (`look_type`/`look_typeid`, `look_skill`/`look_level`) and the fields given by name; the
+generator resolves each field as: given by name, else the look-alike's record in `client.items` / `client.skills`, else the record's own
+original. So an install needs no `client` schema (an operator never imports the client's files), and the resolved values are what the
+old `client_rows.sql` wrote (`docs/plans/ext-1-foundation.md` section 4.1). Before 0.3.0 these were `client.item_rows`,
+`client.skill_rows`, `client.server_only` and `tools/sdata/client_rows.sql` (deleted).
 
 **A generated record** is the original client record (`client.items` / `client.skills`) **unless** its key is in `client.item_rows` /
 `client.skill_rows`; then it is the server's fields from `defs` with the client-only fields from that row. So:
 
-- **A new row** (as the kill-boost stones): `additions.sql` gives the server's row; `client_rows.sql` gives its client row, with its own
-  name and text and the look copied from an existing record (`SELECT model, icon, type2, type3 FROM client.items WHERE …`).
-- **A listed choice** (shipping the server's value of an existing record, e.g. a price from `docs/client/item-sdata-vs-defs.md`): a
-  client row that copies that record's own client-only fields (`INSERT … SELECT name, description, model, icon, type2, type3 FROM
-  client.items …`), so only the server's fields change. Each choice is the maintainer's (that file's differences are the original's own).
+- **A new row** (as the kill-boost stones): the extension's `[[item]]` / `[[skill]]` gives the server's row and, in its `client = {…}`,
+  the client row: its own name and text and a look-alike (`look = "100/108"`) that gives model, icon, `type2`, `type3` (items) or
+  icon, animation, toggle byte, sound (skills).
+- **A listed choice** (shipping the server's value of an existing record, e.g. a price from `docs/client/item-sdata-vs-defs.md`): an
+  entry with `client = "keep"`, which takes every client-only field, text included, from the record's own original, so only the
+  server's fields change. Each choice is the maintainer's (that file's differences are the original's own).
 - The names stay the client's: `defs.items.itemname` is the server's (7,729 differ, some Chinese), never written to the client. For a
-  new row, `client_rows.sql` repeats the name `additions.sql` gave.
+  new row, the client name is the one the extension gives.
 
-The original files and anything decrypted from them stay out of git (`reference/`, `data/` are ignored); only the server's own rows
-(`additions.sql`, `client_rows.sql`) and the tools are in git. The originals' copies are in the client repository.
+The original files and anything decrypted from them stay out of git (`reference/`, `data/` are ignored); only the extensions' rows
+files (`extensions/*/rows.toml`) and the tools are in git. The originals' copies are in the client repository.
 
 ## 3. The checks (`client_patch.py check`; every patch passes them before it is handed over)
 
@@ -119,14 +129,25 @@ share, as it reads `docs/client/`):
     ]
   }
   ```
-  `previous` and `replaces_sha256` come from the highest earlier `data/client-patches/psNNNN/manifest.json` (for files it lists), else
-  from the 108 originals. Every patch carries **whole files** holding every change so far, so a client at any version ends with the same
+  `previous` and `replaces_sha256` come from the patch ledger (`content.client_patches`, `content.client_patch_files`: the newest earlier
+  patch that carried the file), else from the 108 originals. Since 0.3.0 the manifest's key is `commit` (patch 109's, written before the
+  ledger, is `newshaiya_commit` and names a commit of the old private tree) and it gains `"extensions": {"kill-boost": "1.0.0"}`: the
+  installed extensions and versions, the content's provenance. Every patch carries **whole files** holding every change so far, so a client at any version ends with the same
   bytes.
 - `changes.txt`: per changed record, each field that differs, old → new (`Item 100/212 ???177 → Kill Boost Stone: icon 1 → 8, range 0 →
   200, …`), for a person to read before signing.
 
-`generate` refuses to run when `tools/defs/additions.sql` or `tools/sdata/` has uncommitted changes (the manifest's commit must describe
-the files), and runs every check of section 3 first. `--dirty` lets a trial run through and writes `"dirty": true`; the client side
+`generate` refuses to run when `tools/sdata/`, `db/client/` or `extensions/` has uncommitted changes (the manifest's commit must describe
+the files), and runs every check of section 3 first. It then records the patch in the ledger and stamps `since_patch` on the client rows
+that have none, in one transaction (a `--dirty` trial is not recorded).
+
+**The ledger and its commands (0.3.0).** `content.client_patches` has a row per patch (previous, commit, extensions, dirty, the patch
+file's and the signature's SHA-256 once packed, status `generated`, `staged`, `live` or `withdrawn`); `content.client_patch_files` has one
+per member with its encrypted bytes. `client_patch.py adopt --patch N` records a patch made before the ledger existed (109) from its hand-over
+folder, checking every file against its manifest; `rebuild --patch N --out DIR` regenerates the files from the database with only the client
+rows whose `since_patch` is at most N and compares each with the ledger: `MATCH`, or the records that differ; `record --patch N …` writes the
+client side's results. Undoing a client change is the next patch: after `ext remove` the client rows are gone, so the next generated files
+hold the original records again (`docs/plans/ext-1-foundation.md` section 4.3). `--dirty` lets a trial run through and writes `"dirty": true`; the client side
 refuses a dirty manifest.
 
 ## 5. What the client side does
@@ -191,7 +212,7 @@ A change needs a client patch only when the client keeps its own copy of the dat
 
 | Patch | Contents | Files (SHA-256 of the encrypted file) | Patch file and signature | Status |
 |---|---|---|---|---|
-| 109 | the three kill-boost stones and skill 200 levels 1 to 3 | `Item/Item.SData` `a92292782764918ec1e6b8b929fe66617d340da183ec4664eba46c80ddf47bea` (2960592 bytes); `Character/Skill.SData` `6c5b4bc42032949494efd97a226008c6af9f44df9d52b211c0fc5ca5fb54649c` (222368 bytes) | | generated, to the client side |
+| 109 | the three kill-boost stones and skill 200 levels 1 to 3 | `Item/Item.SData` `a92292782764918ec1e6b8b929fe66617d340da183ec4664eba46c80ddf47bea` (2960592 bytes); `Character/Skill.SData` `6c5b4bc42032949494efd97a226008c6af9f44df9d52b211c0fc5ca5fb54649c` (222368 bytes) | `ps0109.patch` `9478d66a773db74ac132d8af13a40fb727e6564a9abdf3cb99532e3e2c17bde5` (2,052,649 bytes), `ps0109.patch.sig` `9d27d3f161c3d783ea5e42378d76e73b6edefc99119c92c7508390477f4f9533` (129 bytes) (`docs/client/client-patch-0109.md` section 2) | staged: the real updater installed it on a spare client; the in-game check (death and relog persistence, player-kill increments) is pending. In the ledger since 0.3.0 (`client_patch.py adopt --patch 109`; `rebuild --patch 109` regenerates both files byte for byte from the database) |
 
 ## Build
 

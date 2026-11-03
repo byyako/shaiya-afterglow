@@ -1605,3 +1605,13 @@ stricter. Everyday login and play must feel the same.
       dungeon speak and summon as before); the log has no "Lua script did not load" and no "ran over its instruction limit".
 - [ ] Restart the game server (`tools/game-server.sh restart`) with the guild bank loaded: the log has no "guild bank count fix" error,
       and the bank still opens with the same items.
+
+## 58. Extensions foundation (the Kill Boost Stones as an extension; `docs/plans/ext-1-foundation.md`)
+
+The dev box now runs from a worktree of the clone, and the Kill Boost Stones come from the extension `extensions/kill-boost` instead of
+`additions.sql`. Nothing in play should change. (The items of part B, the stones with the extension disabled and enabled and
+the settings read from `config/game.toml`, are added when part B is built.)
+
+- [ ] After the move (staff account, a spare character): `/imake 100 212 1`, `/imake 100 213 1` and `/imake 100 214 1` give the three stones; using each
+      shows its buff for one hour (with client patch 109 installed: the names, icons and text as before); a player kill with each counts 2×,
+      5× and 10× (section 51 unchanged).

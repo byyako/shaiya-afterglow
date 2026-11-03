@@ -35,9 +35,11 @@ tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 ```
 
 `tools/setup.sh` does the rest: it writes a `.env` with random passwords, starts PostgreSQL in Docker, builds the server (a few minutes
-the first time; with no Rust installed it downloads the release's binaries instead), reads the game definitions straight out of the original backup, imports the world, and then asks for the name and
-password of your first account and the address your players use, and starts the servers. Without the build it takes about a minute.
-If it stops, it names the step; run it again after fixing the cause.
+the first time; with no Rust installed it downloads the release's binaries instead), reads the game definitions straight out of the original backup, imports the original data once and builds the game's tables from it, writes
+`config/game.toml`, and then asks for the name and password of your first account and the address your players use, and starts the servers.
+Without the build it takes about a minute. If it stops, it names the step; run it again after fixing the cause (a re-run skips what is
+already imported). `--extension extensions/kill-boost` installs the Kill Boost Stones on the way (below), `--reset` imports corrected original
+files again.
 
 Last, point the client at your server: `python3 tools/patch_client_ip.py <Client folder> <server ip>` writes a copy of
 `game.exe` that connects to it ([details](docs/original/client-login.md)). Log in with the account you made. The rest of this README
@@ -87,7 +89,8 @@ container names `PG_CONTAINER` and `MSSQL_CONTAINER` (default `shaiya-afterglow-
 `docs/server/settings.md`, "Tools").
 
 These are the steps `tools/setup.sh` ([Quick start](#quick-start)) runs, one at a time, for doing them by hand or finding which one failed.
-`tools/setup.sh` can be run again; it replaces the definitions and the world. `--sqlserver` makes step 4 use SQL Server (see there).
+`tools/setup.sh` can be run again: it skips what is imported from the same files, refuses other files until `--reset`, and keeps `config/game.toml`.
+`--sqlserver` makes step 4 use SQL Server (see there).
 
 ### 1. Clone and configure
 
@@ -284,6 +287,25 @@ tools/login-server.sh restart
 
 New migrations run when the servers start. The game data is not touched by updates; re-run steps 4 and 5 only when the import tools or
 your original files change.
+
+## The game data and extensions
+
+The original data is imported **once**, into frozen copies (`original_defs`, `original_world`); the tables the servers read (`defs`, `world`)
+are built from them, the installed **extensions** and the data editor's edits, in that order. Nothing hand-edited in `defs` survives a rebuild,
+and `data-editor content check` names every row that was changed by hand.
+
+```bash
+target/release/data-editor content status                 # what is imported and installed, and whether a client patch is due
+target/release/data-editor content check                  # the live tables against a rebuild from the originals, extensions and edits
+target/release/data-editor ext install extensions/kill-boost   # an extension: a folder with extension.toml and rows.toml
+target/release/data-editor ext list | show <name> | check <folder> | upgrade <folder> | enable <name> | disable <name>
+target/release/data-editor ext remove <name>              # every row goes back to the original; refused while players hold its items
+```
+
+An extension adds to or changes items, skills and drop chances without SQL; the database keeps everything it read, so removing it needs no
+folder. `extensions/kill-boost` (three stones whose buff multiplies player kills) is the first and the example to copy; restart the game servers
+after an install. The format, the checks and the commands are in `docs/plans/ext-1-foundation.md` (sections 5 to 7), the schemas in
+`docs/original/database-notes.md`.
 
 ## Development
 

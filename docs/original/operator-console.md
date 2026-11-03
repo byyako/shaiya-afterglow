@@ -143,7 +143,7 @@ Confirmed.
    copies and no item names it; an id of 255 or less keeps the client's one-byte item link equal to the server's number (327, the
    client's next id, would read 71 in the client's item record). The setting takes **`id/level`** (or `id` for any level), default
    **`200/1`**: the monsters' skills share the ids at level 100 (200/100 is their Weakening Curse, kept in the client's separate
-   `NpcSkill.SData`), and a player hit by one must not count double. The server's rows are `tools/defs/additions.sql`; the client's copy
+   `NpcSkill.SData`), and a player hit by one must not count double. The server's rows are the extension `extensions/kill-boost` (before 0.3.0: `additions.sql`); the client's copy
    (`Item.SData` 100/212, `Skill.SData` 200 levels 1 to 3, same names and values) ships in the first client data patch
    (`docs/plans/roadmap.md`, client data patches).
    **Three strengths (`docs/plans/done/client-patches.md` decision 1)**: the Kill Boost Stone (100/212, skill 200/1)
@@ -151,7 +151,7 @@ Confirmed.
    (100/214, 200/3 "Kill Boost Lv3") **10×**, one hour each, kept through death and logout, all looking like the Mini Sun EXP Stone
    (buff icon 225). The stones' setting is `200/1:2,200/2:5,200/3:10` (entries `id[/level][:times]`; the highest matching entry
    counts), the former default; the default is now empty and the stones' rows load only with
-   `tools/defs/additions.sh --with-additions` (an addition: `docs/server/deviations.md` section 1); a stronger stone used during a weaker one ends it and starts a fresh hour, a weaker one is refused while a stronger runs
+   `data-editor ext install extensions/kill-boost` (before 0.3.0: `additions.sh --with-additions`; an addition: `docs/server/deviations.md` section 1); a stronger stone used during a weaker one ends it and starts a fresh hour, a weaker one is refused while a stronger runs
    (`buffs.rs`). The client's copy is client data patch 109.
 4. **The data reloads** (`/remob`, `/remobitem`, `/reitem`, `/reskill`, `/remobskill`, `/reseqitem`, `/reitemenh`, `/reitemcre`, and
    `/aiset`, which changes the data live too): **not built, except `reload` for the monsters and the drop tables** (section 10; section 9 has the estimate for the rest). Data the client also has needs a
@@ -372,12 +372,12 @@ Steps 1 to 7 of section 6 as planned, with these points:
 - **Three strengths**: `skills::KillBoost { skill: SkillMatch, times }`; `GAME_KILL_BOOST_SKILLS` parses `id[/level][:times]`
   (times 1 to 100, 2 when left out), default `200/1:2,200/2:5,200/3:10`; `Zones::kill_boost(map, id, &[KillBoost]) -> u32` is the highest
   `times` of the entries matching an applied skill, 1 when none (replacing `has_applied_skill`); `pvp::kill_counted` uses
-  `kill_rate × kill_boost`. `tools/defs/additions.sql` also makes 100/213, 100/214 and 200/2, 200/3. Tests: `config` (the default,
+  `kill_rate × kill_boost`. The extension `extensions/kill-boost` (once `additions.sql`) also makes 100/213, 100/214 and 200/2, 200/3. Tests: `config` (the default,
   `200`, `200/2:5`, `310:3`, errors naming the entry), `zone` (levels 1 to 3 give 2, 5, 10; none gives 1; two matching entries give the
   higher; the monster's level 100 never counts).
 - **The kill-boost item** (decision 3, after research entry 7; now the first of three): `skills::SkillMatch` (an id, and a level or any);
   `GAME_KILL_BOOST_SKILLS` parses `id` and `id/level` (ids and levels from 1), default `200/1`; `Zones::has_applied_skill` takes the
-  matches. `tools/defs/additions.sql` (run by `tools/defs/additions.sh` after every load of `defs`) turns 100/212 and 200/1 into the
+  matches. The extension `extensions/kill-boost` (before 0.3.0 `additions.sql`, run by `additions.sh` after every load of `defs`) turns 100/212 and 200/1 into the
   Kill Boost Stone and its buff; the PostgreSQL test of the definitions checks both rows. Tests: `config` (the forms and refusals), `zone`
   (by id, by id and level, a monster's level-100 skill of the same id not counted). Unverified: the client's copy (the data patch) and
   the whole in a live PvP kill (live test 51).
