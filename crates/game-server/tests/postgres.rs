@@ -1161,7 +1161,7 @@ async fn world_and_item_definitions_load() {
         let potion = items.get(25, 1).expect("item 25001");
         assert_eq!(potion.item_id, 25001);
         assert!(potion.max_count > 1);
-        // The server's own rows (`tools/defs/additions.sql`, loaded only by `tools/defs/additions.sh --with-additions`:
+        // The server's own rows (the extension `extensions/kill-boost`, installed with `data-editor ext install`:
         // `docs/server/deviations.md` section 1): the kill-boost stone 100/212 gives skill 200/1, a buff with no ability lasting an hour and
         // kept on death (`docs/original/operator-console.md` decision 3).
         let stone = items.get(100, 212).expect("item 100212");
@@ -1173,7 +1173,7 @@ async fn world_and_item_definitions_load() {
             );
             assert_eq!(boost.abilities, [(0, 0); 3]);
         } else {
-            eprintln!("the additions are not loaded (tools/defs/additions.sh --with-additions): skipping the kill-boost rows");
+            eprintln!("the kill-boost extension is not installed (data-editor ext install extensions/kill-boost): skipping the kill-boost rows");
         }
         assert_eq!(skills.get(200, 100).map(|curse| curse.kind), Some(62), "the monsters' Weakening Curse is left as it was");
     } else {

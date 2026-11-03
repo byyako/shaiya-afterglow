@@ -1,18 +1,28 @@
-#!/usr/bin/env python3
 """Generate the client's Item.SData and Skill.SData from the database, check them, and write a client data patch's hand-over folder
-(docs/plans/done/client-patches.md).
+(docs/plans/done/client-patches.md, docs/plans/ext-1-foundation.md section 4).
 
 usage: client_patch.py restore <out dir>
        client_patch.py check
        client_patch.py generate --patch N [--dirty]
+       client_patch.py adopt --patch N [--patch-sha256 H --sig-sha256 H --status S]
+       client_patch.py rebuild --patch N --out DIR
+       client_patch.py record --patch N [--patch-sha256 H] [--sig-sha256 H] [--status S]
 
-Every command first loads tools/sdata/client_rows.sql into the `client` schema (tools/sdata/load_client.py has imported the shipped
-originals there). A generated record is the client's original (client.items / client.skills) unless it has a row in client.item_rows /
-client.skill_rows; then it is the server's fields (defs.items / defs.skills) with the row's client-only fields.
+Reads the database only: a generated record is the client's original (client.items / client.skills, imported by tools/sdata/load_client.py)
+unless it has a client row in content.client_items / content.client_skills (written by `data-editor ext install` from an extension's
+rows); then it is the server's fields (defs.items / defs.skills) with the row's client-only fields, resolved as the plan's section 4.1
+says: a field given by name, else the look-alike's record, else the record's own original.
 
   restore   writes the decrypted and encrypted files from client.items / client.skills alone and checks that they are the shipped ones.
   check     the eight checks of section 3 of the plan, one line each; exit 1 on the first error.
-  generate  runs the checks, then writes data/client-patches/psNNNN/ (the encrypted files that changed, manifest.json, changes.txt).
+  generate  runs the checks, then records the patch in the ledger (content.client_patches, content.client_patch_files) and stamps
+            since_patch on the client rows that have none, in one transaction, and writes data/client-patches/psNNNN/ (the encrypted
+            files that changed, manifest.json, changes.txt).
+  adopt     a patch made before the ledger existed (109): reads its hand-over folder, checks every file against its manifest, writes the
+            ledger rows and stamps since_patch on the client rows its manifest lists.
+  rebuild   generates the files from the database with only the client rows whose since_patch is at most N and compares each with the
+            ledger's sha256 for that patch: MATCH, or the records that differ. The proof that a patch regenerates from the database alone.
+  record    the client side's results for a patch: the patch file's and the signature's SHA-256 and its status.
 """
 import argparse
 import csv
@@ -25,21 +35,20 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "defs"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client_sdata
 import dbconn
 import load_client
-import load_into_postgres
 import parse_item
 import seed_sdata
 
 ROOT = Path(__file__).resolve().parents[2]
-ROWS_SQL = ROOT / "tools/sdata/client_rows.sql"
-DEFS_EXPORT = ROOT / "data/defs-export"
-DEFS_SCHEMA = ROOT / "db/defs/schema.sql"
 PATCHES = ROOT / "data/client-patches"
 PREVIOUS_VERSION = 108  # the originals' patch
+# What the client side reported of patch 109 (docs/client/client-patch-0109.md section 2): `adopt` records them, status "staged" (the
+# updater passed on a spare client; the in-game check is pending). Later patches come with `record`.
+ADOPTED = {109: {"patch_sha256": "9478d66a773db74ac132d8af13a40fb727e6564a9abdf3cb99532e3e2c17bde5",
+                 "sig_sha256": "9d27d3f161c3d783ea5e42378d76e73b6edefc99119c92c7508390477f4f9533", "status": "staged"}}
 
 ITEM_CLIENT_ONLY = ("model", "icon", "type2", "type3")
 SKILL_CLIENT_ONLY = ("icon", "animation", "toggle_type", "sound")
@@ -65,10 +74,6 @@ def psql_run(sql=None, stdin=None):
     if result.returncode != 0:
         sys.exit(f"psql failed: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout.decode("utf-8")
-
-
-def load_rows_file():
-    psql_run(stdin=ROWS_SQL.read_bytes())
 
 
 def query(sql):
@@ -221,22 +226,79 @@ def printable(text, what, longest):
     return raw
 
 
-class Data:
-    """Everything one run reads: the originals as shipped, client.*, the rows, and the server's fields for the listed records."""
+def resolve_field(by_name, look, own):
+    """A client-only field of a client row (docs/plans/ext-1-foundation.md section 4.1): given by name, else the look-alike's record's,
+    else the record's own original."""
+    if by_name is not None:
+        return by_name
+    return look if look is not None else own
 
-    def __init__(self):
-        load_rows_file()
-        self.originals = {}
-        for kind, info in MEMBERS.items():
-            path = load_client.ORIGINALS / info["original"]
-            if not path.exists():
-                raise CheckError(f"{path}: the shipped original is missing")
-            self.originals[kind] = load_client.original(path, info["original"])
-        self.item_rows = {(int(r[0]), int(r[1])): r for r in query(
-            "SELECT type, typeid, name, description, model, icon, type2, type3, since_patch, note FROM client.item_rows ORDER BY 1, 2")}
-        self.skill_rows = {(int(r[0]), int(r[1])): r for r in query(
-            "SELECT skill_id, level, name, description, icon, animation, toggle_type, sound, since_patch, note FROM client.skill_rows ORDER BY 1, 2")}
-        self.server_only = {(r[0], int(r[1]), int(r[2])): r[3] for r in query("SELECT kind, id, level, reason FROM client.server_only")}
+
+def resolve_item_row(raw, own, look):
+    """A client_items row as (type, typeid, name, description, model, icon, type2, type3, since_patch, note); `own` and `look` are the
+    client.items records (name, description, model, icon, type2, type3) or None. `keep` takes the text from the record's own original."""
+    ty, tid, keep, name, description, model, icon, type2, type3, since, note = raw
+    pick = lambda i, given: resolve_field(given, look[i] if look else None, own[i] if own else None)
+    return (ty, tid, (own[0] if keep else name), (own[1] if keep else description),
+            pick(2, model), pick(3, icon), pick(4, type2), pick(5, type3), since, note)
+
+
+def resolve_skill_row(raw, own, look):
+    """The same for client_skills: (skill_id, level, name, description, icon, animation, toggle_type, sound, since_patch, note)."""
+    sid, level, keep, name, description, icon, animation, toggle, sound, since, note = raw
+    pick = lambda i, given: resolve_field(given, look[i] if look else None, own[i] if own else None)
+    return (sid, level, (own[0] if keep else name), (own[1] if keep else description),
+            pick(2, icon), pick(3, animation), pick(4, toggle), pick(5, sound), since, note)
+
+
+def nullable_int(v):
+    return None if v is None else int(v)
+
+
+def client_rows(kind):
+    """The client rows of content.client_items / content.client_skills, resolved against client.items / client.skills."""
+    if kind == "item":
+        raw = query("SELECT type, typeid, keep, name, description, model, icon, type2, type3, since_patch, note, look_type, look_typeid "
+                    "FROM content.client_items ORDER BY 1, 2")
+        records = query("SELECT grp, idx, name, description, model, icon, type2, type3 FROM client.items")
+        resolve = resolve_item_row
+    else:
+        raw = query("SELECT skill_id, level, keep, name, description, icon, animation, toggle_type, sound, since_patch, note, look_skill, look_level "
+                    "FROM content.client_skills ORDER BY 1, 2")
+        records = query("SELECT skill_id, slot, name, description, icon, animation, toggle_type, sound FROM client.skills")
+        resolve = resolve_skill_row
+    by_place = {(int(r[0]), int(r[1])): (r[2], r[3], *[nullable_int(v) for v in r[4:]]) for r in records}
+    out = {}
+    for r in raw:
+        place = (int(r[0]), int(r[1]))
+        look = by_place.get((int(r[11]), int(r[12]))) if r[11] is not None else None
+        fixed = [int(r[0]), int(r[1]), r[2] == "t", r[3], r[4], *[nullable_int(v) for v in r[5:9]], nullable_int(r[9]), r[10]]
+        out[place] = resolve(tuple(fixed), by_place.get(place), look)
+    return out
+
+
+def patch_limit(rows, limit):
+    """The client rows of patches up to `limit` (rebuild): a row with since_patch NULL belongs to no patch yet."""
+    if limit is None:
+        return rows
+    return {k: r for k, r in rows.items() if r[8] is not None and int(r[8]) <= limit}
+
+
+class Data:
+    """Everything one run reads: the originals restored from client.*, the client rows (resolved), and the server's fields for the listed
+    records. `max_patch` keeps only the client rows of patches up to it (rebuild)."""
+
+    def __init__(self, max_patch=None):
+        record = query("SELECT files FROM content.imports WHERE part = 'client'")
+        if not record:
+            raise CheckError("content.imports has no 'client' record: run tools/sdata/load_client.py (a developer's box only)")
+        self.shipped = json.loads(record[0][0])
+        self.restored = restored()
+        # The originals the other checks compare with are the restored bytes (check 2 proves them), not the files.
+        self.originals = {kind: plain for kind, (plain, _) in self.restored.items()}
+        self.item_rows = patch_limit(client_rows("item"), max_patch)
+        self.skill_rows = patch_limit(client_rows("skill"), max_patch)
+        self.server_only = {(r[0], int(r[1]), int(r[2])): r[3] for r in query("SELECT kind, id, level, reason FROM content.server_only")}
         longest = lambda sql: int(query(sql)[0][0])
         self.longest = {"item name": longest("SELECT max(octet_length(name)) FROM client.items"),
                         "item description": longest("SELECT max(octet_length(description)) FROM client.items"),
@@ -334,36 +396,15 @@ def skill_changes(old_records, new_records):
     return out
 
 
-def defs_export_rows(table, key_columns):
-    """The original export of a defs table (as load_into_postgres.py reads it): {key: [string values; None for NULL]}."""
-    columns = load_into_postgres.table_columns(DEFS_SCHEMA.read_text())[table]
-    names = [c for c, _ in columns]
-    index = [names.index(k) for k in key_columns]
-    rows = {}
-    for number, line in enumerate((DEFS_EXPORT / f"{table}.psv").read_text().split("\n"), 1):
-        if not line.strip():
-            continue
-        fields = line.split("|")
-        if len(fields) != len(columns):
-            raise CheckError(f"{table}.psv line {number}: {len(fields)} fields, expected {len(columns)}")
-        values = [load_into_postgres.decode_text(v) if ty == "text" else (None if v == "" else v) for (_, ty), v in zip(columns, fields)]
-        rows[tuple(int(values[i]) for i in index)] = values
-    return names, rows
-
-
 def defs_differences(table, key_columns):
-    """The keys of the rows of a defs table that are not as the original export has them (changed, added or removed)."""
-    names, original = defs_export_rows(table, key_columns)
-    skip = {names.index(c) for c in ("updatedate",) if c in names}
-    current = {}
-    for row in query(f"SELECT {', '.join(names)} FROM defs.{table}"):
-        current[tuple(int(row[names.index(k)]) for k in key_columns)] = row
-    differing = []
-    for key in sorted(set(original) | set(current)):
-        a, b = original.get(key), current.get(key)
-        if a is None or b is None or any(x != y for i, (x, y) in enumerate(zip(a, b)) if i not in skip):
-            differing.append(key)
-    return differing
+    """The keys of the rows of a defs table that are not as the frozen original (original_defs) has them (changed, added or removed);
+    `updatedate` never counts."""
+    keys = ", ".join(f"coalesce(a.{k}, b.{k})" for k in key_columns)
+    join = " AND ".join(f"a.{k} = b.{k}" for k in key_columns)
+    rows = query(f"SELECT {keys} FROM defs.{table} a FULL JOIN original_defs.{table} b ON {join} "
+                 f"WHERE a.{key_columns[0]} IS NULL OR b.{key_columns[0]} IS NULL OR (to_jsonb(a) - 'updatedate') <> (to_jsonb(b) - 'updatedate') "
+                 f"ORDER BY {', '.join(str(i + 1) for i in range(len(key_columns)))}")
+    return [tuple(int(v) for v in row) for row in rows]
 
 
 def only_grade_differs(names, original, current):
@@ -374,33 +415,36 @@ def only_grade_differs(names, original, current):
 
 
 def grade_only_item_edits():
-    """The item ids whose only difference from the original export is `grade` and that the data editor has an `item_grade` edit for
+    """The item ids whose only difference from the original is `grade` and that the data editor has an `item_grade` edit for
     (`docs/plans/done/data-editing.md` section 9): the client does not use the drop grade, so check 4 needs no client row for them."""
     if query("SELECT to_regclass('edits.fields') IS NULL")[0][0] == "t":
         return set()
     edited = [int(k) for (k,) in query("SELECT key FROM edits.fields WHERE target = 'item_grade' AND field = 'grade'")]
     if not edited:
         return set()
-    names, original = defs_export_rows("items", ["itemid"])
-    found = set()
+    names = table_columns("items")
     ids = ", ".join(str(i) for i in edited)
+    original = {int(r[names.index("itemid")]): r for r in query(f"SELECT {', '.join(names)} FROM original_defs.items WHERE itemid IN ({ids})")}
+    found = set()
     for row in query(f"SELECT {', '.join(names)} FROM defs.items WHERE itemid IN ({ids})"):
         itemid = int(row[names.index("itemid")])
-        if (itemid,) in original and only_grade_differs(names, original[(itemid,)], row):
+        if itemid in original and only_grade_differs(names, original[itemid], row):
             found.add(itemid)
     return found
 
 
 def run_checks(data, patch=None, report=print):
     """The eight checks of section 3. Returns (generated files, item changes, skill changes) against the originals."""
-    # 1. Originals: Data() refused anything but the shipped files; the sizes and counts of what was imported.
+    # 1. Originals: the files the import recorded (content.imports 'client') are the shipped ones; the sizes and counts of what was imported.
+    if data.shipped != load_client.SHA256:
+        raise CheckError(f"the import recorded other files than the shipped ones: {data.shipped} (shipped: {load_client.SHA256})")
     counts = (int(query("SELECT count(*) FROM client.items")[0][0]), int(query("SELECT count(*) FROM client.skills")[0][0]))
     if counts != (16045, 978):
         raise CheckError(f"client.items / client.skills hold {counts} rows, the shipped files have (16045, 978)")
     report(f"1 originals: Item.SData {load_client.SHA256['Item.SData'][:8]}…, Skill.SData {load_client.SHA256['Skill.SData'][:8]}… "
-           f"as shipped; client.items {counts[0]} rows, client.skills {counts[1]} rows")
+           f"as recorded by the import; client.items {counts[0]} rows, client.skills {counts[1]} rows")
     # 2. Restore.
-    check_restore(restored())
+    check_restore(data.restored)
     report("2 restore: client.* alone rebuild both files and their encrypted forms byte for byte")
     # 3. Only the listed records change (and their fields are the database's and the rows').
     files = generate(data)
@@ -446,15 +490,15 @@ def run_checks(data, patch=None, report=print):
     for (itemid,) in item_diff:
         key = (itemid // 1000, itemid % 1000)
         if key not in data.item_rows and ("item", itemid, 0) not in data.server_only and itemid not in grade_edits:
-            raise CheckError(f"defs.items {itemid} differs from the original export but is in neither client.item_rows nor client.server_only")
+            raise CheckError(f"defs.items {itemid} differs from the original but has neither a client row nor a server_only reason")
     for skill_id, level in skill_diff:
         if level == 100:
             if ("skill", skill_id, level) not in data.server_only:
                 raise CheckError(f"defs.skills {skill_id}/100 (a monster skill, NpcSkill.SData, not generated yet) differs from the original "
-                                 "export and is not in client.server_only")
+                                 "and has no server_only reason")
         elif (skill_id, level) not in data.skill_rows and ("skill", skill_id, level) not in data.server_only:
-            raise CheckError(f"defs.skills {skill_id}/{level} differs from the original export but is in neither client.skill_rows nor client.server_only")
-    report(f"4 nothing forgotten: {len(item_diff)} defs.items and {len(skill_diff)} defs.skills rows differ from the original export, "
+            raise CheckError(f"defs.skills {skill_id}/{level} differs from the original but has neither a client row nor a server_only reason")
+    report(f"4 nothing forgotten: {len(item_diff)} defs.items and {len(skill_diff)} defs.skills rows differ from the original, "
            f"each with a client row or a server_only reason ({len(grade_edits)} items differ in their drop grade alone, by the data editor)")
     # 5. Widths: checked while generating (every listed record's server values and client-only values).
     report(f"5 widths: all {len(data.item_rows) + len(data.skill_rows)} listed records' values fit their client fields")
@@ -468,7 +512,7 @@ def run_checks(data, patch=None, report=print):
         raise CheckError("generating twice gives different bytes")
     report("8 deterministic: generating twice gives the same bytes")
     if patch is not None:
-        late = [k for rows in (data.item_rows, data.skill_rows) for k, r in rows.items() if int(r[8]) > patch]
+        late = [k for rows in (data.item_rows, data.skill_rows) for k, r in rows.items() if r[8] is not None and int(r[8]) > patch]
         if late:
             raise CheckError(f"client row {late[0]} is for a later patch than {patch}")
     return files, item_changed, skill_changed
@@ -486,29 +530,36 @@ def git(*args):
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout
 
 
-def earlier_manifests(patch):
-    """[(patch number, manifest)] of the earlier patches, newest first."""
-    found = []
-    for folder in PATCHES.glob("ps[0-9][0-9][0-9][0-9]"):
-        number = int(folder.name[2:])
-        if number < patch and (folder / "manifest.json").exists():
-            found.append((number, json.loads((folder / "manifest.json").read_text())))
-    return sorted(found, key=lambda x: -x[0])
+def sql_text(text):
+    return "'" + str(text).replace("'", "''") + "'"
+
+
+def ledger_numbers(below):
+    """The patch numbers in the ledger below `below`, newest first."""
+    return [int(n) for (n,) in query(f"SELECT patch FROM content.client_patches WHERE patch < {int(below)} ORDER BY patch DESC")]
+
+
+def ledger_member(patch, member):
+    """(encrypted bytes, sha256) of a member the ledger holds for a patch, or None."""
+    rows = query(f"SELECT encode(encrypted, 'hex'), sha256 FROM content.client_patch_files WHERE patch = {int(patch)} AND member = {sql_text(member)}")
+    return (bytes.fromhex(rows[0][0]), rows[0][1]) if rows else None
 
 
 def previous_version(kind, patch):
-    """(patch number the file was last shipped in, its encrypted bytes, decrypted bytes) before this patch."""
+    """(patch number the file was last shipped in, its encrypted bytes, decrypted bytes) before this patch: the newest earlier patch of
+    the ledger that carried it, else the restored originals (108)."""
     info = MEMBERS[kind]
-    for number, manifest in earlier_manifests(patch):
-        if any(f["member"] == info["member"] for f in manifest["files"]):
-            encrypted = (PATCHES / f"ps{number:04d}" / info["member"]).read_bytes()
-            return number, encrypted, seed_sdata.decrypt(encrypted, seed_sdata.load_consts(load_client.SEED_CONSTANTS))
-    path = load_client.ORIGINALS / info["original"]
-    return PREVIOUS_VERSION, path.read_bytes(), data_original(kind)
+    number = newest_carrier(ledger_numbers(patch), lambda n: ledger_member(n, info["member"]) is not None)
+    if number is not None:
+        encrypted = ledger_member(number, info["member"])[0]
+        return number, encrypted, seed_sdata.decrypt(encrypted, seed_sdata.load_consts(load_client.SEED_CONSTANTS))
+    plain, encrypted = restored()[kind]
+    return PREVIOUS_VERSION, encrypted, plain
 
 
-def data_original(kind):
-    return load_client.original(load_client.ORIGINALS / MEMBERS[kind]["original"], MEMBERS[kind]["original"])
+def installed_extensions():
+    """{extension: version} of the installed extensions (the content's provenance, for the manifest and the ledger)."""
+    return {name: version for name, version in query("SELECT name, version FROM content.extensions ORDER BY install_seq")}
 
 
 def changes_text(patch, item_changed, skill_changed):
@@ -521,18 +572,48 @@ def changes_text(patch, item_changed, skill_changed):
     return "\n".join(lines)
 
 
+def build_manifest(patch, previous, commit, extensions, dirty, files):
+    """The hand-over folder's manifest: the commit it was generated at (`commit`), the installed extensions and their versions, and the
+    members (without the encrypted bytes, which are files of the folder)."""
+    return {"patch": patch, "previous": previous, "commit": commit, "extensions": extensions, "dirty": dirty,
+            "files": [{k: v for k, v in f.items() if not k.startswith("_")} for f in files]}
+
+
+def newest_carrier(numbers, carried):
+    """The newest earlier patch that carried a member: `numbers` are the ledger's patch numbers below this one, newest first, `carried`
+    says whether a patch carried it; None when none did (the previous version is then the restored original, 108)."""
+    return next((n for n in numbers if carried(n)), None)
+
+
+def ledger_sql(patch, previous, commit, extensions, dirty, files, patch_sha256=None, sig_sha256=None, status="generated"):
+    """The statements that record a generated (or adopted) patch in the ledger and stamp since_patch on the client rows that have none."""
+    def text_or_null(v):
+        return "NULL" if v is None else sql_text(v)
+    out = [f"INSERT INTO content.client_patches (patch, previous, commit, extensions, dirty, patch_sha256, sig_sha256, status) VALUES "
+           f"({patch}, {previous}, {sql_text(commit)}, {sql_text(json.dumps(extensions, sort_keys=True))}::jsonb, {'true' if dirty else 'false'}, "
+           f"{text_or_null(patch_sha256)}, {text_or_null(sig_sha256)}, {sql_text(status)});"]
+    for f in files:
+        changed = "ARRAY[" + ", ".join(sql_text(c) for c in f["changed"]) + "]::text[]"
+        out.append(f"INSERT INTO content.client_patch_files (patch, member, us_path, size, sha256, plain_sha256, plain_size, replaces_sha256, changed, encrypted) "
+                   f"VALUES ({patch}, {sql_text(f['member'])}, {sql_text(f['us_path'])}, {f['size']}, {sql_text(f['sha256'])}, {sql_text(f['plain_sha256'])}, "
+                   f"{f['plain_size']}, {sql_text(f['replaces_sha256'])}, {changed}, decode('{f['_encrypted'].hex()}', 'hex'));")
+    return out
+
+
 def cmd_generate(patch, dirty):
-    status = git("status", "--porcelain", "--", "tools/defs/additions.sql", "tools/sdata", "db/client")
+    status = git("status", "--porcelain", "--", "tools/sdata", "db/client", "extensions")
     if status.strip() and not dirty:
-        sys.exit("uncommitted changes in tools/defs/additions.sql, tools/sdata/ or db/client/ (the manifest's commit must describe the "
+        sys.exit("uncommitted changes in tools/sdata/, db/client/ or extensions/ (the manifest's commit must describe the "
                  "files); commit them, or pass --dirty for a trial run:\n" + status)
     out_dir = PATCHES / f"ps{patch:04d}"
     if out_dir.exists():
         sys.exit(f"{out_dir} exists; refusing to overwrite a patch")
+    if query(f"SELECT 1 FROM content.client_patches WHERE patch = {patch}"):
+        sys.exit(f"patch {patch} is in the ledger already; refusing to overwrite a patch")
     data = Data()
     files, _, _ = run_checks(data, patch)
     manifest_files, all_item_changes, all_skill_changes = [], [], []
-    previous_numbers = [number for number, _ in earlier_manifests(patch)]
+    previous_numbers = ledger_numbers(patch)
     for kind in ("item", "skill"):
         info = MEMBERS[kind]
         plain = files[kind][1]
@@ -552,9 +633,16 @@ def cmd_generate(patch, dirty):
             "changed": [c[0] for c in changed], "_encrypted": encrypted})
     if not manifest_files:
         sys.exit("both files are identical to the previous version; nothing to patch")
-    manifest = {"patch": patch, "previous": previous_numbers[0] if previous_numbers else PREVIOUS_VERSION,
-                "newshaiya_commit": git("rev-parse", "HEAD").strip(), "dirty": bool(status.strip()),
-                "files": [{k: v for k, v in f.items() if not k.startswith("_")} for f in manifest_files]}
+    previous = previous_numbers[0] if previous_numbers else PREVIOUS_VERSION
+    extensions = installed_extensions()
+    commit = git("rev-parse", "HEAD").strip()
+    manifest = build_manifest(patch, previous, commit, extensions, bool(status.strip()), manifest_files)
+    if not manifest["dirty"]:
+        # The ledger and since_patch in one transaction; a trial (--dirty) run is not recorded.
+        script = ["BEGIN;", *ledger_sql(patch, previous, commit, extensions, False, manifest_files),
+                  f"UPDATE content.client_items SET since_patch = {patch} WHERE since_patch IS NULL;",
+                  f"UPDATE content.client_skills SET since_patch = {patch} WHERE since_patch IS NULL;", "COMMIT;"]
+        psql_run(stdin=("\n".join(script) + "\n").encode("utf-8"))
     out_dir.mkdir(parents=True)
     for f in manifest_files:
         path = out_dir / f["member"]
@@ -566,7 +654,94 @@ def cmd_generate(patch, dirty):
     for f in manifest["files"]:
         print(f"  {f['member']}: {f['size']} bytes, sha256 {f['sha256']}, changed {', '.join(f['changed'])}")
     if manifest["dirty"]:
-        print("DIRTY: a trial run; the client side refuses it")
+        print("DIRTY: a trial run; the client side refuses it, and the ledger and since_patch were not touched")
+    else:
+        print(f"patch {patch} is in the ledger (content.client_patches); the client rows without a patch are stamped {patch}")
+
+
+def cmd_adopt(patch, patch_sha256, sig_sha256, status):
+    """A patch made before the ledger existed: its hand-over folder is checked against its own manifest, then recorded."""
+    if query(f"SELECT 1 FROM content.client_patches WHERE patch = {patch}"):
+        sys.exit(f"patch {patch} is in the ledger already")
+    folder = PATCHES / f"ps{patch:04d}"
+    manifest = json.loads((folder / "manifest.json").read_text())
+    if manifest["patch"] != patch:
+        sys.exit(f"{folder}/manifest.json is patch {manifest['patch']}")
+    files = []
+    for f in manifest["files"]:
+        encrypted = (folder / f["member"]).read_bytes()
+        if sha(encrypted) != f["sha256"] or len(encrypted) != f["size"]:
+            sys.exit(f"{folder / f['member']}: not the file the manifest describes")
+        plain = seed_sdata.decrypt(encrypted, seed_sdata.load_consts(load_client.SEED_CONSTANTS))
+        if sha(plain) != f["plain_sha256"] or len(plain) != f["plain_size"]:
+            sys.exit(f"{folder / f['member']}: decrypts to another file than the manifest's")
+        files.append({**f, "_encrypted": encrypted})
+    defaults = ADOPTED.get(patch, {})
+    commit = manifest.get("commit") or manifest["newshaiya_commit"]  # patch 109's key is the old private tree's
+    owners = {}
+    stamps = []
+    for f in files:
+        kind = "item" if f["member"] == MEMBERS["item"]["member"] else "skill"
+        keys = [tuple(int(x) for x in c.split("/")) for c in f["changed"]]
+        if kind == "item":
+            where = ", ".join(f"({a}, {b})" for a, b in keys)
+            stamps.append(f"UPDATE content.client_items SET since_patch = {patch} WHERE (type, typeid) IN ({where}) AND since_patch IS NULL;")
+            rows = query(f"SELECT DISTINCT e.name, e.version FROM content.extensions e JOIN content.client_items i ON i.extension = e.name WHERE (i.type, i.typeid) IN ({where})")
+        else:
+            where = ", ".join(f"({a}, {b})" for a, b in keys)
+            stamps.append(f"UPDATE content.client_skills SET since_patch = {patch} WHERE (skill_id, level) IN ({where}) AND since_patch IS NULL;")
+            rows = query(f"SELECT DISTINCT e.name, e.version FROM content.extensions e JOIN content.client_skills i ON i.extension = e.name WHERE (i.skill_id, i.level) IN ({where})")
+        owners.update({name: version for name, version in rows})
+    script = ["BEGIN;", *ledger_sql(patch, manifest["previous"], commit, manifest.get("extensions", owners), manifest["dirty"], files,
+                                    patch_sha256 or defaults.get("patch_sha256"), sig_sha256 or defaults.get("sig_sha256"),
+                                    status or defaults.get("status", "generated")), *stamps, "COMMIT;"]
+    psql_run(stdin=("\n".join(script) + "\n").encode("utf-8"))
+    stamped = query(f"SELECT (SELECT count(*) FROM content.client_items WHERE since_patch = {patch}) + (SELECT count(*) FROM content.client_skills WHERE since_patch = {patch})")[0][0]
+    print(f"adopted patch {patch}: {len(files)} members in the ledger (status {status or defaults.get('status', 'generated')}), {stamped} client rows stamped {patch}")
+
+
+def cmd_rebuild(patch, out_dir):
+    """The proof of the ledger: the files regenerate from the database alone, with the client rows of patches up to `patch`."""
+    ledger = {m: sha256 for m, sha256 in query(f"SELECT member, sha256 FROM content.client_patch_files WHERE patch = {patch}")}
+    if not ledger:
+        sys.exit(f"patch {patch} is not in the ledger (content.client_patch_files has no member of it)")
+    data = Data(max_patch=patch)
+    files = generate(data)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    differs = 0
+    for kind in ("item", "skill"):
+        info = MEMBERS[kind]
+        if info["member"] not in ledger:
+            continue
+        plain = files[kind][1]
+        encrypted = encrypt(plain)
+        path = out_dir / info["member"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(encrypted)
+        if sha(encrypted) == ledger[info["member"]]:
+            print(f"{info['member']}: MATCH ({sha(encrypted)})")
+            continue
+        differs += 1
+        print(f"{info['member']}: DIFFERS (rebuilt {sha(encrypted)}, ledger {ledger[info['member']]})")
+        carried, _ = ledger_member(patch, info["member"])
+        old = seed_sdata.decrypt(carried, seed_sdata.load_consts(load_client.SEED_CONSTANTS))
+        changed = item_changes(parse_items(old), parse_items(plain)) if kind == "item" else skill_changes(parse_skills(old), parse_skills(plain))
+        for key, old_name, new_name, fields in changed:
+            print(f"  {key} {old_name.decode('cp1252')} -> {new_name.decode('cp1252')}: " + ", ".join(f"{n} {describe(a)} -> {describe(b)}" for n, a, b in fields))
+    if differs:
+        sys.exit(1)
+    print(f"patch {patch} regenerates byte for byte from the database")
+
+
+def cmd_record(patch, patch_sha256, sig_sha256, status):
+    sets = [f"{col} = {sql_text(v)}" for col, v in (("patch_sha256", patch_sha256), ("sig_sha256", sig_sha256), ("status", status)) if v]
+    if not sets:
+        sys.exit("record needs --patch-sha256, --sig-sha256 or --status")
+    done = query(f"UPDATE content.client_patches SET {', '.join(sets)} WHERE patch = {patch} RETURNING patch")
+    if not done:
+        sys.exit(f"patch {patch} is not in the ledger")
+    print(f"patch {patch}: " + ", ".join(sets))
 
 
 def main():
@@ -577,15 +752,29 @@ def main():
     gen = sub.add_parser("generate")
     gen.add_argument("--patch", type=int, required=True)
     gen.add_argument("--dirty", action="store_true")
+    for name in ("adopt", "record"):
+        p = sub.add_parser(name)
+        p.add_argument("--patch", type=int, required=True)
+        p.add_argument("--patch-sha256")
+        p.add_argument("--sig-sha256")
+        p.add_argument("--status", choices=["generated", "staged", "live", "withdrawn"])
+    reb = sub.add_parser("rebuild")
+    reb.add_argument("--patch", type=int, required=True)
+    reb.add_argument("--out", required=True)
     args = parser.parse_args()
     try:
         if args.command == "restore":
-            load_rows_file()
             cmd_restore(args.out_dir)
         elif args.command == "check":
             cmd_check()
-        else:
+        elif args.command == "generate":
             cmd_generate(args.patch, args.dirty)
+        elif args.command == "adopt":
+            cmd_adopt(args.patch, args.patch_sha256, args.sig_sha256, args.status)
+        elif args.command == "rebuild":
+            cmd_rebuild(args.patch, args.out)
+        else:
+            cmd_record(args.patch, args.patch_sha256, args.sig_sha256, args.status)
     except CheckError as error:
         print(f"FAILED: {error}", file=sys.stderr)
         sys.exit(1)

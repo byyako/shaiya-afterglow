@@ -1,10 +1,10 @@
 -- The client's own data files as imported from the originals (US patch 108) by tools/sdata/load_client.py, which creates this schema
--- (DROP SCHEMA client CASCADE, then this file, then the copies): not a migration, like db/defs/schema.sql. Used by
+-- (DROP SCHEMA client CASCADE, then this file, then the copies; once, or with --reset): not a migration, like db/defs/schema.sql. Used by
 -- tools/sdata/client_patch.py (docs/plans/done/client-patches.md section 2). Column names are parse_item.py's FIX and client_sdata.py's
 -- SKILL_FIELDS (the load asserts they match this file); every unsigned field fits its column.
 CREATE SCHEMA client;
 
-COMMENT ON SCHEMA client IS 'The client''s Item.SData and Skill.SData as shipped (client.items, client.skills: replaced on each import by tools/sdata/load_client.py), and what a data patch changes (client.item_rows, client.skill_rows, client.server_only: loaded from tools/sdata/client_rows.sql).';
+COMMENT ON SCHEMA client IS 'The client''s Item.SData and Skill.SData as shipped (client.items, client.skills: imported once by tools/sdata/load_client.py, recorded in content.imports; with --reset replaced). What a data patch changes lives in the content schema: content.client_items, content.client_skills and content.server_only, written by the extensions that change client-visible rows (docs/plans/ext-1-foundation.md section 4).';
 
 CREATE TABLE client.items (
     grp smallint NOT NULL,
@@ -158,42 +158,3 @@ CREATE TABLE client.skills (
     PRIMARY KEY (skill_id, slot)
 );
 COMMENT ON TABLE client.skills IS 'The client''s Skill.SData record by record, as shipped: skill_id from 1, slot 1 to 3 (the record''s place; its level field is a column too). Filled by tools/sdata/load_client.py from the original file; nothing else writes it.';
-
-CREATE TABLE client.item_rows (
-    type smallint NOT NULL,
-    typeid smallint NOT NULL,
-    name text NOT NULL,
-    description text NOT NULL,
-    model smallint NOT NULL,
-    icon smallint NOT NULL,
-    type2 smallint NOT NULL,
-    type3 smallint NOT NULL,
-    since_patch integer NOT NULL,
-    note text NOT NULL,
-    PRIMARY KEY (type, typeid)
-);
-COMMENT ON TABLE client.item_rows IS 'The client-only fields (name, description, model, icon, type2, type3) of each item a patch changes, with the patch that first shipped it: the item (type = group, typeid = place) is generated from defs.items plus this row instead of copied from client.items. Loaded from tools/sdata/client_rows.sql (in git) before every run of client_patch.py.';
-
-CREATE TABLE client.skill_rows (
-    skill_id smallint NOT NULL,
-    level smallint NOT NULL,
-    name text NOT NULL,
-    description text NOT NULL,
-    icon integer NOT NULL,
-    animation integer NOT NULL,
-    toggle_type smallint NOT NULL,
-    sound integer NOT NULL,
-    since_patch integer NOT NULL,
-    note text NOT NULL,
-    PRIMARY KEY (skill_id, level)
-);
-COMMENT ON TABLE client.skill_rows IS 'The client-only fields (name, description, icon, animation, toggle_type, sound) of each skill level a patch changes, with the patch that first shipped it: the record is generated from defs.skills plus this row instead of copied from client.skills. Loaded from tools/sdata/client_rows.sql (in git) before every run of client_patch.py.';
-
-CREATE TABLE client.server_only (
-    kind text NOT NULL CHECK (kind IN ('item', 'skill')),
-    id integer NOT NULL,
-    level smallint NOT NULL DEFAULT 0,
-    reason text NOT NULL,
-    PRIMARY KEY (kind, id, level)
-);
-COMMENT ON TABLE client.server_only IS 'Rows of tools/defs/additions.sql that need nothing in the client, with the reason (items: id = itemid, level 0; skills: id = skillid, level = skilllevel), so that check 4 of client_patch.py can tell "forgotten" from "meant". Loaded from tools/sdata/client_rows.sql.';

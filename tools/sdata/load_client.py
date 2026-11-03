@@ -7,8 +7,8 @@ usage: load_client.py [--reset | --adopt] [<Item.SData> <Skill.SData>]
 Refuses any file that is not the shipped one (SHA-256 of the encrypted file), decrypts it (SEED constants from Parsec's
 SEEDConstants.cs, `seed_sdata.py`), parses it with the readers of `parse_item.py` / `client_sdata.py` (every byte explained), decodes the
 text as cp1252 checking it encodes back to the same bytes, then replaces the schema `client` (db/client/schema.sql) and copies both
-tables in, recording the import in content.imports in the same transaction. The schema's other tables (item_rows, skill_rows,
-server_only) are filled by tools/sdata/client_rows.sql, not here. docs/plans/done/client-patches.md sections 2 and 3.
+tables in, recording the import in content.imports in the same transaction. What a patch changes (the client rows) is in the content
+schema, written by extensions (docs/plans/ext-1-foundation.md section 4). docs/plans/done/client-patches.md sections 2 and 3.
 
 Imported once (docs/plans/ext-1-foundation.md section 3.2): run again it does nothing (the two files' SHA-256 are fixed, so other files
 cannot pass the check above anyway); --reset replaces the schema and the record. --adopt checks the two files, checks that client.items

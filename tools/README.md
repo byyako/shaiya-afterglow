@@ -28,7 +28,6 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 | `defs/verify.py` | compares the loaded `defs` tables with the original database, field by field (`--counts-only`: only the row counts, against the column list, with no SQL Server) | both databases | operator, developer |
 | `defs/generate.py` | makes `db/defs/schema.sql` and the export queries (`export_queries.tsv`) from the column list `docs/original/db/PS_GameDefs.columns.txt` | the column list | developer |
 | `defs/describe_mssql.sh` | writes the three description files per original database (`docs/original/db/`), proven to reproduce them byte for byte | SQL Server (read only) | developer |
-| `defs/additions.sh` (`additions.sql`) | applies the operator's edits (`data-editor apply`) and, with `--with-additions`, the server's own added rows (the Kill Boost Stones) to `defs` | PostgreSQL | operator |
 | `world/import.py` | imports the maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua, and the quests from the original server's `Data` folder into the `world` schema (`--dry-run` only reports) | the `Data` folder; PostgreSQL. It uses `svmap.py` and `npcquest.py` from this folder | operator |
 | `sdata/` | the client's data files: see below | | developer |
 
@@ -71,10 +70,9 @@ All of these only read; none runs anything from the original files.
 
 | script | what it does | reads, writes |
 |---|---|---|
-| `load_client.py` | imports the shipped `Item.SData` and `Skill.SData` into the `client` schema, refusing any other file | the originals (`CLIENT_ORIGINALS`); PostgreSQL |
-| `client_patch.py` | generates the two files from the database, runs the checks of the plan's section 3, writes a patch's hand-over folder (`restore`, `check`, `generate`) | PostgreSQL; `data/client-patches/` |
+| `load_client.py` | imports the shipped `Item.SData` and `Skill.SData` into the `client` schema once, refusing any other file and recording the import (`--reset`, `--adopt`) | the originals (`CLIENT_ORIGINALS`); PostgreSQL |
+| `client_patch.py` | generates the two files from the database alone (the client rows come from the extensions: `content.client_items`, `content.client_skills`), runs the checks of the plan's section 3, writes a patch's hand-over folder and the patch ledger (`restore`, `check`, `generate`, `adopt`, `rebuild`, `record`) | PostgreSQL; `data/client-patches/` |
 | `seed_sdata.py`, `parse_item.py`, `client_sdata.py` | the SEED cipher of the files (the tables come from Parsec, github.com/matigramirez/Parsec: `PARSEC_SEEDCONSTANTS`) and the readers of their records | |
-| `client_rows.sql` | what a data patch changes, loaded into `client.item_rows` and `client.skill_rows` | |
 | `compare_items.py`, `compare_defs.py`, `compare_cash.py`, `compare_npcquest.py` | made the `docs/client/*-vs-*.md` comparisons of the client's files with `defs` and `world` | TSV files; one report |
 | `test_client_patch.py` | tests of the pure parts of `client_patch.py` (no database) | |
 

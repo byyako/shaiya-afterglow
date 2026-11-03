@@ -140,8 +140,12 @@ file directly (it is an uncompressed SQL Server 2005 backup) and writes the tabl
 python3 tools/defs/read_bak.py /path/to/PSM_Data/PS_GameDefs data/defs-export
 python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
 python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt --counts-only   # row counts against the known ones
-tools/defs/additions.sh                                                  # the operator's edits (and, with --with-additions, the server's own extra rows: docs/server/deviations.md section 1)
 ```
+
+The import is made once, into the frozen copy `original_defs`, and ends with `target/release/data-editor content rebuild defs` (the live `defs` table
+is the originals, the installed extensions and your data editor edits, in that order; `docs/original/database-notes.md`). The server's own
+extra rows, the Kill Boost Stones, are an extension: `target/release/data-editor ext install extensions/kill-boost`
+(`docs/server/deviations.md` section 1).
 
 `load_into_postgres.py` decodes the text columns as GBK, the original database's code page, and checks that every value encodes back to
 the same bytes. `docs/original/database-notes.md` describes the backups. If you already have the tables as text (an earlier export, or
@@ -158,7 +162,6 @@ docker cp tools/restore_backups.sh shaiya-afterglow-mssql:/tmp/ && docker exec s
 tools/defs/export_from_mssql.sh                                          # to data/defs-export/
 python3 tools/defs/load_into_postgres.py data/defs-export db/defs/schema.sql
 python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.columns.txt   # row counts and sums against SQL Server
-tools/defs/additions.sh
 docker compose stop mssql                                                # or docker stop shaiya-afterglow-mssql; docker rm once the import is checked
 ```
 
