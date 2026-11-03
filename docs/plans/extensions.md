@@ -1,6 +1,6 @@
 # Extensions, rules and pets (design and work plan)
 
-**Frozen (decided 2026-10-22)** (`docs/plans/roadmap.md`, "Frozen"; it waited for an alpha that was dropped on 2026-11-02). Nothing below is scheduled; the work items of section 7 are kept for when it restarts.
+**Active again (2026-11-02).** It was frozen on 2026-10-22 while an alpha was planned; the alpha was dropped and the maintainer chose this as the next stretch of work (section 2a). The work items of section 7 are the plan; the order and the releases are in section 2a.
 
 Not a spec. This gathers what the maintainer decided and asked for (2026-10-22) so that each chunk of work can be specified and then built
 later, one at a time. Nothing here is built. Each chunk (section 6) has a work item in section 7 (a spec first, then the build); the
@@ -38,6 +38,38 @@ as **extensions**, a **rules** layer for the many "allow, deny or change this fo
 7. **Work in chunks**, never one pile: each chunk is specified, then built, and ends in something that runs.
 8. **Which of the catalogue (section 4) the maintainer's own server uses** is decided later, in a design pass of its own, after the
    foundations exist. The first spec builds a small reference set only (section 5).
+
+## 2a. The maintainer's decisions of 2026-11-02 (the order, the releases, the first scripts)
+
+1. **Goal**: grow what the server can do, now that the install is short (`docs/plans/install.md`) and the release is public (0.2.0). An
+   announcement of the release is planned soon, so the work starts from a released, working base.
+2. **Breaking changes are acceptable in 0.x** (chunk 1's start-up-only environment variables, the import-once rule, the SQL files
+   becoming extension rows): no compatibility layer; the changelog carries a migration note. `tools/setup.sh`, the README and
+   `docs/server/settings.md` change with it.
+3. **Order**: chunk 1 (foundation) in full, then chunk 2 (rules and hooks), then chunk 5 (Lua), then chunk 3 (item effects), then
+   chunk 4 (pets). Chunks 6 to 9 follow when asked for. Chunk 1's spec is already written (`docs/plans/ext-1-foundation.md`) and must be
+   reconciled with what changed since (below) before it is built.
+4. **Releases**: **0.3.0 when Lua works** (extension folders, the rules layer, events and Lua), **0.4.0 with pets**. Chunks land on `main`
+   without a tag in between; every release gets its notes from `CHANGELOG.md` (`tools/release-notes.sh`).
+5. **Lua scripts get the game API only**: no files, processes, network or raw SQL; stored values per character and per script through the
+   API. (Outbound HTTP and read-only queries were offered and not chosen.)
+6. **The first scripts the API must serve**: welcome notice, advert banner and custom chat commands (events: login, timer, command; calls:
+   notice to one or all, reply); boss and kill rewards (events: boss kill, PvP kill; calls: give items or buffs to a party or raid, read kill
+   counts and the map); event spawns, "monster madness" (calls: spawn monsters around a player with caps and clean-up, timers, started by
+   command or item); kill streak and bounty (events: kill, death; per-character stored values).
+7. **Pets are the showcase extension** (decision 1 of section 2). The client research they need (entries 9 and 10) is answered
+   (`docs/client/research-extension-features.md`); the client rows come from the database and the patch generator, the client side packs
+   them.
+8. **Web API and operations (B1, B2 of the roadmap) wait**: the maintainer may run a public server later, not soon. The foundation must
+   not block them.
+
+**Reconcile before chunk 1 is built** (changed since the spec was written, 2026-10-22): `tools/setup.sh` now runs the whole import and
+may be run again, replacing `defs` and `world` (the spec makes a second import an error: its `--reset` and "import once" meet this);
+`tools/defs/read_bak.py` reads the definitions straight from the backup, SQL Server being only a fallback; the names are
+`shaiya-afterglow-*`, `SHAIYA_PASSWORD`, `SHAIYA_PSQL`, the database `shaiya`; releases are binaries from `.github/workflows/release.yml`
+fetched by `tools/fetch-release.sh`, so the tarball must carry what a released build needs (the `extensions/` folder, a sample
+`config/game.toml`) and an operator has no Python beyond `tools/setup.sh`; the repository is `byyako/shaiya-afterglow` with its docs in
+folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the docs site publishes parts of `docs/`.
 
 ## 3. What exists today
 

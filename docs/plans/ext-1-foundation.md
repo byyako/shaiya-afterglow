@@ -1,6 +1,6 @@
 # Extensions chunk 1, the foundation (spec and build plan)
 
-**Frozen on 2026-10-22** (`docs/plans/roadmap.md`, "Frozen"; it waited for an alpha that was dropped on 2026-11-02). Specified, not built, not scheduled.
+**Active again (2026-11-02)**: the next build (`docs/plans/extensions.md`, section 2a). Specified on 2026-10-22, not built. Before building, reconcile it with what changed since: the list at the end of section 2a of that file (the re-runnable `tools/setup.sh`, `tools/defs/read_bak.py`, the renamed containers, database and variables, the released binaries, no alpha). Breaking changes are accepted.
 
 Chunk 1 of `docs/plans/extensions.md` (section 6). It makes the database the source of truth for the game's content, gives custom
 content a package (an **extension**: a folder with a manifest), and gives the game server's settings layers. The Kill Boost Stone,
