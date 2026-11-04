@@ -30,11 +30,12 @@ async fn main() -> Result<()> {
     // `game-server config [--example]` prints the settings and exits (`docs/plans/ext-1-foundation.md` section 7.3).
     let mut args = std::env::args().skip(1);
     if let Some(word) = args.next() {
-        return match (word.as_str(), args.next().as_deref()) {
-            ("config", Some("--example")) => Ok(print!("{}", game_server::config::example())),
-            ("config", None) => Ok(print!("{}", game_server::config::show(&Config::inspect().await?.1))),
+        match (word.as_str(), args.next().as_deref()) {
+            ("config", Some("--example")) => print!("{}", game_server::config::example()),
+            ("config", None) => print!("{}", game_server::config::show(&Config::inspect().await?.1)),
             _ => anyhow::bail!("usage: game-server [config [--example]]"),
-        };
+        }
+        return Ok(());
     }
 
     // The settings, from the start-up environment, the config file and the database; the migrations ran on the one connection that

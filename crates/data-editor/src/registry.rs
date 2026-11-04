@@ -32,6 +32,9 @@ impl Effect {
 pub enum Side {
     Defs,
     World,
+    /// The `content` schema (`docs/plans/ext-1-foundation.md` section 3.1): no load replaces it, so its targets have no marker and no
+    /// frozen copy; the one target is `setting` (section 7.4).
+    Content,
 }
 
 /// The schema names; parameters so that the tests can use scratch schemas.
@@ -71,6 +74,7 @@ impl Schemas {
         match side {
             Side::Defs => &self.defs,
             Side::World => &self.world,
+            Side::Content => &self.content,
         }
     }
 
@@ -79,6 +83,8 @@ impl Schemas {
         match side {
             Side::Defs => &self.original_defs,
             Side::World => &self.original_world,
+            // No frozen copy: nothing replaces `content`, so there is nothing to restore it from.
+            Side::Content => &self.content,
         }
     }
 
@@ -96,6 +102,7 @@ pub enum Sql {
     Real,
     Ints,
     Reals,
+    Text,
 }
 
 impl Sql {
@@ -110,6 +117,7 @@ impl Sql {
             Sql::Real => format!("(({param}::jsonb) #>> '{{}}')::real"),
             Sql::Ints => list("integer"),
             Sql::Reals => list("real"),
+            Sql::Text => format!("(({param}::jsonb) #>> '{{}}')"),
         }
     }
 }
@@ -142,6 +150,9 @@ pub enum Kind {
     Mobs { first_required: bool },
     /// Nine reals: three spots of x, y, z, inside the row's map.
     Spots,
+    /// A game setting's value as the text the server's parsers read (a string, number, boolean or list); whether the setting's own
+    /// parser accepts it is checked with the key in hand (`crate::settings`).
+    Setting,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -250,6 +261,8 @@ static MOB_FIELDS: &[Field] = &[
 
 static MOB_DROP_FIELDS: &[Field] = &[f("grade", Int2, Int(0, 1024), Live), f("droprate", Int4, Kind::DropRate, Live)];
 static ITEM_GRADE_FIELDS: &[Field] = &[f("grade", Int2, Int(0, 1024), Live)];
+
+static SETTING_FIELDS: &[Field] = &[f("value", Sql::Text, Kind::Setting, Restart)];
 
 static SPAWN_AREA_FIELDS: &[Field] = &[
     f("x1", Real, X, Restart),
@@ -501,6 +514,21 @@ static TARGETS: &[Target] = &[
         map_from: MapFrom::Parent("boss_group", 0),
         new_seq_from: 1_000,
     },
+    // The data editor's layer of the game server's settings (section 7.4); its key is the setting's name, not numbers, so the editor
+    // handles it in `crate::settings` and not through the numeric key code.
+    Target {
+        name: "setting",
+        side: Side::Content,
+        table: "setting_values",
+        key_names: &["name"],
+        key_cols: &["name"],
+        fields: SETTING_FIELDS,
+        refused: &[("name", "the key")],
+        can_add: true,
+        can_remove: true,
+        map_from: MapFrom::None,
+        new_seq_from: 0,
+    },
 ];
 
 /// Every target, parents before their children (the order rows are added in).
@@ -555,8 +583,19 @@ impl Target {
         }
     }
 
-    /// Parses a text key (`2/57`).
+    /// The key as text, normalised: numbers joined by `/`, or for the `setting` target the setting's name.
+    pub fn key_text(&self, text: &str) -> Check<String> {
+        if self.name == "setting" {
+            return crate::settings::key(text);
+        }
+        self.parse_key(text).map(|k| format_key(&k))
+    }
+
+    /// Parses a text key (`2/57`). The `setting` target's key is a name and has no numbers: see [`Target::key_text`].
     pub fn parse_key(&self, text: &str) -> Check<Vec<i64>> {
+        if self.name == "setting" {
+            return Err(format!("the key of a setting is its name, not numbers (got {text:?})"));
+        }
         let parts: Result<Vec<i64>, _> = text.split('/').map(|p| p.trim().parse::<i64>()).collect();
         let parts = parts.map_err(|_| format!("{} key {text:?} must be {} as numbers", self.name, self.key_names.join("/")))?;
         if parts.len() != self.key_len() {
@@ -801,6 +840,7 @@ impl Field {
                 }
                 Value::Array(out)
             }
+            Kind::Setting => Value::String(crate::settings::value_text(value)?),
         };
         Ok(out)
     }
@@ -1074,10 +1114,28 @@ mod tests {
                 "obelisk",
                 "obelisk_guard",
                 "boss_group",
-                "boss_follower"
+                "boss_follower",
+                "setting"
             ]
         );
         assert_eq!(children_of("spawn_area"), ["spawn_mob"]);
+    }
+
+    #[test]
+    fn a_setting_is_keyed_by_its_name() {
+        let setting = target("setting").unwrap();
+        assert_eq!(setting.side, Side::Content);
+        assert_eq!(setting.key_text(" market_maps ").unwrap(), "market_maps");
+        assert!(setting.key_text("market_mapz").unwrap_err().contains("not a game setting"));
+        assert!(setting.key_text("ext.welcome.text").unwrap_err().contains("reserved for chunk 5"));
+        assert!(setting.parse_key("market_maps").is_err(), "no numbers in a setting's key");
+        assert_eq!(target("mob").unwrap().key_text("2133").unwrap(), "2133");
+        assert_eq!(setting.field("value").unwrap().effect, Effect::Restart);
+        assert!(setting.field("name").unwrap_err().contains("the key"));
+        let ctx = Ctx { facts: &facts(), map: None, current: &Map::new(), key: &[] };
+        assert_eq!(setting.field("value").unwrap().check(&json!([35, 36]), &ctx).unwrap(), json!("35,36"));
+        assert_eq!(Sql::Text.cast("$1"), "(($1::jsonb) #>> '{}')");
+        assert_eq!(Schemas::default().table(setting), "content.setting_values");
     }
 
     #[test]

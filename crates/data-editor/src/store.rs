@@ -150,7 +150,7 @@ async fn row_map(conn: &mut PgConnection, s: &Schemas, t: &Target, key: &[i64], 
 }
 
 /// `'add'` or `'remove'` when the edits added or removed the row.
-async fn row_action(conn: &mut PgConnection, s: &Schemas, target: &str, key: &str) -> Result<Option<String>> {
+pub(crate) async fn row_action(conn: &mut PgConnection, s: &Schemas, target: &str, key: &str) -> Result<Option<String>> {
     Ok(sqlx::query_scalar(sql(format!("SELECT action FROM {}.rows WHERE target = $1 AND key = $2", s.edits)))
         .bind(target)
         .bind(key)
@@ -160,7 +160,7 @@ async fn row_action(conn: &mut PgConnection, s: &Schemas, target: &str, key: &st
 
 // One argument per column of the log row it writes; a struct here would only rename them.
 #[allow(clippy::too_many_arguments)]
-async fn log(
+pub(crate) async fn log(
     conn: &mut PgConnection,
     run: &mut Run<'_>,
     target: &str,
@@ -190,6 +190,10 @@ async fn log(
 
 /// Carries out one change (inside the caller's transaction) and logs it.
 pub async fn apply_line(conn: &mut PgConnection, run: &mut Run<'_>, line: &Line) -> Result<()> {
+    // A setting's key is a name, not numbers: it has its own code (`docs/plans/ext-1-foundation.md` section 7.4).
+    if line.target == crate::settings::TARGET {
+        return crate::settings::apply_line(conn, run, line).await;
+    }
     let t = user(registry::target(&line.target))?;
     let key = user(t.parse_key(&line.key))?;
     let key_text = format_key(&key);
@@ -372,7 +376,7 @@ async fn add_row(conn: &mut PgConnection, run: &mut Run<'_>, t: &Target, key: &[
 }
 
 /// The edits' own record of an added row: a `rows` line and the fields (without originals).
-async fn record_added(conn: &mut PgConnection, run: &Run<'_>, target: &str, key: &str, row: &Map<String, Value>) -> Result<()> {
+pub(crate) async fn record_added(conn: &mut PgConnection, run: &Run<'_>, target: &str, key: &str, row: &Map<String, Value>) -> Result<()> {
     let s = run.s;
     sqlx::query(sql(format!("INSERT INTO {}.rows (target, key, action, original, change_set) VALUES ($1, $2, 'add', NULL, $3)", s.edits)))
         .bind(target)
@@ -634,8 +638,7 @@ impl Editor {
     /// Checks a line against the tables and the draft so far (a dry run of Apply that is rolled back), then adds it. Returns its number.
     pub async fn draft_add(&self, line: &Line, by: &str) -> Result<i32> {
         let t = user(registry::target(&line.target))?;
-        let key = user(t.parse_key(&line.key))?;
-        let key_text = format_key(&key);
+        let key_text = user(t.key_text(&line.key))?;
         let existing = self.draft_list().await?;
         if matches!(line.op, Op::Remove) {
             let pending = existing.iter().find(|d| d.target == t.name && d.key == key_text).or_else(|| {

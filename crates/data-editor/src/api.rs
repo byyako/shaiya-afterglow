@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use sqlx::AssertSqlSafe;
 
 use crate::console;
-use crate::registry::{self, Effect, Kind, format_key};
+use crate::registry::{self, Effect, Kind};
 use crate::store::{DraftLine, Editor, Line, Op, read_row, refuse};
 
 /// The real item type that never drops (`drops::NO_DROP_REAL_TYPE`).
@@ -66,6 +66,7 @@ fn kind_json(kind: Kind) -> Value {
         Kind::PortalCountry => json!({"type": "portal_country"}),
         Kind::Mobs { first_required } => json!({"type": "mobs", "first_required": first_required}),
         Kind::Spots => json!({"type": "spots"}),
+        Kind::Setting => json!({"type": "setting"}),
     }
 }
 
@@ -492,7 +493,7 @@ impl Editor {
         let mut replaced: Vec<DraftLine> = Vec::new();
         for line in lines {
             let (Op::Set { field, .. } | Op::Unset { field }) = &line.op else { continue };
-            let key = registry::target(&line.target).ok().and_then(|t| t.parse_key(&line.key).ok()).map(|k| format_key(&k));
+            let key = registry::target(&line.target).ok().and_then(|t| t.key_text(&line.key).ok());
             for d in &existing {
                 if Some(&d.key) == key.as_ref()
                     && d.target == line.target

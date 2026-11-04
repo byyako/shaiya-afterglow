@@ -36,7 +36,7 @@ pub struct Report {
 }
 
 impl Report {
-    fn problem(&mut self, change_set: Option<i32>, target: &str, key: &str, field: Option<&str>, text: impl Into<String>) {
+    pub(crate) fn problem(&mut self, change_set: Option<i32>, target: &str, key: &str, field: Option<&str>, text: impl Into<String>) {
         self.problems.push(Problem {
             change_set,
             target: target.to_owned(),
@@ -55,6 +55,8 @@ pub async fn apply_all(conn: &mut PgConnection, s: &Schemas) -> Result<Report> {
     for side in [Side::Defs, Side::World] {
         apply_side(conn, s, side, &mut report).await?;
     }
+    // The settings' overrides live in `content`, which no load replaces: no marker, always written.
+    crate::settings::apply_edits(conn, s, &mut report).await?;
     Ok(report)
 }
 
@@ -327,7 +329,7 @@ impl Editor {
     pub async fn revert_all(&self, conn: &mut PgConnection) -> Result<()> {
         let s = &self.s;
         let fields: Vec<(String, String, String, Value)> = sqlx::query_as(sql(format!(
-            "SELECT target, key, field, original FROM {}.fields WHERE original IS NOT NULL ORDER BY target, key, field",
+            "SELECT target, key, field, original FROM {}.fields WHERE original IS NOT NULL AND target <> 'setting' ORDER BY target, key, field",
             s.edits
         )))
         .fetch_all(&mut *conn)
@@ -339,13 +341,13 @@ impl Editor {
         }
         let added: Vec<(String, String)> =
             sqlx::query_as(sql(format!("SELECT target, key FROM {}.rows WHERE action = 'add'", s.edits))).fetch_all(&mut *conn).await?;
-        for t in registry::all().iter().rev() {
+        for t in registry::all().iter().rev().filter(|t| t.side != Side::Content) {
             for (_, key_text) in added.iter().filter(|a| a.0 == t.name) {
                 delete_row(conn, s, t, &user(t.parse_key(key_text))?).await?;
             }
         }
         let removed: Vec<Value> = sqlx::query_scalar(sql(format!(
-            "SELECT original FROM {}.rows WHERE action = 'remove' AND original IS NOT NULL ORDER BY target, key",
+            "SELECT original FROM {}.rows WHERE action = 'remove' AND original IS NOT NULL AND target <> 'setting' ORDER BY target, key",
             s.edits
         )))
         .fetch_all(&mut *conn)
@@ -367,6 +369,7 @@ impl Editor {
                 insert_row(conn, s, t, &key, &row).await?;
             }
         }
+        crate::settings::revert(conn, s).await?;
         for schema in [&s.defs, &s.world] {
             sqlx::query(sql(format!("DROP TABLE IF EXISTS {schema}.edits_applied"))).execute(&mut *conn).await?;
         }

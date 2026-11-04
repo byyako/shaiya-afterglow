@@ -24,6 +24,7 @@ pub fn part_name(side: Side) -> &'static str {
     match side {
         Side::Defs => "defs",
         Side::World => "world",
+        Side::Content => "content",
     }
 }
 
@@ -106,6 +107,7 @@ fn ddl_for(side: Side, schema: &str) -> String {
     match side {
         Side::Defs => DEFS_DDL.replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {schema};")).replace("defs.", &format!("{schema}.")),
         Side::World => WORLD_DDL.replace("CREATE SCHEMA world;", &format!("CREATE SCHEMA {schema};")).replace("world.", &format!("{schema}.")),
+        Side::Content => unreachable!("content is never rebuilt from a frozen copy"),
     }
 }
 
