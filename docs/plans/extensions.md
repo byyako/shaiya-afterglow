@@ -109,7 +109,7 @@ or a DLL change. The wave names are section 6's chunk 7.
 | Block specific skills, equipment, or chat (by map, kill count, level, position, sitting); warehouse blocking by item id or type; items that cannot be stored, put in the guild bank or traded | R2 | maybe |
 | Remove the AP item requirement (globally or for certain maps) | R2 | no |
 | Items usable only by one gender or only in a guild; use an item by level or kills | R2 | maybe |
-| Block trade-chat spam and the level+10 trade-chat hack (partly built: `GAME_TRADE_CHAT_*`) | R2 | no |
+| Block trade-chat spam and the level+10 trade-chat hack (partly built: `trade_chat_*` settings) | R2 | no |
 
 **B. Number changes (modifier points):**
 
@@ -177,7 +177,7 @@ chunk 9 per-player loot (its own spec; any time after chunk 2)
 | # | Chunk | Done when | Needs from the client side |
 |---|---|---|---|
 | 1 | **Foundation**: the database as the source of truth (import once, `origin`, client tables, patch generation from the database alone), extension folders and manifest, the id-range registry, install/remove/enable, the Kill Boost Stone moved in as the first content pack, config layering | `additions.sql` and `client_rows.sql` are gone; patch 109 regenerates byte for byte from the database; an extension folder installs and removes cleanly | entry 11 (a), (d) |
-| 2 | **Rules and hooks**: the scope model, the rules table, files and editor layering, `reload`, the veto and modifier points in the core, the reference rules and the enchant modifier, the `GAME_*` one-off flags folded in as rules | the two reference rules work from a file and from the editor, undo and reload included; the old flags still work as before | entry 12 (informs the veto messages) |
+| 2 | **Rules and hooks**: the scope model, the rules table, files and editor layering, `reload`, the veto and modifier points in the core, the reference rules and the enchant modifier, the one-off settings folded in as rules | the two reference rules work from a file and from the editor, undo and reload included; the old flags still work as before | entry 12 (informs the veto messages) |
 | 3 | **Item effects and skill abilities**: a registry for item-use effects and skill ability types, the level-up stone, the Kill Boost Stone ported, custom GM status levels | a new effect is added by a row and a handler, with its client rows generated | entry 11 (a) |
 | 4 | **Pets**: the extension: capture, egg, summon, follow, auto-loot, the (possible) menu, the small size by whatever entry 9 finds | catch, summon, follow, loot, dismiss, relog and trade of the egg work with one real client | entries 9, 10 |
 | 5 | **Lua**: the event hooks to Lua, the API, the sandbox, hot reload, per-character storage, the kill streak script | a script dropped in a folder runs and reloads without a restart; a failing script cannot hurt the server | entry 11 (c), 12 (g) |
@@ -211,7 +211,7 @@ database alone and the Kill Boost Stone works as before.
 **Needs**: chunk 1 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `crates/game-server/src/config.rs` and `switches.rs`,
 `docs/original/operator-console.md`, `docs/plans/done/data-editing.md` (the edits layer and the registry the rules plug into), and the
 code and documents of the places the reference rules touch: kills and experience (`docs/original/combat.md`, `pvp.rs`, `server/pvp.rs`,
-`kc.rs`), enchanting (`lapis.rs`, `docs/original/lapis.md`), trade (`trade.rs`, `GAME_CROSS_FACTION_TRADE_MAPS`), `GAME_MARKET_MAPS`.
+`kc.rs`), enchanting (`lapis.rs`, `docs/original/lapis.md`), trade (`trade.rs`, `cross_faction_trade_maps`), `market_maps`.
 
 **The spec settles**:
 1. the scope model (maps, level range, kill-count range, faction, an optional time window; how scopes combine; a way to say "everything
@@ -221,11 +221,11 @@ code and documents of the places the reference rules touch: kills and experience
 3. the veto points and modifier points to add to the core now, with the exact call sites found by reading the code (and which are left
    for the waves), their order, the message the player sees and the log line;
 4. the reference rules (no experience or kills in a map; level-gap protection) and the enchant-jump modifier;
-5. folding the existing `GAME_*` one-off flags in as rules without changing behaviour (the old variables keep working);
+5. folding the existing one-off settings (`config/game.toml` keys since chunk 1) in as rules without changing behaviour (the keys keep working);
 6. cost: the veto points are on hot paths (attack, move, chat); how they stay cheap.
 
 **Output**: `docs/plans/ext-2-rules.md`, with tests (a rule per kind, scope combinations, layering, reload). **Done when** (the build):
-the whole test suite passes and the old `GAME_*` variables work as before.
+the whole test suite passes and the old settings keys work as before.
 
 ### 7.3 Chunk 3, item effects and skill abilities
 
@@ -291,7 +291,7 @@ original's monster Lua behaves as before.
 
 **Needs**: chunk 2 built and the client answer to research entry 12 (if it is missing, the client research comes first).
 **Inputs**: this plan, `docs/plans/ext-2-rules.md`, the client answer to entry 12 (`docs/client/`), `docs/original/party.md`, `friends.md`,
-`trade.md`, `union.md`, `pvp.md`, the chat code, `GAME_CROSS_FACTION_TRADE_MAPS`.
+`trade.md`, `union.md`, `pvp.md`, the chat code, `cross_faction_trade_maps`.
 
 **The spec settles**: for each of trade, whisper, inspect, party, chat combining, GMs seeing both sides' chat and attacking both sides,
 and free-for-all maps: what the server must change, what the client refuses by itself, and which `fixes.dll` feature (named, with its
