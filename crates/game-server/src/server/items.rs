@@ -535,12 +535,13 @@ async fn item_skill_on<S: Backend>(
 ) -> Result<Done> {
     let (id, map, now) = (character.id, state.map, Instant::now());
     let Some(def) = ctx.data.skills.get(skill_id, level).copied() else { return Ok(Done::Failed) };
+    let verdict = if kind == it::KIND_PLAYER { Some(ctx.zones.attack_verdict(map, id, target, ctx.data.world.is_war_map(map))) } else { None };
+    if let Some(crate::zone::Verdict::Ruled(refusal)) = &verdict {
+        tracing::debug!(id, map, point = "attack", rule = &*refusal.name, "refused by a rule");
+        super::refused::tell_refused(conn, state, refusal).await?;
+    }
     let target = match kind {
-        it::KIND_PLAYER
-            if ctx.zones.may_attack_player(map, id, target, ctx.data.world.is_war_map(map)) && !ctx.zones.has_shop(map, target) =>
-        {
-            SkillTarget::Player(target)
-        }
+        it::KIND_PLAYER if verdict.is_some_and(|v| v.is_yes()) && !ctx.zones.has_shop(map, target) => SkillTarget::Player(target),
         // Whether it may be attacked is `target_spot`'s check.
         it::KIND_MOB => SkillTarget::Mob(target),
         _ => {

@@ -4091,3 +4091,138 @@ fn scripted_monsters_keep_their_machine_and_their_shields() {
     assert!(zones.mob(1, 1).unwrap().hp < before, "melee gets through");
     assert_eq!(crate::mob_ai::attack_kinds(2), [false, false, true, false]);
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// The attack point (docs/plans/ext-2-rules.md section 5, point 1)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+fn put_rules(zones: &Zones, rules: &[(&str, serde_json::Value)]) {
+    zones.set_rules(crate::rules::RuleSet::from_values(rules).unwrap());
+}
+
+fn level_of(zones: &Zones, id: u32, level: u16) {
+    edit(zones, id, |p| p.occupant.vitals.guard.level = level);
+}
+
+#[test]
+fn a_deny_attack_rule_refuses_on_its_map_only() {
+    use serde_json::json;
+    let (_, _, defs) = fighting_ground();
+    let (zones, _, _) = duel_ground();
+    assert!(zones.may_attack_player(1, 1, 2, false) && zones.rules().is_empty());
+    put_rules(&zones, &[("safe", json!({ "type": "deny", "point": "attack", "maps": [1], "message": "No." }))]);
+    for (me, target) in [(1, 2), (2, 1)] {
+        let Verdict::Ruled(refusal) = zones.attack_verdict(1, me, target, false) else { panic!("refused") };
+        assert_eq!((&*refusal.name, refusal.text.as_deref()), ("safe", Some("No.")));
+        assert!(!zones.may_attack_player(1, me, target, false));
+    }
+    assert!(matches!(zones.attack_verdict(1, 2, 3, false), Verdict::No), "one country: the core says no, not a rule");
+    assert!(matches!(zones.attack_verdict(1, 1, 1, false), Verdict::No));
+    let health = zones.health(1, 1);
+    assert!(matches!(strike(&zones, &defs, 2, &blows(20, 100), 1, false), AttackOutcome::Gone), "a later blow is dropped silently");
+    assert_eq!(zones.health(1, 1), health);
+    put_rules(&zones, &[("elsewhere", json!({ "type": "deny", "point": "attack", "maps": [2] }))]);
+    assert!(zones.may_attack_player(1, 1, 2, false));
+    assert!(matches!(strike(&zones, &defs, 2, &blows(20, 100), 1, false), AttackOutcome::Struck { .. }));
+    put_rules(&zones, &[]);
+    assert!(zones.may_attack_player(1, 1, 2, false));
+}
+
+#[test]
+fn level_gap_protects_both_ways() {
+    use serde_json::json;
+    let (zones, _, _) = duel_ground();
+    put_rules(&zones, &[("gap", json!({ "type": "level_gap", "gap": 20 }))]);
+    level_of(&zones, 1, 20);
+    level_of(&zones, 3, 41);
+    assert!(!zones.may_attack_player(1, 1, 3, false) && !zones.may_attack_player(1, 3, 1, false), "21 apart: neither may attack");
+    let Verdict::Ruled(refusal) = zones.attack_verdict(1, 3, 1, false) else { panic!("refused") };
+    assert_eq!(refusal.text.as_deref(), Some("The level difference is too great to fight."));
+    level_of(&zones, 3, 40);
+    assert!(zones.may_attack_player(1, 1, 3, false) && zones.may_attack_player(1, 3, 1, false), "20 apart: both may");
+}
+
+#[test]
+fn a_duel_and_a_guild_war_still_fight_across_the_gap_and_the_rules() {
+    use serde_json::json;
+    let (zones, mut inboxes, _) = duel_ground();
+    put_rules(&zones, &[("gap", json!({ "type": "level_gap", "gap": 20 })), ("none", json!({ "type": "deny", "point": "attack" }))]);
+    level_of(&zones, 3, 60);
+    duel_window(&zones, &mut inboxes);
+    duel_fight(&zones, &mut inboxes);
+    assert!(zones.may_attack_player(1, 2, 3, false) && zones.may_attack_player(1, 3, 2, false), "the duel is agreed to");
+    assert!(!zones.may_attack_player(1, 1, 3, false), "but Alice is still ruled out");
+    // A guild war: the sides are enemies whatever the rules say.
+    let (zones, mut inboxes, _) = war_ground();
+    put_rules(&zones, &[("none", json!({ "type": "deny", "point": "attack" }))]);
+    war_countdown(&zones, &mut inboxes);
+    assert!(enemies(&zones, 1, 3) && enemies(&zones, 4, 2) && !enemies(&zones, 1, 2));
+}
+
+#[test]
+fn an_area_skill_skips_a_protected_victim_and_hits_the_others() {
+    use serde_json::json;
+    let (zones, _, _) = duel_ground();
+    let (dave, _dave_in, _) = member(4, 100.0, 103.0, 0, b"Dave", 60);
+    zones.enter(1, dave);
+    put_rules(&zones, &[("gap", json!({ "type": "level_gap", "gap": 20 }))]);
+    level_of(&zones, 2, 20);
+    let around = SkillDef { apply_range: 10, ..sure_skill(skills::ATTACK, skills::TARGET_AROUND_ONESELF, 21, [20, 0, 0]) };
+    bob_casts(&zones, SkillTarget::Player(2), &around).unwrap();
+    assert_eq!(zones.health(1, 1).map(|h| h[0]), Some(80), "Alice, 20 and 20, is hit");
+    assert_eq!(zones.health(1, 4).map(|h| h[0]), Some(100), "Dave, 40 levels above, is skipped");
+    // One target: the cast does not go off at all; the item skill of a lapis finds no target either.
+    let strike = sure_skill(skills::ATTACK, skills::TARGET_ONE, 21, [50, 0, 0]);
+    assert!(bob_casts(&zones, SkillTarget::Player(4), &strike).is_none());
+    assert_eq!(zones.health(1, 4).map(|h| h[0]), Some(100));
+    put_rules(&zones, &[]);
+    bob_casts(&zones, SkillTarget::Player(2), &around).unwrap();
+    assert_eq!(zones.health(1, 4).map(|h| h[0]), Some(80), "without the rule Dave is hit");
+}
+
+#[test]
+fn thorns_and_fields_skip_a_protected_victim_even_after_the_owner_left() {
+    use serde_json::json;
+    use std::time::Duration;
+    let gap = [("gap", json!({ "type": "level_gap", "gap": 20 }))];
+    // Fire Thorns.
+    let (zones, defs, _, _) = skill_ground(0);
+    edit(&zones, 2, |p| p.occupant.shape.country = 1);
+    level_of(&zones, 1, 10);
+    level_of(&zones, 2, 50);
+    put_rules(&zones, &gap);
+    let thorns = SkillDef { id: 47, apply_range: 50, damage: [8, 0, 0], ..sure_buff(skills::TARGET_ONESELF, buffs::FIRE_THORNS, 300) };
+    use_on(&zones, &defs, SkillTarget::Player(1), &thorns).unwrap();
+    let now = Instant::now();
+    zones.keep_effects(now + Duration::from_secs(3), &World::default(), &defs, no_loot(), &mut || 0);
+    assert_eq!(zones.health(1, 2).unwrap()[0], 100, "protected");
+    level_of(&zones, 2, 30);
+    zones.keep_effects(now + Duration::from_secs(6), &World::default(), &defs, no_loot(), &mut || 0);
+    assert_eq!(zones.health(1, 2).unwrap()[0], 92, "20 apart: hit");
+    // A fire wall: the owner's level is the one the wall was made with.
+    let (zones, defs, _, _) = skill_ground(0);
+    edit(&zones, 2, |p| p.occupant.shape.country = 1);
+    level_of(&zones, 1, 10);
+    level_of(&zones, 2, 50);
+    put_rules(&zones, &gap);
+    let wall = SkillDef { apply_range: 50, keep_time: 20, ..sure_skill(skills::FIELD, 1, skills::FIRE_WALL, [32, 0, 0]) };
+    use_on(&zones, &defs, SkillTarget::Player(1), &wall).unwrap();
+    zones.leave(1, 1);
+    let world = World::default();
+    zones.fields(now, &world, &defs, no_loot(), &mut || 0);
+    assert_eq!(zones.health(1, 2).unwrap()[0], 100, "the wall remembers its owner's level");
+    put_rules(&zones, &[]);
+    zones.fields(now + Duration::from_secs(1), &world, &defs, no_loot(), &mut || 0);
+    assert_eq!(zones.health(1, 2).unwrap()[0], 68);
+}
+
+#[test]
+fn the_rules_are_swapped_whole() {
+    use serde_json::json;
+    let zones = Zones::default();
+    assert!(zones.rules().is_empty());
+    put_rules(&zones, &[("a", json!({ "type": "deny", "point": "attack" }))]);
+    let before = zones.rules();
+    put_rules(&zones, &[]);
+    assert_eq!((before.len(), zones.rules().len()), (1, 0), "a snapshot taken earlier keeps what it had");
+}

@@ -2232,17 +2232,22 @@ async fn world_loop<S: Backend>(
                     || state.motion == w::MOTION_SIT
                     || state.target == Some(SkillTarget::Player(target)))
                 {
-                    if ctx.zones.may_attack_player(map, id, target, ctx.data.world.is_war_map(map)) {
-                        if state.target.is_none() {
-                            conn.send(cp::attack_start()).await?;
-                            ctx.zones.set_attacking(map, id, true);
+                    match ctx.zones.attack_verdict(map, id, target, ctx.data.world.is_war_map(map)) {
+                        crate::zone::Verdict::Yes => {
+                            if state.target.is_none() {
+                                conn.send(cp::attack_start()).await?;
+                                ctx.zones.set_attacking(map, id, true);
+                            }
+                            state.target = Some(SkillTarget::Player(target));
+                            state.attack_mode = true;
+                            state.next_skill = None;
+                            state.next_attack = state.next_attack.max(Instant::now());
                         }
-                        state.target = Some(SkillTarget::Player(target));
-                        state.attack_mode = true;
-                        state.next_skill = None;
-                        state.next_attack = state.next_attack.max(Instant::now());
-                    } else {
-                        tracing::debug!(%peer, id, target, "attack refused: not an enemy here");
+                        crate::zone::Verdict::No => tracing::debug!(%peer, id, target, "attack refused: not an enemy here"),
+                        crate::zone::Verdict::Ruled(refusal) => {
+                            tracing::debug!(id, map, point = "attack", rule = &*refusal.name, "refused by a rule");
+                            refused::tell_refused(conn, state, &refusal).await?;
+                        }
                     }
                 }
                 if let Some(packet) = cancel_item_move(ctx, state, id) {
@@ -3538,9 +3543,15 @@ async fn request_skill<S: Backend>(
                 .then_some(SkillTarget::Mob(named))
         }
         // An enemy attacked or debuffed (`docs/original/pvp-2.md` section 1: alive, not hidden, not of the caster's side).
-        Aim::Named if harms => {
-            ctx.zones.may_attack_player(map, id, named, ctx.data.world.is_war_map(map)).then_some(SkillTarget::Player(named))
-        }
+        Aim::Named if harms => match ctx.zones.attack_verdict(map, id, named, ctx.data.world.is_war_map(map)) {
+            crate::zone::Verdict::Yes => Some(SkillTarget::Player(named)),
+            crate::zone::Verdict::No => None,
+            crate::zone::Verdict::Ruled(refusal) => {
+                tracing::debug!(id, map, point = "attack", rule = &*refusal.name, "refused by a rule");
+                refused::tell_refused(conn, state, &refusal).await?;
+                None
+            }
+        },
         // A player who is not hidden (`EnableAttackUser`): a resurrection reaches one's own side, the dead too (ultimate mode needs
         // level 2 or 3); scouting the other side; anything else a living player of the same country (`IsTeamUsable`).
         Aim::Named => {

@@ -37,20 +37,67 @@ pub fn same_side(a: (u32, u8), b: (u32, u8), war_map: bool) -> bool {
     a.0 == b.0 || war_map || a.1 == b.1
 }
 
+/// Why two players are enemies (`CUser::IsTeam` false), for the rules (`docs/plans/ext-2-rules.md` section 1: duels and guild wars are
+/// agreed to, so the rules do not rule them).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Enmity {
+    No,
+    /// A duel partner while fighting, or the other side of a guild war.
+    Agreed,
+    /// Only the country rule (`same_side`) makes them enemies.
+    Faction,
+}
+
+/// What may be done to a player: yes, no (the core says no), or no because a rule refuses (`docs/plans/ext-2-rules.md` section 5.3).
+#[derive(Clone, Debug)]
+pub enum Verdict {
+    Yes,
+    No,
+    Ruled(crate::rules::Refusal),
+}
+
+impl Verdict {
+    pub fn is_yes(&self) -> bool {
+        matches!(self, Verdict::Yes)
+    }
+}
+
+/// What the rules test of a player (`crate::rules::Who`).
+pub(super) fn who(p: &Placed) -> crate::rules::Who {
+    crate::rules::Who { level: p.occupant.vitals.guard.level.into(), kills: p.occupant.shape.kills, country: p.occupant.shape.country }
+}
+
+/// Whether `me` may strike `target` as an enemy: the core's enmity first, then the rules for a faction enemy only (point 1).
+pub(super) fn strikes(me: &Placed, target: &Placed, war_map: bool, rules: &crate::rules::RuleSet, map: u16) -> Verdict {
+    match enmity(me, target, war_map) {
+        Enmity::No => Verdict::No,
+        Enmity::Agreed => Verdict::Yes,
+        Enmity::Faction => rules.attack(map, &who(me), &who(target)).map_or(Verdict::Yes, Verdict::Ruled),
+    }
+}
+
 /// Whether `me` may attack `target` (`0x0502` and the attack tick, sections 2 and 3): alive, not hidden (shape 13), not itself and
 /// not of its side; a duel partner while fighting is always an enemy (`CUser::IsTeam`, `docs/original/duel.md` section 5), and so
 /// are the two sides of a guild war (`docs/original/guild-war.md` section 5). Both are in the zone; everyone in it is fully in the
-/// world.
-pub(super) fn attackable(me: &Placed, target: &Placed, war_map: bool) -> bool {
-    area_victim(target) && target.form.shape != sk::SHAPE_HIDDEN && enemies(me, target, war_map)
+/// world. Enemies by faction only are asked of the rules (`docs/plans/ext-2-rules.md` point 1).
+pub(super) fn attackable(me: &Placed, target: &Placed, war_map: bool, rules: &crate::rules::RuleSet, map: u16) -> Verdict {
+    if area_victim(target) && target.form.shape != sk::SHAPE_HIDDEN { strikes(me, target, war_map, rules, map) } else { Verdict::No }
 }
 
-/// Whether `target` is `me`'s enemy (`CUser::IsTeam` false): not itself, and a duel partner while fighting, a guild war's other
-/// side, or of the other side of the country rule (`same_side`).
-pub(super) fn enemies(me: &Placed, target: &Placed, war_map: bool) -> bool {
+/// Whether `target` is `me`'s enemy and why (`CUser::IsTeam` false): not itself, and a duel partner while fighting, a guild war's
+/// other side, or of the other side of the country rule (`same_side`).
+pub(super) fn enmity(me: &Placed, target: &Placed, war_map: bool) -> Enmity {
     let (a, b) = ((me.occupant.id, me.occupant.shape.country), (target.occupant.id, target.occupant.shape.country));
     let war = || crate::guild_war::enemies((me.occupant.guild_id, me.war.as_ref()), (target.occupant.guild_id, target.war.as_ref()));
-    a.0 != b.0 && (super::duel::fighting(me, b.0) || war() || !same_side(a, b, war_map))
+    if a.0 == b.0 {
+        Enmity::No
+    } else if super::duel::fighting(me, b.0) || war() {
+        Enmity::Agreed
+    } else if !same_side(a, b, war_map) {
+        Enmity::Faction
+    } else {
+        Enmity::No
+    }
 }
 
 /// Whether an area effect may hit `target` (`docs/original/thorns-fields-pvp.md` sections 1 and 2): alive, attackable and visible
@@ -170,12 +217,19 @@ pub(super) fn player_died(
 }
 
 impl Zones {
-    /// Whether `me` may attack the player `target` on `map` (`0x0502`, section 2).
-    pub fn may_attack_player(&self, map: u16, me: u32, target: u32, war_map: bool) -> bool {
+    /// Whether `me` may attack the player `target` on `map` (`0x0502`, section 2), and when not whether a rule says so
+    /// (`docs/plans/ext-2-rules.md` section 5.3): the refusal is for the whisper at the request.
+    pub fn attack_verdict(&self, map: u16, me: u32, target: u32, war_map: bool) -> Verdict {
+        let rules = self.rules();
         let maps = self.maps.guard();
-        let Some(players) = maps.get(&map) else { return false };
-        let (Some(a), Some(t)) = (players.get(&me), players.get(&target)) else { return false };
-        me != target && attackable(a, t, war_map)
+        let Some(players) = maps.get(&map) else { return Verdict::No };
+        let (Some(a), Some(t)) = (players.get(&me), players.get(&target)) else { return Verdict::No };
+        if me == target { Verdict::No } else { attackable(a, t, war_map, &rules, map) }
+    }
+
+    /// Whether `me` may attack the player `target` on `map` (`0x0502`, section 2): `attack_verdict` is yes.
+    pub fn may_attack_player(&self, map: u16, me: u32, target: u32, war_map: bool) -> bool {
+        self.attack_verdict(map, me, target, war_map).is_yes()
     }
 
     /// One normal blow on a player (`CUser::AttackUser`, section 4): range, block, hit or miss, reflection, damage. The players
@@ -193,13 +247,15 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> AttackOutcome {
+        // One snapshot of the rules for the blow (`docs/plans/ext-2-rules.md` section 8); a blow a rule now forbids is dropped silently.
+        let rules = self.rules();
         let mut maps = self.maps.guard();
         let mut all = self.mobs.guard();
         let Some(players) = maps.get_mut(&map) else { return AttackOutcome::Gone };
         let mobs = all.entry(map).or_default();
         let me = attack.attacker;
         let (Some(a), Some(t)) = (players.get(&me), players.get(&target)) else { return AttackOutcome::Gone };
-        if me == target || !attackable(a, t, war_map) {
+        if me == target || !attackable(a, t, war_map, &rules, map).is_yes() {
             return AttackOutcome::Gone;
         }
         let at = a.occupant.position;

@@ -283,6 +283,22 @@ impl RuleSet {
         set
     }
 
+    /// The rules of `rules` as a config file would hold them, in the order given: no rule of the settings, no layers. For tests and
+    /// tools that need a set without a [`crate::config::Config`]; errors name the rule as `check_rule` does.
+    pub fn from_values(rules: &[(&str, Value)]) -> Result<Self> {
+        let mut compiled = Vec::new();
+        for (name, value) in rules {
+            check_name(name).map_err(|e| anyhow::anyhow!("rules.{name}: {e}"))?;
+            match parse::parse(value) {
+                Ok(parse::Parsed::Rule(draft)) if draft.enabled => compiled.push(((*name).to_owned(), "given".to_owned(), draft)),
+                Ok(parse::Parsed::Rule(_)) => {}
+                Ok(parse::Parsed::TurnOff) => anyhow::bail!("rules.{name}: a rule needs a type"),
+                Err(e) => anyhow::bail!("{}", e.describe(name)),
+            }
+        }
+        Ok(Self::build(compiled))
+    }
+
     /// The number of rules in force.
     pub fn len(&self) -> usize {
         self.all.len()

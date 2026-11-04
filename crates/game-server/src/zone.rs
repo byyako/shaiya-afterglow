@@ -60,7 +60,7 @@ use monsters::{
     targetable, wake, walk_mob,
 };
 pub use party::Invitee;
-pub use pvp::same_side;
+pub use pvp::{Verdict, same_side};
 pub use vehicle::{Mount, Riding};
 
 /// Side of a cell (`CZone::Create`).
@@ -304,6 +304,8 @@ struct Field {
     id: u32,
     owner: u32,
     country: u8,
+    /// The owner as the rules saw it when the field was made, so the test holds after it left (`docs/plans/ext-2-rules.md` point 1).
+    owner_who: crate::rules::Who,
     skill: SkillDef,
     position: [f32; 3],
     cell: (i32, i32),
@@ -857,6 +859,7 @@ fn item_options<R: FnMut() -> u32>(
     let duel_flag = at_war
         || matches!(target, SkillTarget::Player(t) if duel::fighting(me, t) && players.get(&t).is_some_and(|p| duel::fighting(p, owner)));
     players.get_mut(&owner).expect("found above").options_running = true;
+    let rules = pass.zones.rules();
     for skill in ids.iter().filter_map(|id| table.get(id)) {
         let cast = SkillCast {
             caster: owner,
@@ -873,6 +876,7 @@ fn item_options<R: FnMut() -> u32>(
         };
         let mut fx = Effect {
             zones: pass.zones,
+            rules: rules.clone(),
             map: pass.map,
             players: &mut *players,
             mobs: &mut *mobs,
@@ -915,6 +919,8 @@ fn item_options<R: FnMut() -> u32>(
 
 struct Effect<'a, 'c, R> {
     zones: &'a Zones,
+    /// The rules in force when the cast started (`docs/plans/ext-2-rules.md` section 8: one snapshot per cast).
+    rules: std::sync::Arc<crate::rules::RuleSet>,
     map: u16,
     players: &'a mut HashMap<u32, Placed>,
     mobs: &'a mut MobMap,
@@ -1144,6 +1150,7 @@ impl<R: FnMut() -> u32> Effect<'_, '_, R> {
             id: self.zones.last_field_id.fetch_add(1, Ordering::Relaxed) + 1,
             owner: caster,
             country: self.cast.country,
+            owner_who: self.players.get(&caster).map(pvp::who).unwrap_or(crate::rules::Who { level: 1, kills: 0, country: self.cast.country }),
             skill: *s,
             position: self.at,
             cell: self.cell,
@@ -1399,7 +1406,7 @@ impl<R: FnMut() -> u32> Effect<'_, '_, R> {
     /// Whether the caster may harm the player `id` (`IsTeam` false, alive, not hidden; `docs/original/pvp-2.md` sections 1 and 4).
     fn enemy(&self, id: u32) -> bool {
         let (Some(me), Some(t)) = (self.players.get(&self.cast.caster), self.players.get(&id)) else { return false };
-        id != self.cast.caster && pvp::attackable(me, t, self.cast.war_map)
+        id != self.cast.caster && pvp::attackable(me, t, self.cast.war_map, &self.rules, self.map).is_yes()
     }
 
     /// `CUser::Damage(victim, 1, by, damage)` during the skill (the record, a death by the killer of record): a death's `0x0504`
@@ -2239,6 +2246,7 @@ impl Zones {
         let at_war = me.war.is_some_and(|w| w.ready);
         let mut fx = Effect {
             zones: self,
+            rules: self.rules(),
             map,
             players,
             mobs,
@@ -2355,6 +2363,7 @@ impl Zones {
         let at_war = me.war.is_some_and(|w| w.ready);
         let mut fx = Effect {
             zones: self,
+            rules: self.rules(),
             map,
             players,
             mobs,
@@ -3400,9 +3409,11 @@ impl Zones {
         let Some(p) = players.get(&caster) else { return };
         let (at, cell, country, rec) = (p.occupant.position, p.cell, p.occupant.shape.country, p.occupant.vitals.rec);
         let reach = f32::from(s.apply_range);
+        // One snapshot of the rules for the pass (`docs/plans/ext-2-rules.md` section 8); a victim a rule protects is skipped.
+        let rules = self.rules();
         let mut victims: Vec<u32> = players
             .values()
-            .filter(|t| pvp::area_victim(t) && pvp::enemies(p, t, war))
+            .filter(|t| pvp::area_victim(t) && pvp::strikes(p, t, war, &rules, map).is_yes())
             .filter(|t| near_cells(t.cell, cell) && distance(t.occupant.position, at) <= reach)
             .map(|t| t.occupant.id)
             .collect();
@@ -3533,6 +3544,7 @@ impl Zones {
         let mut all = self.mobs.guard();
         let mut fields = self.fields.guard();
         let mut nobody = HashMap::new();
+        let rules = self.rules();
         for (&map, list) in fields.iter_mut() {
             let war = world.is_war_map(map);
             let players = maps.get_mut(&map).unwrap_or(&mut nobody);
@@ -3549,6 +3561,7 @@ impl Zones {
                         players
                             .values()
                             .filter(|t| pvp::area_victim(t) && t.occupant.shape.country != f.country)
+                            .filter(|t| rules.attack(map, &f.owner_who, &pvp::who(t)).is_none())
                             .filter(|t| near_cells(t.cell, f.cell) && distance(t.occupant.position, f.position) <= f32::from(s.apply_range))
                             .map(|t| t.occupant.id)
                             .collect()

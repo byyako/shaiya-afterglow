@@ -2115,14 +2115,21 @@ async fn two_in_the_world(backend: &Arc<MemoryBackend>, addr: SocketAddr) -> (Cl
 
 /// `two_in_the_world`, Bob's receive buffer small when `bob_small` (see `Client::connect_small`).
 async fn two_in_the_world_with(backend: &Arc<MemoryBackend>, addr: SocketAddr, bob_small: bool) -> (Client, u32, Client, u32) {
+    two_in_the_world_of(backend, addr, bob_small, [0, 0]).await
+}
+
+/// `two_in_the_world_with`, Alice and Bob of the given factions (0 Light, 1 Fury).
+async fn two_in_the_world_of(backend: &Arc<MemoryBackend>, addr: SocketAddr, bob_small: bool, countries: [u8; 2]) -> (Client, u32, Client, u32) {
     backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
     backend.add_session(8, session([6; 16], Some(SERVER_ID), LOCAL));
     let mut clients = Vec::new();
     for (user, identity, name) in [(7, [5; 16], &b"Alice"[..]), (8, [6; 16], &b"Bob"[..])] {
         let mut client = if bob_small && user == 8 { Client::connect_small(addr).await } else { Client::connect(addr).await };
         client.enter(user, identity).await;
-        client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
-        client.write(create(0, 0, 0, name)).await;
+        let country = countries[usize::from(user == 8)];
+        client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[country])).await;
+        // A human fighter for Light, a Deatheater fighter for Fury (races 0 and 3).
+        client.write(create(0, if country == 0 { 0 } else { 3 }, 0, name)).await;
         client.read().await.unwrap();
         let id = u32::from_le_bytes(client.read_list().await[4][1..5].try_into().unwrap());
         clients.push((client, id));
@@ -2130,6 +2137,10 @@ async fn two_in_the_world_with(backend: &Arc<MemoryBackend>, addr: SocketAddr, b
     let (mut bob, bob_id) = clients.pop().unwrap();
     let (mut alice, alice_id) = clients.pop().unwrap();
     backend.set_money(alice_id, 1000);
+    if countries[0] != countries[1] {
+        // The factions start apart: Bob is put beside Alice's start.
+        backend.set_position(bob_id, 1, [580.0, 78.56, 1762.12]);
+    }
     for (client, id) in [(&mut alice, alice_id), (&mut bob, bob_id)] {
         client.write(g::char_id_request(g::OP_CHAR_SELECT, id)).await;
         while frame::opcode(&client.read().await.unwrap()) != w::OP_CHAR_QUICK {}
@@ -4502,4 +4513,54 @@ async fn a_staff_member_moved_to_another_level_loses_the_console_at_once() {
     })
     .await;
     assert!(heard.is_err(), "the typed line is chat now, not a console command");
+}
+
+/// The rules in force of `values`, put in the running server's zones.
+fn put_rules<S>(ctx: &Context<S>, values: &[(&str, serde_json::Value)]) {
+    ctx.zones.set_rules(game_server::rules::RuleSet::from_values(values).unwrap());
+}
+
+/// The texts of the whispers among `packets` (`0x1102`, the receiving form).
+fn whisper_texts(packets: &[Vec<u8>]) -> Vec<String> {
+    packets
+        .iter()
+        .filter(|p| frame::opcode(p) == chat::OP_WHISPER)
+        .map(|p| String::from_utf8_lossy(&p[4 + 23..4 + 23 + usize::from(p[4 + 22])]).trim_end_matches('\0').to_owned())
+        .collect()
+}
+
+/// Sends `packet`, then a request that is answered with `0x0302`: what the server sent in between, in order.
+async fn answered_with(client: &mut Client, packet: Vec<u8>, marker: &[u8]) -> Vec<Vec<u8>> {
+    client.write(packet).await;
+    client.write(marker.to_vec()).await;
+    let mut seen = Vec::new();
+    loop {
+        let packet = client.read().await.unwrap();
+        if frame::opcode(&packet) == w::OP_USER_HP {
+            return seen;
+        }
+        seen.push(packet);
+    }
+}
+
+#[tokio::test]
+async fn a_rule_refuses_an_attack_and_the_server_says_why() {
+    use shaiya_proto::combat as cp;
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_rules(&ctx, &[("safe", serde_json::json!({ "type": "deny", "point": "attack", "message": "No fighting here." }))]);
+    // Alice is Light, Bob Fury: enemies, so the rules are asked.
+    let (mut alice, _, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 1]).await;
+    let aim = shaiya_proto::encode(cp::OP_ATTACK_USER, &bob_id.to_le_bytes());
+    let marker = shaiya_proto::encode(w::OP_USER_HP, &bob_id.to_le_bytes());
+    let seen = answered_with(&mut alice, aim.clone(), &marker).await;
+    assert!(!seen.contains(&cp::attack_start()), "no attack starts: {seen:x?}");
+    assert_eq!(whisper_texts(&seen), ["No fighting here."]);
+    // A second request within 10 seconds: refused again, but the rule does not whisper again.
+    let seen = answered_with(&mut alice, aim.clone(), &marker).await;
+    assert!(!seen.contains(&cp::attack_start()) && whisper_texts(&seen).is_empty(), "{seen:x?}");
+    // Without the rule the attack starts.
+    put_rules(&ctx, &[]);
+    let seen = answered_with(&mut alice, aim, &marker).await;
+    assert!(seen.contains(&cp::attack_start()) && whisper_texts(&seen).is_empty(), "{seen:x?}");
 }
