@@ -1502,7 +1502,7 @@ async fn world_loop<S: Backend>(
                     ZoneEvent::Kill { mob_id, killer } => {
                         if let Some(def) = ctx.data.live().mobs.get(mob_id) {
                             let gain = combat::kill_exp(def, character.level, ctx.switches.exp_rate());
-                            award_exp(conn, ctx, character, state, gain, 0, killer == id, false).await?;
+                            award_exp(conn, ctx, character, state, gain, 0, killer == id, false, crate::rules::ExpSource::Mob).await?;
                         }
                         quest_kill(conn, ctx, character, state, mob_id).await?;
                     }
@@ -1513,7 +1513,7 @@ async fn world_loop<S: Backend>(
                             let base = combat::mob_exp(def, character.level, ctx.switches.exp_rate());
                             let gain = crate::party::member_exp(base, usize::from(members), union, max_level, character.level);
                             let bonus = if crate::party::full_party(usize::from(members), union) { gain } else { 0 };
-                            award_exp(conn, ctx, character, state, gain, bonus, killer == id, false).await?;
+                            award_exp(conn, ctx, character, state, gain, bonus, killer == id, false, crate::rules::ExpSource::Party).await?;
                         }
                         quest_kill(conn, ctx, character, state, mob_id).await?;
                     }
@@ -1555,7 +1555,8 @@ async fn world_loop<S: Backend>(
                             let name = ctx.game_log.mob_name(mob.mob_id).to_owned();
                             ctx.game_log.action(crate::game_log::death_by_mob(record::header(character, state), u32::from(mob.mob_id), None, &name));
                         }
-                        if counted {
+                        // A death a `pvp_gain` rule with `deaths = false` covers is not counted (`docs/plans/ext-2-rules.md` point 7).
+                        if counted && ctx.zones.rules().pvp_deaths(state.map, &rules_who(character, player.faction.map_or(0, |f| f.country))) {
                             death_counted(conn, ctx, character, state).await?;
                         }
                         if let Some(killer) = loss {
@@ -1579,7 +1580,7 @@ async fn world_loop<S: Backend>(
                                 (gain, if crate::party::full_party(usize::from(members), union) { gain } else { 0 })
                             }
                         };
-                        award_exp(conn, ctx, character, state, gain, bonus, last_hit == id, false).await?;
+                        award_exp(conn, ctx, character, state, gain, bonus, last_hit == id, false, crate::rules::ExpSource::Pvp).await?;
                         kill_counted(conn, ctx, character, state, player.faction.map_or(0, |f| f.country)).await?;
                         // `0x0302` (`CUser::KillPCTo`): the victim and the killer's counters after; the skill is not in the event (NULL).
                         let victim_name = ctx.zones.name_of(victim).unwrap_or_default();
@@ -3952,7 +3953,8 @@ fn died<S>(ctx: &Context<S>, state: &mut WorldState, id: u32) {
 
 /// Experience for the player (`CUser::AddExpFromUser`, `CUser::LevelUp`; `docs/original/combat.md` section 5). `own_kill`: the
 /// player also made the last hit. Unless `plain` (a quest's reward), the item flags' factor first (`docs/original/item-flags.md`
-/// section 2), the full party's bonus being the gain so raised.
+/// section 2), the full party's bonus being the gain so raised; then the rules' factor for the `source` of the experience
+/// (`docs/plans/ext-2-rules.md` point 5).
 #[allow(clippy::too_many_arguments)]
 async fn award_exp<S: Backend>(
     conn: &mut Connection,
@@ -3963,6 +3965,7 @@ async fn award_exp<S: Backend>(
     bonus: u32,
     own_kill: bool,
     plain: bool,
+    source: crate::rules::ExpSource,
 ) -> Result<()> {
     let (gain, bonus) = if plain {
         (gain, bonus)
@@ -3970,6 +3973,13 @@ async fn award_exp<S: Backend>(
         let raised = (f64::from(gain) * state.effects.exp_factor()) as u32;
         (raised, if bonus > 0 { raised } else { 0 })
     };
+    // A race's two families belong to one faction (creation checks it), so the faction is the family over two.
+    let changed = ctx.zones.rules().exp_factor(state.map, &rules_who(character, character.family / 2), source);
+    let (before_rules, bonus_before) = (gain, bonus);
+    let (gain, bonus) = ruled_exp(gain, bonus, changed.value);
+    if changed.value != 1.0 {
+        tracing::debug!(id = character.id, map = state.map, point = "exp", rules = ?changed.rules, before = before_rules + bonus_before, after = gain + bonus, "changed by rules");
+    }
     let before = Progress {
         level: character.level,
         exp: character.exp,
@@ -4004,6 +4014,15 @@ async fn award_exp<S: Backend>(
     let health = ctx.zones.health(map, id).unwrap_or(state.health);
     ctx.store.save_progress(id, &after, health).await?;
     Ok(())
+}
+
+/// The gain and the bonus after the rules' factor (`docs/plans/ext-2-rules.md` point 5): each times the product, truncated; a product
+/// of exactly 1 changes nothing.
+fn ruled_exp(gain: u32, bonus: u32, factor: f64) -> (u32, u32) {
+    if factor == 1.0 {
+        return (gain, bonus);
+    }
+    ((f64::from(gain) * factor) as u32, (f64::from(bonus) * factor) as u32)
 }
 
 /// What a level change announces (`CUser::LevelUp`): the numbers again, the level-up packet and the maxima to everyone within 60, a
@@ -4192,7 +4211,7 @@ async fn finish_quest<S: Backend>(
     send_item_changes(conn, state, &end.changes, false).await?;
     // The killer id 0 is not the player's: a level-up shows at once (`0x051E`).
     let exp = def.exp(result);
-    award_exp(conn, ctx, character, state, exp, 0, false, true).await?;
+    award_exp(conn, ctx, character, state, exp, 0, false, true, crate::rules::ExpSource::Quest).await?;
     let ((bag, slot), (item_type, type_id)) = reward.item.unwrap_or_default();
     let ended = qp::Ended { npc_id, quest_id: def.id, success: true, result: result as u8, exp, money, bag, slot, item_type, type_id };
     conn.send(qp::ended(&ended)).await?;

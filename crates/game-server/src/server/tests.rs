@@ -76,3 +76,25 @@ fn a_party_drop_handed_to_a_leaving_member_goes_on_the_ground() {
     assert_eq!(left_on_the_ground(ZoneEvent::Gold { amount: 30, from_mob: true }, at, 7), Some((Loot::Gold(30), at, 7, 0, Dropped::MOB)));
     assert_eq!(left_on_the_ground(ZoneEvent::KillGrade, at, 7), None);
 }
+
+#[test]
+fn a_rules_factor_of_one_changes_nothing_and_the_others_truncate() {
+    // The item flags' factor is applied first, as award_exp does, then the rules'.
+    let item_then_rules = |gain: u32, item: f64, rules: f64| {
+        let raised = (f64::from(gain) * item) as u32;
+        ruled_exp(raised, raised, rules)
+    };
+    for gain in [0u32, 1, 7, 144, 99_999, u32::MAX] {
+        assert_eq!(ruled_exp(gain, gain, 1.0), (gain, gain), "a factor of exactly 1: today's numbers");
+        assert_eq!(ruled_exp(gain, 0, 1.0), (gain, 0));
+    }
+    assert_eq!(ruled_exp(144, 144, 2.0), (288, 288));
+    assert_eq!(ruled_exp(144, 0, 0.5), (72, 0));
+    assert_eq!(ruled_exp(7, 7, 0.5), (3, 3), "truncated");
+    assert_eq!(ruled_exp(144, 144, 0.0), (0, 0), "a factor of 0 wins");
+    assert_eq!(ruled_exp(u32::MAX, u32::MAX, 100.0), (u32::MAX, u32::MAX), "saturates");
+    // With the item factor: 100 x 1.5 = 150, then x 0.5 = 75; 101 x 1.5 = 151 (151.5 cut), x 0.5 = 75 (75.5 cut).
+    assert_eq!(item_then_rules(100, 1.5, 0.5), (75, 75));
+    assert_eq!(item_then_rules(101, 1.5, 0.5), (75, 75));
+    assert_eq!(item_then_rules(100, 1.5, 1.0), (150, 150), "no rule: the item factor alone");
+}

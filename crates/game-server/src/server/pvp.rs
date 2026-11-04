@@ -10,7 +10,9 @@ const GOLD_LOSS_CHANCE: u32 = 30;
 
 /// A kill counted (`CUser::KillPCTo`, section 7): the player-kill quest, then below the cap kills + 1, saved, `0x020E` and
 /// `0x0522` to the view. The console's kill rate adds more than 1, times the kill boost's multiplier while the killer has one of the
-/// kill-boost skills applied (`docs/original/operator-console.md` section 6 step 2); the faction's count and the quest stay 1.
+/// kill-boost skills applied (`docs/original/operator-console.md` section 6 step 2); the faction's count and the quest stay 1. The
+/// rules' `pvp_gain.kills` first (`docs/plans/ext-2-rules.md` point 6): 0 counts nothing at all, not even the quest; otherwise it
+/// multiplies the kills added.
 pub(super) async fn kill_counted<S: Backend>(
     conn: &mut Connection,
     ctx: &Context<S>,
@@ -18,8 +20,17 @@ pub(super) async fn kill_counted<S: Backend>(
     state: &mut WorldState,
     country: u8,
 ) -> Result<()> {
+    let times = ctx.zones.rules().pvp_kills(state.map, &rules_who(character, country));
+    if times.value == 0 {
+        tracing::debug!(id = character.id, map = state.map, point = "pvp_kills", rules = ?times.rules, before = 1, after = 0, "changed by rules");
+        return Ok(());
+    }
     quest_player_kill(conn, ctx, character, state).await?;
-    let by = ctx.switches.kill_rate() * ctx.zones.kill_boost(state.map, character.id, &ctx.config.kill_boost_skills);
+    let by = ctx
+        .switches
+        .kill_rate()
+        .saturating_mul(ctx.zones.kill_boost(state.map, character.id, &ctx.config.kill_boost_skills))
+        .saturating_mul(times.value);
     let Some(kills) = pvp::counted(character.kills[0], by) else { return Ok(()) };
     character.kills[0] = kills;
     // The faction's kill count (`CWorld::AddKillCount`, `docs/original/pvp-2.md` section 9).

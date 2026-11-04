@@ -4621,3 +4621,42 @@ async fn deny_rules_for_trade_chat_and_a_personal_shop_whisper_their_message() {
     let seen = answered_with(&mut client, trade, &marker).await;
     assert!(whisper_texts(&seen).is_empty());
 }
+
+/// Kills the first monster of the test world with `rules` in force and returns the experience packet (`0x0508`) it gave.
+async fn exp_for_the_first_monster(rules: &[(&str, serde_json::Value)]) -> Vec<u8> {
+    use shaiya_proto::combat as cp;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_rules(&ctx, rules);
+    let mut client = Client::connect(addr).await;
+    let id = enter_world(&mut client, 7, [5; 16], true).await;
+    ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
+    assert_eq!(client.read().await.unwrap(), w::mob_enter(1, true, 1, 600.0, 1780.0));
+    assert_eq!(client.read().await.unwrap(), w::mob_max_hp(1, 120, 120));
+    client.write(step(598.0, 1779.0)).await;
+    assert_eq!(frame::opcode(&client.read().await.unwrap()), w::OP_MOVE);
+    client.write(shaiya_proto::encode(cp::OP_ATTACK_MOB, &1u32.to_le_bytes())).await;
+    assert_eq!(client.read().await.unwrap(), cp::attack_start());
+    loop {
+        let packet = client.read().await.unwrap();
+        if frame::opcode(&packet) == cp::OP_MOB_DEATH {
+            assert_eq!(packet, cp::mob_death(1, cp::KILLER_PLAYER, id));
+            break;
+        }
+    }
+    assert_eq!(frame::opcode(&client.read().await.unwrap()), cp::OP_ATTACK_MOB);
+    client.read().await.unwrap()
+}
+
+#[tokio::test]
+async fn an_exp_rule_changes_the_experience_on_its_map_only() {
+    use shaiya_proto::combat as cp;
+    let double = |maps: serde_json::Value| [("double", serde_json::json!({ "type": "exp", "factor": 2, "maps": maps }))];
+    assert_eq!(exp_for_the_first_monster(&[]).await, cp::exp_gain(144, 0), "the number of killing_a_monster_gives_experience_and_a_level");
+    assert_eq!(exp_for_the_first_monster(&double(serde_json::json!([1]))).await, cp::exp_gain(288, 0), "twice, on the map of the kill");
+    assert_eq!(exp_for_the_first_monster(&double(serde_json::json!([2]))).await, cp::exp_gain(144, 0), "another map: unchanged");
+    let half = [("half", serde_json::json!({ "type": "exp", "factor": 0.5, "sources": ["mob"] }))];
+    assert_eq!(exp_for_the_first_monster(&half).await, cp::exp_gain(72, 0));
+    let quests_only = [("q", serde_json::json!({ "type": "exp", "factor": 0, "sources": ["quest"] }))];
+    assert_eq!(exp_for_the_first_monster(&quests_only).await, cp::exp_gain(144, 0), "a monster is not a quest");
+}
