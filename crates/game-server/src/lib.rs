@@ -42,6 +42,7 @@ pub mod pvp;
 pub mod quests;
 pub mod ranking;
 pub mod repair;
+pub mod rules;
 pub mod server;
 pub mod skills;
 pub mod stats;
