@@ -28,7 +28,7 @@ use crate::lapis::OptionSkills;
 use crate::mobs::{self, Mob, MobDef, MobDefs, MobMap, MobState, Moving, Origin};
 use crate::pacing;
 use crate::skills::{self, KillBoost, SkillDef};
-use crate::sync::Relock;
+use crate::sync::{Relock, RelockRw};
 use crate::world::{MapTerrain, World};
 
 mod admin;
@@ -699,6 +699,9 @@ pub struct Zones {
     /// Running steps paced to the client, with the move tick between the passes (`docs/original/chase-smoothing.md`); off in the
     /// tests unless one turns it on.
     smooth: AtomicBool,
+    /// The rules in force (`docs/plans/ext-2-rules.md` section 5): swapped whole by `reload`. A leaf lock, held for the clone of the
+    /// `Arc` only (section 8).
+    rules: std::sync::RwLock<std::sync::Arc<crate::rules::RuleSet>>,
 }
 
 /// A packet for the players within `range` of a spot.
@@ -1715,7 +1718,18 @@ impl Zones {
             listens: Mutex::default(),
             quests: Mutex::default(),
             smooth: AtomicBool::new(false),
+            rules: std::sync::RwLock::default(),
         }
+    }
+
+    /// The rules in force now: one snapshot per request, blow, cast or field pass (`docs/plans/ext-2-rules.md` section 8).
+    pub fn rules(&self) -> std::sync::Arc<crate::rules::RuleSet> {
+        self.rules.read_guard().clone()
+    }
+
+    /// Puts `rules` in force (the start and `reload`); the players' next requests ask them.
+    pub fn set_rules(&self, rules: crate::rules::RuleSet) {
+        *self.rules.write_guard() = std::sync::Arc::new(rules);
     }
 
     /// Turns the pacing of running steps and the move tick on or off (`smooth_chase`).

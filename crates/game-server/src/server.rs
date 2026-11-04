@@ -70,13 +70,14 @@ mod mini_game;
 mod my_shop;
 mod pvp;
 mod record;
+mod refused;
 mod tasks;
 mod vehicles;
 
 use tasks::Save;
 pub use tasks::{
     MOB_UPDATE_INTERVAL, flush_saves, flush_writers, heartbeat, kill_count_changes, load_closed_quests, load_kill_counts, load_market,
-    load_mob_id, load_obelisk_owners, load_open_questions, market_pass, mob_updater, obelisk_events, ranking_clock, save_mob_id,
+    load_mob_id, load_obelisk_owners, load_open_questions, market_pass, mob_updater, obelisk_events, ranking_clock, rules_clock, save_mob_id,
     save_mob_ids, serve, shut_down, start_friends, start_guilds, start_saves,
 };
 
@@ -92,6 +93,9 @@ const MAX_UNDEFINED_PACKETS: u32 = 10;
 const DEFAULT_MAX_GROW: u8 = 3;
 /// Ultimate mode (`byGrow` 3).
 const ULTIMATE: u8 = 3;
+
+/// The name the console's answers and the rules' refusals whisper from.
+pub(crate) const SERVER_NAME: &[u8] = b"Server";
 
 /// Tables loaded from the game definitions and the world at start-up.
 pub struct GameData {
@@ -202,6 +206,8 @@ impl<S> Context<S> {
         let xor = Arc::new(XorTable::new(&XOR_SEED));
         let zones = Zones::new(&data.world, &data.live().mobs);
         zones.load_item_skills(&data.skills);
+        // The rules the settings make; `main` puts the layers' rules in force over them.
+        zones.set_rules(crate::rules::resolve(&config, &crate::rules::RuleSources::default()).map(|r| r.0).unwrap_or_default());
         let mut kill_counts = crate::kc::KillCounts::new(data.kill_grades.clone(), [0; 2], Instant::now());
         kill_counts.disabled = !config.kill_count;
         let switches = Switches::new(config.exp_rate, config.kill_rate, config.item_mall, config.max_connections as u32);
@@ -1062,6 +1068,8 @@ struct WorldState {
     next_shout: Option<Instant>,
     /// When the player may use trade chat again.
     next_trade: Option<Instant>,
+    /// The rules that whispered a refusal to the player lately: rule id and when, at most 8, the oldest dropped (`refused::due`).
+    told: Vec<(u32, Instant)>,
     /// A Message To Server is armed: the next normal line goes to everyone (`m_bUseChatItem`; lost by leaving the world, kept over
     /// map changes).
     chat_item_armed: bool,
@@ -1217,6 +1225,7 @@ async fn in_world<S: Backend>(
         outbox,
         next_shout: None,
         next_trade: None,
+        told: Vec::new(),
         chat_item_armed: false,
         next_all_chat: None,
         rename_stone_used: false,

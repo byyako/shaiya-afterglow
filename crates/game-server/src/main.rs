@@ -9,7 +9,7 @@ use game_server::pg::{self, PgBackend};
 use game_server::server::console;
 use game_server::server::{
     Context, GameData, flush_saves, flush_writers, heartbeat, load_closed_quests, load_kill_counts, load_market, load_mob_id,
-    load_obelisk_owners, load_open_questions, market_pass, mob_updater, ranking_clock, save_mob_id, save_mob_ids, serve, shut_down,
+    load_obelisk_owners, load_open_questions, market_pass, mob_updater, ranking_clock, rules_clock, save_mob_id, save_mob_ids, serve, shut_down,
     start_friends, start_guilds, start_saves,
 };
 use game_server::supervise::supervise;
@@ -141,6 +141,7 @@ async fn main() -> Result<()> {
     if let Some(game_log) = game_log {
         ctx.set_game_log(game_log);
     }
+    ctx.zones.set_rules(rules);
     let ctx = Arc::new(ctx);
     load_kill_counts(&ctx).await.context("loading the factions' kill counts")?;
     let mob_id = load_mob_id(&ctx).await.context("loading the monsters' id counter")?;
@@ -166,6 +167,7 @@ async fn main() -> Result<()> {
     spawn("monster updater", |ctx| Box::pin(mob_updater(ctx)));
     spawn("monster id saver", |ctx| Box::pin(save_mob_ids(ctx)));
     spawn("ranking clock", |ctx| Box::pin(ranking_clock(ctx)));
+    spawn("rules clock", |ctx| Box::pin(rules_clock(ctx)));
     spawn("market pass", |ctx| Box::pin(market_pass(ctx)));
     let notified = ctx.clone();
     supervise("account notifications", move || account_notifications(pool.clone(), notified.clone()));

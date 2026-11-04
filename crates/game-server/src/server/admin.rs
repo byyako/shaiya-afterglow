@@ -692,9 +692,6 @@ pub(super) async fn notices_due<S: Backend>(conn: &mut Connection, ctx: &Context
     Ok(())
 }
 
-/// The name the console's answers whisper from.
-const SERVER_NAME: &[u8] = b"Server";
-
 /// The longest piece of an answer line in one whisper (the chat line holds 127 bytes and the zero).
 const WHISPER_CUT: usize = 120;
 

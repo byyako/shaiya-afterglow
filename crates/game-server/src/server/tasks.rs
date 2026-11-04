@@ -109,6 +109,15 @@ pub fn start_friends<S: Backend>(ctx: &Arc<Context<S>>) {
     tokio::spawn(async move { crate::friends::run_writer(&writing.store, queue).await });
 }
 
+/// Keeps the rules' hour of the week current (`docs/plans/ext-2-rules.md` section 8, point 4): the clock is read every 30 seconds,
+/// never on the hot path.
+pub async fn rules_clock<S: Backend>(_ctx: Arc<Context<S>>) {
+    loop {
+        crate::rules::refresh_hour_of_week();
+        tokio::time::sleep(Duration::from_secs(30)).await;
+    }
+}
+
 /// The guild ranking battle's clock (`docs/original/guild-ranking.md` section 3): at every new minute of the local clock, the
 /// notice of that minute to everyone, the close (everyone left in the battle map is called out) and, after the delay, the ranking
 /// update. An update left due by an earlier run (deviation 4) runs at the first minute.
