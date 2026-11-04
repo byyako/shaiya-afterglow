@@ -547,6 +547,9 @@ pub struct Enchant {
     pub armour: bool,
     pub step: u8,
     pub dangerous: bool,
+    /// How many steps a success rises: 1, or what an `enchant` rule drew (`docs/plans/ext-2-rules.md` point 8); the step never passes
+    /// `MAX_STEP`.
+    pub jump: u8,
 }
 
 /// `CUser::ItemLapisianAdd` before the roll; `None` when the original ignores the request.
@@ -591,6 +594,7 @@ pub fn enchant(inv: &Inventory, defs: &ItemDefs, money: u32, request: EnchantReq
         armour,
         step,
         dangerous: lapisia_def.vg != 0,
+        jump: 1,
     })
 }
 
@@ -613,7 +617,7 @@ impl Enchant {
             let len = item.craft_name.len().min(CRAFT_NAME_MAX);
             buffer[..len].copy_from_slice(&item.craft_name[..len]);
         }
-        let value = self.step + 1 + if self.armour { ARMOUR_STEP } else { 0 };
+        let value = (self.step + self.jump).min(MAX_STEP) + if self.armour { ARMOUR_STEP } else { 0 };
         buffer[18] = b'0' + value / 10;
         buffer[19] = b'0' + value % 10;
         Kept::pad_craft_name(&buffer[..buffer.iter().position(|&b| b == 0).unwrap_or(CRAFT_NAME_MAX)])
@@ -1045,9 +1049,41 @@ mod tests {
         assert!(enchant(&at_twenty, &defs, 3_000_000, EnchantRequest { count: 1, ..req }).is_none(), "step 20");
         let blank = unit(1, 0, 1, 1, 1);
         assert_eq!(&e.new_name(&blank, defs.get(1, 1).unwrap()), b"00000000000000000001", "twenty zeros first");
+        assert_eq!(e.jump, 1, "one step without a rule");
         assert_eq!(enchant_bonus(b"00000000000000000020"), (140, 0));
         assert_eq!(enchant_bonus(b"00000000000000000055"), (0, 25));
         assert_eq!(enchant_bonus(b"00000000000000000030"), (0, 0));
+    }
+
+    #[test]
+    fn a_jump_raises_the_step_by_more_than_one_and_stops_at_twenty() {
+        let defs = defs();
+        let mut sword = unit(1, 0, 1, 1, 1);
+        sword.craft_name = b"01000000000000000000".to_vec();
+        let inv1 = inv(&[sword.clone(), unit(1, 1, 95, 1, 2), unit(1, 2, 25, 43, 5)]);
+        let req = EnchantRequest { lapisia: (1, 1), material: (1, 2), count: 2, item: (1, 0) };
+        let e = enchant(&inv1, &defs, 3_000_000, req).unwrap();
+        let named = |step: u8, jump: u8, armour: bool| {
+            let mut item = unit(1, 0, 1, 1, 1);
+            item.craft_name = format!("010000000000000000{:02}", step).into_bytes();
+            let e = Enchant { step, jump, armour, ..e.clone() };
+            String::from_utf8(e.new_name(&item, defs.get(1, 1).unwrap()).to_vec()).unwrap()
+        };
+        // A weapon: +1 as always, +3, and the cap at 20.
+        assert_eq!(&named(0, 1, false)[18..], "01");
+        assert_eq!(&named(0, 3, false)[18..], "03");
+        assert_eq!(&named(7, 3, false)[18..], "10");
+        assert_eq!(&named(17, 3, false)[18..], "20", "17 + 3 is 20");
+        assert_eq!(&named(18, 3, false)[18..], "20", "18 + 3 stops at 20");
+        assert_eq!(&named(19, 19, false)[18..], "20");
+        // Armour is written + 50: 51 to 70.
+        assert_eq!(&named(0, 1, true)[18..], "51");
+        assert_eq!(&named(4, 3, true)[18..], "57");
+        assert_eq!(&named(18, 3, true)[18..], "70", "the cap is step 20, written 70");
+        assert_eq!(&named(19, 2, true)[18..], "70");
+        // The bonus the client and the server read back follows the name.
+        assert_eq!(enchant_bonus(named(18, 3, false).as_bytes()), (140, 0));
+        assert_eq!(enchant_bonus(named(18, 3, true).as_bytes()), (0, 100));
     }
 
     #[test]

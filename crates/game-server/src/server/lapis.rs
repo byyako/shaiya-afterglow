@@ -303,7 +303,7 @@ pub(super) async fn enchant<S: Backend>(
         return Ok(());
     }
     let request = EnchantRequest { lapisia, material, count, item };
-    let Some(e) = lapis::enchant(&state.inventory, &ctx.data.items, state.money, request) else {
+    let Some(mut e) = lapis::enchant(&state.inventory, &ctx.data.items, state.money, request) else {
         tracing::debug!(id, ?request, "enchant ignored");
         return Ok(());
     };
@@ -311,6 +311,18 @@ pub(super) async fn enchant<S: Backend>(
         use rand::Rng;
         e.succeeds(rand::rng().random_range(0..lapis::ENCHANT_DRAW))
     };
+    // A success may rise more than one step: the first `enchant` rule in scope draws the jump with a draw of its own
+    // (`docs/plans/ext-2-rules.md` point 8). A failure is as it was.
+    if success {
+        use rand::Rng;
+        let who = rules_who(character, character.family / 2);
+        let draw = rand::rng().random_range(0..lapis::ENCHANT_DRAW);
+        let jump = ctx.zones.rules().enchant_jump(state.map, &who, e.armour, draw);
+        if jump.value != 1 {
+            tracing::debug!(id, map = state.map, point = "enchant", rules = ?jump.rules, before = 1, after = jump.value, "changed by rules");
+        }
+        e.jump = jump.value;
+    }
     let o = e.outcome(&state.inventory, &ctx.data.items, success);
     let name_before = state.inventory.get(item.0, item.1).map(|i| i.craft_name.clone()).unwrap_or_default();
     let saved = save(ctx, id, state, &o, &[item, lapisia]).await?;
@@ -327,7 +339,7 @@ pub(super) async fn enchant<S: Backend>(
         ));
     }
     log_consumed(ctx, character, state, &o, &saved);
-    tracing::info!(id, ?request, step = e.step, success, price = e.price, "enchant");
+    tracing::info!(id, ?request, step = e.step, success, jump = e.jump, price = e.price, "enchant");
     let left = |place: (u8, u8)| state.inventory.get(place.0, place.1).map_or(0, |i| i.count);
     let material_left = (material, if e.material.is_some() { left(material) } else { 0 });
     let name = state.inventory.get(item.0, item.1).map_or(name_before, |i| i.craft_name.clone());
