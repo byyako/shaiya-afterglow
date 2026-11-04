@@ -73,8 +73,9 @@ The layers, lowest first; a later one beats an earlier one:
    removed override falls back to the layers below; History and Undo work as for any edit).
 
 Settings take effect at the next start (`tools/game-server.sh restart`); the console's `exp`, `killrate`, `shop` and `maxusers` still
-change their four values live until then. The tables `[ext.<name>]` and `[rules]` of the file, and the editor's `ext.<name>.<key>` keys,
-are reserved for later chunks and refused (`docs/plans/ext-1-foundation.md` section 7.5). Errors name the place: `config/game.toml line 4:
+change their four values live until then. The table `[rules]` of the file holds the rules (`docs/server/rules.md`), which `reload` puts in
+force live; the tables `[ext.<name>]` of the file, and the editor's `ext.<name>.<key>` keys, are reserved for a later chunk and refused
+(`docs/plans/ext-1-foundation.md` section 7.5). Errors name the place: `config/game.toml line 4:
 unknown setting "trade_chat_minlevel"`, `config/game.toml line 6: market_maps: map id "x"`, `extension kill-boost: kill_boost_skills: …`,
 `data editor (change set 12): slot_payout_percent: …`.
 
@@ -114,9 +115,9 @@ At start the server logs one line per setting that is not at its default, with i
 | `item_mall` | `true` | the item mall sells and sends gifts (`docs/original/item-mall.md`); `false` refuses both as the original's `g_bDisableShop` |
 | `town_secs` | `10` | `/town` moves the player to the map's bind position after this long standing still (as in the original) |
 | `handshake_wait_secs` | `15` | a new connection of an account whose older one is still leaving (ended by a newer login, or its character still staying) waits this long for it before being refused (`docs/original/client-extras.md`; the original: refused at once) |
-| `trade_chat_min_level`, `trade_chat_cooldown_secs` | `10`, `5` | trade chat (`$`, faction-wide): lowest level and time between messages, as the US client limits it; 0 turns a limit off (the original server: no check) |
-| `cross_faction_trade_maps` | empty | maps (comma-separated ids) where players of both factions may trade, for example `42` (the Auction House); empty for none, as the original (an addition: `docs/server/deviations.md` section 1) |
-| `market_maps` | empty | maps (comma-separated ids) where a personal shop may be set up, for example `35,36,42` (the capitals and the Auction House, where the client offers it); empty for every map, as the original (a limit on any map list is an addition: `docs/server/deviations.md` section 1) |
+| `trade_chat_min_level`, `trade_chat_cooldown_secs` | `10`, `5` | trade chat (`$`, faction-wide): lowest level and time between messages, as the US client limits it; 0 turns a limit off (the original server: no check). The level makes the rule `setting.trade_chat_min_level` (silent, as it always was); a `[rules]` entry can do the same with more scope (`docs/server/rules.md`) |
+| `cross_faction_trade_maps` | empty | maps (comma-separated ids) where players of both factions may trade, for example `42` (the Auction House); empty for none, as the original (an addition: `docs/server/deviations.md` section 1). Makes the rule `setting.cross_faction_trade_maps`; a `[rules]` entry can do the same with more scope (`docs/server/rules.md`) |
+| `market_maps` | empty | maps (comma-separated ids) where a personal shop may be set up, for example `35,36,42` (the capitals and the Auction House, where the client offers it); empty for every map, as the original (a limit on any map list is an addition: `docs/server/deviations.md` section 1). Makes the rule `setting.market_maps` (a `deny` of the personal shop on every other map); a `[rules]` entry can do the same with more scope (`docs/server/rules.md`) |
 | `guild_party_size` | `7` | the party size needed to create a guild (the original: exactly 7); 1 (or 0) lets a player create one alone |
 | `kill_count` | `true` | the factions' kill counts move with player kills (`docs/original/pvp-2.md` section 9), as the original's console default |
 | `ranking_times` | empty | the guild ranking battle's open times as `(weekday,hour,hours)` entries, e.g. `(1,14,1)` or `(1,14,1),(3,10,2)` (`docs/original/guild-ranking.md` section 10); empty keeps map 50's `CreateTime`, as the original; a test override |

@@ -311,6 +311,8 @@ step, are each one transaction that holds only while the step in the database is
 changes nothing), and the stat reset saves its points, base stats and the first step together. The original saves the gold and the
 step as two messages (`0x0603` and `0x060C`), so a failure between them offered the reward again.
 
+**Rules** (`docs/server/rules.md`, an addition): between enemies by faction only, `0x0502`, the attack tick, skills, area effects, thorns and fields ask the `deny attack` and `level_gap` rules (a duel and a guild war are agreed to and never ruled); `pvp_gain` rules change the killer's experience (section 6.1), the counted kill (section 7, 0 counts nothing) and whether the victim's death is counted. A refused request gets a whisper from `Server`.
+
 **Not built**: `NEW_SERVER` (by decision, the kill rate instead). The rest listed at the top is built: skills on players and the faction kill count (part 2),
 duels with their victories and defeats (`docs/original/duel.md`), guild wars (`docs/original/guild-war.md`), item option skills on hits
 (`docs/original/item-options.md`).

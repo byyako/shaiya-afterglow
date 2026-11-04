@@ -88,7 +88,12 @@ folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the d
   import, with history, undo, export and import; the page and drawn map (part B) are not built.
 - **Client**: `fixes.dll` (client repo, `rust/fixes/src/`) adds packets and fixes; the signed `psNNNN.patch` updater carries data
   files; patch 109 (`docs/plans/done/client-patches.md`) is generated and waits for the client-side session to pack it.
-- **Hooks**: none. The server is one crate of about 44,000 lines; behaviour sits where the original's code did.
+- **Rules** (built, chunk 2, `docs/plans/ext-2-rules.md`, `docs/server/rules.md`): `rules/` in the game server (scope, six rule types, four
+  layers, a compiled `RuleSet` in `Zones`), eight points in the core (attack, trade, personal shop, trade chat, experience, player kills,
+  player deaths, enchant), `reload`, `game-server rules`, the console's `rules`, the editor's `rule` target and the manifest's `[rules]`;
+  `cross_faction_trade_maps`, `market_maps` and `trade_chat_min_level` make a rule each.
+- **Hooks**: the rules' eight points are the first; no Rust trait, no Lua beyond the original's monster scripts. The server is one crate
+  of about 60,000 lines; behaviour sits where the original's code did.
 
 ## 4. The catalogue (the maintainer's list of changes other servers sell)
 
@@ -208,7 +213,7 @@ database alone and the Kill Boost Stone works as before.
 
 ### 7.2 Chunk 2, rules and hooks
 
-**Specified** 2026-11-04 (`docs/plans/ext-2-rules.md`, the maintainer's decisions in its section 1); not built.
+**Specified** 2026-11-04 (`docs/plans/ext-2-rules.md`, the maintainer's decisions in its section 1); **built** 2026-11-04 (the operator's page: `docs/server/rules.md`).
 
 **Needs**: chunk 1 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `crates/game-server/src/config.rs` and `switches.rs`,
 `docs/original/operator-console.md`, `docs/plans/done/data-editing.md` (the edits layer and the registry the rules plug into), and the

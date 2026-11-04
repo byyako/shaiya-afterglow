@@ -254,7 +254,9 @@ Built as above, with these deviations (all approved):
 
 1. **The market maps**: `0x2301` is refused (nothing sent) outside the maps of `market_maps` (comma-separated, for example **35,
    36, 42**: the two capitals and the Auction House, where the client offers "open market"; empty allows every map, as the original, and
-   is the default; the limit is an addition: `docs/server/deviations.md` section 1). The
+   is the default; the limit is an addition: `docs/server/deviations.md` section 1). The setting makes the rule `setting.market_maps`
+   (a `deny` of `personal_shop` outside those maps, silent); a `[rules]` entry can close or open maps with more scope, and tells the
+   player by a whisper (`docs/server/rules.md`). The
    client's own map gate is gone with the Market Anywhere patch (`docs/client/README.md`).
 2. **Placing an item is checked as a trade offer is** (`docs/original/trade.md`, deviation 6): an item there, not a quest item (real type
    27) nor type 99, not bound (`reqog` not 0); and **count × price must fit in 32 bits** (what the client checks, 468). A `0x2307` price

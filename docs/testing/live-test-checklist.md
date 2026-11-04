@@ -1627,3 +1627,31 @@ shows each value and its layer).
 - [ ] (part B) The data editor's layer: `target/release/data-editor draft add set setting guild_party_size value 3`, `apply-draft -m
       "party of three"`, `tools/game-server.sh restart`: `game-server config` shows `guild_party_size = 3 # data editor (change set N)`
       and a party of two can no longer found a guild (a party of three can). `data-editor undo N`, restart: a party of two can again.
+
+## 59. Rules (extensions chunk 2; `docs/plans/ext-2-rules.md`, `docs/server/rules.md`)
+
+Rules are off until written: the live dev box's `config/game.toml` has the examples at its end, commented out. To turn a rule on,
+uncomment it, run `target/release/game-server rules --check`, then `target/release/console 1 reload`; to turn it off, comment it again and
+reload. `target/release/game-server rules` shows what is in force, and `.rules` in the game (staff) the hits of each rule.
+
+- [ ] Without any `[rules]` entry nothing changed: trade chat below level 10 says nothing (as before); a personal shop outside maps 35, 36
+      and 42 does not open (as before); players of both factions trade on map 42 and not elsewhere (as before). `.rules` lists the three
+      `setting.…` rules and no others.
+- [ ] `level-gap` (set `gap` to fit two test characters of different factions, e.g. 10 and 40 with `gap = 20`; reload): neither can attack
+      the other; the attacker is told "The level difference is too great to fight." by a whisper from `Server` once in 10 seconds however
+      often the attack is tried; a skill and an area skill that would hit the protected player do not; a duel between two players of one
+      faction across the gap still works.
+- [ ] A `deny attack` rule in the style of `safe-evenings` on a map (give it the hours of now, reload): attacks on players of the other
+      faction there are refused with the rule's message; area skills, Fire Thorns and fire walls there do not hit players; outside the hours,
+      or on another map, they do.
+- [ ] `market-no-pvp-gain` (map 42 or the map you test on): a player kill there gives no experience, the kill counter and the faction's
+      count do not move, no player-kill quest step is counted, the victim's death counter does not move; on another map they all do.
+- [ ] `enchant-jumps` with the weights changed to `[[3, 1]]` for the test (reload): a successful enchant at the blacksmith goes up three
+      steps; the item's tooltip, the blacksmith window and another player's view of the item (the craft name in `0x0507`) show the new
+      step, for a weapon and for armour; a failure is as before. (A jump of more than one step is not verified in the client.)
+- [ ] A rule through the data editor: `target/release/data-editor draft add add rule level-gap '{"rule": {"type": "level_gap", "gap": 15}}'`,
+      `apply-draft -m "gap"`, `console 1 reload`: it is in force and `game-server rules` names `data editor (change set N)`; `data-editor undo
+      N`, `console 1 reload`: it is gone.
+- [ ] `.reload` typed in the game by a level-1 staff member after editing a rule puts it in force without a restart and answers with the
+      rule count; a rule with a typo (`target/release/game-server rules --check` shows the line) makes `.reload` answer "reload failed,
+      nothing changed" and the old rules stay.

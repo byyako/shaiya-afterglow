@@ -55,7 +55,7 @@ boss spawns of `Obelisk.ini`; party instance zones with their Lua bosses; person
 premium accounts; the gambling house; the game and chat log; the operator (GM) commands and the operator console.
 
 Not built, by decision: the second game server for map 200 (`ps_gamewar.exe`; nothing in the shipped data leads there), the original
-console's `/reitem`-style live reloads (the `reload` console command covers monsters and drop tables), the obelisks' road portal links
+console's `/reitem`-style live reloads (the `reload` console command covers monsters, drop tables and rules), the obelisks' road portal links
 (the shipped `Obelisk.ini` defines none) and a global chat without its item (`docs/server/deviations.md` section 8).
 
 Many of the systems have been tested with the real client; the rest are covered by the test suite and still wait for a test in play.
@@ -231,6 +231,12 @@ value comes from. Everything else is an environment variable, and all of them ar
 [`docs/server/settings.md`](docs/server/settings.md). The ones most often changed: `exp_rate` (experience factor, in the file),
 `GAME_SERVER_ID`, `GAME_BIND` / `LOGIN_BIND`, and `RUST_LOG`.
 
+**Rules** are the file's other table: `[rules.<name>]` entries that allow, deny or change something for a map, level range, faction or
+time of day (no experience from player kills in a map, level-gap protection between players, enchant jumps, a safe zone for PvP). The
+console's `reload` puts them in force without a restart, `target/release/game-server rules` lists what is in force and where each
+rule comes from, and `game-server rules --check` checks the file first ([`docs/server/rules.md`](docs/server/rules.md)); the data editor
+and the extensions can carry rules too.
+
 For a public server on a VPS (systemd units, firewall, backups, updates, copying the game data instead of importing it), see
 [`docs/server/deploy.md`](docs/server/deploy.md).
 
@@ -356,6 +362,7 @@ How a feature is built: the original's behaviour is read from the binaries first
   [`docs/original/ps_login.md`](docs/original/ps_login.md) and [`docs/original/ps_game.md`](docs/original/ps_game.md) are the place to start.
 - [`docs/original/protocol-notes.md`](docs/original/protocol-notes.md): packet framing and encryption.
 - [`docs/server/settings.md`](docs/server/settings.md): every setting.
+- [`docs/server/rules.md`](docs/server/rules.md): the rules: scope, types, layers, `reload`, the editor and extensions.
 - [`docs/server/deviations.md`](docs/server/deviations.md): every place where the server knowingly differs from the original, by kind, with its setting.
 - [`docs/server/deploy.md`](docs/server/deploy.md): running on a VPS.
 - [`docs/original/client-login.md`](docs/original/client-login.md): pointing the client at the server.

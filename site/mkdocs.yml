@@ -189,6 +189,7 @@ nav:
           - Architecture: server/architecture.md
       - Running it:
           - Settings: server/settings.md
+          - Rules: server/rules.md
           - Deploying on a VPS: server/deploy.md
           - Pointing the client at the server: original/client-login.md
       - Behaviour and safety:

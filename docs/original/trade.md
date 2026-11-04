@@ -168,7 +168,9 @@ with `0x0A07`; the new server does not need this, because every way it has of mo
 Follows sections 1 to 4, with these deviations (numbered as the other notes refer to them):
 
 1. **Trade between factions on chosen maps.** The original refuses any. `cross_faction_trade_maps` (comma-separated map ids,
-   for example `42`, the Auction House) lists the maps where the country check is skipped. It is off by default, because the original
+   for example `42`, the Auction House) lists the maps where the country check is skipped; the setting makes the rule
+   `setting.cross_faction_trade_maps`, and `cross_faction_trade` and `deny` `trade` rules in `[rules]` do the same with more scope
+   (`docs/server/rules.md`: a `deny trade` rule answers `0x0A03 2` and whispers its message, and beats the permission). It is off by default, because the original
    allows no such trade (an addition, `docs/server/deviations.md` section 1). Whether the client offers "request transaction" on a player of
    the other faction is not known.
 2. **One database transaction for the whole exchange**: both characters' money and every item, all or nothing. The plan is made from

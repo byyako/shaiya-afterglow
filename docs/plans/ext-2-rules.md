@@ -1,11 +1,40 @@
 # Extensions chunk 2, rules and hooks (spec and build plan)
 
-**Specified 2026-11-04; not built.** Chunk 2 of `docs/plans/extensions.md` (section 6, work item 7.2). Chunk 1 is built
+**Specified 2026-11-04; built 2026-11-04** (steps 1 to 9, one commit each, rehearsed on the drill, then on the live dev box). Chunk 2 of `docs/plans/extensions.md` (section 6, work item 7.2). Chunk 1 is built
 (`docs/plans/ext-1-foundation.md`): the settings registry and its four layers, extensions with their manifest, the data editor's
 `setting` target. This chunk adds **rules**: named, scoped allow/deny/change statements that the core asks at a few fixed places in the
 code (the **points**), set from the same layers as the settings (built-in, enabled extensions, `config/game.toml`, the data editor),
 and put in force **live** by the console's `reload`. It builds the reference set the plan names (no experience or kills in a map,
 level-gap protection, enchant jumps) and folds the three scoped one-off settings in as rules without changing what they do.
+
+**What the build settled where the text left a choice** (none changes a decision of section 1):
+- `Config.config_path` is `Option<String>`: `GAME_CONFIG` as named, `None` for the default file, so `reload` reads with the rule `start` uses
+  (a missing default file is fine, a missing named one an error). `Config::load` and `Config::inspect` return a third value, the rules'
+  `RuleSources`; `config::read_rule_layers_in(conn, content, edits)` is the query behind it and `Backend::rule_layers` (the data editor's
+  tests pass their own schema names).
+- `rules::resolve(&Config, &RuleSources)` takes the layer each folded setting came from in `RuleSources.setting_layers` (for the comment
+  `# setting market_maps (config file)`); `from_settings` returns `(setting, rule)` pairs; `RuleSet::from_values` builds a set from named
+  rules for tests and tools.
+- `check_rule` accepts `{ "enabled": false }` alone (it turns off a lower rule); `check_whole_rule` is for an extension's own rule and
+  refuses it. A manifest names its rules without the prefix, and a `/` there is refused.
+- On `pvp_gain` the key `kills` is the multiplier (section 4.1), so that rule cannot be scoped by the kill count; on every other type
+  `kills` is the scope key.
+- A trade request asks the core's checks first (the faction test with the permission in its place, busy, staking), then `deny trade`:
+  a `deny trade` rule whispers only when the core would have let the request through.
+- A modifier counts a hit at a point only where it changes the number (`pvp_gain`: `exp` not 1, `kills` not 1, `deaths = false`), so
+  one player kill is up to three hits; a refusal counts one hit, the rule that refuses.
+- The rules read the faction of the receiver of experience as the character's family over two (creation checks it), and of the others
+  from the connection's faction.
+- The console's `rules` shows the layer in a word without spaces (`file`, `editor:12`, `extension:pets`, `setting:market_maps`); the
+  longer text is `game-server rules`'s.
+- `config --example` ends with the rules heading and examples, and its header gains the line `# the rules: game-server rules` (`config`
+  itself prints no header).
+- `reload` names a setting when a value in the *file* differs from the one in force, as the text says: a setting the editor overrides is
+  named whenever the file differs from it, though the file's value would not count at a start either.
+- The weights of `enchant.jumps` are proportional (the draw below 1,000,000 is scaled to their sum); the jump is drawn after a success,
+  with a draw of its own, and `Enchant.new_name` caps the step at 20.
+- The folded settings keep their debug log lines (the rule's name starts with `setting.`); other rules log `refused by a rule`.
+
 
 Background read for this spec: `docs/plans/extensions.md` sections 2, 2a, 3, 5, 6, 7.2; `docs/plans/ext-1-foundation.md` sections 5, 7
 and 8; `crates/game-server/src/config.rs`, `switches.rs`; `crates/data-editor/src/registry.rs`, `settings.rs`, `apply.rs`;

@@ -312,5 +312,6 @@ place is emptied, and the player gets **`0x0206`** (7 bytes: `u8 bag, u8 slot, u
   state miss.
 - Make types are read from the database when a request needs them (`ItemStore::make_types`). Quest items are now stored with make type
   `'Q'` (`CUser::QuestAddItem`), extracted lapis with `'G'`, remade items with `'C'`.
+- **Enchant jumps** (an addition, `docs/server/rules.md`): after a successful roll the first matching `enchant` rule draws how many steps the item rises (1 without a rule, at most to step 20); the craft name is written as for one step. Whether the client shows a jump of more than one step is for the live test.
 - Not built: `NEW_SERVER` (by decision: the Lapisia price stays full). Built: the game log records, premium accounts (`docs/original/item-mall.md`), the guild house rates (`docs/original/guild-house.md` section 9) and
   random craft stats on dropped and bought items (`docs/original/item-origins.md` section 6).

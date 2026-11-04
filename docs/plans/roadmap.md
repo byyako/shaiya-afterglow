@@ -160,8 +160,9 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
 | Reconcile the chunk 1 spec with 0.2.0 and ask the open questions | done 2026-11-02 (seven decisions, spec section 1a) |
 | Chunk 1 foundation, part A: the dev box on a worktree of the clone, the `content` schema and `data-editor content`, the importers that import once, the extension manager (`ext …`), the Kill Boost Stone as the first extension, `client_patch.py` on the database (patch 109 regenerates byte for byte), `setup.sh --reset/--extension`, the release package | **built** (drilled on a copy of the dev database, then done on the live one) |
 | Chunk 1 foundation, part B: the settings in layers (`config/game.toml`, the start-up-only environment, `game-server config`), the editor's `setting` target, the settings docs | **built** 2026-11-03 (rehearsed on the drill, then on the live dev box; live-test items in section 58) |
-| Chunk 2 rules and hooks (spec, build) | spec written 2026-11-04 (`docs/plans/ext-2-rules.md`); the build is **next** |
-| Chunk 5 Lua (spec, build), release 0.3.0 | not started |
+| Chunk 2 rules and hooks (spec, build) | spec written and **built** 2026-11-04 (`docs/plans/ext-2-rules.md`, `docs/server/rules.md`; rehearsed on the drill, then on the live dev box; live-test items in section 59) |
+| Chunk 5 Lua (spec) | the spec is **next** |
+| Chunk 5 Lua (build), release 0.3.0 | not started |
 | Chunk 3 item effects, chunk 4 pets (spec, build), release 0.4.0 | not started |
 
 ## Frozen or later (not scheduled)

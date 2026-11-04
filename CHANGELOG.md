@@ -38,6 +38,20 @@
   beats the file, with History, Undo, export and import, checked by the game server's own parser; changes take effect at the next start.
 - The game server reads the settings' database layers over one connection, which also runs the migrations, before it builds its pool.
 
+**Rules** (extensions chunk 2; `docs/plans/ext-2-rules.md`, `docs/server/rules.md`)
+- `[rules.<name>]` tables in `config/game.toml` allow, deny or change something for a scope: maps, level and kill-count ranges, faction,
+  weekdays and hours, `{ not = … }`, and for two-player points which side is tested. Types: `deny` (attack, trade, personal shop, trade
+  chat), `level_gap` (neither of two players more than N levels apart may attack the other), `cross_faction_trade`, `pvp_gain`
+  (experience, kills and deaths of player kills), `exp` (experience from monsters, parties and quests) and `enchant` (weighted jumps of
+  more than one step). A refused player gets a whisper from `Server` (the rule's `message`, once per rule per 10 seconds).
+- Layers as the settings: the settings' own rules, the enabled extensions' (`[rules.<name>]` in `extension.toml`), the file, the data
+  editor (target `rule`, effect live); a rule replaces a lower one of the same name whole, `{ enabled = false }` turns one off.
+- The console's `reload` also reads the rules (the file's and the database's) and puts them in force with the monsters and drops, all or
+  nothing; it names the settings changed in the file, which wait for a start. The console's `rules` lists the rules with their hits.
+  `game-server rules` prints the rules in force with the layer of each; `game-server rules --check [file]` checks a file alone.
+- `cross_faction_trade_maps`, `market_maps` and `trade_chat_min_level` keep working and make a rule each; nothing else changes by default.
+- Migration 0032 (`content.ext_rules`, `content.rule_values`) runs at the next start. No step for an operator.
+
 **Upgrading from 0.2.0** (breaking changes; nothing is converted automatically):
 1. **Settings**: the game settings are no longer environment variables. Stop the game server, start the new one once: it refuses to start
    and prints the `config/game.toml` lines for every `GAME_…` setting it found (in `.env` too). Put them in `config/game.toml` (on a VPS:
