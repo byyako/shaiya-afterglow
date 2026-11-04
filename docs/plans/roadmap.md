@@ -220,6 +220,12 @@ Raised by the maintainer (2026-10-22): people already running the original serve
 
 ## Open work items
 
+- **A changelog for the docs site.** The site (`site/`, published at tylerd.me/shaiya/) has no record of what changed on it: a deploy
+  rewrites every page and nothing says which pages changed in substance (the 2026-11-04 deploy renamed the settings on 28 pages and
+  rewrote the Settings page, and only the repository's `CHANGELOG.md` mentions the settings change). **Inputs**: `site/README.md`,
+  `site/deploy.sh`, `site/build.py`. **To settle**: where it lives (a `site/CHANGELOG.md` kept by hand, or a "What's new" page in the nav
+  that `site/build.py` publishes), and whether `deploy.sh --go` should refuse a deploy whose changes are not listed. **Done when**: every
+  deploy has an entry (date, pages changed, why), the 2026-11-04 deploy has one, and the deploy guide in `site/README.md` says to write it.
 - **Data editor: map pictures.** The page draws the grid alone until `data/map-images/` exists. **Inputs**: the client's answer to queue
   entry 8, `docs/client/research-extension-features.md`, "Map pictures"; `docs/plans/done/data-editing.md` section 8 (the folder's
   layout and `data-editor images import`). **Done when**: the pictures are imported and a map's picture lines up with its spawn areas
