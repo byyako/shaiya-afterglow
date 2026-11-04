@@ -413,7 +413,7 @@ in part 1, instead of the game log.
 6. **Kicks are announced**: `F804` `/kick` sends **`F804`** (2 bytes) to the target before its connection closes, and part 1's `F709` `/akick`
    sends **`F709`** the same way (part 1's `Kick::Operator` carries the opcode), so the client shows 339 "Log out by operator". *Why*: the
    client has the handler; as part 1's deviation 18 does for bans.
-   Amended by deviation 1 of `docs/original/small-items.md` (built): the socket stays open `GAME_KICK_NOTICE_SECS` (3 s) after the notice,
+   Amended by deviation 1 of `docs/original/small-items.md` (built): the socket stays open `kick_notice_secs` (3 s) after the notice,
    the character already out of the world, so the client shows 339 before its disconnect box.
 7. **Staff are protected from lower-ranked staff**: `F802`, `F803`, `F804`, `F80B`, `F80C` (and part 1's `F709`) on a character whose account is
    staff of the GM's level or higher (its level number ≤ the GM's) answer `F501 op`; the GM acting on itself is allowed. *Why*: as part 1's

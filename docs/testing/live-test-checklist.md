@@ -270,7 +270,7 @@ check, the refusals, the cancellations and the faction case are untried.
 
 ## 9. Guilds
 
-The dev server runs with `GAME_GUILD_PARTY_SIZE=2` (in `.env`; the original needs a party of exactly 7; remove the line for that), so
+The dev server runs with `guild_party_size = 2` (in `config/game.toml`; the original needs a party of exactly 7; remove the line for that), so
 TestPriest (the second player account) and TestMage (the first player account), both Light and level 30, can create one in a party of two. TestPriest, TestMage and
 TestRanger have 100,000 gold (creating costs 1,000). Joining a guild starts a 72-hour penalty against creating and join requests (not
 invitations): try join requests with a character that has not joined one (TestRanger).
@@ -576,7 +576,7 @@ each, items in their bags). Request from the player menu (right-click the other 
 ## 24. Personal shops
 
 The same two characters: **the first player account → TestRanger** and **the second player account → TestPriest** (Light, 10M gold each). A shop may only be set up
-on a market map (`GAME_MARKET_MAPS`, default 35, 36, 42): both use a **Bootleggery Recall Rune** (100/132, bag 2 slot 9, two each) to
+on a market map (`market_maps`, default 35, 36, 42): both use a **Bootleggery Recall Rune** (100/132, bag 2 slot 9, two each) to
 reach map 42, where the seller pays 5 %; Apulune (map 35) works too, without the commission. Watch `logs/game-server.log` for
 "personal shop opened", "sold from a personal shop" and "purchase refused".
 
@@ -854,10 +854,10 @@ nothing from the house portal on (items 4 to 12) has been tried.
 
 ## 35. Guild ranking battle (guild houses part 2)
 
-`docs/original/guild-ranking.md`. The server runs with a test window: **Monday 11:00 to 12:00** (`GAME_RANKING_TIMES="(1,11,1)"`) and the
-ranking update **2 minutes** after the close (`GAME_RANKING_UPDATE_DELAY_SECS=120`); the log's first lines show "the ranking battle's
-open times are set by GAME_RANKING_TIMES". To test at another time, restart with the new window (`tools/game-server.sh restart` keeps the
-environment you export; the notices come at hour−1:30, hour−1:50, the start, end−1:50 and end−1:59). **TestMage** (the first player account, Light) is the
+`docs/original/guild-ranking.md`. The server runs with a test window: **Monday 11:00 to 12:00** (`ranking_times = "(1,11,1)"`) and the
+ranking update **2 minutes** after the close (`ranking_update_delay_secs = 120`), both in `config/game.toml`; the log's first lines show
+"the ranking battle's open times are set by ranking_times". To test at another time, edit the window in `config/game.toml` and restart
+(`tools/game-server.sh restart`; `target/release/game-server config` shows what is in force; the notices come at hour−1:30, hour−1:50, the start, end−1:50 and end−1:59). **TestMage** (the first player account, Light) is the
 master of **Builders**, ranking 5; the page below needs only him, a second Builders member shows the entry bonus (Rangers and Priests are
 unranked guilds of one member each). Map 53's portal 0 (about (89, 115)) leads to map 50 (508, 3, 98), map 54's portal 1 for Fury. Watch
 `logs/game-server.log` for "ranking battle open", "ranking notice", "ranking zone made", "ranking battle entry", "ranking battle points"
@@ -1180,7 +1180,7 @@ slots), the Name Change Stones in bag 1 slot 9 and bag 2 slot 23. TestRanger's g
 
 ## 42. Monsters, guards and walking NPCs moving without stops
 
-`docs/original/chase-smoothing.md` (deviations 1 to 5, `GAME_SMOOTH_CHASE`, on by default): running steps wait for the client's own
+`docs/original/chase-smoothing.md` (deviations 1 to 5, `smooth_chase`, on by default): running steps wait for the client's own
 walking time, with a step taken every 100 ms between the passes, so a chasing monster never stands still until it is in reach. Any
 character; a monster that chases you, standing and then walking away. Expect the monsters to catch up about 10 % sooner than before.
 
@@ -1328,8 +1328,8 @@ the fights (section 37's TestVail as staff, or TestRanger raised to about level 
 for `ActionLog`, `chat_log` for `ChatLog`; migration 0029, runs at start). The client has nothing to show: you do ordinary things, and the
 next session reads the rows (`docker exec shaiya-afterglow-postgres psql … "SELECT action, value1, value2, value3, text1 … FROM game_log
 ORDER BY id DESC LIMIT 50"`) and checks them against this list. Use two clients where it says so (any two characters of one country; one of them staff for the staff item). Every row
-has the character's name and the time, so the rows are found from those. Nothing else is needed: the log is on by default (`GAME_LOG`,
-`GAME_CHAT_LOG`).
+has the character's name and the time, so the rows are found from those. Nothing else is needed: the log is on by default (`log`,
+`chat_log`).
 
 - [ ] Log in and enter the world with one character, then log out to the character screen: one 107 (T1 your address, T2 money and bank and
       cash, T3 level/skill/stat points, T4 the stats) and one 232 ('Enter') at entering; one 108 (T2 with `firstmoney`) and one 232
@@ -1427,7 +1427,7 @@ dev server without a client; what is left is what only the client shows.
 - [ ] The tool: `console 1 info` prints the same line; `console 9 info` (no such server) → "no answer"; `console 1 exp -1` → the usage text.
 - [ ] A level-5 GM's `.info` is ordinary chat. The game log has a 180 row per command (T1 `.info`, T3 the arguments); the server log a
       "console command" line.
-- [ ] Kill boost (`GAME_KILL_BOOST_SKILLS` default `200/1:2,200/2:5,200/3:10`; the three stones from `/imake 100 212 1`, `100 213 1`,
+- [ ] Kill boost (`kill_boost_skills` is `200/1:2,200/2:5,200/3:10`, set by the kill-boost extension; the three stones from `/imake 100 212 1`, `100 213 1`,
       `100 214 1`). **After client data patch 109 is installed** (`docs/plans/done/client-patches.md`): the stones show their names (Kill Boost
       Stone, Lv2, Lv3), the Mini Sun EXP Stone's icon and their text; using one shows its buff ("Kill Boost", "Kill Boost Lv2", "Kill
       Boost Lv3", icon 225) for one hour; with them a player kill adds 2×, 5× and 10× the kill rate (`.killrate 1`: +2, +5, +10), without
@@ -1435,12 +1435,12 @@ dev server without a client; what is left is what only the client shows.
       weaker one is refused while a stronger runs, the same one again restarts the hour. Before the patch the client's copy is the empty
       "???177": note whether it can be used at all.
 
-## 52. The gambling house (`GAME_MINI_GAME`)
+## 52. The gambling house (`mini_game`)
 
 `docs/original/mini-game.md` sections 2 to 5 and 9 (built, section 12; the client's side read statically, section 13). A character with
 some gold (e.g. 50 000) next to a gambling NPC: map 1's (type id 1, Asran Epebos), map 2's (4, Quibos Raksion), or the others (maps 19,
 20, 28, 29). Research entry 6 read the client without running it: every answer's fields agree with the server's, and standing up should
-reload the map and send `0x0201`. This test is the first run. If the client misbehaves, set `GAME_MINI_GAME=false`, restart, and report
+reload the map and send `0x0201`. This test is the first run. If the client misbehaves, set `mini_game = false` in `config/game.toml`, restart, and report
 what happened.
 
 - [ ] The NPC is drawn with its model and name (Asran Epebos on map 1), and clicking it from a normal distance works. Clicking opens the
@@ -1454,7 +1454,7 @@ what happened.
       card shows; guess high or low; a win doubles, then ×4 …; stop takes the stake; a loss gives back a fifth.
 - [ ] After the card game ends (a loss, stop, or the fifth win), back at the slots: **no bet is selected** and the gold shown is the
       server's (the server clears the bet; whether the window does is not read). Note it if the old lines are still selected.
-- [ ] Card round five (if reached, or with `GAME_CARD_WIN_CHANCES=1000,1000,1000,1000,1000` for the test): the fifth win pays the stake and
+- [ ] Card round five (if reached, or with `card_win_chances = [1000, 1000, 1000, 1000, 1000]` in `config/game.toml` for the test): the fifth win pays the stake and
       returns to the slots.
 - [ ] The gold shown at the table agrees with the server's (the window works most of it out itself and takes the server's number only
       after a bet and on standing up): the gold shown just before standing up equals the gold after it and after a relog; the 192 rows
@@ -1529,7 +1529,7 @@ machine, a packet tool or a test client.
       deadline of 20 s, then the 10 s stay) and a login with the same account works at once afterwards.
 - [ ] A client that is frozen (suspend the process, e.g. `kill -STOP`) in a busy place is dropped after about 20 s and the others in the
       place are not held up; `/kick <name>` of such a client works at once.
-- [ ] A silent client is idled out at `GAME_IDLE_SECS` (600) even in a busy area: leave a client at the character screen with nothing
+- [ ] A silent client is idled out at `idle_secs` (600) even in a busy area: leave a client at the character screen with nothing
       typed; it is closed after ten minutes without the client's keepalive. (The real client sends one, so normal play never meets this.)
 - [ ] Leaving the client at the login screen for more than 10 minutes without logging in disconnects it; the key exchange itself is
       unchanged (the client does it at once).
@@ -1609,9 +1609,21 @@ stricter. Everyday login and play must feel the same.
 ## 58. Extensions foundation (the Kill Boost Stones as an extension; `docs/plans/ext-1-foundation.md`)
 
 The dev box now runs from a worktree of the clone, and the Kill Boost Stones come from the extension `extensions/kill-boost` instead of
-`additions.sql`. Nothing in play should change. (The items of part B, the stones with the extension disabled and enabled and
-the settings read from `config/game.toml`, are added when part B is built.)
+`additions.sql`. Nothing in play should change. Part B moved the game server's settings out of the environment: the dev box's six
+(`guild_party_size = 2`, `mini_game`, `slot_payout_percent = 220`, `card_win_chances`, `cross_faction_trade_maps`, `market_maps`) are
+keys of `config/game.toml` in the live worktree, and `kill_boost_skills` comes from the extension (`target/release/game-server config`
+shows each value and its layer).
 
 - [ ] After the move (staff account, a spare character): `/imake 100 212 1`, `/imake 100 213 1` and `/imake 100 214 1` give the three stones; using each
       shows its buff for one hour (with client patch 109 installed: the names, icons and text as before); a player kill with each counts 2×,
       5× and 10× (section 51 unchanged).
+- [ ] (part B) The stones with the extension off and on. On the box: `target/release/data-editor ext disable kill-boost`, then
+      `tools/game-server.sh restart` (`game-server config` shows `kill_boost_skills = "" # default`). A stone from `/imake 100 212 1` still
+      uses and shows its buff, and a player kill adds 1×, not 2×. Then `ext enable kill-boost`, restart: the kill adds 2× again.
+- [ ] (part B) Settings from the file: a guild founded by a party of two (`guild_party_size = 2` now comes from `config/game.toml`; section
+      9 as before); the gambling house's slot payouts and card double-up as in section 52 (`slot_payout_percent = 220`, `card_win_chances =
+      "420,200,130,100,80"`), and a personal shop set up on map 35, 36 or 42 and refused on another (`market_maps`) and a trade between the
+      factions on map 42 and refused elsewhere (`cross_faction_trade_maps`), all as before the move.
+- [ ] (part B) The data editor's layer: `target/release/data-editor draft add set setting guild_party_size value 3`, `apply-draft -m
+      "party of three"`, `tools/game-server.sh restart`: `game-server config` shows `guild_party_size = 3 # data editor (change set N)`
+      and a party of two can no longer found a guild (a party of three can). `data-editor undo N`, restart: a party of two can again.

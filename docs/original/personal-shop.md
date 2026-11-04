@@ -252,7 +252,7 @@ everyone. (A visitor dying, standing up or trading keeps its visit.)
 
 Built as above, with these deviations (all approved):
 
-1. **The market maps**: `0x2301` is refused (nothing sent) outside the maps of `GAME_MARKET_MAPS` (comma-separated, for example **35,
+1. **The market maps**: `0x2301` is refused (nothing sent) outside the maps of `market_maps` (comma-separated, for example **35,
    36, 42**: the two capitals and the Auction House, where the client offers "open market"; empty allows every map, as the original, and
    is the default; the limit is an addition: `docs/server/deviations.md` section 1). The
    client's own map gate is gone with the Market Anywhere patch (`docs/client/README.md`).

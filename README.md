@@ -63,7 +63,7 @@ Many of the systems have been tested with the real client; the rest are covered 
 `CONTRIBUTING.md` "Reporting a bug"). With only `DATABASE_URL` set, the
 server behaves as the original apart from its fixes and the operator's tools: `docs/server/deviations.md` lists every deviation, and in its
 section 1 the settings that turn on what the original lacks (cross-faction trade, a market-map limit, the Kill Boost Stones). One
-addition is on by default: the gambling house, which the original's data places but its server never shows (`GAME_MINI_GAME`, with
+addition is on by default: the gambling house, which the original's data places but its server never shows (`mini_game`, with
 the original's odds).
 
 ## What you need
@@ -225,8 +225,11 @@ Stopping the game server (Ctrl+C, SIGTERM or `stop`) saves every character in th
 the countdown: `target/release/console 1 quit 5` announces a stop in five minutes, `restart 5` does the same and exits with status 75, which
 the run script and the systemd unit of `docs/server/deploy.md` start again.
 
-All settings are environment variables, listed with their defaults in [`docs/server/settings.md`](docs/server/settings.md). The ones most often
-changed: `GAME_EXP_RATE` (experience factor), `GAME_SERVER_ID`, `GAME_BIND` / `LOGIN_BIND`, and `RUST_LOG`.
+The game server's settings are keys of `config/game.toml` (`tools/setup.sh` writes it; `config/game.toml.example` lists every key with its
+default; after a change, `tools/game-server.sh restart`), and `target/release/game-server config` shows what is in force and where each
+value comes from. Everything else is an environment variable, and all of them are listed with their defaults in
+[`docs/server/settings.md`](docs/server/settings.md). The ones most often changed: `exp_rate` (experience factor, in the file),
+`GAME_SERVER_ID`, `GAME_BIND` / `LOGIN_BIND`, and `RUST_LOG`.
 
 For a public server on a VPS (systemd units, firewall, backups, updates, copying the game data instead of importing it), see
 [`docs/server/deploy.md`](docs/server/deploy.md).

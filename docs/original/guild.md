@@ -304,7 +304,7 @@ shows as if it had been taken (the client ignores the result byte).
 - **Members online** from the enter-world burst (which carries the guild list, the member list and the join requests before `0x0105`, as
   the original) to leaving the world.
 - **Deviations** (approved):
-  1. **The party size needed to create a guild is a setting**, `GAME_GUILD_PARTY_SIZE`, default 7 as the original; 1 lets a player create
+  1. **The party size needed to create a guild is a setting**, `guild_party_size`, default 7 as the original; 1 lets a player create
      one alone (no party needed). For testing with few accounts.
   2. **Agreements lapse after 30 s** (creation: `0x0D01 0` "Failed to form guild"; disbanding: `0x0D03 0` "Failed to disband guild"), and
      end at once when one of their members leaves the world (creation `0x0D01 3`, disbanding `0x0D03 2`).

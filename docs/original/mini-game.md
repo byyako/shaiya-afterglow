@@ -226,13 +226,13 @@ and experience 0):
 
 ## 9. Design decisions
 
-1. **Built**: `GAME_MINI_GAME` places the type-5 NPCs (all 6 placements) and handles `0x31xx`; false keeps them hidden as the original.
+1. **Built**: `mini_game` places the type-5 NPCs (all 6 placements) and handles `0x31xx`; false keeps them hidden as the original.
    Default **true**, with the original's odds (decision 2): an addition that is on unless the operator turns it off
    (`docs/server/deviations.md` section 1). Play test section 52 checks the client; if it misbehaves, set the setting to `false`.
 2. **Fairer odds, still a sink**, as settings:
-   - **`GAME_SLOT_PAYOUT_PERCENT`** (default **100**, the original's; the fairer value is **220**): each winning line pays `multiplier × table bet × percent / 100` (truncated): about
+   - **`slot_payout_percent`** (default **100**, the original's; the fairer value is **220**): each winning line pays `multiplier × table bet × percent / 100` (truncated): about
      **90 %** of the bet back on average instead of 41 % (100 is the original).
-   - **`GAME_CARD_WIN_CHANCES`** (default the original's **`400,200,100,50,10`** since R1; the fairer value **`420,200,130,100,80`** per mille for rounds 1 to 5): each round
+   - **`card_win_chances`** (default the original's **`400,200,100,50,10`** since R1; the fairer value **`420,200,130,100,80`** per mille for rounds 1 to 5): each round
      gives back about 95 % of the stake risked (a little less, since a tie still loses). The chances must fall from round to round because a
      win multiplies the stake by 2 × the round.
 3. **Safety checks**: `0x3101` answers 0 (and nothing changes) while the player is **dead, trading** (a trade window open), **has a personal
@@ -249,8 +249,8 @@ The plan the code was written from; the code is authoritative where it differs. 
    and one builder per answer of section 2 (`sat(ok)`, `bet(result, bet, money)`, `spin(ok, cells, won, winnings, short)`, `dealer(op,
    d)`, `again()`, `stood(money)`, `guessed(card, result, amount)`, `stopped(money)`), with byte-exact tests of their sizes (3, 11, 18, 3,
    2, 6, 8, 6).
-2. **Settings** (`config.rs`, README table): `GAME_MINI_GAME` (bool, default true), `GAME_SLOT_PAYOUT_PERCENT` (u32 1 to 1000, default
-   220), `GAME_CARD_WIN_CHANCES` (five numbers 0 to 1000, default `420,200,130,100,80`).
+2. **Settings** (`config.rs`, README table): `mini_game` (bool, default true), `slot_payout_percent` (u32 1 to 1000, default
+   220), `card_win_chances` (five numbers 0 to 1000, default `420,200,130,100,80`).
 3. **`mini_game.rs`** (new, pure; `pub mod mini_game;`): the tables of sections 3 to 5 as constants (bets, symbols, class thresholds, lines,
    `NO_BINGO`, `BINGO`, `START`, `COUNT`); `pub struct Odds { payout_percent: u32, chances: [u32; 5] }` (from the config;
    `Odds::ORIGINAL` = 100 and the original chances, for tests); `pub struct MiniGame { state, table, bet, lines, pending, round, dealer }`
@@ -264,7 +264,7 @@ The plan the code was written from; the code is authoritative where it differs. 
    `lines` lines pay; the payout with 100 and 220 percent; the re-bet paid and not paid (`short`); `0x3105` with and without money; the card
    round chances, the stake doubling to ×3840, the fifth-win end, the fifth back on a loss (`(stake as f32 * 0.2) as u32`); `0x3109`;
    `stand` in each state.
-4. **The NPCs** (`world.rs` `World::build`): a parameter (or a `World` setting) so type 5 is placed when `GAME_MINI_GAME` is on; adjust
+4. **The NPCs** (`world.rs` `World::build`): a parameter (or a `World` setting) so type 5 is placed when `mini_game` is on; adjust
    the test at ~568 (`row(1, 5, 1, …) // type 5 is never placed`) to both cases. Object ids are numbered in placement order, so the ids of
    the NPCs after them shift by one per gambling NPC: check nothing stores NPC object ids across restarts (nothing should).
 5. **The connection** (`server/mini_game.rs`, new; `WorldState.mini_game: Option<MiniGame>`):
@@ -287,7 +287,7 @@ The plan the code was written from; the code is authoritative where it differs. 
    and gets `0x3101 1`, bets three lines (`0x3102 1` three times, money down by 300), spins (`0x3103` with `ok` 1, 18 bytes), stands up
    (`0x0213` and `0x3106` with the money, the winnings or the re-bet included), sends `0x0201` and is in the zone again (others see it);
    far from the NPC `0x3101 0`; a lost connection at the table saves the money with the bet handed back.
-8. **Docs**: a "Built" section 12 here; `docs/original/maps-npcs.md` section 4 (type 5 placed with `GAME_MINI_GAME`);
+8. **Docs**: a "Built" section 12 here; `docs/original/maps-npcs.md` section 4 (type 5 placed with `mini_game`);
    `docs/original/ps_game.md`'s `m_nWhere` 3 row (the mini-game); README (settings, test count; the gambling house in the server's list);
    live test **section 52** of `docs/testing/live-test-checklist.md`.
 
@@ -308,7 +308,7 @@ the others of section 1. `docs/testing/live-test-checklist.md` section 52 is the
 - [ ] Sitting down while dead, trading or far from the NPC (a modified client only: else skip) is refused.
 - [ ] `game_log` has rows 190 to 194 for the session.
 - [ ] If any of this fails on the client's side (no window, the character stuck out of the zone after standing up), set
-      `GAME_MINI_GAME=false` and report what happened for research entry 6.
+      `mini_game=false` and report what happened for research entry 6.
 
 ## 12. As built
 
@@ -326,7 +326,7 @@ Steps 1 to 7 as planned, with these points:
   pay; the payout at 100 and 220 percent; the re-bet paid and not paid (`short`); `again`; the card rounds to ×3840, the tie, the fifth
   back; `stand` in each state; and the **return**: 40 to 42 % at the original numbers and 88 to 93 % at 220 for 1 to 8 lines, computed
   from the tables.
-- **Settings**: `GAME_MINI_GAME` (default true), `GAME_SLOT_PAYOUT_PERCENT` (1 to 1000, default 220), `GAME_CARD_WIN_CHANCES` (five numbers
+- **Settings**: `mini_game` (default true), `slot_payout_percent` (1 to 1000, default 220), `card_win_chances` (five numbers
   0 to 1000), refused at start when out of range.
 - **The NPCs**: `World::build_with(…, gambling)` (`build` keeps the original's rule), `pg::load_world(pool, gambling)`; the type constant is
   `world::GAMBLING_NPC_TYPE`. The `world` test places a type-5 row both ways.
@@ -359,7 +359,7 @@ own arithmetic against the server (`mini_game::tests::the_clients_wallet_follows
 
 - **The NPC**: `0x0E01` (reader 0x57e000, handler 0x552730) passes type 5 through; NPC construction 0x433770 handles type 5 with its
   name and model from `NpcQuest.SData` (type 5 has 8 records: Asran Epebos, Bete Margarita, Piedia Epebos, Quibos Raksion, Aldea Lwena,
-  Igra, Yutikia Epebos, Iba, models present in the archive). The build places them with `GAME_MINI_GAME` (section 12).
+  Igra, Yutikia Epebos, Iba, models present in the archive). The build places them with `mini_game` (section 12).
 - **The click**: type 5's primary action opens a **table selector** (UI state `0x6a`, `gamble.tga`) of **seven rows**; the row sends
   **`0x3101 u8 table`** (sender 0x588c00, 3 bytes). The NPC's id is not sent: the server's "a type-5 NPC in view" check (decision 3) is
   all it can check. The client's per-line table (0x6f2150) is **100, 300, 500, 1000, 1500, 2000, 3000**, the same as `TABLE_BETS`.
@@ -368,7 +368,7 @@ own arithmetic against the server (`mini_game::tests::the_clients_wallet_follows
 - **The cells and cards**: the nine cells row by row (0 1 2 / 3 4 5 / 6 7 8), revealed 0 to 8; value `v` is drawn as face `v` of
   `game_card%d.tga` (reels) or `tarocard%d.tga` (cards), 0 to 21 the 22 major arcana in order, **22 the back**. The server sends 0 to 21
   only (cells, the dealer's 4 to 17, the player's card 0 to 21). The client highlights winning lines in the same order as `LINES` and
-  shows the server's amount (it computes no payout), so `GAME_SLOT_PAYOUT_PERCENT` shows correctly.
+  shows the server's amount (it computes no payout), so `slot_payout_percent` shows correctly.
 - **`short`** is a "no re-bet" flag: after a losing spin, or after `0x3105`, the window keeps the bet and takes it from its own wallet when
   `short` is 0, and clears the lines and bet when it is not. The server's rule (section 4 steps 6 and 7, `0x3105`) is the same condition.
 - **The gold**: the window copies the money on sitting down and takes it from the server only at **`0x3102` result 1** and **`0x3106`**;

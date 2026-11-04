@@ -244,8 +244,8 @@ and the database write. Not yet tried with the client: section 35 of `docs/testi
 - **The clock** (`crate::ranking`, pure): fed the local time once a minute (at each new minute of the local clock), it says: the
   notice of that minute (section 3's table), whether the battle is open, its tag (`(date, start hour)` of the open entry), and when the
   update is due (30 minutes after a close seen while running). A server task calls it every minute: notices to everyone
-  (`0x0D26`), the close (section 6), the update (section 8). Test settings: `GAME_RANKING_TIMES` (e.g. `"(1,14,1)"`, replaces map 50's
-  `CreateTime`) and `GAME_RANKING_UPDATE_DELAY_SECS` (default 1800).
+  (`0x0D26`), the close (section 6), the update (section 8). Test settings: `ranking_times` (e.g. `"(1,14,1)"`, replaces map 50's
+  `CreateTime`) and `ranking_update_delay_secs` (default 1800).
 - **Guild state** (`crate::guild`): per guild `battle_points` and `battle_entries` (memory only, as the original), with the stored
   `etin_returns`; per country the best `(points, guild)`; per character the tag of the last battle entered (memory only, deviation 3).
 - **Going in**: `0x020A` and **`0x0227`** to an R map: section 4's order; a player already in an R zone moves within its zone. The zone

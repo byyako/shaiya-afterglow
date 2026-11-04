@@ -80,7 +80,7 @@ master, 12 dead NPC, 13 combat commander.
 
 Confirmed, `CMap::InitNPC` 0x429130.
 
-For each NPC entry of the map file, in order: skipped if its type is 5 (the new server places them when `GAME_MINI_GAME` is on, the default: the gambling house,
+For each NPC entry of the map file, in order: skipped if its type is 5 (the new server places them when `mini_game` is on, the default: the gambling house,
 `docs/original/mini-game.md`), if `GetNpc` finds nothing, if it has no position, or if the first position fails
 `IsSafePos`. Otherwise **one NPC at the first position** with the first direction in degrees, **truncated** to a whole number (`fistp` with the
 rounding mode set to chop, 0x4292f1), a new object id from the object manager's counter (`InterlockedIncrement`, 0x429288; kept when the heap reuses an

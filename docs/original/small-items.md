@@ -73,7 +73,7 @@ no new reading of `ps_game.exe`.
 1. sends the notice under the current encryption (as now);
 2. stops reading packets for the game: the character **leaves the world at once** as now (others see it go, it is saved), so the hold
    changes nothing in the world;
-3. keeps the socket open for **`GAME_KICK_NOTICE_SECS`** (default **3**; 0 = close at once as now), reading and dropping whatever the client
+3. keeps the socket open for **`kick_notice_secs`** (default **3**; 0 = close at once as now), reading and dropping whatever the client
    still sends; if the client closes first, the hold ends there;
 4. then shuts down the sending side and drains as now (`QUIT_GRACE`).
 
@@ -452,7 +452,7 @@ Mark "can't test" if no NPC offers it.
 ## 14. Deviations (all decided; all but 2 built)
 
 1. **Approved, built. Kick and ban notices are held before the close** (section 1): after `F804`, `F709`, `F70A`, `F805` the socket stays open
-   `GAME_KICK_NOTICE_SECS` (default 3) with the character already out of the world, so the client shows the chat line before its box.
+   `kick_notice_secs` (default 3) with the character already out of the world, so the client shows the chat line before its box.
    *Why*: the client needs it to show 339/340/341 at all (client verified). Amends deviation 6 of `docs/original/gm-commands-2.md` and
    deviation 18 of `docs/original/gm-commands.md` (when the notice is seen, not what is sent).
 2. **Not built (decided): a global chat without the item** (section 5.4). The number is kept free.
@@ -478,7 +478,7 @@ Built as above (`docs/plans/done/small-items.md`): `crates/shaiya-proto` (`world
 `market.rs`, both stores) and migration `0026_rename.sql`; live test section 41. These small choices were made in the build:
 
 - **The kick hold and the stay of a lost connection.** A connection that ends in the world normally leaves its character there for
-  `GAME_LINGER_SECS` (10 s) with the socket shut at once; that would have closed the socket before the notice was read and kept the
+  `linger_secs` (10 s) with the socket shut at once; that would have closed the socket before the notice was read and kept the
   character in the world. A held kick or ban therefore skips the stay: the character leaves at once (as section 1 asks) and only the socket
   is held. The hold counts from the notice, so the box comes about 3 s after the chat line whatever the save takes. A newer login and an
   `/akick` of an account on the character screen (`op` 0) close at once as before.

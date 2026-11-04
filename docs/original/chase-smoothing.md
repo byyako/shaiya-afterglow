@@ -150,7 +150,7 @@ one step (about 9 units) behind where the server has it. That is the original's 
    Running the whole fight turn every 100 ms would change what monsters decide (retargeting by aggro, `byOK` 6, entry choice and the
    calls of `rand()` happen once per turn), so only the step is repeated. A monster that comes into reach on a tick in between strikes
    at the next pass, at most 400 ms later (900 ms for scripted and Lua monsters), as a monster reaching it during the original's wait.
-3. **A setting**: `GAME_SMOOTH_CHASE` (default `true`); `false` keeps the original's waits and passes exactly.
+3. **A setting**: `smooth_chase` (default `true`); `false` keeps the original's waits and passes exactly.
 4. **The Lua `WhileMove` is paced too** (approved): a Lua monster walking to a spot (motion 0) waits for the client's
    walking time, `NormalStep` and `NormalTime` in the speed of section 1 step 3; the move tick takes its steps while it is 10 or more from
    the spot (nearer, the pass's `5 + rand() % 5` may call it there). *Why*: in the original the server walks 2 units/s against the
@@ -193,7 +193,7 @@ For the usual NPC (16, 8000): walking 2 units/s (16 units in 8 s), running 8 uni
 - `mobs.rs` `Mob`: `client_eta: Instant` (reset on spawn and when a monster is moved by anything else: a jump, a Lua move, rebirth) and
   `running: bool` (the last turn sent a running step; cleared on every other outcome).
 - `server.rs` `mob_updater`: interval 100 ms; `mob_fight` and guards on every fifth tick, the one-second passes on every tenth (keep their
-  order); `zones.chase_steps(now, …)` on the others when `GAME_SMOOTH_CHASE` is on.
+  order); `zones.chase_steps(now, …)` on the others when `smooth_chase` is on.
 - `zone.rs`: `chase_steps` (deviation 2); `fight_turn`, `go_home`, the scripted `battle` and the Lua `chase_ex`/`WhileReturnHome` pace their
   steps when the setting is on.
 - Tests: `fight` unit tests for `client_speed` (9/1800 → 4.70, index 0 → 2.48, time 0 → none) and the pacing; zone tests that a chasing
@@ -207,7 +207,7 @@ For the usual NPC (16, 8000): walking 2 units/s (16 units in 8 s), running 8 uni
 (`paced_next`, `stop_moving`, `Zones::set_smooth_chase`; the paced steps of `fight_turn` and `go_home`), `zone/mob_skills.rs` (the
 skill chase), `zone/lua.rs` (`chase_ex`, `walk` for `WhileMove` and `WhileReturnHome`), `zone/npc.rs` (`npc::Moving`, `Npc::client_eta`,
 the paced guard chase, going back and walk, `move_tick`), `zone/move_tick.rs` (`Zones::move_steps`), `server.rs` (`mob_updater` on
-100 ms ticks with smoothing: the passes on every fifth), `config.rs` (`GAME_SMOOTH_CHASE`). Tests: `pacing` (speeds, arrival
+100 ms ticks with smoothing: the passes on every fifth), `config.rs` (`smooth_chase`). Tests: `pacing` (speeds, arrival
 anchoring), `zone::move_tick` (a chase stepping at 938 ms then 1977 ms on the ticks, no blow and no decision on a tick, the original's
 waits with smoothing off), `zone::npc` (a guard's paced chase and its last step on a tick, a walking NPC's step at 7.9 s). The flow
 tests run with smoothing off (their timings are the original's). Live test: `docs/testing/live-test-checklist.md` section 42.

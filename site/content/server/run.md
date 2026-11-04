@@ -49,7 +49,7 @@ The address is the one players' clients reach: a LAN address for a home test, th
 
 The run scripts take `start`, `stop`, `restart`, `status` and `logs`. Stopping the game server saves every character in the world first. With players online, use the countdown instead: `target/release/console 1 quit 5` announces a stop in five minutes, and `restart 5` does the same and starts the server again.
 
-The settings most often changed are `GAME_EXP_RATE` (the experience factor), `GAME_SERVER_ID`, the listen addresses `GAME_BIND` and `LOGIN_BIND`, and the log level `RUST_LOG`. [Settings](settings.md) lists every one; [Deviations](deviations.md) section 1 lists the ones that turn on what the original lacks, such as trade between the factions.
+The game server's settings are keys of `config/game.toml` (restart the server after a change; `game-server config` shows what is in force and where each value comes from). The ones most often changed are `exp_rate` (the experience factor, in the file), `GAME_SERVER_ID`, the listen addresses `GAME_BIND` and `LOGIN_BIND`, and the log level `RUST_LOG`. [Settings](settings.md) lists every one; [Deviations](deviations.md) section 1 lists the ones that turn on what the original lacks, such as trade between the factions.
 
 ## The operator tools
 

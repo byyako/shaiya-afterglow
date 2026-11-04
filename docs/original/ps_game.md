@@ -360,7 +360,7 @@ The new game server does this:
 1. Accept only `0xA301` before authentication, in plain text, exactly 22 bytes (stricter than the original: reject other lengths).
 2. Look up the session for `dwUserID`. Require: the identity matches (constant-time compare), the session is bound to **this** server id, it has not
    expired, and it has not already been used for a game connection. Mark it used in the same statement. It also requires the
-   connecting address to equal the login address (`GAME_CHECK_IP`, on by default; the original did not check).
+   connecting address to equal the login address (`check_ip`, on by default; the original did not check).
 3. On any failure: close the connection without a reply (the original's behaviour; the client shows its own error). This includes an account that
    still has a connection on this server, in the world or lingering after a lost connection (the original's `CWorld::FindUserBill`;
    `docs/original/world.md` section 4.3); checked before the session is claimed, so a refused handshake does not use the session up.

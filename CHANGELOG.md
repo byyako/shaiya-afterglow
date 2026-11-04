@@ -23,15 +23,35 @@
   the release tarball carries `extensions/`; `tools/fetch-release.sh --keep <dir>` unpacks the whole tarball.
 - Migration 0031 (the `content` schema).
 
-**Upgrading from 0.2.0** (breaking changes; nothing is converted automatically; the settings step comes with the settings work of this release):
-1. **Game data**: run `tools/setup.sh` again with the same two folders. It imports the original data once into new schemas
+**The game server's settings are a file** (extensions chunk 1, part B)
+- Every game setting is a key of `config/game.toml` (the old variable's name without `GAME_`, in lowercase: `GAME_MARKET_MAPS` is
+  `market_maps`); the layers, lowest first, are the built-in defaults, the defaults of the enabled extensions, the file, and the data
+  editor's overrides. `config/game.toml.example` lists every setting with its default and meaning. `tools/game-server.sh` sets
+  `GAME_CONFIG` to the checkout's file; on a VPS `GAME_CONFIG` names `/etc/shaiya-afterglow/game.toml`.
+- A game setting still set in the environment (`.env` included) **stops the game server at start** and prints the lines to put in the file;
+  a `GAME_` name that is not a setting is listed as such. `DATABASE_URL`, `GAME_BIND`, `GAME_SERVER_ID`, `GAME_CONFIG` and `RUST_LOG` stay
+  variables. Errors in the file name the line (`config/game.toml line 4: unknown setting "x"`), and an extension's or the editor's value
+  names its layer.
+- `game-server config` prints what is in force and which layer each value came from; `game-server config --example` prints the example
+  file. At start the server logs every setting that is not at its default, with its layer.
+- The data editor has the target `setting` (`draft add set setting <name> value <value>`): an override in `content.setting_values` that
+  beats the file, with History, Undo, export and import, checked by the game server's own parser; changes take effect at the next start.
+- The game server reads the settings' database layers over one connection, which also runs the migrations, before it builds its pool.
+
+**Upgrading from 0.2.0** (breaking changes; nothing is converted automatically):
+1. **Settings**: the game settings are no longer environment variables. Stop the game server, start the new one once: it refuses to start
+   and prints the `config/game.toml` lines for every `GAME_…` setting it found (in `.env` too). Put them in `config/game.toml` (on a VPS:
+   `/etc/shaiya-afterglow/game.toml`, and `GAME_CONFIG=/etc/shaiya-afterglow/game.toml` in the env file), remove the variables.
+   `DATABASE_URL`, `GAME_BIND`, `GAME_SERVER_ID` and `RUST_LOG` stay variables.
+2. **Game data**: run `tools/setup.sh` again with the same two folders. It imports the original data once into new schemas
    (`original_defs`, `original_world`) and rebuilds `defs` and `world` from them plus your data editor's edits; changes made by hand
    in SQL are replaced, as before on every re-run. Later re-runs skip the import; `--reset` re-imports corrected files. Until then the game
    server runs as before and `data-editor ext install` refuses, saying so.
-2. **The Kill Boost Stones**: `additions.sh` is gone. If you used `--with-additions`, install the extension instead
+3. **The Kill Boost Stones**: `additions.sh` is gone. If you used `--with-additions`, install the extension instead
    (`target/release/data-editor ext install extensions/kill-boost`, or `tools/setup.sh --extension extensions/kill-boost`) before
-   the game server starts, so held stones stay stones.
-3. **Moving game data to a VPS**: dump `defs`, `world`, `original_defs`, `original_world`, `content` and `edits`
+   the game server starts, so held stones stay stones; its kill multipliers come with it, so drop `kill_boost_skills` from your
+   settings unless you changed them.
+4. **Moving game data to a VPS**: dump `defs`, `world`, `original_defs`, `original_world`, `content` and `edits`
    (`docs/server/deploy.md` section 3).
 
 ## 0.2.0 (2026-11-02)

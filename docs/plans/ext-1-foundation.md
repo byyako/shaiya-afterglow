@@ -1,10 +1,13 @@
 # Extensions chunk 1, the foundation (spec and build plan)
 
-**Ready to build (reconciled 2026-11-02).** Specified on 2026-10-22, before the install work; reconciled on 2026-11-02 with what 0.2.0
+**Built (part A 2026-11-02 and 2026-11-03, part B 2026-11-03).** Ready to build as reconciled 2026-11-02: Specified on 2026-10-22, before the install work; reconciled on 2026-11-02 with what 0.2.0
 changed (`docs/plans/extensions.md` section 2a: the re-runnable `tools/setup.sh`, `tools/defs/read_bak.py`, the renamed containers,
 database and variables, the released binaries, no alpha) and checked against the Lua scripts chunk 5 must serve (section 5.8). The
 maintainer's answers of that day are section 1a. Breaking changes are accepted in 0.x; section 11 is the changelog's migration note.
-Not built.
+Built as specified; what the build settled where the text left a choice: `game-server config` runs no migrations and tolerates a database
+without the `content` schema (the server's start runs them on the one connection); the editor's `setting` target stores a value as the
+text the file would give (`12`, `35,36`) and a `set` on a setting without an override adds one; the key of that target is a name, so it
+has its own code (`crates/data-editor/src/settings.rs`) beside the numeric key code of the other targets.
 
 Chunk 1 of `docs/plans/extensions.md` (section 6). It makes the database the source of truth for the game's content, gives custom
 content a package (an **extension**: a folder with a manifest), and gives the game server's settings layers. The Kill Boost Stone,

@@ -167,7 +167,7 @@ with `0x0A07`; the new server does not need this, because every way it has of mo
 
 Follows sections 1 to 4, with these deviations (numbered as the other notes refer to them):
 
-1. **Trade between factions on chosen maps.** The original refuses any. `GAME_CROSS_FACTION_TRADE_MAPS` (comma-separated map ids,
+1. **Trade between factions on chosen maps.** The original refuses any. `cross_faction_trade_maps` (comma-separated map ids,
    for example `42`, the Auction House) lists the maps where the country check is skipped. It is off by default, because the original
    allows no such trade (an addition, `docs/server/deviations.md` section 1). Whether the client offers "request transaction" on a player of
    the other faction is not known.

@@ -550,7 +550,7 @@ attacked", 265 "Won't be attacked anymore"; the failures 2035 "Can't use functio
 18. **The ban notice before the kick**: the account's connection is closed with the ban packet first (deviation 14), so `OnlineUsers` carries
     a reason with its kick (a newer login: `0x0004 0` as now; an operator's `/akick`: nothing, as the original; a ban: `F70A`/`F805 u16
     minutes`).
-    Amended by deviation 1 of `docs/original/small-items.md` (built): after the ban notice the socket stays open `GAME_KICK_NOTICE_SECS`
+    Amended by deviation 1 of `docs/original/small-items.md` (built): after the ban notice the socket stays open `kick_notice_secs`
     (3 s), the character already out of the world, so the client shows 340/341 before its disconnect box.
 
 19. **`F706` flips the server switch** (found in play). The US client compares only 9 characters of "/server on" (`0x4728b7`), so

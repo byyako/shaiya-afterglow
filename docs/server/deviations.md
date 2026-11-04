@@ -27,16 +27,16 @@ A setting written as `NAME` (`value`) gives its release default. `docs/server/se
 
 | setting | before the release | release default | the original | kind |
 |---|---|---|---|---|
-| `GAME_MINI_GAME` | `true` | `true` | never creates the type-5 NPCs, so the gambling house cannot be reached (`docs/original/mini-game.md`) | addition, on by default |
-| `GAME_SLOT_PAYOUT_PERCENT` | `220` | `100` | the table's payout: about 41 % of the bets come back | addition (used only with the gambling house on) |
-| `GAME_CARD_WIN_CHANCES` | `420,200,130,100,80` | `400,200,100,50,10` | the double-up's chances | addition (same) |
-| `GAME_CROSS_FACTION_TRADE_MAPS` | `42` | empty | no trade between factions anywhere (`docs/original/trade.md` deviation 1) | addition |
-| `GAME_MARKET_MAPS` | `35,36,42` | empty | the server allows a personal shop on any map; the unpatched client offers it only where its own map table allows (`docs/original/personal-shop.md` deviation 1) | addition |
-| `GAME_KILL_BOOST_SKILLS` | `200/1:2,200/2:5,200/3:10` | empty | no kill-boost item (`docs/original/operator-console.md`) | addition |
+| `mini_game` | `true` | `true` | never creates the type-5 NPCs, so the gambling house cannot be reached (`docs/original/mini-game.md`) | addition, on by default |
+| `slot_payout_percent` | `220` | `100` | the table's payout: about 41 % of the bets come back | addition (used only with the gambling house on) |
+| `card_win_chances` | `420,200,130,100,80` | `400,200,100,50,10` | the double-up's chances | addition (same) |
+| `cross_faction_trade_maps` | `42` | empty | no trade between factions anywhere (`docs/original/trade.md` deviation 1) | addition |
+| `market_maps` | `35,36,42` | empty | the server allows a personal shop on any map; the unpatched client offers it only where its own map table allows (`docs/original/personal-shop.md` deviation 1) | addition |
+| `kill_boost_skills` | `200/1:2,200/2:5,200/3:10` | empty | no kill-boost item (`docs/original/operator-console.md`) | addition |
 | the Kill Boost Stone rows (items 100/212-214 and skill 200/1-3) | loaded by `additions.sh --with-additions` (0.2.0) | the extension `extensions/kill-boost`, installed with `data-editor ext install extensions/kill-boost` (or `tools/setup.sh --extension extensions/kill-boost`); not installed by default; its multipliers are the setting above (the extension carries `200/1:2,200/2:5,200/3:10` as its default, which the game server reads once settings come in layers) | items 100/212-214 and skill 200/1-3 are empty `???` rows | addition |
 
-Unchanged on purpose, though they differ from the original: `GAME_SMOOTH_CHASE` (`true`, kept as a display fix, section 9),
-`GAME_CHECK_IP` (`true`, a security fix), `GAME_KICK_NOTICE_SECS` (`3`, so the client shows the notice), the trade chat limits (`10`,
+Unchanged on purpose, though they differ from the original: `smooth_chase` (`true`, kept as a display fix, section 9),
+`check_ip` (`true`, a security fix), `kick_notice_secs` (`3`, so the client shows the notice), the trade chat limits (`10`,
 `5`: what the US client enforces itself), the robustness limits (section 2).
 
 ## 2. Connections, login and robustness
@@ -45,18 +45,18 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 
 | # | the original → this server | kind | setting |
 |---|---|---|---|
-| R1, R19 | a client that stops reading kept its connection and an unbounded queue → a write deadline, a bounded queue, the idle clock from the client's last bytes | robust | `GAME_WRITE_TIMEOUT_SECS` (`20`), `GAME_OUTBOX_LIMIT`, `GAME_IDLE_SECS` (`600`) |
-| R2, R10 | any number of connections per address; pings keep a socket for ever → per-address caps and connects a minute, handshake and key-exchange deadlines | robust | `GAME_MAX_PER_IP`, `GAME_CONNECTS_PER_MINUTE`, `GAME_HANDSHAKE_SECS`; `LOGIN_MAX_PER_IP`, `LOGIN_CONNECTS_PER_MINUTE`, `LOGIN_KEY_TIMEOUT_SECS`, `LOGIN_IDLE_SECS` |
-| R4 | no chat or packet limit → per-connection chat and packet rates | robust | `GAME_CHAT_PER_SEC`, `GAME_CHAT_BURST`, `GAME_PACKETS_PER_SEC` |
+| R1, R19 | a client that stops reading kept its connection and an unbounded queue → a write deadline, a bounded queue, the idle clock from the client's last bytes | robust | `write_timeout_secs` (`20`), `outbox_limit`, `idle_secs` (`600`) |
+| R2, R10 | any number of connections per address; pings keep a socket for ever → per-address caps and connects a minute, handshake and key-exchange deadlines | robust | `max_per_ip`, `connects_per_minute`, `handshake_secs`; `LOGIN_MAX_PER_IP`, `LOGIN_CONNECTS_PER_MINUTE`, `LOGIN_KEY_TIMEOUT_SECS`, `LOGIN_IDLE_SECS` |
+| R4 | no chat or packet limit → per-connection chat and packet rates | robust | `chat_per_sec`, `chat_burst`, `packets_per_sec` |
 | R5, R6 | a crash in one connection or an accept error ends the server → survived, with the shutdown save | robust | |
 | R7 | wrong passwords never locked anyone out → lockouts per address, per account and address, per account; passwords 6 to 16 characters | robust | `LOGIN_FAILURE_*`, `LOGIN_PAIR_*`, `LOGIN_ACCOUNT_*` |
 | ps_login | passwords stored as the original's database holds them → Argon2 hashes in `accounts` | robust | |
-| ps_game 3 | the game connection's address is never compared with the login's → it must match | fix | `GAME_CHECK_IP` (`true`) |
-| R8, R9, R11, R18, R22, R26, R28, R29 | the auction and guild-bank turns held across writes; the handshake order; eight database connections; player-triggered log lines; oversize packets; the console's staff level; the Lua `os` library; the bank count fix-ups → each made safe | robust | `GAME_DB_POOL`, `GAME_DB_ACQUIRE_SECS` |
+| ps_game 3 | the game connection's address is never compared with the login's → it must match | fix | `check_ip` (`true`) |
+| R8, R9, R11, R18, R22, R26, R28, R29 | the auction and guild-bank turns held across writes; the handshake order; eight database connections; player-triggered log lines; oversize packets; the console's staff level; the Lua `os` library; the bank count fix-ups → each made safe | robust | `db_pool`, `db_acquire_secs` |
 | R21 | a NaN or huge height stored and relayed; shop titles unchecked; hair, face and size unchecked (the last still stored as sent: entry 13 of `docs/testing/client-research-queue.md` gave the ranges, the clamp is not built) | fix | |
 | R3, R12-R16, R20, R23-R25, R27, N6 | exchanges, rewards and saves in several writes → each one transaction, or retried; listed under their systems below | fix | |
 | client-extras 2 | a kicked connection closes silently → `0x0004 00` first, so the client says why and quits | client | |
-| client-extras 3 | a new login while the old connection is still leaving is refused → it waits for it | robust | `GAME_HANDSHAKE_WAIT_SECS` (`15`) |
+| client-extras 3 | a new login while the old connection is still leaving is refused → it waits for it | robust | `handshake_wait_secs` (`15`) |
 | world | a player dead when the connection ends stays 10 s → leaves at once (nothing could happen to it) | internal | |
 
 ## 3. Characters, stats and items
@@ -99,7 +99,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | mob-fight | | aggressive monsters target players of their own country first and drop them → passed over; `0x0609` names the monster; `0x0521` after entering; a lower maximum lowers the current value | fix, client | |
 | mob-skills | | damage over time on players added → multiplied, as on monsters; a healed monster's HP also as `0x0305`; drain hits as a blow; area hits stop when a reflection kills; DoT end within 60 | fix, client | |
 | pathing | 1 | a monster at a turn of its way set to height 0 → keeps its height | fix | |
-| chase-smoothing | 1-5 | monsters, guards and walking NPCs step to the server's clock, so the client shows them stopping and starting → paced to the client's walking, with a 100 ms move tick | fix (display, kept on) | `GAME_SMOOTH_CHASE` (`true`) |
+| chase-smoothing | 1-5 | monsters, guards and walking NPCs step to the server's clock, so the client shows them stopping and starting → paced to the client's walking, with a 100 ms move tick | fix (display, kept on) | `smooth_chase` (`true`) |
 | guards | 1, 2 | an NPC's cell lags a move behind; a zero-length move sent every turn → fixed | fix | |
 | guards | 4, 6 | a death by a guard leaves trades and shops open; a guard keeps hitting a dead target → fixed | fix | |
 | guards | 7 | a guard walking home ignores everyone → it looks for targets on the way | gameplay | |
@@ -108,7 +108,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | scripted-mobs | 3-6 | `SetDrMove` absolute; a changed target drops the boss out of its script; the attack-kind switches written and never read (shields, immunities); a lost target ends the script → as the scripts were written | fix | |
 | instances | 1 | an instance's expiry set once → restarts each time it empties | gameplay | |
 | instances | 2-4 | the zone booked at the portal, `LuaGetNumberAggro(n)` the n-th, Lua events at the next pass | fix, internal | |
-| move-check | 1-3 | a refused step leaves client and server apart → the player placed back; a setting; logging | fix, tooling | `GAME_MOVE_CHECK` (`true`, the original's check) |
+| move-check | 1-3 | a refused step leaves client and server apart → the player placed back; a setting; logging | fix, tooling | `move_check` (`true`, the original's check) |
 | quest-drops | 1 | every party member wherever it is counts for a quest drop → only members in the killer's zone | gameplay | |
 | quest-drops | 2 | the monster id counter saved hourly → every minute | robust | |
 
@@ -128,15 +128,15 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 
 | note | # | the original → this server | kind | setting |
 |---|---|---|---|---|
-| trade | 1 | no trade between factions → on the chosen maps | addition | `GAME_CROSS_FACTION_TRADE_MAPS` (empty) |
+| trade | 1 | no trade between factions → on the chosen maps | addition | `cross_faction_trade_maps` (empty) |
 | trade | 2-11 | the exchange in pieces; split items lose their stats; a requester left busy; self trades; bound items; vanished offers paid anyway; trades with duels; trading while dead; item actions during a trade → each fixed | fix | |
-| personal-shop | 1 | a shop on any map → only on the listed maps | addition | `GAME_MARKET_MAPS` (empty = any map) |
+| personal-shop | 1 | a shop on any map → only on the listed maps | addition | `market_maps` (empty = any map) |
 | personal-shop | 2-9 | empty slots listed; the price wraps (two for 0); visitors not cleared; self visits; the sign left up; the purchase in pieces → each fixed | fix | |
 | auction | 1, 4, 5 | gold rows paid past the deadline; bids up to a minute after the end; refreshes larger than a packet → fixed | fix | |
 | auction | 2 | the name search is case-sensitive → ignores case | gameplay | |
 | auction | 3 | `/auctionrecall` keeps the seller's deposit → returns it | tooling | |
 | guild-bank | 1-4 | the bank anywhere; bound items in by a swap; the wrong refusal text; a guild with items in its bank disbanded → each fixed | fix, client | |
-| mini-game | | the gambling house unreachable (type-5 NPCs never made) → shown, with the original's odds (fairer odds are settings) | addition | `GAME_MINI_GAME` (`true`), `GAME_SLOT_PAYOUT_PERCENT` (`100`), `GAME_CARD_WIN_CHANCES` (`400,200,100,50,10`) |
+| mini-game | | the gambling house unreachable (type-5 NPCs never made) → shown, with the original's odds (fairer odds are settings) | addition | `mini_game` (`true`), `slot_payout_percent` (`100`), `card_win_chances` (`400,200,100,50,10`) |
 
 ## 7. Parties, unions, guilds, friends, quests
 
@@ -146,7 +146,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | union | 1-3, 5, 8, 9 | odd `bRaidType` and loot values; group moves out of range; the party's kick and leader change in a union; the config reset; a joiner not counted by this client → fixed | fix, client | |
 | union | 6 | party buffs reach the caster's group of 6 → the whole union | gameplay | |
 | union | 7 | the leader's union line as `0x1112`, which this client ignores → `0xF10A` | client | |
-| guild | 1 | guild creation needs a party of exactly 7 | none (default `7`) | `GAME_GUILD_PARTY_SIZE` (`7`) |
+| guild | 1 | guild creation needs a party of exactly 7 | none (default `7`) | `guild_party_size` (`7`) |
 | guild | 2, 4-13 | agreements that never lapse; the join penalty; a deleted master; refused remarks; unchecked names; looks not resent; double joins; lost writes → each fixed | fix, robust | |
 | guild | 3 | a disband goes through at the third yes → needs every officer asked | gameplay | |
 | guild-house | 2-7 | `0x0D34`/`0x0D35` without the NPC; the Etin to the requester only; a full slot table silent; a disconnect for a house that stopped qualifying; the purchase in pieces → each fixed | fix | |
@@ -158,16 +158,16 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 
 | note | # | the original → this server | kind | setting |
 |---|---|---|---|---|
-| game-log | 1 | a separate log server (`ps_gameLog.exe`) → the game server writes `game_log` and `chat_log` itself, same action types and columns | tooling | `GAME_LOG`, `GAME_CHAT_LOG` (`true`), `GAME_LOG_DAYS` (`0`) |
+| game-log | 1 | a separate log server (`ps_gameLog.exe`) → the game server writes `game_log` and `chat_log` itself, same action types and columns | tooling | `log`, `chat_log` (`true`), `log_days` (`0`) |
 | game-log | 3, 4 | two guild records the log server drops by a typo → stored; item ids from the database writes | fix | |
-| operator-console | | the console window of `ps_game.exe` → the `console` tool through PostgreSQL `NOTIFY`, and `.commands` in the game for staff | tooling | `GAME_CONSOLE_LEVEL` (`1`) |
+| operator-console | | the console window of `ps_game.exe` → the `console` tool through PostgreSQL `NOTIFY`, and `.commands` in the game for staff | tooling | `console_level` (`1`) |
 | operator-console | | `reload` (monsters and drop tables) and `restart` with a countdown | tooling | |
-| operator-console | | `[NEW_SERVER]` (double kills, half-price Lapisia): **rejected**; the kill rate instead | tooling | `GAME_KILL_RATE` (`1`), `GAME_EXP_RATE` (`1`) |
-| operator-console | | the Kill Boost Stones (2×, 5×, 10× kills for an hour) | addition | `GAME_KILL_BOOST_SKILLS` (empty), `data-editor ext install extensions/kill-boost` |
+| operator-console | | `[NEW_SERVER]` (double kills, half-price Lapisia): **rejected**; the kill rate instead | tooling | `kill_rate` (`1`), `exp_rate` (`1`) |
+| operator-console | | the Kill Boost Stones (2×, 5×, 10× kills for an hour) | addition | `kill_boost_skills` (empty), `data-editor ext install extensions/kill-boost` |
 | gm-commands | 1-13, 18-24 | unknown commands close the staff connection; `/apower` unusable with this client; `/set` on the wrong character; moves through a deferred pass; bans lost at relog; summons, guild and NPC commands; `/server off` still listed; `/cwatch` links → each fixed for this client | tooling, fix, client | |
 | gm-commands | 14-17 | `/aban`, `/ban` and their cancels; `/pvpon`/`/pvpoff`; `/queston`/`/questoff`; `/eventadd`/`/eventrem`, in the client but unhandled → built | tooling | |
 | gm-commands-2 | 1-15 | user questions saved (migration 0023), answers delivered, at most 3 open each; names not found refused; kicks announced; staff protected from lower staff; safe quest and strip commands; summons → each fixed or built | tooling, fix | |
-| small-items | 1 | kick and ban notices cut off by the close → held a moment | client | `GAME_KICK_NOTICE_SECS` (`3`) |
+| small-items | 1 | kick and ban notices cut off by the close → held a moment | client | `kick_notice_secs` (`3`) |
 | small-items | 7 | `0x0559` kinds 1 and 2 → built with the attack checks | fix | |
 | small-items | 8 | `F706` / `F707` as the original (deviation 19 of gm-commands withdrawn) | none | |
 

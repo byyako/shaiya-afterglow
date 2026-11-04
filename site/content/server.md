@@ -30,7 +30,7 @@ A reading path, from running it to how it is made:
 1. **This page.** What the server is, what it is built against, and the words the pages use.
 2. [Run your own server](server/run.md): what you need, the setup in brief, the operator tools, the data editor, updating.
 3. [Architecture](server/architecture.md): the programs, how a login reaches the world, the inside of the game server, the database schemas.
-4. [Settings](server/settings.md): every environment variable with its default; the ones that change gameplay default to the original.
+4. [Settings](server/settings.md): the game server's `config/game.toml` keys and every environment variable, with their defaults; the ones that change gameplay default to the original.
 5. [Deviations from the original](server/deviations.md): every difference, by kind, with the setting that controls it.
 6. [Deploying on a VPS](server/deploy.md): a public server with systemd, the firewall, backups and updates.
 7. [Pointing the client at the server](original/client-login.md): how the client finds the login server, the two ways to change that, and reading what it shows.
@@ -55,5 +55,5 @@ The rest is on GitHub: the [README](https://github.com/byyako/shaiya-afterglow#r
 - Status words for the server: **built**, **not built** (by decision, or planned), **tested in play** (tried with the real client) and **waiting for a test in play** (covered by the test suite only; the list is the [live test checklist](https://github.com/byyako/shaiya-afterglow/blob/main/docs/testing/live-test-checklist.md)).
 - Status words for what is said about the original: **confirmed** (read in the binary or the code, with the address or function), *inferred* (follows from what was read, not seen directly) and **PDB** (from the debug symbols, so names and layouts are exact).
 - Deviations have a kind: **fix**, **client**, **robust**, **tooling**, **gameplay**, **addition** or **internal**; [the Deviations page](server/deviations.md) explains each.
-- Settings are environment variables, written `GAME_EXP_RATE`; every one has a default and only `DATABASE_URL` is required.
+- The game server's settings are keys of `config/game.toml`, written `exp_rate`; the servers' other settings are environment variables; every one has a default and only `DATABASE_URL` is required.
 - Audit findings are numbered `R1` to `R30`. Paths such as `crates/game-server` are in the repository, and link to it on GitHub.

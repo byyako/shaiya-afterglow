@@ -324,7 +324,7 @@ kill, the Goddess Blessing, the 10-minute tick, `0x020F` to the faction, `0x0211
    (DEX) adds max **SP** (as DEX does everywhere), **type 20** is **magic defence** (as 18 and 19 are defences; the file has it beside 19).
    The original's `InitKCStatus` and `UpdateKCStatus` disagree on all three (section 10).
 
-**Not built here, built later**: the faction kill count's switch (the console's `killcount on|off` and `GAME_KILL_COUNT`,
+**Not built here, built later**: the faction kill count's switch (the console's `killcount on|off` and `kill_count`,
 `docs/original/operator-console.md`); the Charge allowance (`docs/original/move-check.md` section 1, for players as for monsters). Built: duels and guild
 wars (`docs/original/duel.md`, `docs/original/guild-war.md`), item options (`docs/original/item-options.md`), obelisks
 (`docs/original/obelisks.md`).

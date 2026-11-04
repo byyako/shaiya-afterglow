@@ -99,12 +99,12 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   is killed for memory, which runs no shutdown at all. A trade partner or shop buyer waiting on the task stalls 30 s; R8 makes it
   server-wide. At shutdown the 10 s grace runs out and the stuck player's leave-save is lost.
 - Fix (decision 3):
-  - Write with a deadline: `GAME_WRITE_TIMEOUT_SECS` (default 20). Expiry is an error, handled as a lost connection (linger and
+  - Write with a deadline: `write_timeout_secs` (default 20). Expiry is an error, handled as a lost connection (linger and
     cleanup).
   - While a write waits, also watch the kick and shutdown: a kick or shutdown abandons the write, closes the socket and goes on as
     `kick_out` does now. A kicked connection has nothing more to say.
   - Bound the outbox by bytes: replace `pub type Outbox = UnboundedSender<Vec<u8>>` with a small type that keeps the sender and a
-    shared queued-bytes counter, with the same `send(&self, Vec<u8>)` shape so the call sites do not change. Past `GAME_OUTBOX_LIMIT`
+    shared queued-bytes counter, with the same `send(&self, Vec<u8>)` shape so the call sites do not change. Past `outbox_limit`
     (default 4 MiB, about 80 s of a busy town) it drops the packet and marks the connection as overflowed. `world_loop` ends an
     overflowed connection as a lost one. The drain subtracts what it writes. The events channel stays unbounded: its events carry items
     and gold, and with the write deadline the task always drains it.
@@ -114,16 +114,16 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   plus the linger, and can log in again. A kick reaches a stuck reader at once.
 
 **R2. One address can hold every game-server connection slot.**
-- Where: `serve` (`server.rs:215-240`) has only the global semaphore (`GAME_MAX_CONNECTIONS`, 5000) and the console's `maxusers`, both
+- Where: `serve` (`server.rs:215-240`) has only the global semaphore (`max_connections`, 5000) and the console's `maxusers`, both
   counting sockets that never logged in. `handshake` reads with `next_packet(ctx.config.handshake_timeout)`, a 30 s timeout per read,
   and `g::OP_PING => continue` (`server.rs:1003`) does not count against the ten undefined packets.
 - How: from one address, open 5000 connections to 30810 and send `04 00 03 00` (a plain-text ping) on each every 29 s. One byte works
   too, since a partial frame restarts the read timeout. Each `0xA301` also costs a database round trip before anything is checked.
 - Effect: "connection limit reached" for every real player; a lower `maxusers` makes it cheaper. No account is needed.
 - Fix (decision 3):
-  - A per-address limit at the game server, `GAME_MAX_PER_IP` (default 8), checked right after `accept` (the stream is dropped when
+  - A per-address limit at the game server, `max_per_ip` (default 8), checked right after `accept` (the stream is dropped when
     over). Copy the login server's `IpLimits` pattern; a `ConnectionGuard` held by the task releases it.
-  - A per-address limit on new connections, `GAME_CONNECTS_PER_MINUTE` (default 30), same mechanism at both servers.
+  - A per-address limit on new connections, `connects_per_minute` (default 30), same mechanism at both servers.
   - An absolute deadline on the whole handshake: `timeout(handshake_timeout, handshake(...))` from `accept`. It includes the
     `Online::claim` wait (15 s), which fits inside 30 s.
 - Player-visible: none for the real client, which sends `0xA301` at once.
@@ -192,8 +192,8 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   - About seven accounts spamming database writes saturate the pool (R11).
 - Fix (decision 4):
   - Chat: a token bucket per connection for the chat channels without a cooldown, 3 lines a second with a burst of 5
-    (`GAME_CHAT_PER_SEC`, `GAME_CHAT_BURST`). Extra lines are dropped silently, with at most one debug line per connection per minute.
-  - All packets: a token bucket per connection, 100 a second with a burst of 200 (`GAME_PACKETS_PER_SEC`). A connection over it for
+    (`chat_per_sec`, `chat_burst`). Extra lines are dropped silently, with at most one debug line per connection per minute.
+  - All packets: a token bucket per connection, 100 a second with a burst of 200 (`packets_per_sec`). A connection over it for
     5 s in a row is disconnected, with one warn line.
   - No-op writes: skip the quick-slot save when the slots are unchanged, and skip a memo, remark or rank write that changes nothing.
 - Player-visible: spam beyond the limit disappears; normal play never reaches either limit. Watch for the client's own bursts (entering
@@ -228,7 +228,7 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   `result = serve(listener, ctx.clone()) => return result` (`main.rs:119`) returns at once. The shutdown path (`main.rs:123-137`:
   closing connections, saving, flushing the game log, saving the mob id) is skipped, and dropping the runtime cancels every connection
   task before its cleanup.
-- How: `EMFILE` once the open files exceed the soft limit. Systemd's default for a service is 1024 against `GAME_MAX_CONNECTIONS` 5000,
+- How: `EMFILE` once the open files exceed the soft limit. Systemd's default for a service is 1024 against `max_connections` 5000,
   so about a thousand connections (R2) do it. `ENFILE`, `ENOMEM` and `ENOBUFS` can do it under memory pressure (R1, R4).
 - Effect: every player is dropped and loses what was not saved yet (positions, HP, cooldowns, buffs, quest timers, wear), plus the
   game-log queue. `tools/game-server.sh` does not restart it (exit status not 75).
@@ -326,9 +326,9 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
 - Effect: every save queues. Past the acquire timeout the `?`s end players' connections, some mid-change (R14, R16). The monster
   passes, invitation and trade expiry freeze while the tick waits. A late heartbeat makes the login server list the server as closed.
 - Fix:
-  - `GAME_DB_POOL` (default 24; PostgreSQL allows 100 by default).
+  - `db_pool` (default 24; PostgreSQL allows 100 by default).
   - The listener on its own connection (`PgListener::connect(&url)`).
-  - An explicit acquire timeout, `GAME_DB_ACQUIRE_SECS` (default 10).
+  - An explicit acquire timeout, `db_acquire_secs` (default 10).
   - The tick hands the obelisk and kill-count saves to a spawned task (in order, one queue) instead of awaiting them.
   - The login server's pool to 16.
 - Player-visible: none.
@@ -444,7 +444,7 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
   - The hex dumps are cut to the first 64 bytes.
   - A per-connection limit of one such line per kind per 10 s.
   - The scripts keep debug (they are meant for a development machine), but `docs/server/deploy.md` runs a public server under systemd at `info`.
-  - `GAME_LOG_DAYS` is built (`docs/server/settings.md`); a `login_log` purge is not (it was left to an operations step that is not
+  - `log_days` is built (`docs/server/settings.md`); a `login_log` purge is not (it was left to an operations step that is not
     scheduled: `docs/plans/roadmap.md`).
 - Player-visible: none.
 
@@ -639,7 +639,7 @@ So the next audit need not redo these (all at the audited commit):
 - **Staff.**
   - Every opcode from `0xF000` goes through `admin::check` with the live privilege; a player is disconnected.
   - No staff action hides behind a player opcode.
-  - The in-game console needs a staff level within `GAME_CONSOLE_LEVEL` (R26 aside).
+  - The in-game console needs a staff level within `console_level` (R26 aside).
 - **Guild and party.** The rank checks hold for upgrade, purchase, remark, disband, kick, rank changes, invites, join answers and the
   bank. Party and union invites, kicks and slots are checked. Every list is chunked within a packet.
 - **Queues.** The game-log queue is bounded (10,000, `try_send`, drops counted). Invitations, trades and guild invitations expire; user
@@ -783,9 +783,9 @@ The fixes were built in four parts, in this order: part 1 makes the server survi
 
 ### Part 1: survive hostile connections (R1, R2, R4, R5, R6, R8, R9, R10, R11, R18, R19)
 
-New settings: `GAME_WRITE_TIMEOUT_SECS` 20, `GAME_OUTBOX_LIMIT`
-4194304, `GAME_MAX_PER_IP` 8, `GAME_CONNECTS_PER_MINUTE` 30, `GAME_CHAT_PER_SEC` 3, `GAME_CHAT_BURST` 5, `GAME_PACKETS_PER_SEC` 100,
-`GAME_DB_POOL` 24, `GAME_DB_ACQUIRE_SECS` 10, `LOGIN_CONNECTS_PER_MINUTE` 30, and the login pool to 16.
+New settings: `write_timeout_secs` 20, `outbox_limit`
+4194304, `max_per_ip` 8, `connects_per_minute` 30, `chat_per_sec` 3, `chat_burst` 5, `packets_per_sec` 100,
+`db_pool` 24, `db_acquire_secs` 10, `LOGIN_CONNECTS_PER_MINUTE` 30, and the login pool to 16.
 
 ### Part 2: whole exchanges and saves (R3, R12, R13, R14, R15, R16, R20, R23, R24, R25, R27, N6)
 

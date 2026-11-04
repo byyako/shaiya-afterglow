@@ -87,7 +87,7 @@ itself (`WM_CLOSE` to its own window). Whether any original server sends it is n
   notification reaches the listeners when the insert commits, before the client has the server list.
 - Each game server **listens on `account_login`** (`sqlx::postgres::PgListener`, reconnecting by itself). For a user id it has a
   connection for, whose session was created **before** `<created>`, it ends that connection: the connection's next wait sees the
-  kick, and from there it is an ordinary lost connection (section 2: the stay of `GAME_LINGER_SECS` in the world, saved at once with
+  kick, and from there it is an ordinary lost connection (section 2: the stay of `linger_secs` in the world, saved at once with
   a logout pending, gone at once on the character screen). A connection whose session is the new one (the same `created`, or later)
   is never touched, so a notification arriving late cannot end the new login.
 - The claim of a session returns its `created` for this (`SessionGate::claim`).
@@ -104,7 +104,7 @@ itself (`WM_CLOSE` to its own window). Whether any original server sends it is n
    and what the client still sends read and dropped for up to 10 s (the logout's grace) before the socket closes. The original
    closes silently; the old client then only shows its own "connection lost".
 3. **A handshake for an account whose older connection is still leaving this server waits for it** (up to
-   `GAME_HANDSHAKE_WAIT_SECS`, default 15 s: the 10 s stay and 5 s more, inside the client's 30 s) and then goes on, instead of
+   `handshake_wait_secs`, default 15 s: the 10 s stay and 5 s more, inside the client's 30 s) and then goes on, instead of
    being refused. The wait happens before the session is claimed, so a
    handshake that ends up refused still leaves the session unused; one that waits in vain is refused as before. With the kick of
    3.2 the older connection is always leaving, so the second login gets in as soon as the first character is saved, without the

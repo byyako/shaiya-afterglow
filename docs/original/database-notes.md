@@ -163,7 +163,7 @@ python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.col
 
 The new servers write what the original's `ps_game` sent to its log server (`docs/original/game-log.md`): `game_log` is `PS_GameLog.dbo.ActionLog` (the
 same ActionType numbers in `action`, the same placement of values and texts: `value1` to `value10`, `text1` to `text4`), `chat_log` is
-`PS_ChatLog.dbo.ChatLog`. No foreign keys (the log outlives deleted characters); `GAME_LOG_DAYS` deletes old rows, otherwise nothing does.
+`PS_ChatLog.dbo.ChatLog`. No foreign keys (the log outlives deleted characters); `log_days` deletes old rows, otherwise nothing does.
 
 **Following an item.** Every item record names the row as stored: `value1` is `character_items.uid` (the same number in `bank_items`,
 `guild_bank_items` and the market's rows while the item is in them), `value2` the item id, `text1` its name. A row keeps its `uid` while it

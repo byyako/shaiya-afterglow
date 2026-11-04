@@ -236,7 +236,7 @@ most one message per 5 seconds**; regions 5 and 9 need level 15; region 2 only w
 without a message (seen live with level 1 characters). The original server does not check either.
 
 The new server: `0x1101`, `0x1102`, `0x1103`, `0x1107` (with its cooldown) and `0x1111` as above; `0x1103` (trade) also
-enforces the client's limits on the server, level 10 and 5 seconds by default (`GAME_TRADE_CHAT_MIN_LEVEL`, `GAME_TRADE_CHAT_COOLDOWN_SECS`), so a modified
+enforces the client's limits on the server, level 10 and 5 seconds by default (`trade_chat_min_level`, `trade_chat_cooldown_secs`), so a modified
 client cannot bypass them; `0x1104`, `0x1105`, `0x1108` and `0x1112` are handled with guilds, parties and chat items; staff listening and the chat log are in `docs/original/gm-commands.md` section 8.4 and `docs/original/game-log.md`. Names in
 whispers are matched ignoring case (character names are unique ignoring case).
 

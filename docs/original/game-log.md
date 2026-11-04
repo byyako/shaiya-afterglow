@@ -346,7 +346,7 @@ original's three drop types or who dropped it.
    (2004-era, the log database often on another machine) so that the heavy log writes never slowed the game; an in-process background
    writer with a queue gives the same isolation without a second protocol and service. Approved.
 2. **The chat log**: the original stores every chat line of types 1 to 7 and staff chat (section 3.5), whispers included. Built, switched
-   by `GAME_CHAT_LOG`, **on by default** (as the original). Approved.
+   by `chat_log`, **on by default** (as the original). Approved.
 3. **The two guild records the original never stores** (`0x0B06` expelled, `0x0B07` a member deleted; section 3.7): **stored** (V2 1 and
    2), since the fault is a typo in the log server's text, not a choice. Approved.
 4. **Item unique ids and making times come from the database writes.** The item records' V1 (unique id) and C (making time) need what
@@ -358,7 +358,7 @@ original's three drop types or who dropped it.
    appears without the record that made it. (The other two options: ids only where memory has them, most records without — rejected, it
    cannot follow items; ids carried in memory for every item — the most complete but the largest change, every place that makes an item.)
    Chosen: the option that tracks duplication.
-5. **Retention**: the original never deletes rows. A setting `GAME_LOG_DAYS` (default 0 = keep forever, as the original); when set, a
+5. **Retention**: the original never deletes rows. A setting `log_days` (default 0 = keep forever, as the original); when set, a
    daily pass deletes `game_log` and `chat_log` rows older than that many days. Approved.
 
 Not deviations (the original's behaviour, built as it is): the records the original never sends stay unsent (`0x0303`, `0x0416` to
@@ -398,16 +398,16 @@ The plan the code was written from; section 11 records where the code differs fr
      action(&self, row: Row)` and `pub fn chat(&self, row: ChatRow)` (nothing when off, or chat off): `try_send`, on a full queue count the
      drop and warn at most once a minute with the count. `GameLog::spawn(pool: PgPool, config) -> GameLog`: channel of 10000; a task that
      takes up to 500 entries at a time (`recv_many`) and writes them with `pg::write_game_log`; an error is a `warn` with the count lost.
-     When `GAME_LOG_DAYS` > 0 the same task runs `pg::purge_game_log(days)` at start and every 24 h.
+     When `log_days` > 0 the same task runs `pg::purge_game_log(days)` at start and every 24 h.
    - Unit tests: each constructor's placement against section 3 (one test per subsection is enough, checking every column of two or three
      records each, plus G, C, the stat order of `0x0306`/`0x0307`, the `0x0305` ways, the `0x030A` actions, the `0x0B09` names, the
      `0x0A04` actions); the queue drops when full and counts it; chat off sends no chat rows.
 3. **`pg.rs`**: `pub async fn write_game_log(pool, entries: &[Entry]) -> Result<()>`: one multi-row `INSERT` per table with
    `sqlx::QueryBuilder::push_values` (chunks of 500); `pub async fn purge_game_log(pool, days) -> Result<u64>`. A PostgreSQL test in
    `tests/postgres.rs` (skips without `DATABASE_URL` as the others): write two action rows and one chat row, read them back. **`config.rs`**:
-   `GAME_LOG` (bool, default true), `GAME_CHAT_LOG` (bool, default per deviation 2), `GAME_LOG_DAYS` (u32, default 0); add them to the README
+   `log` (bool, default true), `chat_log` (bool, default per deviation 2), `log_days` (u32, default 0); add them to the README
    settings table. **`Context`** (`server.rs`): `pub game_log: GameLog`, `GameLog::off()` in `Context::new`; `main.rs` sets
-   `GameLog::spawn(pool.clone(), &config)` when `GAME_LOG` is on, before the `Arc`.
+   `GameLog::spawn(pool.clone(), &config)` when `log` is on, before the `Arc`.
 4. **What memory lacks** (deviation 4 first):
    - **The rows' ids from the writes.** `backend.rs`: `pub struct Stored { pub uid: i64, pub made_at: i64 }` (microseconds, as
      `Kept.origin`). `ItemStore::trade` and `guild_bank` return `Result<Option<Vec<Option<Stored>>>>` (`None`: refused, nothing changed;
@@ -474,7 +474,7 @@ The plan the code was written from; section 11 records where the code differs fr
    command, log out. Each item says what row to expect; **the rows are checked in the database afterwards** (`psql … "SELECT action, value1 … FROM game_log ORDER BY id DESC LIMIT 50"`),
    so the items are things to do in the client and the check is a query.
 9. **Docs**: a "Built" section here (the commit, what has no source and stays NULL); README "Not built": drop "the game log records";
-   the README settings table: `GAME_LOG`, `GAME_CHAT_LOG`, `GAME_LOG_DAYS`; a short "following an item" note in `docs/original/database-notes.md`
+   the README settings table: `log`, `chat_log`, `log_days`; a short "following an item" note in `docs/original/database-notes.md`
    (`SELECT … FROM game_log WHERE value1 = <uid> ORDER BY at`, and that `value3`/`value4` of the gem records hold the lapis's ids); `docs/original/gm-commands-2.md`: the
    correction of section 4 (the questions go to `g_pClientToLog`); a line in `docs/server/architecture.md` where the database writers are
    described; the "Not covered … game log" notes of the other analysis documents may stay (they point here by name).
@@ -508,8 +508,8 @@ Play test: **section 48** of `docs/testing/live-test-checklist.md`. The rows are
 
 **As specified.** Migration 0029; `game_log.rs` (a constructor per record of section 3, the queue of 10000, the writer task of 500 at a
 time, the daily retention pass, `GameLog::flush` at shutdown so the queue is written before the process ends); `pg::write_game_log`
-(`(pool, server_id, entries)`: the server id is a parameter, not a field of the rows), `purge_game_log`; `GAME_LOG`, `GAME_CHAT_LOG`,
-`GAME_LOG_DAYS`; `PlayCharacter.account_id` and `account_name` (loaded with the character, empty in the memory backend); the item names
+(`(pool, server_id, entries)`: the server id is a parameter, not a field of the rows), `purge_game_log`; `log`, `chat_log`,
+`log_days`; `PlayCharacter.account_id` and `account_name` (loaded with the character, empty in the memory backend); the item names
 the texts carry come from `defs.items`, `defs.mobs` and `defs.skills` (`pg::load_game_log_names`), held by the `GameLog`.
 
 **Deviation 4 (the item writes return the rows they touch).** Done with a few changes to the shapes of section 7 step 4:

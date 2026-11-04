@@ -245,8 +245,8 @@ client keeps it on that player). At 200 000 nothing changes.
 deaths + 1, `0x060C` index **1**, `0x020E` index **1** with the deaths to the victim.
 
 (`NEW_SERVER`: `ps_game.ini` `[NEW_SERVER] Check`, 0 when absent as in the shipped files; when set, a timer switches kills to count twice
-outside some hours. Not built, by decision: the kill rate (`GAME_KILL_RATE`, `.killrate`) and the kill-boost skills
-(`GAME_KILL_BOOST_SKILLS`) of `docs/original/operator-console.md` section 4 instead; built.)
+outside some hours. Not built, by decision: the kill rate (`kill_rate`, `.killrate`) and the kill-boost skills
+(`kill_boost_skills`) of `docs/original/operator-console.md` section 4 instead; built.)
 
 ## 8. The reward panels: `0x0218`, `0x0219`, `0x021A`
 

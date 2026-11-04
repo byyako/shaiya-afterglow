@@ -30,7 +30,7 @@ Server-side working notes moved out of the published client pages; never in the 
   (`0x2405`); `/defeat` counts none on the server, so the client's own +1 on `0x2406 2` shows until the next login. The stakes go on
   the ground for the winner at the two players' feet (`ItemDropPvP`); every other end gives each side its own back there.
 - **Personal shops `0x23xx`** (`docs/original/personal-shop.md`): built from `CUser::PacketMyShop`. The server enforces the market
-  maps (35, 36, 42 by default, `GAME_MARKET_MAPS`), sends `0x2309` only for a visit that succeeds (the client opens the window on any), and
+  maps (35, 36, 42 by default, `market_maps`), sends `0x2309` only for a visit that succeeds (the client opens the window on any), and
   takes the 5 % commission on map 42 as `personal-shop.md` says.
 - **Guild wars `0x25xx`** (`docs/original/guild-war.md`): built from `CUser::PacketPVPGuild`, `CGuild::PvPUserSet`,
   `PvPUserLeave` and the `PvPChkLeave*` guild halves. Corrections to `guild-wars.md`: `0x2503` and `0x2504` go only to **the members
@@ -105,7 +105,7 @@ Server-side working notes moved out of the published client pages; never in the 
   kind 4, detail 82, targets oneself) with the three abilities (0, 0), **KeepTime 1 with the duration flag 1** (one hour, kept on death
   and counting down offline). 200 rather than 327: its levels 1 to 3 are empty in both copies (`skill-monster-sdata-vs-defs.md` lists
   no difference for 200) and no item names it, and below 256 the item's skill byte is the real id. The monsters' 200/100 (Weakening
-  Curse, your `NpcSkill.SData` group 199) is untouched; `GAME_KILL_BOOST_SKILLS` now takes `id/level`, default `200/1`, so it never
+  Curse, your `NpcSkill.SData` group 199) is untouched; `kill_boost_skills` now takes `id/level`, default `200/1`, so it never
   counts. Server rows: `extensions/kill-boost` (before 0.3.0: `additions.sql`), applied on the dev database. **For your side, in the first client data patch**
   (`docs/plans/roadmap.md` step 1b, which also builds the generator): `Item.SData` 100/212 with skill byte 200, level byte 1, the stack and
   icon of 100/108, a name and description; `Skill.SData` 200 level 1 as above with the name "Kill Boost" (levels 2 and 3 left empty);

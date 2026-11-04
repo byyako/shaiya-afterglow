@@ -161,7 +161,7 @@ To build (`move_check.rs`, the rules; the `0x0501` handler):
 1. **After a refused step the server also places the player at the window start** (oddity 2): the zone's position, the view and the
    connection's copy all become the window start, so client and server agree and the distance gained is taken back. The packets are the
    original's (`0x020B` to the view with the player, `0x0502` 5 to the player), and a mount pair is not split (unlike a teleport).
-2. **`GAME_MOVE_CHECK`** (default `true`): `false` turns the speed check off (the 35-unit step check stays), for a client that turns out
+2. **`move_check`** (default `true`): `false` turns the speed check off (the 35-unit step check stays), for a client that turns out
    to walk faster than the table.
 3. **Logging**: each refusal at `info` (distance walked, allowance, seconds, speed); each closed window at `debug` with its average
    speed, so that a play session can show the client's real speeds (section 2, not verified).
@@ -181,5 +181,5 @@ To build (`move_check.rs`, the rules; the `0x0501` handler):
 entering a zone, in `move_player`, and on the three same-map revivals. A refused step: `stop_attacking`, `Zones::move_back` (the
 window start for the zone and the view, `0x020B` to them and the player, a mount pair kept), `0x0502` 5, then the trade, duel and war
 distance checks; the connection's position is the window start. Charge takes its reach off when it goes off. A step that is too long
-now stops attacking too. `GAME_MOVE_CHECK` (default `true`). Logs: "move refused: too fast" (`info`), "move window" (`debug`). Tests:
+now stops attacking too. `move_check` (default `true`). Logs: "move refused: too fast" (`info`), "move window" (`debug`). Tests:
 `move_check` (4) and `game_flow::walking_too_fast_goes_back_to_the_windows_start`. Live test: checklist section 45.

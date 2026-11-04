@@ -29,14 +29,14 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
    PISS), 50.4 (a Life Elixir), 44 (all but 5; the `mall` tool from a shell).
 4. **A strong character** (raise one to about level 60, or TestVail as staff): 27 (all), 29 (all but 7; maps 45 and 47), 42.2, 47 (all),
    22.6 to 22.8 (TestVail and six new Goddess Blessings: the first six were used on 10-19).
-5. **Guild houses, TestMage:** 34 (all), 35 (all but 6; inside a ranking window, `GAME_RANKING_TIMES` moved to suit), 36.1 to 36.8,
+5. **Guild houses, TestMage:** 34 (all), 35 (all but 6; inside a ranking window, `ranking_times` moved to suit), 36.1 to 36.8,
    36.12 to 36.14.
 6. **Quest drops, ProbeHero and sefewfe one after the other:** 39.1 to 39.4, 39.8, 39.11.
 7. **Auction House, ProbeHero and sefewfe one after the other** (registering, then logging the other in): 24.1 (the shop setup
    window), 40.1 to 40.5, 40.9, 40.11 (an
    auction left 7 hours), 40.12 to 40.14, 40.16, 40.17.
 8. **Staff alone (TestVail):** 37.7, 37.14, 38.15, 41.4, 41.7, 41.10, 41.11, 41.13, 49.7, 49.8, 51 (1 to 4, 6, 10 to 13; the "not seen
-   by a second client" half of 51.1 and "also on another map" in 51.3 wait for B), 58.1.
+   by a second client" half of 51.1 and "also on another map" in 51.3 wait for B), 58.1 to 58.4.
 9. **TestVail at the Light guards, staff level set back to 0** (guards ignore staff): 33.2, 33.3, 42.5.
 10. **The data editor, TestVail on map 2 (and map 0 for the obelisk):** 53 (all; the page, the `console` tool and the game side by side).
 11. **Log checks:** 30.2; 48 (all but 6, 9, 11, 12): ordinary play, the next session reads the rows.
@@ -103,7 +103,7 @@ Grouped by place and setup so each sitting needs one set of changes. Order withi
 | 55 | 1, 2, 4, 7, 8, 9 | 5, 10 | 3 (eight clients on one address) | 6 (the real client sends its keepalive) | |
 | 56 | 7, 8, 10, 13, 14, 16 | 1–6, 11 | 9, 12, 15 (acting at the same moment; seven players for a guild) | | |
 | 57 | 1–7, 9, 10 | 8 (two staff accounts) | | | |
-| 58 | 1 | | | | |
+| 58 | 1–4 | | | | |
 
 ## Sitting 1 setup (applied)
 

@@ -77,11 +77,13 @@ folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the d
 ## 3. What exists today
 
 - **Lua** (`mlua`, Lua 5.1, vendored): runs only the original's monster scripts (`zone/lua.rs`, `mob_lua.rs`). No hooks for custom content.
-- **One-off flags**, the precedents this generalises: `GAME_CROSS_FACTION_TRADE_MAPS`, `GAME_MARKET_MAPS` (the maps where a personal shop may be set up),
-  `GAME_TRADE_CHAT_MIN_LEVEL` / `GAME_TRADE_CHAT_COOLDOWN_SECS`, `GAME_KILL_BOOST_SKILLS`, `GAME_KILL_COUNT`, `GAME_KILL_RATE`,
-  `GAME_EXP_RATE`; all env variables read in `config.rs::from_env`, the operator console's switches (`switches.rs`) on top.
-- **Content rows outside the original's data**: `tools/defs/additions.sql` (the Kill Boost Stone) re-applied after every defs load, and
-  `tools/sdata/client_rows.sql` (client-only fields). Both are what chunk 1 moves into the database.
+- **Settings** (built, chunk 1 part B, `docs/plans/ext-1-foundation.md` section 7): the one-off flags this chapter generalises
+  (`cross_faction_trade_maps`, `market_maps`, `trade_chat_min_level`, `kill_boost_skills`, `kill_count`, `kill_rate`, `exp_rate`, …) are
+  entries of one registry in `config.rs` (`SETTINGS`), read in four layers: the built-in defaults, the enabled extensions' defaults,
+  `config/game.toml`, and the data editor's `setting` overrides; a game setting left in the environment stops the start;
+  `game-server config` shows each value and its layer. The operator console's switches (`switches.rs`) are on top.
+- **Content rows outside the original's data** (built, chunk 1 part A): the extension manager (`data-editor ext …`) writes them from
+  `extension.toml` and `rows.toml`; the Kill Boost Stone is `extensions/kill-boost`; `additions.sql` and `client_rows.sql` are gone.
 - **Edits overlay**: `docs/plans/done/data-editing.md` (migration 0030, `crates/data-editor`): an `edits` schema re-applied after every
   import, with history, undo, export and import; the page and drawn map (part B) are not built.
 - **Client**: `fixes.dll` (client repo, `rust/fixes/src/`) adds packets and fixes; the signed `psNNNN.patch` updater carries data
@@ -201,7 +203,7 @@ build stops and the question goes to the maintainer.
 
 ### 7.1 Chunk 1, foundation
 
-Spec: `docs/plans/ext-1-foundation.md` (written; reconciled 2026-11-02). Build: its Build section. Done when: patch 109 regenerates byte for byte from the
+**Built** (part A 2026-11-02 and 2026-11-03, part B 2026-11-03; the build notes are kept out of the repository). Spec: `docs/plans/ext-1-foundation.md`. Done when: patch 109 regenerates byte for byte from the
 database alone and the Kill Boost Stone works as before.
 
 ### 7.2 Chunk 2, rules and hooks

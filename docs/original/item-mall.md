@@ -284,7 +284,7 @@ To build, as the original unless a deviation says otherwise:
 - **Operator tool** (`login-server` crate, next to `create_account`): `points <user> show | add <n> | set <n>`, `premium <user> <type>
   [<days>]` (0 ends it), `deliver <user> <product code>` (into the billing storage). A change to points notifies the game servers
   (`pg_notify('account_points', …)`, as the duplicate-login kick), which send `0x2605` to the account's player in the world.
-- **Setting** `GAME_ITEM_MALL` (default on; off = the original's `g_bDisableShop` 1: purchases answer 1, gifts 6).
+- **Setting** `item_mall` (default on; off = the original's `g_bDisableShop` 1: purchases answer 1, gifts 6).
 - Game log records: purchases and storage takes are written (`mall_buy`, `mall_stored_take`, `billing_take`; [The game log](game-log.md)).
 - Live test: a new checklist section (purchase, a full bag, short points, a gift to an online and an offline character, the storage
   takes, premium 1 and 2 with the warehouse, wear, experience and a lapis link).
@@ -342,7 +342,7 @@ server but not to one's own account, the product without a server row answering 
   and the packed end date.
 - **Operator tool** `mall` (`crates/login-server/src/bin/mall.rs`): `show`, `points add|take|set` (with `pg_notify('account_points')`,
   which the game server's listener turns into `0x2605` for a character in the world), `premium <type> [<days>]`, `deliver <code>`.
-- **Setting** `GAME_ITEM_MALL` (default on).
+- **Setting** `item_mall` (default on).
 - Tests: `point` (sizes and layouts), `mall` (the list, purchases, gifts), `buffs` (premium flags), `lapis` (the premium rate), `enter`
   (burst order), flow tests (a purchase, refusals and refreshes; gifts online and offline, takes, notices at entry; premium 1 with the
   warehouse and the billing storage) and a PostgreSQL test (purchase, gift, refusals, loading, takes, notices, the shipped list).
