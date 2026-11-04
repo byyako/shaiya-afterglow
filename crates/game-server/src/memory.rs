@@ -63,6 +63,8 @@ pub struct MemoryBackend {
     pub kill_counts: Mutex<[u32; 2]>,
     /// What the next `reload` loads (a test sets it): the monsters and drop tables, or the error to fail with. `None` fails too.
     pub next_live: Mutex<Option<std::result::Result<crate::server::Live, String>>>,
+    /// What `reload` reads as the rules' database layers (`rule_layers`); tests set it.
+    pub rule_layers: Mutex<crate::rules::RuleSources>,
     /// The obelisks' owners as last saved, by map and number.
     pub obelisk_owners: Mutex<std::collections::BTreeMap<(u16, u16), crate::obelisk::Owner>>,
     /// Treat every pending deletion as due.
@@ -1226,6 +1228,10 @@ impl AdminStore for MemoryBackend {
             Some(Err(error)) => bail!(error),
             None => bail!("nothing to load"),
         }
+    }
+
+    async fn rule_layers(&self) -> Result<crate::rules::RuleSources> {
+        Ok(self.rule_layers.guard().clone())
     }
 
     async fn set_account_status(&self, user_id: u32, status: i16) -> Result<()> {

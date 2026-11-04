@@ -14,7 +14,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 pub use parse::TYPES;
-pub use resolve::{FileRule, ResolvedRule, RuleFile, RuleLayer, RuleSources, RuleState, from_settings, resolve};
+pub use resolve::{EXAMPLE, FileRule, ResolvedRule, RuleFile, RuleLayer, RuleSources, RuleState, check_file, from_settings, resolve, show};
 pub use scope::{Who, WhoMode, hour_of_week, refresh_hour_of_week, set_hour_of_week};
 
 use parse::{Draft, Items, Kind};

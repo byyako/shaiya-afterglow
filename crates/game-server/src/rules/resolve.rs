@@ -2,6 +2,7 @@
 //! extensions' rules, the config file's, the data editor's. A rule of a higher layer with the same name replaces the lower one whole.
 
 use std::fmt;
+use std::fmt::Write as _;
 
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -204,4 +205,111 @@ pub fn resolve(config: &Config, sources: &RuleSources) -> Result<(RuleSet, Vec<R
     all.extend(off);
     all.extend(r.gone);
     Ok((RuleSet::build(compiled), all))
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Seeing the rules (section 4.7)
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/// The commented example `game-server config --example` ends with: the rules of section 4.2.
+pub const EXAMPLE: &str = r#"# The rules (docs/server/rules.md): named, scoped allow/deny/change statements the server asks at a few places, e.g. no experience in
+# a map, a level gap that stops fights, jumps in enchanting. One [rules.<name>] table each; `reload` (console) puts changes in force.
+# What is in force and where each rule comes from: target/release/game-server rules. Check this file alone: game-server rules --check.
+#
+# No experience, kills or deaths from player kills in the capitals and the Auction House.
+# [rules.market-no-pvp-gain]
+# type = "pvp_gain"
+# maps = [35, 36, 42]
+# exp = 0
+# kills = 0
+# deaths = false
+#
+# Players whose levels differ by more than 20 cannot fight, except in the Auction House.
+# [rules.level-gap]
+# type = "level_gap"
+# gap = 20
+# maps = { not = [42] }
+#
+# Enchanting may jump: +1 seven times in ten, +2 twice, +3 once.
+# [rules.enchant-jumps]
+# type = "enchant"
+# jumps = [[1, 70], [2, 20], [3, 10]]
+#
+# A safe zone for PvP, weekday evenings.
+# [rules.safe-evenings]
+# type = "deny"
+# point = "attack"
+# maps = [2]
+# days = [1, 2, 3, 4, 5]
+# hours = "18-22"
+# message = "No fighting here in the evening."
+"#;
+
+/// A JSON value as inline TOML.
+fn inline(v: &Value) -> String {
+    match v {
+        Value::String(s) => format!("{s:?}"),
+        Value::Array(items) => format!("[{}]", items.iter().map(inline).collect::<Vec<_>>().join(", ")),
+        Value::Object(map) => format!("{{ {} }}", map.iter().map(|(k, v)| format!("{k} = {}", inline(v))).collect::<Vec<_>>().join(", ")),
+        other => other.to_string(),
+    }
+}
+
+/// A rule as the file would hold it: `[rules.<name>]` and its keys, `type` and `point` first, `message` last.
+fn table(name: &str, value: &Value, prefix: &str) -> String {
+    let bare = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    let header = if bare { format!("[rules.{name}]") } else { format!("[rules.{name:?}]") };
+    let mut out = format!("{prefix}{header}\n");
+    if let Value::Object(map) = value {
+        let rank = |k: &str| match k {
+            "type" => 0,
+            "point" => 1,
+            "message" => 3,
+            _ => 2,
+        };
+        let mut keys: Vec<&String> = map.keys().collect();
+        keys.sort_by_key(|k| (rank(k), k.as_str()));
+        for key in keys {
+            let _ = writeln!(out, "{prefix}{key} = {}", inline(&map[key]));
+        }
+    }
+    out
+}
+
+/// `game-server rules`: the rules in force as the file would hold them, each under a comment naming its layer; then the rules that were
+/// replaced or turned off, commented out, with what did it.
+pub fn show(rules: &[ResolvedRule]) -> String {
+    let mut out = String::new();
+    for r in rules.iter().filter(|r| r.state == RuleState::InForce) {
+        let _ = write!(out, "# {}\n{}\n", r.layer, table(&r.name, &r.value, ""));
+    }
+    let mut first = true;
+    for r in rules.iter().filter(|r| r.state != RuleState::InForce) {
+        if first {
+            out.push_str("# Replaced or turned off:\n\n");
+            first = false;
+        }
+        let why = match &r.state {
+            RuleState::Replaced(by) => format!("replaced by {by}"),
+            RuleState::TurnedOff(by) => format!("turned off by {by}"),
+            _ => "turned off by its own enabled = false".to_owned(),
+        };
+        let _ = write!(out, "# {}, {why}\n{}\n", r.layer, table(&r.name, &r.value, "# "));
+    }
+    if out.is_empty() {
+        out.push_str("# no rules\n");
+    }
+    out
+}
+
+/// `game-server rules --check [file]`: the file alone, settings and rules, no database (section 4.7). The summary line, or the first error.
+pub fn check_file(path: &str) -> Result<String> {
+    let text = std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!("reading {path}: {e}"))?;
+    let layer = crate::config::read_file(path, &text)?;
+    let startup = crate::config::Startup { bind: "0.0.0.0:30810".parse()?, database_url: String::new(), server_id: 1, config: None };
+    let (config, _) = crate::config::resolve(&startup, &crate::config::Sources { file: Some(layer.clone()), ..Default::default() })?;
+    let sources = RuleSources { file: Some(RuleFile { path: layer.path.clone(), rules: layer.rules.clone() }), ..RuleSources::default() };
+    resolve(&config, &sources)?;
+    let n = layer.rules.len();
+    Ok(format!("{path}: {n} rule{}, no errors", if n == 1 { "" } else { "s" }))
 }

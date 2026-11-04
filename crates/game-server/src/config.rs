@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+use crate::rules::{FileRule, RuleSources};
 use crate::skills::{KillBoost, SkillMatch};
 
 #[derive(Clone, Debug)]
@@ -110,6 +111,9 @@ pub struct Config {
     pub card_win_chances: [u32; 5],
     /// The staff levels that may type console commands in the game, 1 to this level (section 6 step 5).
     pub console_level: u8,
+    /// `GAME_CONFIG`, the config file's path as named at start (`None`: `config/game.toml`); `reload` reads the file again from it
+    /// (`docs/plans/ext-2-rules.md` section 4.6).
+    pub config_path: Option<String>,
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -292,6 +296,8 @@ pub struct Resolved {
 pub struct FileLayer {
     pub path: String,
     pub values: Vec<(String, String, usize)>,
+    /// The `[rules.<name>]` tables (`docs/plans/ext-2-rules.md` section 4.2).
+    pub rules: Vec<FileRule>,
 }
 
 /// An override of the data editor: `(name, value, change set)`.
@@ -378,6 +384,20 @@ fn setting_text(value: &toml::Value) -> Result<String, String> {
     })
 }
 
+/// A TOML value as JSON, for the rules (`docs/plans/ext-2-rules.md` section 1: one parser serves every layer).
+fn toml_to_json(value: &toml::Value) -> Result<serde_json::Value, String> {
+    use serde_json::Value;
+    Ok(match value {
+        toml::Value::String(s) => Value::String(s.clone()),
+        toml::Value::Integer(i) => Value::from(*i),
+        toml::Value::Float(f) => Value::Number(serde_json::Number::from_f64(*f).ok_or_else(|| format!("{f} is not a number a rule can hold"))?),
+        toml::Value::Boolean(b) => Value::Bool(*b),
+        toml::Value::Array(items) => Value::Array(items.iter().map(toml_to_json).collect::<Result<_, _>>()?),
+        toml::Value::Table(table) => Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_to_json(v)?))).collect::<Result<_, String>>()?),
+        toml::Value::Datetime(_) => return Err("a date cannot be in a rule".into()),
+    })
+}
+
 fn line_of(text: &str, offset: usize) -> usize {
     text[..offset.min(text.len())].bytes().filter(|&b| b == b'\n').count() + 1
 }
@@ -388,7 +408,7 @@ pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
     let fail = |line: usize, message: String| anyhow::anyhow!("{path} line {line}: {message}");
     let spans = toml::de::DeTable::parse(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
     let values: toml::Table = toml::from_str(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
-    let mut file = FileLayer { path: path.to_owned(), values: Vec::new() };
+    let mut file = FileLayer { path: path.to_owned(), values: Vec::new(), rules: Vec::new() };
     for (key, value) in spans.get_ref().iter() {
         let name: &str = key.get_ref();
         let line = line_of(text, key.span().start);
@@ -402,7 +422,25 @@ pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
                 let (extension, at) = first.unwrap_or_else(|| ("<name>".to_owned(), line));
                 return Err(fail(at, format!("[ext.{extension}] is reserved for chunk 5 (docs/plans/ext-1-foundation.md 7.5)")));
             }
-            "rules" => return Err(fail(line, "[rules] is reserved for chunk 2 (docs/plans/ext-1-foundation.md 7.2)".into())),
+            "rules" => {
+                let (toml::Value::Table(tables), toml::de::DeValue::Table(spanned)) = (parsed, value.get_ref()) else {
+                    return Err(fail(line, "rules: write one table per rule, [rules.<name>] (docs/server/rules.md)".into()));
+                };
+                for (rule_key, rule_value) in spanned.iter() {
+                    let rule_name: &str = rule_key.get_ref();
+                    let rule_line = line_of(text, rule_key.span().start);
+                    let toml::Value::Table(body) = &tables[rule_name] else {
+                        return Err(fail(rule_line, format!("rules.{rule_name}: a rule is a table, [rules.{rule_name}]")));
+                    };
+                    let key_lines = match rule_value.get_ref() {
+                        toml::de::DeValue::Table(keys) => keys.iter().map(|(k, _)| (k.get_ref().to_string(), line_of(text, k.span().start))).collect(),
+                        _ => Vec::new(),
+                    };
+                    let json = toml_to_json(&toml::Value::Table(body.clone())).map_err(|e| fail(rule_line, format!("rules.{rule_name}: {e}")))?;
+                    file.rules.push(FileRule { name: rule_name.to_owned(), value: json, line: rule_line, key_lines });
+                }
+                continue;
+            }
             _ => {}
         }
         if setting(name).is_none() {
@@ -497,25 +535,31 @@ impl Config {
             slot_payout_percent: slot_payout_percent(&var("slot_payout_percent")).context("slot_payout_percent")?,
             card_win_chances: card_win_chances(&var("card_win_chances")).context("card_win_chances")?,
             console_level: console_level(&var("console_level")).context("console_level")?,
+            config_path: startup.config.clone(),
         })
     }
 
     /// Reads the start-up environment, the config file and the database layers (one connection, which also runs the migrations; the
-    /// pool is built after, with the resolved `db_pool`) and resolves the settings (section 7.3).
-    pub async fn load() -> Result<(Config, Vec<Resolved>)> {
+    /// pool is built after, with the resolved `db_pool`) and resolves the settings (section 7.3). The rules' layers come with them
+    /// (`docs/plans/ext-2-rules.md` section 4.3); `rules::resolve` puts them together.
+    pub async fn load() -> Result<(Config, Vec<Resolved>, RuleSources)> {
         Self::read(true).await
     }
 
-    /// As [`Config::load`] for `game-server config`: no migrations, and a database without the `content` schema (before 0.3.0) has
-    /// no database layers.
-    pub async fn inspect() -> Result<(Config, Vec<Resolved>)> {
+    /// As [`Config::load`] for `game-server config` and `game-server rules`: no migrations, and a database without the `content`
+    /// schema (before 0.3.0) has no database layers.
+    pub async fn inspect() -> Result<(Config, Vec<Resolved>, RuleSources)> {
         Self::read(false).await
     }
 
-    async fn read(migrate: bool) -> Result<(Config, Vec<Resolved>)> {
+    async fn read(migrate: bool) -> Result<(Config, Vec<Resolved>, RuleSources)> {
         use sqlx::Connection;
         let startup = Startup::from_env()?;
         let mut sources = Sources { file: read_config_file(startup.config.as_deref())?, ..Sources::default() };
+        let mut rules = RuleSources {
+            file: sources.file.as_ref().map(|f| crate::rules::RuleFile { path: f.path.clone(), rules: f.rules.clone() }),
+            ..RuleSources::default()
+        };
         let mut conn = sqlx::PgConnection::connect(&startup.database_url).await.context("connecting to DATABASE_URL")?;
         if migrate {
             sqlx::migrate!("../../db/migrations").run(&mut conn).await?;
@@ -539,13 +583,70 @@ impl Config {
             };
             sources.editor = sqlx::query_as(query).fetch_all(&mut conn).await?;
         }
+        let layers = read_rule_layers(&mut conn).await?;
+        rules.extensions = layers.extensions;
+        rules.editor = layers.editor;
         conn.close().await?;
-        resolve(&startup, &sources)
+        let (config, resolved) = resolve(&startup, &sources)?;
+        rules.setting_layers = resolved
+            .iter()
+            .filter(|r| matches!(r.name, "cross_faction_trade_maps" | "market_maps" | "trade_chat_min_level"))
+            .map(|r| (r.name.to_owned(), r.layer.to_string()))
+            .collect();
+        Ok((config, resolved, rules))
     }
 }
 
+/// The database layers of the rules (`docs/plans/ext-2-rules.md` section 4.3): the enabled extensions' (`content.ext_rules`, in
+/// install order) and the data editor's (`content.rule_values`, with the change set that wrote each). Empty before migration 0032.
+/// Returned as a [`RuleSources`] with the other layers left empty.
+pub async fn read_rule_layers(conn: &mut sqlx::PgConnection) -> Result<RuleSources> {
+    read_rule_layers_in(conn, "content", "edits").await
+}
+
+/// As [`read_rule_layers`] with the schemas named (the tests of the data editor keep theirs apart). The names are the caller's own,
+/// never a user's.
+pub async fn read_rule_layers_in(conn: &mut sqlx::PgConnection, content: &str, edits: &str) -> Result<RuleSources> {
+    use sqlx::AssertSqlSafe;
+    let mut layers = RuleSources::default();
+    let present: bool = sqlx::query_scalar(AssertSqlSafe(format!(
+        "SELECT to_regclass('{content}.ext_rules') IS NOT NULL AND to_regclass('{content}.rule_values') IS NOT NULL"
+    )))
+    .fetch_one(&mut *conn)
+    .await?;
+    if !present {
+        return Ok(layers);
+    }
+    let json = |text: &str, place: String| -> Result<serde_json::Value> { serde_json::from_str(text).with_context(|| place) };
+    let rows: Vec<(String, String, String)> = sqlx::query_as(AssertSqlSafe(format!(
+        "SELECT r.extension, r.name, r.rule::text FROM {content}.ext_rules r JOIN {content}.extensions e ON e.name = r.extension \
+         WHERE e.enabled ORDER BY e.install_seq, r.name"
+    )))
+    .fetch_all(&mut *conn)
+    .await?;
+    for (extension, name, rule) in rows {
+        let value = json(&rule, format!("content.ext_rules {extension}/{name}"))?;
+        layers.extensions.push((extension, name, value));
+    }
+    let has_edits: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+    let query = if has_edits {
+        format!(
+            "SELECT v.name, v.rule::text, (SELECT max(f.change_set) FROM {edits}.fields f WHERE f.target = 'rule' AND f.key = v.name) \
+             FROM {content}.rule_values v ORDER BY v.name"
+        )
+    } else {
+        format!("SELECT name, rule::text, NULL::integer FROM {content}.rule_values ORDER BY name")
+    };
+    let rows: Vec<(String, String, Option<i32>)> = sqlx::query_as(AssertSqlSafe(query)).fetch_all(&mut *conn).await?;
+    for (name, rule, change_set) in rows {
+        let value = json(&rule, format!("content.rule_values {name}"))?;
+        layers.editor.push((name, value, change_set));
+    }
+    Ok(layers)
+}
+
 /// The config file named by `GAME_CONFIG`, or `config/game.toml`; a missing default file is fine, a missing named one is an error.
-fn read_config_file(named: Option<&str>) -> Result<Option<FileLayer>> {
+pub fn read_config_file(named: Option<&str>) -> Result<Option<FileLayer>> {
     let path = named.unwrap_or(DEFAULT_CONFIG);
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(Some(read_file(path, &text)?)),
@@ -586,11 +687,14 @@ pub fn example() -> String {
         "# The game server's settings (docs/server/settings.md). Every setting is listed at its default, commented out: remove the # and\n\
          # change the value to set it. Changes take effect at the next start (tools/game-server.sh restart). With nothing set the server\n\
          # behaves as the original. What is in force and where each value comes from: target/release/game-server config.\n\
-         # This file is generated by `game-server config --example`; a list may be written as an array: market_maps = [35, 36, 42].\n",
+         # This file is generated by `game-server config --example`; a list may be written as an array: market_maps = [35, 36, 42].\n\
+         # the rules: game-server rules\n",
     );
     for setting in SETTINGS {
         out.push_str(&format!("\n# {}\n# {} = {}\n", setting.doc, setting.name, toml_value(setting, setting.default)));
     }
+    out.push_str("\n# [rules]\n");
+    out.push_str(crate::rules::EXAMPLE);
     out
 }
 
@@ -765,6 +869,7 @@ mod tests {
             slot_payout_percent: 100,
             card_win_chances: [400, 200, 100, 50, 10],
             console_level: 1,
+            config_path: None,
         };
         assert_eq!(format!("{config:?}"), format!("{expected:?}"));
         assert!(all.iter().all(|r| r.layer == Layer::Default && r.value == r.default));
@@ -830,7 +935,7 @@ mod tests {
         let message = file_error("guild_party_size = 2\n\n[ext.welcome]\nwelcome_text = \"x\"\n");
         assert!(message.contains("line 3") && message.contains("[ext.welcome] is reserved for chunk 5"), "{message}");
         let message = file_error("# 1\n# 2\n\n\n\n\n\n\n[rules]\nx = 1\n");
-        assert!(message.contains("line 9") && message.contains("[rules] is reserved for chunk 2"), "{message}");
+        assert!(message.contains("line 10") && message.contains("rules.x: a rule is a table"), "{message}");
         let message = file_error("[market]\nx = 1\n");
         assert!(message.contains("line 1") && message.contains("unknown setting \"market\""), "{message}");
         let message = file_error("market_maps = { a = 1 }\n");
@@ -905,6 +1010,98 @@ mod tests {
         let all = read_file("example", &uncommented).unwrap();
         assert_eq!(all.values.len(), SETTINGS.len());
         assert!(resolved(&Sources { file: Some(all), ..Sources::default() }).is_ok());
+    }
+
+    const RULES_FILE: &str = "# comment
+guild_party_size = 2
+
+[rules.market-no-pvp-gain]
+type = \"pvp_gain\"
+maps = [35, 36, 42]
+exp = 0
+kills = 0
+deaths = false
+
+[rules.\"pets/no-capture\"]
+enabled = false
+
+[rules.level-gap]
+type = \"level_gap\"
+gap = 20
+maps = { not = [42] }
+message = \"Too far apart.\"
+";
+
+    #[test]
+    fn rules_in_the_file_are_read_with_their_lines() {
+        let layer = file(RULES_FILE);
+        assert_eq!(layer.values.len(), 1, "the setting is still a setting");
+        let names: Vec<_> = layer.rules.iter().map(|r| (r.name.as_str(), r.line)).collect();
+        assert_eq!(names, [("level-gap", 14), ("market-no-pvp-gain", 4), ("pets/no-capture", 11)], "the order of the table; each at its header's line");
+        let gap = layer.rules.iter().find(|r| r.name == "level-gap").unwrap();
+        assert_eq!(gap.value, serde_json::json!({ "type": "level_gap", "gap": 20, "maps": { "not": [42] }, "message": "Too far apart." }));
+        assert_eq!(gap.key_lines, [("gap".to_owned(), 16), ("maps".to_owned(), 17), ("message".to_owned(), 18), ("type".to_owned(), 15)]);
+        let market = layer.rules.iter().find(|r| r.name == "market-no-pvp-gain").unwrap();
+        assert_eq!(market.value["exp"], 0);
+        assert_eq!((market.value["deaths"].as_bool(), market.value["maps"][1].as_u64()), (Some(false), Some(36)));
+        let empty = file("[rules]\n");
+        assert!(empty.rules.is_empty());
+    }
+
+    fn rules_error(text: &str) -> String {
+        let layer = file(text);
+        let (config, _) = resolved(&Sources { file: Some(layer.clone()), ..Sources::default() }).unwrap();
+        let sources = RuleSources { file: Some(crate::rules::RuleFile { path: layer.path.clone(), rules: layer.rules }), ..RuleSources::default() };
+        format!("{:#}", crate::rules::resolve(&config, &sources).unwrap_err())
+    }
+
+    #[test]
+    fn rule_errors_name_the_line_and_the_key() {
+        let text = "[rules.level-gap]\ntype = \"level_gap\"\n\n\ngap = 0\n";
+        assert_eq!(rules_error(text), "config/game.toml line 5: rules.level-gap.gap: 0 is not 1 to 255");
+        let text = "\n\n[rules.safe-evenings]\ntype = \"deny\"\npoint = \"attack\"\nhour = 3\n";
+        assert_eq!(rules_error(text), "config/game.toml line 6: rules.safe-evenings: unknown key \"hour\"");
+        assert_eq!(rules_error("\n\n\n[rules.x]\nmaps = [1]\n"), "config/game.toml line 4: rules.x: a rule needs a type");
+        let message = file_error("[rules]\nx = 1\n");
+        assert_eq!(message, "config/game.toml line 2: rules.x: a rule is a table, [rules.x]");
+        let message = file_error("rules = 3\n");
+        assert!(message.starts_with("config/game.toml line 1: rules:"), "{message}");
+        let message = file_error("[rules.x]\nwhen = 1979-05-27T07:32:00Z\n");
+        assert!(message.contains("line 1") && message.contains("a date cannot be in a rule"), "{message}");
+        let message = file_error("[rules.x]\nfactor = nan\n");
+        assert!(message.contains("line 1") && message.contains("is not a number a rule can hold"), "{message}");
+        let message = file_error("guild_party_size = 2\n[ext.welcome]\nx = 1\n");
+        assert!(message.contains("[ext.welcome] is reserved for chunk 5"), "[ext.…] stays refused: {message}");
+    }
+
+    #[test]
+    fn the_examples_rules_are_valid_when_uncommented() {
+        let rules_part = &example()[example().find("# [rules]\n").unwrap()..];
+        let uncommented: String =
+            rules_part.lines().skip(1).filter(|l| l.starts_with("# [rules.") || l.starts_with("# type") || l.starts_with("# maps") || l.starts_with("# exp") || l.starts_with("# kills") || l.starts_with("# deaths") || l.starts_with("# gap") || l.starts_with("# jumps") || l.starts_with("# point") || l.starts_with("# days") || l.starts_with("# hours") || l.starts_with("# message")).map(|l| format!("{}\n", &l[2..])).collect();
+        let layer = read_file("example", &uncommented).unwrap();
+        assert_eq!(layer.rules.len(), 4);
+        let (config, _) = resolved(&Sources::default()).unwrap();
+        let sources = RuleSources { file: Some(crate::rules::RuleFile { path: "example".into(), rules: layer.rules }), ..RuleSources::default() };
+        assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 5, "the four and the trade-chat level's");
+    }
+
+    #[test]
+    fn check_file_gives_a_summary_or_the_first_error() {
+        let dir = std::env::temp_dir().join(format!("afterglow-rules-check-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("good.toml");
+        std::fs::write(&good, RULES_FILE.replace("[rules.\"pets/no-capture\"]\nenabled = false\n\n", "")).unwrap();
+        let path = good.to_str().unwrap();
+        assert_eq!(crate::rules::check_file(path).unwrap(), format!("{path}: 2 rules, no errors"));
+        std::fs::write(&good, "[rules.x]\ntype = \"exp\"\nfactor = 2\n").unwrap();
+        assert_eq!(crate::rules::check_file(path).unwrap(), format!("{path}: 1 rule, no errors"));
+        std::fs::write(&good, "guild_party_size = 2\n[rules.x]\ntype = \"exp\"\nfactor = 200\n").unwrap();
+        assert_eq!(format!("{:#}", crate::rules::check_file(path).unwrap_err()), format!("{path} line 4: rules.x.factor: 200 is not 0 to 100"));
+        std::fs::write(&good, "market_maps = \"x\"\n").unwrap();
+        assert!(format!("{:#}", crate::rules::check_file(path).unwrap_err()).contains("market_maps"), "the settings are checked too");
+        assert!(crate::rules::check_file(dir.join("nothing.toml").to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -75,6 +75,7 @@ pub fn config(check_ip: bool) -> Config {
         mini_game: true,
         slot_payout_percent: 220,
         card_win_chances: [420, 200, 130, 100, 80],
+        config_path: None,
     }
 }
 

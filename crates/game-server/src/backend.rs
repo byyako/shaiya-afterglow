@@ -820,6 +820,9 @@ pub trait AdminStore: Send + Sync + 'static {
     /// The console's `reload` (`docs/plans/done/data-editing.md` section 7): the monsters and the drop tables read again from the
     /// database, with `skills` attached. An error means nothing was loaded.
     fn load_live(&self, skills: &crate::skills::SkillDefs) -> impl Future<Output = Result<crate::server::Live>> + Send;
+    /// The database layers of the rules, read again by `reload` (`docs/plans/ext-2-rules.md` section 4.6): the enabled extensions'
+    /// and the data editor's. An error means nothing was read.
+    fn rule_layers(&self) -> impl Future<Output = Result<crate::rules::RuleSources>> + Send;
     /// `F601`, `F602`: the account's status word (the staff level in bits 4 to 6).
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send;
     /// An account by name, ignoring case, with its status; `None` when there is none (or it is deleted).
@@ -1296,6 +1299,9 @@ impl<T: Heartbeat> Heartbeat for std::sync::Arc<T> {
 impl<T: AdminStore> AdminStore for std::sync::Arc<T> {
     fn load_live(&self, skills: &crate::skills::SkillDefs) -> impl Future<Output = Result<crate::server::Live>> + Send {
         (**self).load_live(skills)
+    }
+    fn rule_layers(&self) -> impl Future<Output = Result<crate::rules::RuleSources>> + Send {
+        (**self).rule_layers()
     }
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send {
         (**self).set_account_status(user_id, status)

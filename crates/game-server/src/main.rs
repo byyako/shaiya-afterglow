@@ -33,17 +33,34 @@ async fn main() -> Result<()> {
         match (word.as_str(), args.next().as_deref()) {
             ("config", Some("--example")) => print!("{}", game_server::config::example()),
             ("config", None) => print!("{}", game_server::config::show(&Config::inspect().await?.1)),
-            _ => anyhow::bail!("usage: game-server [config [--example]]"),
+            // `game-server rules [--check [file]]` (`docs/plans/ext-2-rules.md` section 4.7).
+            ("rules", None) => {
+                let (config, _, sources) = Config::inspect().await?;
+                print!("{}", game_server::rules::show(&game_server::rules::resolve(&config, &sources)?.1));
+            }
+            ("rules", Some("--check")) => {
+                let file = args.next().or_else(|| std::env::var("GAME_CONFIG").ok().filter(|c| !c.is_empty())).unwrap_or_else(|| game_server::config::DEFAULT_CONFIG.to_owned());
+                match game_server::rules::check_file(&file) {
+                    Ok(line) => println!("{line}"),
+                    Err(error) => {
+                        eprintln!("{error:#}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            _ => anyhow::bail!("usage: game-server [config [--example] | rules [--check [file]]]"),
         }
         return Ok(());
     }
 
     // The settings, from the start-up environment, the config file and the database; the migrations ran on the one connection that
     // read the database layers (`Config::load`), then the pool, whose size is a setting.
-    let (config, settings) = Config::load().await?;
+    let (config, settings, rule_sources) = Config::load().await?;
     for setting in settings.iter().filter(|s| s.value != s.default && s.layer != game_server::config::Layer::Default) {
         tracing::info!(setting = setting.name, value = %setting.value, layer = %setting.layer, "setting not at its default");
     }
+    let (rules, _) = game_server::rules::resolve(&config, &rule_sources)?;
+    tracing::info!(rules = rules.len(), "rules in force");
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
     let creation = CreationData {
