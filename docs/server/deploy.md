@@ -83,7 +83,8 @@ from the originals, the installed extensions and the data editor's edits, in tha
 
 ## 4. Settings
 
-A system user for the services, and one environment file for both servers and the tools:
+A system user for the services, one environment file for both servers and the tools (the start-up variables only), and one settings file for
+the game server:
 
 ```bash
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin shaiya
@@ -96,13 +97,26 @@ sudo chown root:shaiya /etc/shaiya-afterglow/shaiya-afterglow.env && sudo chmod 
 # /etc/shaiya-afterglow/shaiya-afterglow.env
 DATABASE_URL=postgres://shaiya:<password>@127.0.0.1:5432/shaiya
 GAME_SERVER_ID=1
+GAME_CONFIG=/etc/shaiya-afterglow/game.toml
 RUST_LOG=info
 ```
 
+The game server's own settings are not variables: they are keys of the settings file `GAME_CONFIG` names (`docs/server/settings.md`). Start
+from the commented list of every setting with its default, and uncomment what you change (a missing file named by `GAME_CONFIG` stops the
+start; an empty one is fine):
+
+```bash
+sudo install -m 640 -o root -g shaiya config/game.toml.example /etc/shaiya-afterglow/game.toml   # from the checkout or the release tarball
+sudoedit /etc/shaiya-afterglow/game.toml                                                         # e.g. guild_party_size = 2
+```
+
+A game setting left in the environment file (the old `GAME_MARKET_MAPS=…` lines of 0.2.0) stops the game server at start and prints the line
+to put in the settings file instead. Changes to the file take effect at the next start: `sudo systemctl restart shaiya-afterglow-game`.
+
 The services run at `RUST_LOG=info` and log to the journal, which rotates; `tools/game-server.sh` and `tools/login-server.sh` are meant
 for a development machine and default to `debug` in a file that does not (`docs/server/audit.md` R18). Both units below carry `LimitNOFILE=65536`: systemd's
-default of 1024 open files is below `GAME_MAX_CONNECTIONS` (5000), and running out of them makes `accept` fail. Open the game port to the
-world but keep PostgreSQL on loopback: the game server's pool (`GAME_DB_POOL`, 24) and the login server's (16) plus the notification
+default of 1024 open files is below `max_connections` (5000), and running out of them makes `accept` fail. Open the game port to the
+world but keep PostgreSQL on loopback: the game server's pool (`db_pool`, 24) and the login server's (16) plus the notification
 listener fit PostgreSQL's default of 100 connections.
 
 The login guard (`docs/server/audit.md` R7) needs no setting: five wrong passwords for one account from one address make that address wait
@@ -111,7 +125,7 @@ password" answer, so the names that exist are not revealed); `LOGIN_PAIR_*`, `LO
 A player locked out this way waits it out; the operator can restart the login server to clear the counts (they are in memory only). New
 passwords (`create_account`, later the web API) have 6 to 16 characters (16 is all the client sends); accounts made with shorter ones still log in.
 
-Every other setting has a default; the full lists are in `docs/server/settings.md`. The file is read by systemd, not a shell: one `NAME=value` per line, no `export`, no quotes needed.
+Every other setting has a default; the full lists are in `docs/server/settings.md`. The environment file is read by systemd, not a shell: one `NAME=value` per line, no `export`, no quotes needed.
 
 ## 5. Register the game server and create accounts
 
@@ -270,8 +284,8 @@ python3 tools/patch_client_ip.py <Client>/game.exe <Client>/game_vps.exe <VPS pu
 
 The login server sends the client the address registered with `servers add`, so that address must be the public one too.
 
-`GAME_CHECK_IP=true` (the default) refuses a game connection from another address than the account's login. Players whose address changes
-between the two (some mobile and carrier-grade NAT connections) cannot enter; `GAME_CHECK_IP=false` turns the check off, as in the original.
+`check_ip = true` (the default) refuses a game connection from another address than the account's login. Players whose address changes
+between the two (some mobile and carrier-grade NAT connections) cannot enter; `check_ip = false` in the game settings file turns the check off, as in the original.
 
 ## 9. Updating
 

@@ -187,7 +187,7 @@ impl SkillDef {
     }
 }
 
-/// A skill named in a setting (`GAME_KILL_BOOST_SKILLS`): an id, and a level when only that level counts. The monsters' skills share
+/// A skill named in a setting (`kill_boost_skills`): an id, and a level when only that level counts. The monsters' skills share
 /// the players' ids at level 100 (`MOB_LEVEL`), so `200/1` is the kill-boost item's buff and not the monsters' Weakening Curse 200/100.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SkillMatch {
@@ -201,7 +201,7 @@ impl SkillMatch {
     }
 }
 
-/// One entry of `GAME_KILL_BOOST_SKILLS`: a skill, and how many times a player kill counts while it is applied.
+/// One entry of `kill_boost_skills`: a skill, and how many times a player kill counts while it is applied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct KillBoost {
     pub skill: SkillMatch,

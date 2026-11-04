@@ -840,7 +840,7 @@ impl Guilds {
     // Creating (section 4).
 
     /// `0x0D21`: `party` is the requester's party in its order, each with whether it is on the requester's map; `size` the party
-    /// size needed (`GAME_GUILD_PARTY_SIZE`; 1 or less: the requester alone).
+    /// size needed (`guild_party_size`; 1 or less: the requester alone).
     pub fn create_request(&mut self, me: u32, party: &[(u32, bool)], size: usize, name: &[u8], remark: &[u8], now: Instant) {
         let Some(requester) = self.online.get(&me) else { return };
         let fail = |code: u8| requester.send(&gp::create_result(code, 0, 0, name, remark));

@@ -54,7 +54,7 @@ pub(super) async fn packet<S: Backend>(
     payload: &[u8],
 ) -> Result<()> {
     if !ctx.config.mini_game {
-        tracing::debug!(id = character.id, opcode = format_args!("{opcode:#06x}"), "gambling house request ignored: GAME_MINI_GAME is off");
+        tracing::debug!(id = character.id, opcode = format_args!("{opcode:#06x}"), "gambling house request ignored: mini_game is off");
         return Ok(());
     }
     if opcode == mp::OP_SIT {

@@ -54,7 +54,7 @@ async fn carry_out<S: Backend>(ctx: &Context<S>, command: Command) -> Vec<String
         Command::MaxUsers(n) => {
             s.set_max_users(n);
             let top = ctx.config.max_connections;
-            let note = if n as usize > top { format!(" (at most {top} take effect: GAME_MAX_CONNECTIONS)") } else { String::new() };
+            let note = if n as usize > top { format!(" (at most {top} take effect: max_connections)") } else { String::new() };
             vec![format!("maxusers {n}{note}")]
         }
         Command::Kick(by) => vec![kick(ctx, by).await],

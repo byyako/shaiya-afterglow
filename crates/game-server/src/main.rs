@@ -39,7 +39,10 @@ async fn main() -> Result<()> {
 
     // The settings, from the start-up environment, the config file and the database; the migrations ran on the one connection that
     // read the database layers (`Config::load`), then the pool, whose size is a setting.
-    let (config, _settings) = Config::load().await?;
+    let (config, settings) = Config::load().await?;
+    for setting in settings.iter().filter(|s| s.value != s.default && s.layer != game_server::config::Layer::Default) {
+        tracing::info!(setting = setting.name, value = %setting.value, layer = %setting.layer, "setting not at its default");
+    }
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
     let creation = CreationData {
@@ -55,7 +58,7 @@ async fn main() -> Result<()> {
     let mobs = &live.mobs;
     let mut world = pg::load_world(&pool, config.mini_game).await.context("loading the maps")?;
     if let Some(times) = &config.ranking_times {
-        tracing::info!(?times, "the ranking battle's open times are set by GAME_RANKING_TIMES");
+        tracing::info!(?times, "the ranking battle's open times are set by ranking_times");
         world.set_ranking_times(times.clone());
     }
     let obelisks =
@@ -113,7 +116,7 @@ async fn main() -> Result<()> {
         tracing::info!(chat = config.game_chat_log, days = config.game_log_days, "game log on");
         Some(GameLog::spawn(pool.clone(), &config, names))
     } else {
-        tracing::info!("game log off (GAME_LOG)");
+        tracing::info!("game log off (log = false)");
         None
     };
     let mut ctx = Context::new(config, backend, data);

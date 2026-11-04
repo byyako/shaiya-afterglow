@@ -1,7 +1,9 @@
 #!/bin/bash
 # Run the game server in the background.
 #   tools/game-server.sh start|stop|restart|status|logs
-# Reads .env (DATABASE_URL; GAME_SERVER_ID defaults to 1) from the project root. A setting can come from the environment only when .env does not set it (.env is loaded over it: docs/server/settings.md, "Run scripts").
+# Reads .env (DATABASE_URL; GAME_BIND and GAME_SERVER_ID default to 0.0.0.0:30810 and 1) from the project root. The game's settings are
+# not variables: they are read from config/game.toml (GAME_CONFIG names another file; docs/server/settings.md). A GAME_ setting left in
+# .env or the environment stops the server at start and prints the line for the file.
 # The server runs in a loop that starts it again after any non-zero exit status: 75 is the console's `restart`
 # (docs/plans/done/data-editing.md section 7), the others are crashes. The loop gives up when the server exits more than 5 times within a
 # minute (docs/server/audit.md R5). A clean exit (status 0) and `stop` end the loop.
@@ -23,6 +25,8 @@ case "${1:-status}" in
     set -a; . "$root/.env"; set +a
     : "${GAME_BIND:=0.0.0.0:30810}" "${RUST_LOG:=info,game_server=debug}"
     export GAME_BIND RUST_LOG
+    # The settings file of this checkout, unless GAME_CONFIG names another (a file that is not there is fine for the default only).
+    if [ -z "${GAME_CONFIG:-}" ] && [ -f "$root/config/game.toml" ]; then GAME_CONFIG="$root/config/game.toml"; export GAME_CONFIG; fi
     # Many connections need many descriptors; the soft limit is often 1024.
     ulimit -n 65536 2>/dev/null || ulimit -n "$(ulimit -Hn)" 2>/dev/null
     loop='starts=(); while true; do "$1"; code=$?; [ $code -eq 0 ] && exit 0

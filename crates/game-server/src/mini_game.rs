@@ -80,7 +80,7 @@ fn add(money: &mut u32, amount: u32) {
     *money = money.saturating_add(amount);
 }
 
-/// The odds in force (`GAME_SLOT_PAYOUT_PERCENT`, `GAME_CARD_WIN_CHANCES`, `docs/original/mini-game.md` decision 2).
+/// The odds in force (`slot_payout_percent`, `card_win_chances`, `docs/original/mini-game.md` decision 2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Odds {
     /// Each winning line pays `multiplier × the table's bet × payout_percent / 100`; 100 is the original.

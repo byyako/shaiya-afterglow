@@ -311,7 +311,7 @@ impl GameLog {
         Self { sink, chat, names: Arc::default(), dropped: Arc::default(), warned: Arc::default(), pending: Arc::default() }
     }
 
-    /// No log: every call does nothing (`GAME_LOG` off, and the tests that do not look).
+    /// No log: every call does nothing (`log` off, and the tests that do not look).
     pub fn off() -> Self {
         Self::with(Sink::Off, false)
     }
@@ -334,7 +334,7 @@ impl GameLog {
         self
     }
 
-    /// Starts the writer task (section 7 step 2): `GAME_LOG` is on.
+    /// Starts the writer task (section 7 step 2): `log` is on.
     pub fn spawn(pool: PgPool, config: &Config, names: Names) -> Self {
         let (log, rx) = Self::queue(QUEUE, config.game_chat_log);
         let log = log.with_names(names);
@@ -385,7 +385,7 @@ impl GameLog {
         self.send(Entry::Action(row));
     }
 
-    /// Records a chat line, unless the chat log is off (`GAME_CHAT_LOG`).
+    /// Records a chat line, unless the chat log is off (`chat_log`).
     pub fn chat(&self, row: ChatRow) {
         if self.chat {
             self.send(Entry::Chat(row));
@@ -431,7 +431,7 @@ impl GameLog {
 }
 
 /// The writer: takes up to 500 entries at a time and writes them; an error loses the batch and warns with its size. With
-/// `GAME_LOG_DAYS` set, it deletes the older rows at start and every 24 hours (deviation 5).
+/// `log_days` set, it deletes the older rows at start and every 24 hours (deviation 5).
 async fn write_loop(pool: PgPool, server_id: u8, days: u32, mut rx: mpsc::Receiver<Entry>, pending: Arc<AtomicU64>) {
     let mut purge = tokio::time::interval(PURGE_EVERY);
     let mut batch = Vec::with_capacity(BATCH);

@@ -49,7 +49,7 @@ impl Zones {
     }
 
     /// `0x0A01` (section 2.1): the target on the requester's map, both free, the same faction unless `any_faction` (a map listed in
-    /// `GAME_CROSS_FACTION_TRADE_MAPS`), not oneself (deviation 5).
+    /// `cross_faction_trade_maps`), not oneself (deviation 5).
     pub fn trade_request(&self, map: u16, me: u32, target: u32, any_faction: bool, now: Instant) {
         let maps = self.maps.guard();
         let Some(players) = maps.get(&map) else { return };

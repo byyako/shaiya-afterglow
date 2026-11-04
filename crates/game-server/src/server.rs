@@ -170,7 +170,7 @@ pub struct Context<S> {
     pub questions: Mutex<crate::user_questions::QuestionQueue>,
     /// The auction house (`docs/original/auction.md`); `load_market` fills it before the listener starts.
     pub market: crate::market::House,
-    /// The game log (`docs/original/game-log.md`); `main` starts its writer when `GAME_LOG` is on.
+    /// The game log (`docs/original/game-log.md`); `main` starts its writer when `log` is on.
     pub game_log: crate::game_log::GameLog,
     /// What the console turns while the server runs (`docs/original/operator-console.md` sections 2 and 4).
     pub switches: Switches,

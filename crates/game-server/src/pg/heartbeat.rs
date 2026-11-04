@@ -239,7 +239,7 @@ struct MapPortalRow {
 }
 
 /// The maps and NPC placements from the `world` schema (`tools/world/import.py`, `db/world/schema.sql`).
-/// `gambling` places the gambling house's NPCs (type 5, `GAME_MINI_GAME`).
+/// `gambling` places the gambling house's NPCs (type 5, `mini_game`).
 pub async fn load_world(pool: &PgPool, gambling: bool) -> Result<World> {
     let maps: Vec<(i16, i32)> = sqlx::query_as("SELECT id, size FROM world.maps").fetch_all(pool).await?;
     if maps.is_empty() {

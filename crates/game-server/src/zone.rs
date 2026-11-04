@@ -1718,7 +1718,7 @@ impl Zones {
         }
     }
 
-    /// Turns the pacing of running steps and the move tick on or off (`GAME_SMOOTH_CHASE`).
+    /// Turns the pacing of running steps and the move tick on or off (`smooth_chase`).
     pub fn set_smooth_chase(&self, on: bool) {
         self.smooth.store(on, Ordering::Relaxed);
     }

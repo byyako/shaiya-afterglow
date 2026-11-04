@@ -8,7 +8,7 @@ use shaiya_proto::world::NpcEnter;
 
 use crate::mobs::SpawnArea;
 
-/// NPC type the original never places from a map file (`CMap::InitNPC`): the gambling house's, which `GAME_MINI_GAME` places
+/// NPC type the original never places from a map file (`CMap::InitNPC`): the gambling house's, which `mini_game` places
 /// (`docs/original/mini-game.md` decision 1).
 pub const GAMBLING_NPC_TYPE: u8 = 5;
 /// The largest height (either way) `is_safe_pos` accepts; real terrain is within a few hundred.
@@ -431,7 +431,7 @@ impl World {
         self.ranking_map().map(|map| self.instance_rules(map).open_times).unwrap_or_default()
     }
 
-    /// Replaces the ranking battle map's open times (`GAME_RANKING_TIMES`).
+    /// Replaces the ranking battle map's open times (`ranking_times`).
     pub fn set_ranking_times(&mut self, times: Vec<[u16; 3]>) {
         if let Some(map) = self.ranking_map() {
             self.instance_rules.entry(map).or_default().open_times = times;

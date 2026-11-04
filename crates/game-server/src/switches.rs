@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 
 /// The item mall is open (`g_bDisableShop` 0).
 pub const SHOP_ON: u8 = 0;
-/// Purchases and gifts answer their failure (`g_bDisableShop` 1, `GAME_ITEM_MALL=false`).
+/// Purchases and gifts answer their failure (`g_bDisableShop` 1, `item_mall = false`).
 pub const SHOP_OFF: u8 = 1;
 /// Purchases and gifts get no answer at all (`g_bDisableShop` 2).
 pub const SHOP_SILENT: u8 = 2;
