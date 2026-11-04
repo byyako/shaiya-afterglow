@@ -16,6 +16,7 @@ shaiya-crypto = { version = "0.2.0", path = "../shaiya-crypto" }
 shaiya-proto = { version = "0.2.0", path = "../shaiya-proto" }
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync", "signal"] }
+toml = "1.1.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 

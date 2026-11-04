@@ -27,10 +27,21 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
 
-    let config = Config::from_env()?;
+    // `game-server config [--example]` prints the settings and exits (`docs/plans/ext-1-foundation.md` section 7.3).
+    let mut args = std::env::args().skip(1);
+    if let Some(word) = args.next() {
+        return match (word.as_str(), args.next().as_deref()) {
+            ("config", Some("--example")) => Ok(print!("{}", game_server::config::example())),
+            ("config", None) => Ok(print!("{}", game_server::config::show(&Config::inspect().await?.1))),
+            _ => anyhow::bail!("usage: game-server [config [--example]]"),
+        };
+    }
+
+    // The settings, from the start-up environment, the config file and the database; the migrations ran on the one connection that
+    // read the database layers (`Config::load`), then the pool, whose size is a setting.
+    let (config, _settings) = Config::load().await?;
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
-    sqlx::migrate!("../../db/migrations").run(&pool).await?;
     let creation = CreationData {
         class_base: pg::load_class_base(&pool).await.context("loading the class table")?,
         start: CreationData::original_start_positions(),

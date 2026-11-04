@@ -644,6 +644,7 @@ dependencies = [
  "shaiya-proto",
  "sqlx",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]
