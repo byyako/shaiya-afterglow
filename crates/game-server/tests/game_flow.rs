@@ -4564,3 +4564,60 @@ async fn a_rule_refuses_an_attack_and_the_server_says_why() {
     let seen = answered_with(&mut alice, aim, &marker).await;
     assert!(seen.contains(&cp::attack_start()) && whisper_texts(&seen).is_empty(), "{seen:x?}");
 }
+
+#[tokio::test]
+async fn a_deny_trade_rule_answers_busy_and_whispers_once() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_rules(&ctx, &[("no-trade", serde_json::json!({ "type": "deny", "point": "trade" }))]);
+    let (mut alice, alice_id, mut bob, bob_id) = two_in_the_world(&backend, addr).await;
+    let request = shaiya_proto::encode(tp::OP_REQUEST, &bob_id.to_le_bytes());
+    let marker = shaiya_proto::encode(w::OP_USER_HP, &bob_id.to_le_bytes());
+    let seen = answered_with(&mut alice, request.clone(), &marker).await;
+    assert!(seen.contains(&tp::start(bob_id, tp::START_BUSY)), "{seen:x?}");
+    assert_eq!(whisper_texts(&seen), ["Trading is not allowed here."]);
+    // Again within 10 seconds: busy again, no second whisper.
+    let seen = answered_with(&mut alice, request.clone(), &marker).await;
+    assert!(seen.contains(&tp::start(bob_id, tp::START_BUSY)) && whisper_texts(&seen).is_empty(), "{seen:x?}");
+    // Bob never heard of it; without the rule the request goes through.
+    put_rules(&ctx, &[]);
+    alice.write(request).await;
+    assert_eq!(next_trade_packet(&mut bob).await, tp::request(alice_id));
+}
+
+#[tokio::test]
+async fn deny_rules_for_trade_chat_and_a_personal_shop_whisper_their_message() {
+    use shaiya_proto::my_shop as mp;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    let mut client = Client::connect(addr).await;
+    client.enter(7, [5; 16]).await;
+    client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
+    client.write(create(0, 0, 0, b"Trader")).await;
+    client.read().await.unwrap();
+    client.read_list().await;
+    backend.set_level(1, 10);
+    let id = select_and_enter(&mut client).await;
+    let marker = shaiya_proto::encode(w::OP_USER_HP, &id.to_le_bytes());
+    let trade = shaiya_proto::encode(chat::OP_TRADE, &[4, b'w', b't', b's', 0]);
+    // The settings' own rules are silent: the test server's market_maps closes map 1, and nobody hears of it.
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[w::MOTION_SIT])).await;
+    let seen = answered_with(&mut client, shaiya_proto::encode(mp::OP_BEGIN, &[]), &marker).await;
+    assert!(whisper_texts(&seen).is_empty(), "{seen:x?}");
+    put_rules(
+        &ctx,
+        &[
+            ("no-shops", serde_json::json!({ "type": "deny", "point": "personal_shop", "message": "No shops here." })),
+            ("no-trade-chat", serde_json::json!({ "type": "deny", "point": "trade_chat", "level": "10-", "message": "Be quiet." })),
+        ],
+    );
+    let seen = answered_with(&mut client, shaiya_proto::encode(mp::OP_BEGIN, &[]), &marker).await;
+    assert_eq!(whisper_texts(&seen), ["No shops here."]);
+    assert!(!seen.iter().any(|p| frame::opcode(p) == mp::OP_BEGIN), "the shop did not open");
+    let seen = answered_with(&mut client, trade.clone(), &marker).await;
+    assert_eq!(whisper_texts(&seen), ["Be quiet."]);
+    assert!(!seen.iter().any(|p| frame::opcode(p) == chat::OP_TRADE), "nothing was said to the faction");
+    // Each rule whispers once in ten seconds.
+    let seen = answered_with(&mut client, trade, &marker).await;
+    assert!(whisper_texts(&seen).is_empty());
+}

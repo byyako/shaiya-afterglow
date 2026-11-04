@@ -8,9 +8,11 @@ use shaiya_proto::my_shop as mp;
 
 /// The `0x23xx` requests (`CUser::PacketMyShop`). Each first ends a trade (not the shop); unknown ones are ignored, as the original.
 pub(super) async fn packet<S: Backend>(
+    conn: &mut Connection,
     ctx: &Context<S>,
     character: &PlayCharacter,
     state: &mut WorldState,
+    country: u8,
     opcode: u16,
     payload: &[u8],
 ) -> Result<()> {
@@ -18,10 +20,19 @@ pub(super) async fn packet<S: Backend>(
     ctx.zones.trade_end(id);
     match opcode {
         mp::OP_BEGIN => {
-            // Sitting (`m_byMotion` 1), on a market map (deviation 1).
-            let market = ctx.config.market_maps.is_empty() || ctx.config.market_maps.contains(&map);
-            if state.motion != w::MOTION_SIT || !market {
-                tracing::debug!(id, map, motion = state.motion, "personal shop refused: not sitting or not a market map");
+            // Sitting (`m_byMotion` 1), on a map no `deny personal_shop` rule closes (deviation 1; the `market_maps` setting makes
+            // the rule that closes every other map).
+            let refusal = ctx.zones.rules().denied(crate::rules::Point::PersonalShop, map, &rules_who(character, country));
+            if state.motion != w::MOTION_SIT || refusal.is_some() {
+                match &refusal {
+                    Some(refusal) if !refusal.name.starts_with("setting.") => {
+                        tracing::debug!(id, map, point = "personal_shop", rule = &*refusal.name, "refused by a rule");
+                    }
+                    _ => tracing::debug!(id, map, motion = state.motion, "personal shop refused: not sitting or not a market map"),
+                }
+                if state.motion == w::MOTION_SIT && let Some(refusal) = refusal {
+                    super::refused::tell_refused(conn, state, &refusal).await?;
+                }
                 return Ok(());
             }
             ctx.zones.shop_begin(map, id);

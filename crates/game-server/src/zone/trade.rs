@@ -48,25 +48,34 @@ impl Zones {
         self.trades.guard()
     }
 
-    /// `0x0A01` (section 2.1): the target on the requester's map, both free, the same faction unless `any_faction` (a map listed in
-    /// `cross_faction_trade_maps`), not oneself (deviation 5).
-    pub fn trade_request(&self, map: u16, me: u32, target: u32, any_faction: bool, now: Instant) {
+    /// `0x0A01` (section 2.1): the target on the requester's map, both free, the same faction unless a `cross_faction_trade` rule lets
+    /// the two trade (`docs/plans/ext-2-rules.md` point 2; the `cross_faction_trade_maps` setting makes one), not oneself
+    /// (deviation 5). The core's refusals answer `START_BUSY` and say nothing more; a `deny trade` rule answers `START_BUSY` too and
+    /// is returned for the whisper, and it beats the permission.
+    pub fn trade_request(&self, map: u16, me: u32, target: u32, now: Instant) -> Option<crate::rules::Refusal> {
+        let rules = self.rules();
         let maps = self.maps.guard();
-        let Some(players) = maps.get(&map) else { return };
-        let Some(requester) = players.get(&me) else { return };
+        let players = maps.get(&map)?;
+        let requester = players.get(&me)?;
         let mut trades = self.trades();
         if trades.busy(me) {
             requester.send(&tp::start(target, tp::START_BUSY));
-            return;
+            return None;
         }
-        let Some(asked) = players.get(&target) else { return };
-        let faction_ok = any_faction || asked.occupant.shape.country == requester.occupant.shape.country;
+        let asked = players.get(&target)?;
+        let (a, b) = (pvp::who(requester), pvp::who(asked));
+        let faction_ok = a.country == b.country || rules.cross_faction_trade(map, &a, &b);
         if target == me || trades.busy(target) || !faction_ok || staking(&maps, me) || staking(&maps, target) {
             requester.send(&tp::start(target, tp::START_BUSY));
-            return;
+            return None;
+        }
+        if let Some(refusal) = rules.trade(map, &a, &b) {
+            requester.send(&tp::start(target, tp::START_BUSY));
+            return Some(refusal);
         }
         trades.request(me, target, now);
         asked.send(&tp::request(me));
+        None
     }
 
     /// `0x0A02` (section 2.2): yes opens both windows; no tells the requester with its own id, as the original.

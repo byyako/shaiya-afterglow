@@ -94,6 +94,11 @@ const DEFAULT_MAX_GROW: u8 = 3;
 /// Ultimate mode (`byGrow` 3).
 const ULTIMATE: u8 = 3;
 
+/// What the rules test of the player on this connection (`crate::rules::Who`); `country` is its faction.
+fn rules_who(character: &PlayCharacter, country: u8) -> crate::rules::Who {
+    crate::rules::Who { level: character.level, kills: character.kills[0], country }
+}
+
 /// The name the console's answers and the rules' refusals whisper from.
 pub(crate) const SERVER_NAME: &[u8] = b"Server";
 
@@ -1897,8 +1902,10 @@ async fn world_loop<S: Backend>(
             }
             tp::OP_REQUEST if state.entered => {
                 let Some(target) = tp::parse_id(payload) else { continue };
-                let any_faction = ctx.config.cross_faction_trade_maps.contains(&map);
-                ctx.zones.trade_request(map, id, target, any_faction, Instant::now());
+                if let Some(refusal) = ctx.zones.trade_request(map, id, target, Instant::now()) {
+                    tracing::debug!(id, map, point = "trade", rule = &*refusal.name, "refused by a rule");
+                    refused::tell_refused(conn, state, &refusal).await?;
+                }
             }
             tp::OP_ANSWER if state.entered => {
                 let Some(answer) = tp::parse_byte(payload) else { continue };
@@ -2025,7 +2032,7 @@ async fn world_loop<S: Backend>(
                     ctx.zones.war_answer(state.map, id, answer != gwp::ANSWER_REFUSE, Instant::now());
                 }
             }
-            opcode if opcode & 0xFF00 == 0x2300 && state.entered => my_shop::packet(ctx, character, state, opcode, payload).await?,
+            opcode if opcode & 0xFF00 == 0x2300 && state.entered => my_shop::packet(conn, ctx, character, state, player.faction.map_or(0, |f| f.country), opcode, payload).await?,
             // The auction house (`docs/original/auction.md`).
             opcode if opcode & 0xFF00 == 0x1C00 && state.entered => market::packet(conn, ctx, character, state, opcode, payload).await?,
             // The item mall and the billing storage (`docs/original/item-mall.md`).
@@ -2383,8 +2390,14 @@ async fn world_loop<S: Backend>(
                     // The client's trade channel. Limited here as the US client limits it (configurable), since the original server did not.
                     chat::OP_TRADE => {
                         let config = &ctx.config;
-                        if character.level < config.trade_chat_min_level {
-                            tracing::debug!(%peer, id, level = character.level, "trade chat refused: level too low");
+                        let rules = ctx.zones.rules();
+                        if let Some(refusal) = rules.denied(crate::rules::Point::TradeChat, map, &rules_who(character, country)) {
+                            if refusal.name.starts_with("setting.") {
+                                tracing::debug!(%peer, id, level = character.level, "trade chat refused: level too low");
+                            } else {
+                                tracing::debug!(id, map, point = "trade_chat", rule = &*refusal.name, "refused by a rule");
+                            }
+                            refused::tell_refused(conn, state, &refusal).await?;
                         } else if state.next_trade.is_some_and(|next| Instant::now() < next) {
                             tracing::debug!(%peer, id, "trade chat refused: too soon");
                         } else {

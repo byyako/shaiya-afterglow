@@ -2184,24 +2184,26 @@ fn trades_need_the_same_faction_except_where_allowed() {
     }
     let now = Instant::now();
     // Oneself, the other faction, nobody of that id on the map (no answer at all).
-    zones.trade_request(1, 1, 1, false, now);
-    zones.trade_request(1, 1, 4, false, now);
-    zones.trade_request(1, 1, 9, false, now);
+    zones.trade_request(1, 1, 1, now);
+    zones.trade_request(1, 1, 4, now);
+    zones.trade_request(1, 1, 9, now);
     assert_eq!(received(&mut a_in), [tp::start(1, tp::START_BUSY), tp::start(4, tp::START_BUSY)]);
     assert!(received(&mut d_in).is_empty());
     // Where both factions may trade (the Auction House by default).
-    zones.trade_request(1, 1, 4, true, now);
+    put_rules(&zones, &[("any", serde_json::json!({ "type": "cross_faction_trade" }))]);
+    zones.trade_request(1, 1, 4, now);
+    put_rules(&zones, &[]);
     assert_eq!(received(&mut d_in), [tp::request(1)]);
     // Dark is busy now; so is Alice.
-    zones.trade_request(1, 2, 4, false, now);
-    zones.trade_request(1, 1, 2, false, now);
+    zones.trade_request(1, 2, 4, now);
+    zones.trade_request(1, 1, 2, now);
     assert_eq!(received(&mut b_in), [tp::start(4, tp::START_BUSY)]);
     assert_eq!(received(&mut a_in), [tp::start(2, tp::START_BUSY)]);
     // Dying while asked refuses for the asked player (`CancleActionExc`, state 2).
     assert!(zones.trade_end(4));
     assert_eq!(received(&mut a_in), [tp::start(4, tp::START_REFUSED)]);
     // Expired requests free both, silently.
-    zones.trade_request(1, 1, 2, false, now);
+    zones.trade_request(1, 1, 2, now);
     drain(&mut b_in);
     zones.expire_trades(now + crate::trade::REQUEST_TIME);
     zones.trade_answer(2, true);
@@ -3049,17 +3051,19 @@ fn a_trade_and_a_duel_stakes_window_exclude_each_other() {
     let now = Instant::now();
     // The accomplice case of audit R3: Bob (2) stakes against Carol (3); Alice (1) cannot trade with Bob meanwhile, nor Bob with her.
     let (zones, mut inboxes, _) = duel_ground();
+    put_rules(&zones, &[("any", serde_json::json!({ "type": "cross_faction_trade" }))]);
     duel_window(&zones, &mut inboxes);
-    zones.trade_request(1, 1, 2, true, now);
+    zones.trade_request(1, 1, 2, now);
     assert_eq!(received(&mut inboxes[0]), [tp::start(2, tp::START_BUSY)]);
-    zones.trade_request(1, 2, 1, true, now);
+    zones.trade_request(1, 2, 1, now);
     assert_eq!(received(&mut inboxes[1]), [tp::start(1, tp::START_BUSY)]);
     assert!(received(&mut inboxes[2]).is_empty());
     assert!(!zones.trades.guard().busy(1) && !zones.trades.guard().busy(2));
 
     // The other way round: Bob trades with Alice, so neither Carol nor Alice can duel him, and Bob cannot ask Carol.
     let (zones, mut inboxes, _) = duel_ground();
-    zones.trade_request(1, 1, 2, true, now);
+    put_rules(&zones, &[("any", serde_json::json!({ "type": "cross_faction_trade" }))]);
+    zones.trade_request(1, 1, 2, now);
     zones.trade_answer(2, true);
     for inbox in inboxes.iter_mut() {
         received(inbox);
@@ -3073,8 +3077,9 @@ fn a_trade_and_a_duel_stakes_window_exclude_each_other() {
 
     // A request waiting for its answer is cancelled when the other kind opened in between.
     let (zones, mut inboxes, _) = duel_ground();
+    put_rules(&zones, &[("any", serde_json::json!({ "type": "cross_faction_trade" }))]);
     zones.duel_request(1, 2, 3, now);
-    zones.trade_request(1, 1, 2, true, now);
+    zones.trade_request(1, 1, 2, now);
     zones.trade_answer(2, true);
     for inbox in inboxes.iter_mut() {
         received(inbox);
@@ -4225,4 +4230,48 @@ fn the_rules_are_swapped_whole() {
     let before = zones.rules();
     put_rules(&zones, &[]);
     assert_eq!((before.len(), zones.rules().len()), (1, 0), "a snapshot taken earlier keeps what it had");
+}
+
+#[test]
+fn trade_requests_ask_the_rules_after_the_cores_own_checks() {
+    use serde_json::json;
+    use shaiya_proto::trade as tp;
+    let now = Instant::now();
+    // Alice (1, Light), Bob (2, Fury) and Carol (3, Fury).
+    let (zones, mut inboxes, _) = duel_ground();
+    let [a_in, b_in, c_in] = &mut inboxes;
+    // No rule: the other faction is refused with START_BUSY and nothing more; a rule for the permission lets it through.
+    assert!(zones.trade_request(1, 1, 2, now).is_none());
+    assert_eq!(received(a_in), [tp::start(2, tp::START_BUSY)]);
+    put_rules(&zones, &[("grant", json!({ "type": "cross_faction_trade", "level": "60-" }))]);
+    // Who defaults to both: one trader at 59 is refused, both at 60 may.
+    level_of(&zones, 1, 60);
+    level_of(&zones, 2, 59);
+    assert!(zones.trade_request(1, 1, 2, now).is_none());
+    assert_eq!(received(a_in), [tp::start(2, tp::START_BUSY)]);
+    level_of(&zones, 2, 60);
+    assert!(zones.trade_request(1, 1, 2, now).is_none());
+    assert_eq!(received(b_in), [tp::request(1)]);
+    assert!(received(a_in).is_empty());
+    assert!(zones.trade_end(2));
+    drain(a_in);
+    // A deny trade rule beats the permission: START_BUSY for the requester, the refusal returned for the whisper, nothing for Bob.
+    put_rules(
+        &zones,
+        &[("grant", json!({ "type": "cross_faction_trade" })), ("busy", json!({ "type": "deny", "point": "trade", "maps": [1], "message": "Not here." }))],
+    );
+    let refusal = zones.trade_request(1, 1, 2, now).expect("refused by a rule");
+    assert_eq!((&*refusal.name, refusal.text.as_deref()), ("busy", Some("Not here.")));
+    assert_eq!(received(a_in), [tp::start(2, tp::START_BUSY)]);
+    assert!(received(b_in).is_empty() && !zones.trades.guard().busy(1));
+    // The same faction too, and the core's own refusal (oneself) says nothing more than START_BUSY.
+    assert!(zones.trade_request(1, 2, 3, now).is_some());
+    drain(b_in);
+    assert!(zones.trade_request(1, 2, 2, now).is_none(), "the core's check comes first");
+    assert_eq!(received(b_in), [tp::start(2, tp::START_BUSY)]);
+    assert!(received(c_in).is_empty());
+    // Elsewhere the deny does not hold.
+    put_rules(&zones, &[("busy", json!({ "type": "deny", "point": "trade", "maps": [2] }))]);
+    assert!(zones.trade_request(1, 2, 3, now).is_none());
+    assert_eq!(received(c_in), [tp::request(2)]);
 }
