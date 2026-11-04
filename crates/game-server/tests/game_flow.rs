@@ -4114,7 +4114,7 @@ async fn reload_puts_new_drops_in_force_and_a_failed_one_changes_nothing() {
     *backend.next_live.guard() = Some(Ok(reloaded(drops, MobAttack::default(), 120)));
     let answer = run("reload").await;
     assert_eq!(answer.len(), 1);
-    assert!(answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets ("), "{answer:?}");
+    assert!(answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets, 3 rules ("), "{answer:?}");
     assert_eq!(ctx.data.live().mobs.get(1).unwrap().drops[1], (7, 100));
     assert_eq!(before.mobs.get(1).unwrap().drops[1], (0, 0));
 
@@ -4659,4 +4659,73 @@ async fn an_exp_rule_changes_the_experience_on_its_map_only() {
     assert_eq!(exp_for_the_first_monster(&half).await, cp::exp_gain(72, 0));
     let quests_only = [("q", serde_json::json!({ "type": "exp", "factor": 0, "sources": ["quest"] }))];
     assert_eq!(exp_for_the_first_monster(&quests_only).await, cp::exp_gain(144, 0), "a monster is not a quest");
+}
+
+#[tokio::test]
+async fn reload_puts_new_rules_in_force_and_a_broken_one_changes_nothing() {
+    use game_server::game_log::Header;
+    use game_server::mobs::MobAttack;
+    use game_server::rules::RuleSources;
+    use shaiya_proto::combat as cp;
+    let path = std::env::temp_dir().join(format!("reload-rules-{:08x}.toml", rand::random::<u32>()));
+    std::fs::write(&path, "# no rules yet\n").unwrap();
+    let backend = Arc::new(MemoryBackend::default());
+    let config = Config { config_path: Some(path.to_str().unwrap().to_owned()), ..config(true) };
+    let (addr, ctx) = start_with(backend.clone(), config).await;
+    let (mut alice, alice_id, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 1]).await;
+    let run = |line: &'static str| {
+        let ctx = ctx.clone();
+        async move { game_server::server::console::line(&ctx, line, "test", Header::none(), 0).await }
+    };
+    let aim = shaiya_proto::encode(cp::OP_ATTACK_USER, &bob_id.to_le_bytes());
+    let marker = shaiya_proto::encode(w::OP_USER_HP, &bob_id.to_le_bytes());
+
+    // Before any rule the two are enemies (a request would start the attack).
+    assert!(ctx.zones.may_attack_player(1, alice_id, bob_id, false));
+    assert_eq!(run("rules").await.len(), 3, "the three settings' rules");
+
+    // A rule written to the file: before `reload` nothing changes, after it the attack is refused with the rule's message.
+    std::fs::write(&path, "guild_party_size = 3\n[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nmessage = \"Not in the file.\"\n").unwrap();
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
+    // Not yet read: the same monsters, the same rules.
+    assert_eq!(ctx.zones.rules().len(), 3);
+    let answer = run("reload").await;
+    assert!(
+        answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets, 4 rules (")
+            && answer[0].ends_with("); settings changed in the file take effect at the next start: guild_party_size"),
+        "{answer:?}"
+    );
+    assert_eq!(ctx.config.guild_party_size, 7, "the setting was not taken");
+    let seen = answered_with(&mut alice, aim.clone(), &marker).await;
+    assert_eq!(whisper_texts(&seen), ["Not in the file."]);
+    let listed = run("rules").await;
+    assert!(listed[0].starts_with("safe deny file ") && listed.len() == 4, "{listed:?}");
+    assert!(listed[0].ends_with(" 1"), "one hit so far: {listed:?}");
+    assert!(listed.iter().any(|l| l.starts_with("setting.market_maps deny setting:market_maps ")), "{listed:?}");
+
+    // A broken rule fails the reload and changes nothing: not the rules, not the monsters.
+    let hp_before = ctx.data.live().mobs.get(1).unwrap().hp;
+    std::fs::write(&path, "\n[rules.safe]\ntype = \"level_gap\"\ngap = 0\n").unwrap();
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 5000)));
+    let answer = run("reload").await;
+    assert_eq!(answer, [format!("reload failed, nothing changed: {} line 4: rules.safe.gap: 0 is not 1 to 255", path.display())]);
+    assert_eq!(ctx.data.live().mobs.get(1).unwrap().hp, hp_before, "the monsters are as they were");
+    assert_eq!(ctx.zones.rules().len(), 4);
+    let seen = answered_with(&mut alice, aim.clone(), &marker).await;
+    assert!(!seen.contains(&cp::attack_start()), "the old rule still holds");
+
+    // The database's layer: the data editor's rule beats the file's of the same name; its change set is shown; a new rule may whisper
+    // at once.
+    std::fs::write(&path, "[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nmessage = \"Not in the file.\"\n").unwrap();
+    *backend.rule_layers.guard() = RuleSources {
+        editor: vec![("safe".into(), serde_json::json!({ "type": "deny", "point": "attack", "message": "From the editor." }), Some(3))],
+        ..RuleSources::default()
+    };
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
+    let answer = run("reload").await;
+    assert!(answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets, 4 rules ("), "{answer:?}");
+    let seen = answered_with(&mut alice, aim, &marker).await;
+    assert_eq!(whisper_texts(&seen), ["From the editor."]);
+    assert!(run("rules").await[0].starts_with("safe deny editor:3 "));
+    std::fs::remove_file(&path).unwrap();
 }

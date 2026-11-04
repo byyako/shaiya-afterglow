@@ -194,6 +194,10 @@ pub async fn apply_line(conn: &mut PgConnection, run: &mut Run<'_>, line: &Line)
     if line.target == crate::settings::TARGET {
         return crate::settings::apply_line(conn, run, line).await;
     }
+    // So is a rule's: its key is a name too (`docs/plans/ext-2-rules.md` section 4.5).
+    if line.target == crate::rules::TARGET {
+        return crate::rules::apply_line(conn, run, line).await;
+    }
     let t = user(registry::target(&line.target))?;
     let key = user(t.parse_key(&line.key))?;
     let key_text = format_key(&key);

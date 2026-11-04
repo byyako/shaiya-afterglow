@@ -67,6 +67,7 @@ fn kind_json(kind: Kind) -> Value {
         Kind::Mobs { first_required } => json!({"type": "mobs", "first_required": first_required}),
         Kind::Spots => json!({"type": "spots"}),
         Kind::Setting => json!({"type": "setting"}),
+        Kind::Rule => json!({"type": "rule"}),
     }
 }
 

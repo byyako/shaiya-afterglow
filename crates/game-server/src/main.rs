@@ -138,6 +138,7 @@ async fn main() -> Result<()> {
         None
     };
     let mut ctx = Context::new(config, backend, data);
+    ctx.set_settings(&settings);
     if let Some(game_log) = game_log {
         ctx.set_game_log(game_log);
     }

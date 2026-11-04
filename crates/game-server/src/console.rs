@@ -24,8 +24,11 @@ pub enum Command {
     QuitCancel,
     /// `restart [minutes]`: the `quit` countdown, then the process ends with `RESTART_STATUS` so that its supervisor starts it again.
     Restart(Option<u32>),
-    /// `reload`: the monsters and drop tables read again from the database (`docs/plans/done/data-editing.md` section 7).
+    /// `reload`: the monsters and drop tables, and the rules, read again (`docs/plans/done/data-editing.md` section 7,
+    /// `docs/plans/ext-2-rules.md` section 4.6).
     Reload,
+    /// `rules`: the rules in force with how often each matched (`docs/plans/ext-2-rules.md` section 4.7).
+    Rules,
     AllOut,
     Close,
     Open,
@@ -49,7 +52,7 @@ struct Entry {
     example: &'static str,
 }
 
-const TABLE: [Entry; 17] = [
+const TABLE: [Entry; 18] = [
     Entry { word: "help", usage: "help [command]", sentence: "lists the commands, or tells how one is used.", example: "help kick" },
     Entry {
         word: "info",
@@ -78,8 +81,14 @@ const TABLE: [Entry; 17] = [
     Entry {
         word: "reload",
         usage: "reload",
-        sentence: "reloads the monsters and the drops from the database: drops, gold and monster stats change at once.",
+        sentence: "reloads the monsters, the drops and the rules: drops, gold, monster stats and rules change at once.",
         example: "reload",
+    },
+    Entry {
+        word: "rules",
+        usage: "rules",
+        sentence: "lists the rules in force: name, type, where from, and how often each matched since the start or the last reload.",
+        example: "rules",
     },
     Entry { word: "allout", usage: "allout", sentence: "disconnects every player, saved; the server keeps running.", example: "allout" },
     Entry { word: "close", usage: "close", sentence: "stops new logins to this server (as /server off).", example: "close" },
@@ -213,6 +222,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
             _ => bad(),
         },
         "reload" if rest.is_empty() => Ok(Command::Reload),
+        "rules" if rest.is_empty() => Ok(Command::Rules),
         "allout" if rest.is_empty() => Ok(Command::AllOut),
         "close" if rest.is_empty() => Ok(Command::Close),
         "open" if rest.is_empty() => Ok(Command::Open),
@@ -285,6 +295,7 @@ mod tests {
             ("restart", Command::Restart(None)),
             (".restart 15", Command::Restart(Some(15))),
             ("reload", Command::Reload),
+            (".rules", Command::Rules),
             ("allout", Command::AllOut),
             ("close", Command::Close),
             ("open", Command::Open),
@@ -347,6 +358,7 @@ mod tests {
             "restart 1 2",
             "restart cancel",
             "reload now",
+            "rules now",
             "notice",
             "info now",
             "close now",
@@ -364,7 +376,7 @@ mod tests {
     #[test]
     fn help_lists_every_command_and_explains_each() {
         let all = help();
-        assert_eq!(all.len(), 17);
+        assert_eq!(all.len(), 18);
         assert!(all.contains(&"exp <factor> | exp off".to_owned()));
         let lines = help_for("exp").unwrap();
         assert_eq!(lines[0], "usage: exp <factor> | exp off");

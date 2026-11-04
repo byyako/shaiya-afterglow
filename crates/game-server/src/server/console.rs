@@ -41,6 +41,7 @@ async fn carry_out<S: Backend>(ctx: &Context<S>, command: Command) -> Vec<String
         Command::Quit(minutes) => vec![quit(ctx, console::quit_duration(minutes), false)],
         Command::Restart(minutes) => vec![quit(ctx, console::quit_duration(minutes), true)],
         Command::Reload => vec![reload(ctx).await],
+        Command::Rules => rules_answer(ctx),
         Command::QuitCancel => vec![quit_cancel(ctx).await],
         Command::AllOut => vec![format!("{} connections closed", ctx.online.kick_all(Kick::Operator { op: 0 }))],
         Command::Close => {
@@ -196,23 +197,60 @@ pub async fn countdown<S: Backend>(ctx: Arc<Context<S>>) {
     }
 }
 
-/// `reload` (`docs/plans/done/data-editing.md` section 7): the monsters and drop tables are read again and put in force together; on any
-/// error nothing is swapped. Living monsters keep what they were spawned with (the section 2 table of the plan says per field).
+/// `reload` (`docs/plans/done/data-editing.md` section 7, `docs/plans/ext-2-rules.md` section 4.6): the monsters and drop tables, the config
+/// file's rules and the database's rules (the enabled extensions' and the data editor's) are read again and put in force together;
+/// on any error nothing is swapped. Living monsters keep what they were spawned with (the section 2 table of the plan says per field).
+/// The settings are not taken: one whose value in the file differs from the value in force is named, and waits for the next start.
 async fn reload<S: Backend>(ctx: &Context<S>) -> String {
     let started = Instant::now();
-    match ctx.store.load_live(&ctx.data.skills).await {
-        Ok(live) => {
-            let (monsters, grades, box_sets) = (live.mobs.len(), live.drops.grade_count(), live.drops.box_count());
+    match read_everything(ctx).await {
+        Ok((live, rules, changed)) => {
+            let (monsters, grades, box_sets, rule_count) = (live.mobs.len(), live.drops.grade_count(), live.drops.box_count(), rules.len());
             ctx.data.set_live(live);
+            ctx.zones.set_rules(rules);
             let ms = started.elapsed().as_millis();
-            tracing::info!(monsters, grades, box_sets, ms, "monsters and drops reloaded");
-            format!("reloaded: {monsters} monsters, {grades} drop grades, {box_sets} box sets ({ms} ms)")
+            tracing::info!(monsters, grades, box_sets, rules = rule_count, ms, "monsters, drops and rules reloaded");
+            let mut answer = format!("reloaded: {monsters} monsters, {grades} drop grades, {box_sets} box sets, {rule_count} rules ({ms} ms)");
+            if !changed.is_empty() {
+                let names = changed.join(", ");
+                tracing::warn!(settings = %names, "settings changed in the file take effect at the next start");
+                answer.push_str(&format!("; settings changed in the file take effect at the next start: {names}"));
+            }
+            answer
         }
         Err(error) => {
             tracing::warn!(error = format!("{error:#}"), "reload failed; nothing changed");
             format!("reload failed, nothing changed: {error:#}")
         }
     }
+}
+
+/// Everything `reload` reads before it swaps anything: the live tables, the rules resolved over the config file and the database, and
+/// the settings whose value in the file is not the one in force.
+async fn read_everything<S: Backend>(ctx: &Context<S>) -> anyhow::Result<(crate::server::Live, crate::rules::RuleSet, Vec<String>)> {
+    let live = ctx.store.load_live(&ctx.data.skills).await?;
+    let file = crate::config::read_config_file(ctx.config.config_path.as_deref())?;
+    let mut sources = ctx.store.rule_layers().await?;
+    sources.file = file.as_ref().map(|f| crate::rules::RuleFile { path: f.path.clone(), rules: f.rules.clone() });
+    sources.setting_layers = ctx.rule_setting_layers.clone();
+    // The settings stay as they were at start, so the rules they make do too.
+    let (rules, _) = crate::rules::resolve(&ctx.config, &sources)?;
+    let changed = file
+        .iter()
+        .flat_map(|f| f.values.iter())
+        .filter(|(name, value, _)| ctx.settings_in_force.iter().find(|(n, _)| n == name).is_none_or(|(_, in_force)| in_force != value))
+        .map(|(name, _, _)| name.clone())
+        .collect();
+    Ok((live, rules, changed))
+}
+
+/// `rules`: one line per rule in force, `<name> <type> <where from> <hits>`.
+fn rules_answer<S>(ctx: &Context<S>) -> Vec<String> {
+    let list = ctx.zones.rules().list();
+    if list.is_empty() {
+        return vec!["no rules".to_owned()];
+    }
+    list.iter().map(|l| format!("{} {} {} {}", l.name, l.ty, l.short, l.hits)).collect()
 }
 
 /// `quit cancel` (an addition): the countdown stops, logins are accepted again if they were before.

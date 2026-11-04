@@ -153,6 +153,9 @@ pub enum Kind {
     /// A game setting's value as the text the server's parsers read (a string, number, boolean or list); whether the setting's own
     /// parser accepts it is checked with the key in hand (`crate::settings`).
     Setting,
+    /// A rule: a JSON object of its keys; whether the game server's parser accepts it is checked with the name in hand
+    /// (`crate::rules`).
+    Rule,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -263,6 +266,7 @@ static MOB_DROP_FIELDS: &[Field] = &[f("grade", Int2, Int(0, 1024), Live), f("dr
 static ITEM_GRADE_FIELDS: &[Field] = &[f("grade", Int2, Int(0, 1024), Live)];
 
 static SETTING_FIELDS: &[Field] = &[f("value", Sql::Text, Kind::Setting, Restart)];
+static RULE_FIELDS: &[Field] = &[f("rule", Sql::Text, Kind::Rule, Live)];
 
 static SPAWN_AREA_FIELDS: &[Field] = &[
     f("x1", Real, X, Restart),
@@ -529,6 +533,21 @@ static TARGETS: &[Target] = &[
         map_from: MapFrom::None,
         new_seq_from: 0,
     },
+    // The data editor's layer of the game server's rules (`docs/plans/ext-2-rules.md` section 4.5); keyed by name as `setting`, handled
+    // in `crate::rules`. Live: the console's `reload` puts it in force.
+    Target {
+        name: "rule",
+        side: Side::Content,
+        table: "rule_values",
+        key_names: &["name"],
+        key_cols: &["name"],
+        fields: RULE_FIELDS,
+        refused: &[("name", "the key")],
+        can_add: true,
+        can_remove: true,
+        map_from: MapFrom::None,
+        new_seq_from: 0,
+    },
 ];
 
 /// Every target, parents before their children (the order rows are added in).
@@ -588,13 +607,16 @@ impl Target {
         if self.name == "setting" {
             return crate::settings::key(text);
         }
+        if self.name == "rule" {
+            return crate::rules::key(text);
+        }
         self.parse_key(text).map(|k| format_key(&k))
     }
 
     /// Parses a text key (`2/57`). The `setting` target's key is a name and has no numbers: see [`Target::key_text`].
     pub fn parse_key(&self, text: &str) -> Check<Vec<i64>> {
-        if self.name == "setting" {
-            return Err(format!("the key of a setting is its name, not numbers (got {text:?})"));
+        if self.name == "setting" || self.name == "rule" {
+            return Err(format!("the key of a {} is its name, not numbers (got {text:?})", self.name));
         }
         let parts: Result<Vec<i64>, _> = text.split('/').map(|p| p.trim().parse::<i64>()).collect();
         let parts = parts.map_err(|_| format!("{} key {text:?} must be {} as numbers", self.name, self.key_names.join("/")))?;
@@ -841,6 +863,7 @@ impl Field {
                 Value::Array(out)
             }
             Kind::Setting => Value::String(crate::settings::value_text(value)?),
+            Kind::Rule => crate::rules::rule_object(value)?,
         };
         Ok(out)
     }
@@ -1115,7 +1138,8 @@ mod tests {
                 "obelisk_guard",
                 "boss_group",
                 "boss_follower",
-                "setting"
+                "setting",
+                "rule"
             ]
         );
         assert_eq!(children_of("spawn_area"), ["spawn_mob"]);

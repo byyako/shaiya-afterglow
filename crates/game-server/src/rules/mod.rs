@@ -161,6 +161,8 @@ pub struct RuleLine {
     pub name: Arc<str>,
     pub ty: &'static str,
     pub layer: String,
+    /// The layer without spaces (`RuleLayer::short`).
+    pub short: String,
     pub hits: u64,
 }
 
@@ -171,6 +173,7 @@ struct Meta {
     name: Arc<str>,
     ty: &'static str,
     layer: String,
+    short: String,
     text: Option<Arc<str>>,
     hits: AtomicU64,
 }
@@ -251,14 +254,15 @@ impl RuleSet {
     }
 
     /// Compiles the rules, given in the order of section 4.3 (the first is the strongest).
-    fn build(rules: Vec<(String, String, Draft)>) -> Self {
+    fn build(rules: Vec<(String, RuleLayer, Draft)>) -> Self {
         let mut set = Self::default();
         for (name, layer, draft) in rules {
             let meta = Arc::new(Meta {
                 id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
                 name: Arc::from(name),
                 ty: draft.kind.type_name(),
-                layer,
+                layer: layer.to_string(),
+                short: layer.short(),
                 text: draft.text.clone(),
                 hits: AtomicU64::new(0),
             });
@@ -290,7 +294,7 @@ impl RuleSet {
         for (name, value) in rules {
             check_name(name).map_err(|e| anyhow::anyhow!("rules.{name}: {e}"))?;
             match parse::parse(value) {
-                Ok(parse::Parsed::Rule(draft)) if draft.enabled => compiled.push(((*name).to_owned(), "given".to_owned(), draft)),
+                Ok(parse::Parsed::Rule(draft)) if draft.enabled => compiled.push(((*name).to_owned(), RuleLayer::File, draft)),
                 Ok(parse::Parsed::Rule(_)) => {}
                 Ok(parse::Parsed::TurnOff) => anyhow::bail!("rules.{name}: a rule needs a type"),
                 Err(e) => anyhow::bail!("{}", e.describe(name)),
@@ -310,7 +314,7 @@ impl RuleSet {
 
     /// The rules in force in order, with their hits since this set was built.
     pub fn list(&self) -> Vec<RuleLine> {
-        self.all.iter().map(|m| RuleLine { name: m.name.clone(), ty: m.ty, layer: m.layer.clone(), hits: m.hits.load(Ordering::Relaxed) }).collect()
+        self.all.iter().map(|m| RuleLine { name: m.name.clone(), ty: m.ty, layer: m.layer.clone(), short: m.short.clone(), hits: m.hits.load(Ordering::Relaxed) }).collect()
     }
 
     /// Point 1: whether `attacker` may not attack `target` on `map` (both players, enemies by faction). The first refusing rule.

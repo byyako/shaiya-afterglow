@@ -196,6 +196,10 @@ pub struct Context<S> {
     pub test_panic: std::sync::atomic::AtomicU32,
     /// The countdown that ended was a `restart`: `main` exits with `console::RESTART_STATUS` after shutting down.
     pub restart: AtomicBool,
+    /// The settings as they were resolved at start, by name and text, and the layer each of the three folded settings came from: what
+    /// `reload` compares the config file with, and puts on the rules the settings make (`docs/plans/ext-2-rules.md` section 4.6).
+    pub settings_in_force: Vec<(String, String)>,
+    pub rule_setting_layers: Vec<(String, String)>,
 }
 
 impl<S> Context<S> {
@@ -203,6 +207,16 @@ impl<S> Context<S> {
     pub fn set_game_log(&mut self, log: crate::game_log::GameLog) {
         self.zones.set_game_log(log.clone());
         self.game_log = log;
+    }
+
+    /// Remembers the settings as resolved at start (see `settings_in_force`).
+    pub fn set_settings(&mut self, resolved: &[crate::config::Resolved]) {
+        self.settings_in_force = resolved.iter().map(|r| (r.name.to_owned(), r.value.clone())).collect();
+        self.rule_setting_layers = resolved
+            .iter()
+            .filter(|r| matches!(r.name, "cross_faction_trade_maps" | "market_maps" | "trade_chat_min_level"))
+            .map(|r| (r.name.to_owned(), r.layer.to_string()))
+            .collect();
     }
 
     pub fn new(config: Config, store: S, data: GameData) -> Self {
@@ -244,6 +258,8 @@ impl<S> Context<S> {
             saves: Mutex::new(None),
             test_panic: std::sync::atomic::AtomicU32::new(0),
             restart: AtomicBool::new(false),
+            settings_in_force: Vec::new(),
+            rule_setting_layers: Vec::new(),
         }
     }
 }

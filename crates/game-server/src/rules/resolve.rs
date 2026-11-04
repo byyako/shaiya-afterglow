@@ -36,6 +36,20 @@ impl RuleLayer {
     }
 }
 
+impl RuleLayer {
+    /// The layer in a word or two without spaces, for the console's one-line answers: `file`, `editor:12`, `extension:pets`,
+    /// `setting:market_maps`.
+    pub fn short(&self) -> String {
+        match self {
+            RuleLayer::Setting(name, _) => format!("setting:{name}"),
+            RuleLayer::Extension(name) => format!("extension:{name}"),
+            RuleLayer::File => "file".to_owned(),
+            RuleLayer::Editor(Some(change_set)) => format!("editor:{change_set}"),
+            RuleLayer::Editor(None) => "editor".to_owned(),
+        }
+    }
+}
+
 impl fmt::Display for RuleLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -194,7 +208,7 @@ pub fn resolve(config: &Config, sources: &RuleSources) -> Result<(RuleSet, Vec<R
     let mut compiled = Vec::new();
     for slot in slots {
         if slot.draft.enabled {
-            compiled.push((slot.name.clone(), slot.layer.to_string(), slot.draft));
+            compiled.push((slot.name.clone(), slot.layer.clone(), slot.draft));
             resolved.push(ResolvedRule { name: slot.name, layer: slot.layer, value: slot.value, state: RuleState::InForce });
         } else {
             resolved.push(ResolvedRule { name: slot.name, layer: slot.layer, value: slot.value, state: RuleState::Disabled });

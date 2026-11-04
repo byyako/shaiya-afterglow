@@ -57,6 +57,7 @@ pub async fn apply_all(conn: &mut PgConnection, s: &Schemas) -> Result<Report> {
     }
     // The settings' overrides live in `content`, which no load replaces: no marker, always written.
     crate::settings::apply_edits(conn, s, &mut report).await?;
+    crate::rules::apply_edits(conn, s, &mut report).await?;
     Ok(report)
 }
 
@@ -329,7 +330,7 @@ impl Editor {
     pub async fn revert_all(&self, conn: &mut PgConnection) -> Result<()> {
         let s = &self.s;
         let fields: Vec<(String, String, String, Value)> = sqlx::query_as(sql(format!(
-            "SELECT target, key, field, original FROM {}.fields WHERE original IS NOT NULL AND target <> 'setting' ORDER BY target, key, field",
+            "SELECT target, key, field, original FROM {}.fields WHERE original IS NOT NULL AND target NOT IN ('setting', 'rule') ORDER BY target, key, field",
             s.edits
         )))
         .fetch_all(&mut *conn)
@@ -347,7 +348,7 @@ impl Editor {
             }
         }
         let removed: Vec<Value> = sqlx::query_scalar(sql(format!(
-            "SELECT original FROM {}.rows WHERE action = 'remove' AND original IS NOT NULL AND target <> 'setting' ORDER BY target, key",
+            "SELECT original FROM {}.rows WHERE action = 'remove' AND original IS NOT NULL AND target NOT IN ('setting', 'rule') ORDER BY target, key",
             s.edits
         )))
         .fetch_all(&mut *conn)
@@ -370,6 +371,7 @@ impl Editor {
             }
         }
         crate::settings::revert(conn, s).await?;
+        crate::rules::revert(conn, s).await?;
         for schema in [&s.defs, &s.world] {
             sqlx::query(sql(format!("DROP TABLE IF EXISTS {schema}.edits_applied"))).execute(&mut *conn).await?;
         }

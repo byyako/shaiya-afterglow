@@ -573,6 +573,13 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             return refuse(format!("the setting {key} is set by the enabled extension {other} already; disable it or drop the setting from {name}"));
         }
     }
+    // Rules: each passes the server's parser and stands alone (a name without the extension's prefix, a whole rule).
+    for (rule_name, rule) in &m.rules {
+        if rule_name.contains('/') {
+            return refuse(format!("extension.toml [rules.{rule_name:?}]: an extension names its rules without a prefix (the server adds \"{name}/\")"));
+        }
+        game_server::rules::check_whole_rule(rule_name, rule).map_err(|e| crate::store::Refused(format!("extension.toml {e:#}")))?;
+    }
     // Ranges against the other installed extensions, enabled or not.
     for (kind, list) in [("item", &m.items), ("skill", &m.skills)] {
         for r in list {
@@ -636,7 +643,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .bind(&manifest_json)
             .execute(&mut *conn)
             .await?;
-        for table in ["ext_ranges", "ext_settings", "ext_client"] {
+        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client"] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
         }
     } else {
@@ -663,6 +670,9 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     }
     for (key, value) in &m.settings {
         sqlx::query(sql(format!("INSERT INTO {c}.ext_settings (extension, name, value) VALUES ($1, $2, $3)"))).bind(name).bind(key).bind(value).execute(&mut *conn).await?;
+    }
+    for (rule_name, rule) in &m.rules {
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_rules (extension, name, rule) VALUES ($1, $2, $3)"))).bind(name).bind(rule_name).bind(rule).execute(&mut *conn).await?;
     }
     for f in &m.features {
         sqlx::query(sql(format!("INSERT INTO {c}.ext_client (extension, kind, name) VALUES ($1, 'feature', $2)"))).bind(name).bind(f).execute(&mut *conn).await?;
@@ -768,7 +778,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
 
     // On top: the edits.
     let problems = rewrite_edits(conn, s).await?;
-    out.push(format!("{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings", m.settings.len()));
+    out.push(format!("{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings, {} rules", m.settings.len(), m.rules.len()));
     out.extend(shown);
     out.extend(warnings.into_iter().map(|w| format!("warning: {w}")));
     out.extend(problems);
@@ -794,6 +804,9 @@ fn next_steps(plan: &Plan, wrote_items_or_skills: bool, wrote_drops: bool, clien
     if client_rows {
         out.push("next: run tools/sdata/client_patch.py check, then generate a client patch".to_owned());
         out.push("      the players' clients show these items as ??? until they have a patch that carries them".to_owned());
+    }
+    if !plan.manifest.rules.is_empty() {
+        out.push("next: `console <server id> reload` puts its rules in force".to_owned());
     }
     if !plan.manifest.features.is_empty() {
         out.push(format!("the extension needs these fixes.dll features in the client: {}", plan.manifest.features.join(", ")));
@@ -948,6 +961,7 @@ impl Editor {
             sqlx::query(sql(format!("DROP SCHEMA IF EXISTS {schema} CASCADE"))).execute(&mut *tx).await?;
             lines.push(format!("dropped the schema {schema}"));
         }
+        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
         sqlx::query(sql(format!("DELETE FROM {c}.extensions WHERE name = $1"))).bind(name).execute(&mut *tx).await?;
         let problems = rewrite_edits(&mut tx, s).await?;
         log_entry(&mut tx, s, name, "remove", json!({"version": version, "rows": rows.iter().map(|(t, k, _)| format!("{t} {k}")).collect::<Vec<_>>(), "shipped_client_rows": shipped})).await?;
@@ -955,6 +969,9 @@ impl Editor {
         lines.insert(0, format!("removed {name} {version}: {} rows restored", rows.len()));
         lines.extend(problems);
         lines.push("next: restart the game servers".to_owned());
+        if rules > 0 {
+            lines.push("next: `console <server id> reload` takes its rules out of force".to_owned());
+        }
         if shipped > 0 {
             lines.push(format!("a client patch is due: {shipped} client rows were in an earlier patch and are gone now"));
         }
@@ -986,29 +1003,35 @@ impl Editor {
         }
         sqlx::query(sql(format!("UPDATE {c}.extensions SET enabled = $2 WHERE name = $1"))).bind(name).bind(enabled).execute(&mut *tx).await?;
         log_entry(&mut tx, s, name, if enabled { "enable" } else { "disable" }, json!({})).await?;
+        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
         tx.commit().await?;
-        Ok(vec![
-            format!("{name} {}: its settings defaults {}; its rows stay", if enabled { "enabled" } else { "disabled" }, if enabled { "count again" } else { "stop counting" }),
+        let mut out = vec![
+            format!("{name} {}: its settings defaults and rules {}; its rows stay", if enabled { "enabled" } else { "disabled" }, if enabled { "count again" } else { "stop counting" }),
             "next: restart the game servers".to_owned(),
-        ])
+        ];
+        if rules > 0 {
+            out.push(format!("next: `console <server id> reload` {} its rules", if enabled { "puts in force" } else { "takes out of force" }));
+        }
+        Ok(out)
     }
 
     /// `ext list`.
     pub async fn ext_list(&self) -> Result<Vec<String>> {
         let c = &self.s.content;
-        let rows: Vec<(String, String, bool, i64, i64, i64)> = sqlx::query_as(sql(format!(
+        let rows: Vec<(String, String, bool, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled, (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
                     (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
-                    (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
+                    (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name),
+                    (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
         )))
         .fetch_all(&self.pool)
         .await?;
         if rows.is_empty() {
             return Ok(vec!["no extensions installed".to_owned()]);
         }
-        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>9}", "name", "version", "state", "rows", "client", "settings")];
-        for (name, version, enabled, r, cl, se) in rows {
-            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {se:>9}", if enabled { "enabled" } else { "disabled" }));
+        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>9} {:>6}", "name", "version", "state", "rows", "client", "settings", "rules")];
+        for (name, version, enabled, r, cl, se, ru) in rows {
+            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {se:>9} {ru:>6}", if enabled { "enabled" } else { "disabled" }));
         }
         Ok(out)
     }
@@ -1031,6 +1054,10 @@ impl Editor {
         let settings: Vec<(String, String)> = sqlx::query_as(sql(format!("SELECT name, value FROM {c}.ext_settings WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
         for (k, v) in settings {
             out.push(format!("  setting {k} = {v:?}"));
+        }
+        let rules: Vec<(String, Value)> = sqlx::query_as(sql(format!("SELECT name, rule FROM {c}.ext_rules WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
+        for (rule_name, rule) in rules {
+            out.push(format!("  rule {name}/{rule_name} = {rule}"));
         }
         let rows: Vec<(String, String, String, Value)> = sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
         for (tbl, key, action, row) in rows {

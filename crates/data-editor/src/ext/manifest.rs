@@ -11,7 +11,7 @@ use super::ids::{self, IdRange};
 pub const FORMAT: i64 = 1;
 
 /// Keys that belong to later chunks: refused, so that an extension cannot rely on them being ignored.
-const RESERVED: &[&str] = &["options", "rules", "scripts", "api"];
+const RESERVED: &[&str] = &["options", "scripts", "api"];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Art {
@@ -29,6 +29,9 @@ pub struct Manifest {
     pub skills: Vec<IdRange>,
     /// Defaults for game settings, as the text the server's parsers read.
     pub settings: BTreeMap<String, String>,
+    /// The extension's rules (`docs/plans/ext-2-rules.md` section 4.4), by name without the extension's prefix, each as the JSON of its
+    /// table; the game server's parser checks them (`ext check`, `ext install`).
+    pub rules: BTreeMap<String, Value>,
     pub features: Vec<String>,
     pub art: Vec<Art>,
     /// The manifest as read, for `content.extensions.manifest`.
@@ -118,7 +121,7 @@ impl Manifest {
             }
             Some(other) => return Err(format!("`format` must be {FORMAT}, not {other}")),
         }
-        only_keys(&table, &["format", "name", "version", "title", "description", "authors", "license", "ids", "settings", "client"], "the manifest")?;
+        only_keys(&table, &["format", "name", "version", "title", "description", "authors", "license", "ids", "settings", "rules", "client"], "the manifest")?;
         let name = string(&table, "name", true)?.unwrap_or_default();
         if !valid_name(&name) {
             return Err(format!("name {name:?} must match ^[a-z][a-z0-9-]{{1,39}}$"));
@@ -151,6 +154,14 @@ impl Manifest {
             }
         }
 
+        let mut rules = BTreeMap::new();
+        if let Some(value) = table.get("rules") {
+            for (key, v) in value.as_table().ok_or("`rules` must be a table of tables, [rules.<name>]")? {
+                let rule = v.as_table().ok_or_else(|| format!("[rules.{key}] must be a table"))?;
+                rules.insert(key.clone(), serde_json::to_value(rule).map_err(|e| format!("[rules.{key}]: {e}"))?);
+            }
+        }
+
         let (mut features, mut art) = (Vec::new(), Vec::new());
         if let Some(value) = table.get("client") {
             let client = value.as_table().ok_or("`client` must be a table")?;
@@ -172,7 +183,7 @@ impl Manifest {
             }
         }
         let json = serde_json::to_value(&table).map_err(|e| e.to_string())?;
-        Ok(Manifest { name, version, title, description, items, skills, settings, features, art, json })
+        Ok(Manifest { name, version, title, description, items, skills, settings, rules, features, art, json })
     }
 }
 
@@ -207,6 +218,11 @@ kill_boost_skills = "200/1:2,200/2:5,200/3:10"
 guild_party_size = 2
 market_maps = [35, 36]
 
+[rules.no-pvp-gain]
+type = "pvp_gain"
+maps = [35, 36]
+exp = 0
+
 [client]
 features = ["a"]
 art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
@@ -221,6 +237,8 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
         assert_eq!(m.settings["kill_boost_skills"], "200/1:2,200/2:5,200/3:10");
         assert_eq!(m.settings["guild_party_size"], "2");
         assert_eq!(m.settings["market_maps"], "35,36", "a list is joined like the old variable's text");
+        assert_eq!(m.rules["no-pvp-gain"], serde_json::json!({ "type": "pvp_gain", "maps": [35, 36], "exp": 0 }));
+        assert_eq!(m.rules.len(), 1);
         assert_eq!(m.features, ["a"]);
         assert_eq!(m.art, [Art { member: "Item/Icon/x.dds".into(), file: "art/x.dds".into() }]);
         assert_eq!(m.json["name"], "kill-boost");
@@ -229,11 +247,12 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
     #[test]
     fn a_minimal_manifest_needs_only_the_required_keys() {
         let m = Manifest::parse("format = 1\nname = \"ab\"\nversion = \"0.1.0\"\ntitle = \"t\"\ndescription = \"d\"\n").unwrap();
-        assert!(m.items.is_empty() && m.skills.is_empty() && m.settings.is_empty());
+        assert!(m.items.is_empty() && m.skills.is_empty() && m.settings.is_empty() && m.rules.is_empty());
     }
 
     #[test]
     fn refusals_name_the_key() {
+        let no_rules = || GOOD.replace("\n[rules.no-pvp-gain]\ntype = \"pvp_gain\"\nmaps = [35, 36]\nexp = 0\n", "");
         let without = |line: &str| GOOD.lines().filter(|l| !l.starts_with(line)).collect::<Vec<_>>().join("\n");
         let cases: Vec<(String, &str)> = vec![
             (GOOD.replace("format = 1", "format = 2"), "format = 2: this data-editor reads format 1; it needs a newer data-editor"),
@@ -247,7 +266,8 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
             (GOOD.replace("1.0.0", "1.0"), "not a semantic version"),
             (format!("{GOOD}\nextra = 1\n").replace("[ids]", "extra = 1\n[ids]"), "unknown key `extra` in the manifest"),
             (GOOD.replace("[ids]", "options = 1\n[ids]"), "`options` is reserved for a later chunk"),
-            (GOOD.replace("[ids]", "rules = 1\n[ids]"), "`rules` is reserved for a later chunk"),
+            (no_rules().replace("[ids]", "rules = 1\n[ids]"), "`rules` must be a table of tables"),
+            (no_rules().replace("[ids]", "[rules]\nx = 1\n[ids]"), "[rules.x] must be a table"),
             (GOOD.replace("[ids]", "scripts = 1\n[ids]"), "`scripts` is reserved for a later chunk"),
             (GOOD.replace("[ids]", "api = 1\n[ids]"), "`api` is reserved for a later chunk"),
             (GOOD.replace("items = [", "monsters = [\"1\"]\nitems = ["), "unknown key `monsters` in [ids]"),

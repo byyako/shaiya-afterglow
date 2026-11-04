@@ -179,7 +179,14 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
         ("format 2", Folder::new().edit("extension.toml", "format = 1", "format = 2"), "needs a newer data-editor"),
         ("an unknown manifest key", Folder::new().edit("extension.toml", "[ids]", "extra = 1\n[ids]"), "unknown key `extra`"),
         ("options", Folder::new().edit("extension.toml", "[ids]", "options = 1\n[ids]"), "`options` is reserved for a later chunk"),
-        ("rules", Folder::new().edit("extension.toml", "[ids]", "rules = 1\n[ids]"), "`rules` is reserved for a later chunk"),
+        ("rules not a table", Folder::new().edit("extension.toml", "[ids]", "rules = 1\n[ids]"), "`rules` must be a table of tables"),
+        ("a rule that is not a table", Folder::new().append("extension.toml", "[rules]\nx = 1"), "[rules.x] must be a table"),
+        ("a rule with a bad key", Folder::new().append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 0"), "extension.toml rules.gap.gap: 0 is not 1 to 255"),
+        ("a rule with an unknown key", Folder::new().append("extension.toml", "[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nhour = 3"), "rules.safe: unknown key \"hour\""),
+        ("a rule with no type", Folder::new().append("extension.toml", "[rules.safe]\nmaps = [1]"), "rules.safe: a rule needs a type"),
+        ("a rule that only turns off", Folder::new().append("extension.toml", "[rules.safe]\nenabled = false"), "rules.safe: a rule needs a type"),
+        ("a rule with a prefix", Folder::new().append("extension.toml", "[rules.\"kb/safe\"]\ntype = \"deny\"\npoint = \"attack\""), "without a prefix"),
+        ("a rule named for a setting", Folder::new().append("extension.toml", "[rules.\"setting.market_maps\"]\ntype = \"deny\"\npoint = \"attack\""), "belong to the settings"),
         ("scripts", Folder::new().edit("extension.toml", "[ids]", "scripts = 1\n[ids]"), "`scripts` is reserved for a later chunk"),
         ("api", Folder::new().edit("extension.toml", "[ids]", "api = 1\n[ids]"), "`api` is reserved for a later chunk"),
         ("type 101", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"101/5\""), "item type 101"),
@@ -376,7 +383,7 @@ async fn remove_restores_every_table_and_takes_the_added_rows_out() {
     assert!(has(&lines, "removed kb 1.0.0: 7 rows restored") && has(&lines, "restart the game servers"), "{lines:#?}");
     assert_eq!(before, hashes(&db).await, "every table is as it was before the install");
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.items WHERE itemid = 100215", db.s.defs)).await, 0, "the added row is gone");
-    for table in ["extensions", "ext_rows", "ext_ranges", "ext_settings", "client_items", "client_skills", "server_only"] {
+    for table in ["extensions", "ext_rows", "ext_ranges", "ext_settings", "ext_rules", "client_items", "client_skills", "server_only"] {
         assert_eq!(count_in_content(&db, table).await, 0, "{table}");
     }
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.ext_log WHERE action IN ('install', 'remove')", db.s.content)).await, 2);
@@ -539,7 +546,7 @@ async fn disable_and_enable_flip_the_flag_and_leave_the_rows() {
     install(&db, &Folder::new()).await;
     let rows = hashes(&db).await;
     let lines = db.editor.ext_set_enabled("kb", false).await.unwrap();
-    assert!(has(&lines, "kb disabled: its settings defaults stop counting; its rows stay") && has(&lines, "restart the game servers"), "{lines:#?}");
+    assert!(has(&lines, "kb disabled: its settings defaults and rules stop counting; its rows stay") && has(&lines, "restart the game servers"), "{lines:#?}");
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.extensions WHERE NOT enabled", db.s.content)).await, 1);
     assert_eq!(rows, hashes(&db).await);
     assert_eq!(db.editor.ext_set_enabled("kb", false).await.unwrap(), ["kb is disabled already"]);
@@ -582,4 +589,68 @@ async fn the_builtin_group_counts_are_the_client_schemas_when_it_exists() {
     }
     let have: Vec<i64> = data_editor::ext::ids::ITEM_GROUP_RECORDS.iter().map(|&n| i64::from(n)).collect();
     assert_eq!(have, want, "ext/ids.rs ITEM_GROUP_RECORDS is not client.items' group sizes");
+}
+
+// ------------------------------------------------------------------------------------------------------------------------ rules
+
+const RULE_KB: &str = "[rules.no-gain]\ntype = \"pvp_gain\"\nmaps = [35, 36, 42]\nexp = 0\nkills = 0\ndeaths = false\n\n[rules.gap]\ntype = \"level_gap\"\ngap = 20\n";
+
+fn startup() -> game_server::config::Startup {
+    game_server::config::Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None }
+}
+
+/// What the game server reads of the rules from this database (the enabled extensions' and the editor's).
+async fn rule_layers(db: &Db) -> game_server::rules::RuleSources {
+    let mut conn = db.pool.acquire().await.unwrap();
+    game_server::config::read_rule_layers_in(&mut conn, &db.s.content, &db.s.edits).await.unwrap()
+}
+
+#[tokio::test]
+async fn an_extensions_rules_are_stored_resolved_and_follow_enable_upgrade_and_remove() {
+    let Some(db) = seeded(true).await else { return };
+    let f = Folder::new().append("extension.toml", RULE_KB);
+    let checked = db.editor.ext_check(f.path()).await.unwrap();
+    assert!(has(&checked, "2 rules"), "{checked:#?}");
+    assert_eq!(count_in_content(&db, "ext_rules").await, 0, "a check writes nothing");
+    let lines = install(&db, &f).await;
+    assert!(has(&lines, "6 client rows, 1 settings, 2 rules") && has(&lines, "`console <server id> reload` puts its rules in force"), "{lines:#?}");
+    assert_eq!(count_in_content(&db, "ext_rules").await, 2);
+    let stored = db.scalar(format!("SELECT rule AS v FROM {}.ext_rules WHERE extension = 'kb' AND name = 'gap'", db.s.content)).await;
+    assert_eq!(stored["v"], json!({ "type": "level_gap", "gap": 20 }));
+    let list = db.editor.ext_list().await.unwrap();
+    assert!(list[0].contains("rules") && list.iter().any(|l| l.starts_with("kb ") && l.trim_end().ends_with(" 2")), "{list:#?}");
+    let shown = db.editor.ext_show("kb").await.unwrap();
+    assert!(has(&shown, "rule kb/gap = ") && has(&shown, "rule kb/no-gain = "), "{shown:#?}");
+
+    // The server's resolve puts them in, named for the extension, in install order.
+    let sources = rule_layers(&db).await;
+    assert_eq!(sources.extensions.iter().map(|(e, n, _)| format!("{e}/{n}")).collect::<Vec<_>>(), ["kb/gap", "kb/no-gain"]);
+    let config = game_server::config::resolve(&startup(), &game_server::config::Sources::default()).unwrap().0;
+    let (set, all) = game_server::rules::resolve(&config, &sources).unwrap();
+    let names: Vec<String> = set.list().iter().map(|l| l.name.to_string()).collect();
+    assert_eq!(names, ["kb/gap", "kb/no-gain", "setting.trade_chat_min_level"]);
+    assert_eq!(set.list()[0].layer, "extension kb");
+    assert_eq!(all.len(), 3);
+
+    // Disabled, its rules do not count; enabled again they do.
+    let lines = db.editor.ext_set_enabled("kb", false).await.unwrap();
+    assert!(has(&lines, "its settings defaults and rules stop counting") && has(&lines, "`console <server id> reload` takes out of force its rules"), "{lines:#?}");
+    assert!(rule_layers(&db).await.extensions.is_empty());
+    assert_eq!(count_in_content(&db, "ext_rules").await, 2, "stored all the same");
+    db.editor.ext_set_enabled("kb", true).await.unwrap();
+    assert_eq!(rule_layers(&db).await.extensions.len(), 2);
+
+    // An upgrade replaces them whole.
+    let up = Folder::new().edit("extension.toml", "version = \"1.0.0\"", "version = \"1.1.0\"").append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 30\n");
+    db.editor.ext_upgrade(up.path()).await.unwrap();
+    let sources = rule_layers(&db).await;
+    assert_eq!(sources.extensions.len(), 1);
+    assert_eq!(sources.extensions[0].2, json!({ "type": "level_gap", "gap": 30 }));
+
+    // Removed, they go with it.
+    let lines = db.editor.ext_remove("kb", false, |_| Ok(true)).await.unwrap();
+    assert!(has(&lines, "`console <server id> reload` takes its rules out of force"), "{lines:#?}");
+    assert_eq!(count_in_content(&db, "ext_rules").await, 0);
+    assert!(rule_layers(&db).await.extensions.is_empty());
+    db.drop().await;
 }

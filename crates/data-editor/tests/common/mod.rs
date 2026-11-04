@@ -13,6 +13,7 @@ const DEFS_SCHEMA: &str = include_str!("../../../../db/defs/schema.sql");
 const WORLD_SCHEMA: &str = include_str!("../../../../db/world/schema.sql");
 const EDITS_MIGRATION: &str = include_str!("../../../../db/migrations/0030_data_edits.sql");
 const CONTENT_MIGRATION: &str = include_str!("../../../../db/migrations/0031_content.sql");
+const RULES_MIGRATION: &str = include_str!("../../../../db/migrations/0032_rules.sql");
 
 pub struct Db {
     pub pool: PgPool,
@@ -114,6 +115,7 @@ impl Db {
                 .replace("content.", &format!("{}.", s.content)),
         )
         .await;
+        run(&pool, RULES_MIGRATION.replace("content.", &format!("{}.", s.content))).await;
         let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s, pub_schema: full.then_some(pub_schema) };
         db.load(Files::default()).await;
         Some(db)

@@ -7,6 +7,7 @@ pub mod console;
 pub mod content;
 pub mod export;
 pub mod ext;
+pub mod rules;
 pub mod settings;
 pub mod images;
 pub mod registry;
