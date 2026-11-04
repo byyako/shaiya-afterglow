@@ -208,6 +208,8 @@ database alone and the Kill Boost Stone works as before.
 
 ### 7.2 Chunk 2, rules and hooks
 
+**Specified** 2026-11-04 (`docs/plans/ext-2-rules.md`, the maintainer's decisions in its section 1); not built.
+
 **Needs**: chunk 1 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `crates/game-server/src/config.rs` and `switches.rs`,
 `docs/original/operator-console.md`, `docs/plans/done/data-editing.md` (the edits layer and the registry the rules plug into), and the
 code and documents of the places the reference rules touch: kills and experience (`docs/original/combat.md`, `pvp.rs`, `server/pvp.rs`,
