@@ -1,0 +1,53 @@
+format = 1
+name = "monster-madness"
+version = "1.0.0"
+title = "Monster madness"
+description = "Staff start a swarm of monsters around them with !madness, for a while; an item may start one too."
+license = "MIT"
+api = 1
+scripts = ["main.lua"]
+
+[options.mobs]
+type = "integers"
+default = []
+doc = "The monster ids !madness may name; empty for any monster."
+
+[options.max_alive]
+type = "integer"
+default = 100
+min = 1
+max = 300
+doc = "The most monsters of the extension alive at once."
+
+[options.max_minutes]
+type = "integer"
+default = 30
+min = 1
+max = 60
+doc = "The longest a madness may last, minutes."
+
+[options.item]
+type = "string"
+default = ""
+doc = "An item as type/type_id that starts a madness around its user when used; empty for none."
+
+[options.item_mob]
+type = "integer"
+default = 1
+min = 1
+max = 65535
+doc = "The monster the item's madness spawns."
+
+[options.item_count]
+type = "integer"
+default = 20
+min = 1
+max = 300
+doc = "How many monsters the item's madness spawns."
+
+[options.item_minutes]
+type = "integer"
+default = 5
+min = 1
+max = 60
+doc = "How long the item's madness lasts, minutes."

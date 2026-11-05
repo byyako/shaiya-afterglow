@@ -5225,3 +5225,219 @@ async fn a_point_handler_in_an_endless_loop_does_not_stop_the_players_action() {
     assert!(started.elapsed() < Duration::from_secs(2));
     assert_eq!(ctx.zones.ext_scripts().extensions()[0].fault_count(), 1);
 }
+
+// ------------------------------------------------------------------------------------------------ the bundled extensions (step 9)
+
+use game_server::script::event::{Job, Killer, MobInfo, Payload, PlayerRef};
+
+/// Loads the bundled extensions `(folder, option values as the data editor would hold them)` from `extensions/`, as `main` does.
+fn put_extensions(ctx: &TestContext, extensions: &[(&str, &[(&str, serde_json::Value)])]) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
+    let mut sources = ScriptSources::default();
+    for (folder, values) in extensions {
+        let manifest: toml::Table = toml::from_str(&std::fs::read_to_string(root.join(folder).join("extension.toml")).unwrap()).unwrap();
+        let manifest = serde_json::to_value(&manifest).unwrap();
+        let scripts: Vec<(String, String)> = manifest["scripts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| (p.as_str().unwrap().to_owned(), std::fs::read_to_string(root.join(folder).join(p.as_str().unwrap())).unwrap()))
+            .collect();
+        let options = manifest["options"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(key, spec)| (key.clone(), game_server::script::OptionSpec::parse(spec).unwrap()))
+            .collect();
+        sources.extensions.push(ScriptExtension { name: (*folder).to_owned(), scripts, options, globals: Vec::new() });
+        sources.installed.push(((*folder).to_owned(), true));
+        for (key, value) in *values {
+            sources.editor.push((format!("ext.{folder}.{key}"), value.to_string(), None));
+        }
+    }
+    let set = game_server::server::script::load_at_start(ctx, &sources).unwrap();
+    assert!(set.failed().is_empty(), "{:?}", set.failed());
+    ctx.start_scripts(set);
+}
+
+fn player_ref(id: u32, name: &str) -> PlayerRef {
+    PlayerRef { id, name: name.to_owned() }
+}
+
+fn pvp_kill(ctx: &TestContext, killer: (u32, &str), victim: (u32, &str)) {
+    let k = player_ref(killer.0, killer.1);
+    ctx.zones.script_job(Job::Event {
+        event: game_server::script::Event::PvpKill,
+        payload: Payload::PvpKill { killer: k.clone(), victim: player_ref(victim.0, victim.1), last_hit: None, near: vec![k] },
+    });
+}
+
+fn pvp_death(ctx: &TestContext, victim: (u32, &str), killer: (u32, &str)) {
+    ctx.zones.script_job(Job::Event {
+        event: game_server::script::Event::Death,
+        payload: Payload::Death { victim: player_ref(victim.0, victim.1), killer: Killer::Player(player_ref(killer.0, killer.1)), pvp: true },
+    });
+}
+
+/// Reads until the world notice with this text (within five seconds); the notices before it are other announcements.
+async fn world_notice(client: &mut Client, text: &str) {
+    let want = ap::world_notice(text).unwrap();
+    timeout(Duration::from_secs(5), async { while client.read().await.unwrap() != want {} }).await.unwrap_or_else(|_| panic!("the notice {text:?}"));
+}
+
+/// A staff member of `level` in the world, alone.
+async fn staff_in_world(backend: &Arc<MemoryBackend>, addr: SocketAddr, level: u8) -> (Client, u32) {
+    backend.add_session(7, StoredSession { privilege: level, ..session([5; 16], Some(SERVER_ID), LOCAL) });
+    backend.add_account(7, "gmboss", i16::from(level) * 16);
+    let mut client = Client::connect(addr).await;
+    client.enter(7, [5; 16]).await;
+    client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
+    client.write(create(0, 0, 0, b"Boss")).await;
+    client.read().await.unwrap();
+    let id = u32::from_le_bytes(client.read_list().await[4][1..5].try_into().unwrap());
+    client.write(g::char_id_request(g::OP_CHAR_SELECT, id)).await;
+    while frame::opcode(&client.read().await.unwrap()) != w::OP_CHAR_QUICK {}
+    client.write(shaiya_proto::encode(w::OP_USER_ENTER, &[])).await;
+    read_until(&mut client, shaiya_proto::combat::OP_RECOVER_SET).await;
+    (client, id)
+}
+
+/// Waits until `check` holds (within five seconds).
+async fn until(what: &str, mut check: impl FnMut() -> bool) {
+    timeout(Duration::from_secs(5), async { while !check() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.unwrap_or_else(|_| panic!("{what}"));
+}
+
+#[tokio::test]
+async fn the_kill_streak_extension_announces_pays_bounties_and_takes_players_gold() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_extensions(
+        &ctx,
+        &[("kill-streak", &[("bounty_from", serde_json::json!(2)), ("announce_at", serde_json::json!([2, 3])), ("repeat_secs", serde_json::json!(0)), ("player_bounty_min", serde_json::json!(100))])],
+    );
+    let (mut alice, alice_id, mut bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 1]).await;
+    let (a, b) = ((alice_id, "Alice"), (bob_id, "Bob"));
+    // Two kills in a row: the second reaches the announced length, with the server's bounty (from the second kill: 100,000 gold).
+    pvp_kill(&ctx, a, b);
+    pvp_kill(&ctx, a, b);
+    world_notice(&mut bob, "Alice has killed 2 players in a row! Bounty: 100000 gold").await;
+    // Alice dies to Bob: he takes the bounty, and the streak is told ended.
+    pvp_death(&ctx, a, b);
+    world_notice(&mut bob, "Bob ended Alice's streak of 2 and took the bounty of 100000 gold").await;
+    until("the gold arrives", || backend.stored(bob_id).unwrap().0 == 100_000).await;
+    // `!bounty`: the gold is taken at once, the notice names the total, and the next kill of the target pays it.
+    bob.write(say(chat::OP_NORMAL, b"!bounty Alice 500")).await;
+    world_notice(&mut alice, "Bob put 500 gold on Alice's head (500 in all)").await;
+    assert_eq!(backend.stored(bob_id).unwrap().0, 99_500);
+    bob.write(say(chat::OP_NORMAL, b"!bounty Alice 50")).await;
+    assert_eq!(next_server_whisper(&mut bob).await, "At least 100 gold.");
+    bob.write(say(chat::OP_NORMAL, b"!bounty Bob 500")).await;
+    assert_eq!(next_server_whisper(&mut bob).await, "Not on yourself.");
+    pvp_death(&ctx, a, b);
+    until("the placed gold is paid", || backend.stored(bob_id).unwrap().0 == 100_000).await;
+    // `!streak` and `!bounties`.
+    alice.write(say(chat::OP_NORMAL, b"!streak")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "Streak 0, best 2, bounty on you 0 gold");
+    alice.write(say(chat::OP_NORMAL, b"!bounties")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "No bounties.");
+    assert_eq!(ctx.zones.script_store().get_global("kill-streak", "bounty.1"), None);
+}
+
+#[tokio::test]
+async fn the_same_victim_within_repeat_secs_does_not_count() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_extensions(&ctx, &[("kill-streak", &[])]);
+    let (mut alice, alice_id, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 1]).await;
+    pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));
+    pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));
+    alice.write(say(chat::OP_NORMAL, b"!streak")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "Streak 1, best 1, bounty on you 0 gold", "the second kill of Bob within 600 s did not count");
+}
+
+#[tokio::test]
+async fn the_welcome_extension_welcomes_and_answers_its_commands() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_extensions(&ctx, &[("welcome", &[("text", serde_json::json!("Hello {name}, enjoy!"))]), ("kill-streak", &[])]);
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    assert_eq!(next_server_whisper(&mut client).await, "Hello Walker, enjoy!");
+    client.write(say(chat::OP_NORMAL, b"!help")).await;
+    // One message, cut into lines of 120 bytes.
+    let mut help = next_server_whisper(&mut client).await;
+    while !help.contains("!time - the server's local time") {
+        help.push_str(&next_server_whisper(&mut client).await);
+    }
+    assert!(help.starts_with("Commands: !bounties") && help.contains("!help - lists the commands you may use") && help.contains("!streak"), "{help}");
+    client.write(say(chat::OP_NORMAL, b"!online")).await;
+    assert_eq!(next_server_whisper(&mut client).await, "1 players online");
+    client.write(say(chat::OP_NORMAL, b"!time")).await;
+    assert!(next_server_whisper(&mut client).await.starts_with("Server time "));
+}
+
+#[tokio::test]
+async fn the_welcome_extensions_adverts_go_out_on_a_timer() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    // The shortest period the option allows is a minute: the timer is set; the test looks at it and runs it.
+    put_extensions(&ctx, &[("welcome", &[("adverts", serde_json::json!(["Vote for us", "Join the guild"])), ("advert_minutes", serde_json::json!(1))])]);
+    let ext = ctx.zones.ext_scripts().extensions()[0].clone();
+    assert_eq!(ext.timer_count(), 1);
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    let set = ctx.zones.ext_scripts();
+    game_server::script::runner::timers(&set, std::time::Instant::now() + Duration::from_secs(61));
+    assert_eq!(timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(), ap::world_notice("Vote for us").unwrap());
+    game_server::script::runner::timers(&set, std::time::Instant::now() + Duration::from_secs(130));
+    assert_eq!(timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(), ap::world_notice("Join the guild").unwrap());
+}
+
+#[tokio::test]
+async fn the_boss_rewards_extension_gives_each_player_near_a_boss_kill_its_reward() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_extensions(
+        &ctx,
+        &[("boss-rewards", &[("item", serde_json::json!("25/1")), ("item_count", serde_json::json!(2)), ("gold", serde_json::json!(300)), ("pvp_gold", serde_json::json!(40))])],
+    );
+    let (mut alice, alice_id, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    let boss = MobInfo { id: 1, uid: 9, name: String::new(), level: 50, map: 1, x: 1.0, z: 2.0, boss: true, spawned: None };
+    ctx.zones.script_job(Job::Event {
+        event: game_server::script::Event::BossKill,
+        payload: Payload::Kill { p: player_ref(alice_id, "Alice"), mob: boss, near: vec![player_ref(alice_id, "Alice"), player_ref(bob_id, "Bob")] },
+    });
+    let notice = timeout(Duration::from_secs(5), read_op(&mut alice, ap::OP_NOTICE_WORLD)).await.expect("the announcement");
+    assert_eq!(notice, ap::world_notice("Alice, Bob defeated boss 1!").unwrap());
+    let potions = |id| backend.stored(id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>();
+    until("the rewards", || backend.stored(alice_id).unwrap().0 == 1300 && potions(alice_id) == 12 && potions(bob_id) == 12).await;
+    // A player kill shares its gold with the players it was shared with.
+    pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));
+    until("the kill's gold", || backend.stored(alice_id).unwrap().0 == 1340).await;
+}
+
+#[tokio::test]
+async fn the_monster_madness_extension_spawns_around_staff_and_stops() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_extensions(&ctx, &[("monster-madness", &[])]);
+    let (mut gm, _) = staff_in_world(&backend, addr, 1).await;
+    gm.write(say(ap::OP_CHAT_NORMAL, b"!madness")).await;
+    assert!(next_server_whisper(&mut gm).await.starts_with("Usage: !madness"));
+    gm.write(say(ap::OP_CHAT_NORMAL, b"!madness 1 8 5")).await;
+    let notice = timeout(Duration::from_secs(5), read_op(&mut gm, ap::OP_NOTICE_ZONE)).await.expect("the zone is told");
+    assert_eq!(notice, ap::notice(ap::OP_NOTICE_ZONE, b"8 monsters appear! They stay for 5 minutes.\0"));
+    assert_eq!(ctx.zones.ext_spawn_count("monster-madness"), 8);
+    gm.write(say(ap::OP_CHAT_NORMAL, b"!madness stop")).await;
+    let notice = timeout(Duration::from_secs(5), read_op(&mut gm, ap::OP_NOTICE_ZONE)).await.expect("the end");
+    assert_eq!(notice, ap::notice(ap::OP_NOTICE_ZONE, b"The madness is over: 0 monsters fell before it was stopped.\0"));
+    until("the monsters are gone", || ctx.zones.ext_alive("monster-madness", &(1..=50).collect::<Vec<u32>>()) == 0).await;
+    // A player (not staff) typing it gets a line of chat, not a command.
+    let backend2 = Arc::new(MemoryBackend::default());
+    let (addr2, ctx2) = start(backend2.clone(), true).await;
+    put_extensions(&ctx2, &[("monster-madness", &[])]);
+    let (mut alice, alice_id, mut bob, _) = two_in_the_world_of(&backend2, addr2, false, [0, 0]).await;
+    alice.write(say(chat::OP_NORMAL, b"!madness 1 5 5")).await;
+    assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, b"!madness 1 5 5\0"));
+    assert_eq!(ctx2.zones.ext_spawn_count("monster-madness"), 0);
+}

@@ -1,0 +1,53 @@
+format = 1
+name = "kill-streak"
+version = "1.0.0"
+title = "Kill streaks and bounties"
+description = "Announces player-kill streaks, puts a growing bounty on a streaker and lets players add gold to a bounty."
+license = "MIT"
+api = 1
+scripts = ["main.lua"]
+
+[options.maps]
+type = "maps"
+default = []
+doc = "Where kills count for a streak and bounties are paid; empty for every map."
+
+[options.announce_at]
+type = "integers"
+default = [5, 10, 15, 20, 25]
+doc = "Streak lengths announced to everyone."
+
+[options.bounty_from]
+type = "integer"
+default = 5
+min = 1
+max = 1000
+doc = "The streak from which the server puts a bounty on the killer."
+
+[options.bounty_gold]
+type = "integer"
+default = 100000
+min = 0
+max = 100000000
+doc = "Gold the server puts on a streaker's head for each kill from bounty_from on."
+
+[options.bounty_cap]
+type = "integer"
+default = 10000000
+min = 0
+max = 2000000000
+doc = "The most gold the server's bounty on one player comes to."
+
+[options.player_bounty_min]
+type = "integer"
+default = 10000
+min = 1
+max = 2000000000
+doc = "The least gold a player may add to a bounty with !bounty."
+
+[options.repeat_secs]
+type = "integer"
+default = 600
+min = 0
+max = 86400
+doc = "A kill of the same victim within this many seconds does not count (no farming a friend)."

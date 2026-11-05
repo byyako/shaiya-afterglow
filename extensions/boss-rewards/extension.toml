@@ -1,0 +1,54 @@
+format = 1
+name = "boss-rewards"
+version = "1.0.0"
+title = "Boss and player-kill rewards"
+description = "Gives the players near a boss kill an item, a buff and gold, and the same kind of reward for a player kill."
+license = "MIT"
+api = 1
+scripts = ["main.lua"]
+
+[options.item]
+type = "string"
+default = ""
+doc = "A boss kill's item as type/type_id (for example 25/1); empty for none."
+
+[options.item_count]
+type = "integer"
+default = 1
+min = 1
+max = 255
+doc = "How many of the item each player gets."
+
+[options.buff]
+type = "string"
+default = ""
+doc = "A boss kill's buff as skill/level (for example 223/1); empty for none."
+
+[options.gold]
+type = "integer"
+default = 0
+min = 0
+max = 2000000000
+doc = "A boss kill's gold for each player."
+
+[options.announce]
+type = "boolean"
+default = true
+doc = "Announce a boss kill to everyone."
+
+[options.pvp_item]
+type = "string"
+default = ""
+doc = "A player kill's item as type/type_id; empty for none."
+
+[options.pvp_gold]
+type = "integer"
+default = 0
+min = 0
+max = 2000000000
+doc = "A player kill's gold for each player the kill is shared with."
+
+[options.pvp_maps]
+type = "maps"
+default = []
+doc = "Where a player kill rewards; empty for every map."

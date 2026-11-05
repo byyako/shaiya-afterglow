@@ -1,0 +1,30 @@
+format = 1
+name = "welcome"
+version = "1.0.0"
+title = "Welcome notice, adverts and chat commands"
+description = "Welcomes a player at login, sends adverts on a timer, and answers !help, !online and !time."
+license = "MIT"
+api = 1
+scripts = ["main.lua"]
+
+[options.text]
+type = "string"
+default = "Welcome to the server, {name}!"
+doc = "The welcome shown at login; {name} is the character's name."
+
+[options.adverts]
+type = "strings"
+default = []
+doc = "Lines sent in turn every advert_minutes; none for no adverts."
+
+[options.advert_minutes]
+type = "integer"
+default = 30
+min = 1
+max = 1440
+doc = "Minutes between two adverts."
+
+[options.advert_kind]
+type = "string"
+default = "notice"
+doc = "How an advert is shown: notice (the world notice) or banner (the centre-screen line)."

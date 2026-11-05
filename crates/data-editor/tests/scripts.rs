@@ -290,3 +290,24 @@ async fn the_editor_sets_an_extensions_option_checked_against_its_spec() {
     assert!(report.problems.iter().any(|p| p.key == "ext.sx.text" && p.text.contains("has no option")), "{:?}", report.problems);
     db.drop().await;
 }
+
+/// `ext check`'s work that needs no database, on every folder of `extensions/`: the manifest, the rows and the dry run of the scripts.
+#[test]
+fn every_bundled_extension_passes_check() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
+    let mut scripted = Vec::new();
+    for entry in std::fs::read_dir(&root).unwrap() {
+        let dir = entry.unwrap().path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let plan = data_editor::ext::ops::read_folder(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+        assert!(dir.join("README.md").is_file(), "{} has a README", dir.display());
+        if let Some(summary) = &plan.summary {
+            assert!(summary.handlers() > 0, "{} registers something", plan.manifest.name);
+            scripted.push(plan.manifest.name.clone());
+        }
+    }
+    scripted.sort();
+    assert_eq!(scripted, ["boss-rewards", "kill-streak", "monster-madness", "welcome"]);
+}
