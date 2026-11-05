@@ -276,6 +276,8 @@ before; the client rows and the DLL feature request go to `docs/testing/client-r
 
 ### 7.5 Chunk 5, Lua
 
+**Specified** 2026-11-04 (`docs/plans/ext-5-lua.md`, the maintainer's decisions in its section 1); not built.
+
 **Needs**: chunk 2 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`, the way the server runs the
 original's monster scripts (`mob_lua.rs`, `zone/lua.rs`, `docs/original/instances.md` sections 9 to 15), the `mlua` version and features in
 `crates/game-server/Cargo.toml`, and entries 11 c and 12 g of `docs/testing/client-research-queue.md` with their answers.

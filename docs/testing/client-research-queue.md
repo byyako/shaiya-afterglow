@@ -13,6 +13,19 @@ it in the server spec it names.
    target is a player.** From `docs/original/thorns-fields-pvp.md` section 9. The original sends exactly this, so it should work; the
    live test (section 46) shows it. Client side, only if the live test looks wrong: the `0x0513` handler's use of the skill kind, whether
    it subtracts the HP shown from the target's bar or waits for another packet, and the effect it plays.
+22. **How server texts from scripts read in the client** (asked 2026-11-04 by `docs/plans/ext-5-lua.md` sections 7.4 and 12, for the welcome
+    notice, adverts, kill-streak announcements). For each of `F106` (world notice), the GM's to-one notice (`NoticeKind::To`), the country
+    and zone notices, and `0x1108` (the centre-screen "[chatting all members]" line): the longest text shown on one line, whether and how it
+    wraps or is cut, the sound, how long it stays; for `0x1108`, whether the sender name may be any text (and what an empty one shows),
+    and whether a player who blocked that name misses it; whether several notices sent in the burst right after entering the world all
+    show. What it changes: the API's length limits and which packet each reference script uses. The live test (section 60) shows the
+    look in the meantime.
+23. **The feature handshake that entry 11 (c) found missing** (from `docs/plans/ext-5-lua.md` section 12): the opcode and format a
+    `fixes.dll` would send after `0x0201` naming the features it has (the research's cheapest way: one new client-to-server opcode), so
+    the server can tell a modified client from an unmodified one and `p:has_feature(name)` can answer. Client side: a design to agree with
+    the DLL work; the server then reads it (the original closes the connection on an unknown opcode; the server side checks what this
+    server does with one before relying on it). Until then
+    `has_feature` answers `false`.
 
 ## Answered
 
