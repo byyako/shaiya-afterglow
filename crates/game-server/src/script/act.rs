@@ -131,7 +131,7 @@ fn handles(lua: &Lua, views: &[PlayerView]) -> mlua::Result<Table> {
 }
 
 /// The arguments of an event as the handlers get them (section 5).
-pub fn event_args(lua: &Lua, payload: &super::event::Payload) -> mlua::Result<MultiValue> {
+pub fn event_args(lua: &Lua, world: &dyn ScriptWorld, payload: &super::event::Payload) -> mlua::Result<MultiValue> {
     use super::event::{Killer, Payload};
     let list = |ps: &[PlayerRef]| -> mlua::Result<Table> {
         let t = lua.create_table()?;
@@ -144,7 +144,9 @@ pub fn event_args(lua: &Lua, payload: &super::event::Payload) -> mlua::Result<Mu
         let t = lua.create_table()?;
         t.raw_set("id", m.id)?;
         t.raw_set("uid", m.uid)?;
-        t.raw_set("name", m.name.as_str())?;
+        // The zone does not know names; the world does.
+        let name = if m.name.is_empty() { world.mob_name(m.id).unwrap_or_default() } else { m.name.clone() };
+        t.raw_set("name", name)?;
         t.raw_set("level", m.level)?;
         t.raw_set("map", m.map)?;
         t.raw_set("x", m.x)?;
@@ -263,6 +265,60 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
         w.banner(&name, &text);
         Ok(())
     })?)?;
+
+    // Monsters (section 7.4): at most 50 a call and 300 alive per extension; they live `lifetime` seconds.
+    let (s, w) = (shared.clone(), world.clone());
+    game.set("spawn", lua.create_function(move |lua, (mob, count, map, x, z, opts): (Value, Value, Value, Value, Value, Option<Table>)| {
+        let num = |what: &str, v: &Value, low: f64, high: f64| -> mlua::Result<f64> {
+            let n = match v {
+                Value::Integer(i) => *i as f64,
+                Value::Number(n) if n.is_finite() => *n,
+                _ => return Err(script_error(lua, format!("game.spawn {what}: a number is wanted"))),
+            };
+            if n < low || n > high {
+                return Err(script_error(lua, format!("game.spawn {what}: from {low} to {high} is wanted (got {n})")));
+            }
+            Ok(n)
+        };
+        let mob_id = num("mob id", &mob, 1.0, 65535.0)? as u16;
+        let count = num("count", &count, 1.0, crate::zone::SPAWNS_PER_CALL as f64)? as usize;
+        let map = num("map", &map, 0.0, 65535.0)? as u16;
+        let (x, z) = (num("x", &x, -1.0e6, 1.0e6)? as f32, num("z", &z, -1.0e6, 1.0e6)? as f32);
+        let Some(opts) = opts else { return Err(script_error(lua, "game.spawn: the options table with lifetime (10 to 3600 seconds) is required")) };
+        let (mut radius, mut lifetime, mut exp, mut drops) = (10u32, None, true, true);
+        for pair in opts.pairs::<Value, Value>() {
+            let (key, value) = pair?;
+            match (&key, &value) {
+                (Value::String(k), v) if k.as_bytes() == b"radius" => radius = num("radius", v, 0.0, 50.0)? as u32,
+                (Value::String(k), v) if k.as_bytes() == b"lifetime" => lifetime = Some(num("lifetime", v, 10.0, 3600.0)? as u32),
+                (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"exp" => exp = *b,
+                (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"drops" => drops = *b,
+                _ => return Err(script_error(lua, "game.spawn: the options are radius, lifetime (required), exp and drops")),
+            }
+        }
+        let Some(lifetime) = lifetime else { return Err(script_error(lua, "game.spawn: lifetime (10 to 3600 seconds) is required")) };
+        let ids = w.spawn(&s.name, mob_id, count, map, x, z, radius, lifetime, exp, drops);
+        let list = lua.create_table()?;
+        for (i, id) in ids.iter().enumerate() {
+            list.raw_set(i + 1, *id)?;
+        }
+        Ok(list)
+    })?)?;
+    let uids = |lua: &Lua, what: &str, list: &Table| -> mlua::Result<Vec<u32>> {
+        let mut out = Vec::new();
+        for v in list.sequence_values::<Value>() {
+            match v? {
+                Value::Integer(i) if i >= 0 => out.push(i as u32),
+                Value::Number(n) if n >= 0.0 && n.fract() == 0.0 && n <= f64::from(u32::MAX) => out.push(n as u32),
+                _ => return Err(script_error(lua, format!("{what}: a list of the ids game.spawn gave"))),
+            }
+        }
+        Ok(out)
+    };
+    let (s, w) = (shared.clone(), world.clone());
+    game.set("despawn", lua.create_function(move |lua, list: Table| Ok(w.despawn(&s.name, &uids(lua, "game.despawn", &list)?)))?)?;
+    let (s, w) = (shared.clone(), world.clone());
+    game.set("alive", lua.create_function(move |lua, list: Table| Ok(w.alive(&s.name, &uids(lua, "game.alive", &list)?)))?)?;
 
     // The player handle.
     let reads = |name: &str, f: fn(&Lua, &PlayerView) -> mlua::Result<MultiValue>| -> mlua::Result<()> {

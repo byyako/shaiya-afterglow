@@ -164,6 +164,7 @@ pub(super) fn player_died(
     let (kind, killer) = recorded.unwrap_or(by);
     let mut loss = None;
     let mut counted = false;
+    let mut pvp_raised = false;
     let winner = super::duel::winner(players, victim, (kind, killer), flag);
     let defeat = winner.is_none() && super::guild_war::defeat(players, victim, (kind, killer), flag);
     // `m_nDropExp` −1: a duel's death, a guild war's, or the flag with a player of record in the zone (the victim itself included).
@@ -188,16 +189,23 @@ pub(super) fn player_died(
                 None => {
                     let _ = players[&killer].occupant.events.send(kill(None));
                     counted = true;
+                    zones.raise_pvp_kill(players, killer, victim, last_hit, &[killer]);
                 }
                 Some(share) => {
                     for m in share.near.iter().filter_map(|m| players.get(m)) {
                         let _ = m.occupant.events.send(kill(Some((share.size, share.union, share.max_level))));
                     }
                     counted = !share.near.is_empty();
+                    if counted {
+                        zones.raise_pvp_kill(players, killer, victim, last_hit, &share.near);
+                    }
                 }
             }
+            pvp_raised = counted;
         }
     }
+    // The scripts' `death`, after `pvp_kill` when there was one; queued here, run on the script thread (section 4.3).
+    zones.raise_death(players, victim, kind, killer, pvp_raised);
     let p = &players[&victim];
     let death = cp::death(victim, kind, killer);
     for other in players.values().filter(|o| Some(o.occupant.id) != skip && in_view(o.cell, p.cell)) {

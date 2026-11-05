@@ -55,6 +55,7 @@ mod trade;
 mod vehicle;
 
 pub use admin::{AdminOrder, BanKind, Bans, CureKind, usable_def};
+pub use script::{SPAWNS_ALIVE, SPAWNS_PER_CALL};
 pub use items::Member;
 use monsters::{
     fight_turn, find_target, go_home, mob_enter, mob_strike, mobs_in_view, paced_next, retarget, set_target, stop_moving, take_target,
@@ -714,6 +715,8 @@ pub struct Zones {
     script_jobs: OnceLock<crate::script::runner::Jobs>,
     /// The staff level each online staff member entered with, for `p:staff()`. A leaf lock.
     script_staff: Mutex<HashMap<u32, u8>>,
+    /// The monsters extensions spawned (`game.spawn`), by object id. A leaf lock, taken inside the zone's.
+    ext_spawns: Mutex<HashMap<u32, script::ExtSpawn>>,
 }
 
 /// A packet for the players within `range` of a spot.
@@ -1740,6 +1743,7 @@ impl Zones {
             scripts: std::sync::Arc::default(),
             script_jobs: OnceLock::new(),
             script_staff: Mutex::default(),
+            ext_spawns: Mutex::default(),
         }
     }
 
@@ -2054,7 +2058,13 @@ impl Zones {
             }
             // A party shares the kill among the members near the killer (`docs/original/party.md` sections 8 and 9).
             let share = if fair { self.kill_share(players, top) } else { None };
-            if let Some(p) = players.get(&top).filter(|_| fair) {
+            // The scripts' `kill` (and a boss's `boss_kill`): queued, never run here (`docs/plans/ext-5-lua.md` section 4.3).
+            if fair && players.contains_key(&top) {
+                let near: Vec<u32> = share.as_ref().map_or_else(|| vec![top], |s| s.near.clone());
+                self.raise_kill(players, top, mobs, mob_id, def.level, map, &near);
+            }
+            let (spawn_exp, spawn_drops) = self.spawn_gives(mob_id);
+            if let Some(p) = players.get(&top).filter(|_| fair && spawn_exp) {
                 match &share {
                     None => {
                         let _ = p.occupant.events.send(ZoneEvent::Kill { mob_id: kind, killer: hit.attacker });
@@ -2082,7 +2092,7 @@ impl Zones {
             let mut ground = self.ground.guard();
             let ground = ground.entry(map).or_default();
             let item_defs = loot.1;
-            let mut loot = if fair {
+            let mut loot = if fair && spawn_drops {
                 drops::roll(
                     def,
                     mob_id,
@@ -2578,6 +2588,7 @@ impl Zones {
                     p.send(&packet);
                 }
                 mobs.remove(mob.id);
+                self.forget_ext_spawn(mob.id);
                 removed += 1;
                 if Self::obelisk_body(mobs, &mob, defs, now, rand) || Self::boss_body(map, mobs, &mob, defs, now, rand) {
                     continue;

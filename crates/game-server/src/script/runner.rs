@@ -114,7 +114,7 @@ pub fn handle(set: &ScriptSet, store: &super::store::Store, job: Job) {
         Job::Event { event, payload } => {
             for ext in set.for_event(event) {
                 // A failure is counted and logged by the extension; the next one runs.
-                let _ = ext.call_built::<()>(event.name(), Limit::EVENT, |lua| act::event_args(lua, &payload));
+                let _ = ext.call_built::<()>(event.name(), Limit::EVENT, |lua| act::event_args(lua, &*ext.shared().world, &payload));
             }
         }
         Job::Command { extension, word, p, args } => {

@@ -4275,3 +4275,177 @@ fn trade_requests_ask_the_rules_after_the_cores_own_checks() {
     assert!(zones.trade_request(1, 2, 3, now).is_none());
     assert_eq!(received(c_in), [tp::request(2)]);
 }
+
+// ------------------------------------------------------------------------------------------ the scripts' events and spawns
+// (docs/plans/ext-5-lua.md section 12, step 7). The events are queued by the zone and run on the script thread, so the tests let a
+// script write what it saw into the extension's own stored values and wait for it.
+
+/// Starts the script thread over `zones` with one extension `w` running `source`, whose `note(text)` appends to the stored `log`.
+fn watch(zones: &Zones, source: &str) {
+    use crate::script::{ExtInput, LoadContext, ScriptSet};
+    zones.start_script_thread();
+    let ctx = LoadContext { store: Some(zones.script_store()), ..LoadContext::default() };
+    let prelude = "local function note(text) game.set('log', (game.get('log') or '') .. text .. ';') end\n";
+    let input = ExtInput { name: "w".into(), scripts: vec![("main.lua".into(), format!("{prelude}{source}"))], options: Vec::new() };
+    let set = ScriptSet::load(&[input], ctx, 16);
+    assert!(set.failed().is_empty(), "{:?}", set.failed());
+    zones.set_ext_scripts(set);
+}
+
+/// The script's log once it has `count` entries (within five seconds).
+fn logged(zones: &Zones, count: usize) -> Vec<String> {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let log = zones.script_store().get_global("w", "log").and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
+        let entries: Vec<String> = log.split(';').filter(|e| !e.is_empty()).map(str::to_owned).collect();
+        if entries.len() >= count || std::time::Instant::now() > until {
+            return entries;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn a_kill_queues_one_kill_event_with_the_party_near() {
+    use crate::combat::{self, Gear};
+    use crate::mobs::{MobDef, MobDefs, SpawnArea};
+    let mut world = World::build([(1, 2048)], &std::collections::HashSet::new(), []);
+    world.set_mob_data(
+        [(1, vec![0u8; 2048 * 2048 / 8])].into(),
+        [(1, vec![SpawnArea::new([100.0, 0.0, 105.0, 100.0, 0.0, 105.0], vec![(7, 1)])])].into(),
+    );
+    let defs = MobDefs::new([MobDef { id: 7, level: 4, hp: 30, size: 1, country: 2, respawn: Duration::from_secs(30), ..Default::default() }]);
+    let zones = Zones::new(&world, &defs);
+    let (a, _a_in, _) = member(1, 100.0, 100.0, 0, b"Alice", 10);
+    let (b, _b_in, _) = member(2, 100.0, 199.0, 0, b"Bob", 20);
+    let (c, _c_in, _) = member(3, 100.0, 201.0, 0, b"Carol", 12);
+    for o in [a, b, c] {
+        zones.enter(1, o);
+    }
+    watch(
+        &zones,
+        "game.on('kill', function(p, mob, near)
+           local names = {} for _, n in ipairs(near) do names[#names + 1] = n.name end
+           note('kill ' .. p.name .. ' ' .. mob.id .. ' ' .. mob.uid .. ' L' .. mob.level .. ' map ' .. mob.map .. ' boss ' .. tostring(mob.boss) .. ' near ' .. table.concat(names, ','))
+         end)
+         game.on('boss_kill', function() note('boss') end)",
+    );
+    let fighter = combat::player(10, [100, 10, 10, 10, 10, 0], &Gear { kind: Some(combat::MELEE), ..Default::default() });
+    let attack =
+        Attack { attacker: 1, country: 0, fighter: &fighter, kind: combat::MELEE, slack: 2.0, range: 0, rec: 0, cross_road: false };
+    let now = Instant::now();
+    // Alone: the near list is the killer.
+    zones.respawn(now, &world, &defs, &mut || 0);
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, 1, &attack, &defs, no_loot(), now, &mut || 0) else { panic!("a hit") };
+    assert!(killed);
+    // In a party of three with Carol too far: the members near.
+    join(&zones, 1, 2);
+    join(&zones, 1, 3);
+    let later = now + Duration::from_secs(60);
+    zones.remove_bodies(later, &defs, &mut || 0);
+    zones.respawn(later + Duration::from_secs(60), &world, &defs, &mut || 0);
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, 2, &attack, &defs, no_loot(), later, &mut || 0) else { panic!("a hit") };
+    assert!(killed);
+    assert_eq!(logged(&zones, 2), ["kill Alice 7 1 L4 map 1 boss false near Alice", "kill Alice 7 2 L4 map 1 boss false near Alice,Bob"]);
+    // Once per death: nothing else came.
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(logged(&zones, 3).len(), 2);
+}
+
+#[test]
+fn a_boss_groups_boss_queues_kill_then_boss_kill() {
+    let (world, defs) = boss_ground();
+    let zones = Zones::new(&world, &defs);
+    let (a, _a_in) = player(1, 100.0, 100.0);
+    zones.enter(1, a);
+    watch(&zones, "game.on('kill', function(p, mob) note('kill ' .. mob.id .. ' ' .. tostring(mob.boss)) end) game.on('boss_kill', function(p, mob) note('boss_kill ' .. mob.id) end)");
+    let t = Instant::now();
+    zones.respawn(t, &world, &defs, &mut || 0);
+    kill(&zones, 1, 1, &defs, t);
+    assert_eq!(logged(&zones, 2), ["kill 70 true", "boss_kill 70"]);
+}
+
+#[test]
+fn a_faction_kill_queues_pvp_kill_and_death_and_a_duels_death_only_death() {
+    // A player kill: Alice (country 0) kills Bob (country 1) with Fire Thorns.
+    let (zones, defs, _b_in, _a_ev) = thorns_ground(150);
+    edit(&zones, 1, |p| p.occupant.shape.name = b"Alice".to_vec());
+    edit(&zones, 2, |p| p.occupant.shape.name = b"Bob".to_vec());
+    watch(
+        &zones,
+        "game.on('pvp_kill', function(killer, victim, last, near) note('pvp ' .. killer.name .. '>' .. victim.name .. ' last ' .. tostring(last and last.name) .. ' near ' .. #near) end)
+         game.on('death', function(victim, by, killer, pvp) note('death ' .. victim.name .. ' ' .. by .. ' ' .. tostring(type(killer) == 'table' and killer.name or killer) .. ' ' .. tostring(pvp)) end)",
+    );
+    zones.keep_effects(Instant::now() + Duration::from_secs(3), &World::default(), &defs, no_loot(), &mut || 0);
+    assert_eq!(logged(&zones, 2), ["pvp Alice>Bob last Alice near 1", "death Bob player Alice true"]);
+
+    // A duel: the loser's death is a death and nothing else.
+    let (zones, mut inboxes, _events) = duel_ground();
+    edit(&zones, 2, |p| p.occupant.shape.name = b"Bob".to_vec());
+    edit(&zones, 3, |p| p.occupant.shape.name = b"Carol".to_vec());
+    duel_fight(&zones, &mut inboxes);
+    watch(&zones, "game.on('pvp_kill', function() note('pvp') end) game.on('death', function(victim, by, killer, pvp) note('death ' .. victim.name .. ' ' .. tostring(pvp)) end)");
+    let (_, _, defs) = fighting_ground();
+    assert!(matches!(strike(&zones, &defs, 2, &blows(20, 100), 3, false), AttackOutcome::Struck { killed: true, .. }));
+    assert_eq!(logged(&zones, 1), ["death Carol false"]);
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(logged(&zones, 2), ["death Carol false"], "no pvp_kill");
+}
+
+#[test]
+fn spawned_monsters_are_capped_tagged_expire_quietly_and_give_what_they_were_told_to() {
+    use crate::mobs::{MobDef, MobDefs, SpawnArea};
+    let mut world = World::build([(1, 2048)], &std::collections::HashSet::new(), []);
+    world.set_mob_data(
+        [(1, vec![0u8; 2048 * 2048 / 8])].into(),
+        [(1, vec![SpawnArea::new([100.0, 0.0, 105.0, 100.0, 0.0, 105.0], vec![(7, 1)])])].into(),
+    );
+    let defs = MobDefs::new([MobDef { id: 7, level: 1, hp: 30, size: 1, country: 2, money: 90, ..Default::default() }]);
+    let zones = Zones::new(&world, &defs);
+    let (a, mut a_in, mut a_ev) = member(1, 100.0, 100.0, 0, b"Alice", 10);
+    zones.enter(1, a);
+    drain(&mut a_in);
+    watch(&zones, "game.on('kill', function(p, mob) note('kill ' .. tostring(mob.spawned)) end)");
+    let now = Instant::now();
+    let life = Duration::from_secs(60);
+    let spawn = |count, gives| zones.ext_spawn("w", &world, &defs, 7, count, 1, [100.0, 0.0, 100.0], 10, life, gives, now, &mut || 5);
+    // 50 a call at most, 300 alive.
+    let first = spawn(80, (true, true));
+    assert_eq!(first.len(), 50, "50 a call");
+    for _ in 0..5 {
+        assert_eq!(spawn(50, (true, true)).len(), 50);
+    }
+    assert_eq!(zones.ext_spawn_count("w"), 300);
+    assert!(spawn(1, (true, true)).is_empty(), "300 alive");
+    assert_eq!(zones.ext_alive("w", &first), 50);
+    assert_eq!(zones.ext_alive("other", &first), 0, "its own only");
+    assert_eq!(zones.ext_despawn("other", &first, now), 0);
+    // Despawning is quiet: 0x0602 at the next body pass, nothing gained.
+    assert_eq!(zones.ext_despawn("w", &first[..10], now), 10);
+    assert_eq!(zones.ext_alive("w", &first), 40);
+    drain(&mut a_in);
+    assert_eq!(zones.remove_bodies(now, &defs, &mut || 0), 10);
+    assert!(drain(&mut a_in).iter().all(|(op, _)| *op == 0x0602));
+    assert_eq!(zones.ext_spawn_count("w"), 290);
+    assert!(a_ev.try_recv().is_err(), "no experience, no gold");
+    // Their lifetime: removed quietly when it ends.
+    assert_eq!(zones.expire_ext_spawns(now + Duration::from_secs(59)), 0);
+    assert_eq!(zones.expire_ext_spawns(now + Duration::from_secs(60)), 290);
+    assert_eq!(zones.remove_bodies(now + Duration::from_secs(61), &defs, &mut || 0), 290);
+    assert_eq!(zones.ext_spawn_count("w"), 0);
+    assert!(a_ev.try_recv().is_err());
+    // A kill of a spawned monster: the script's `kill` names the extension; no experience with exp = false, no gold with drops = false.
+    let quiet = spawn(1, (false, false));
+    let fighter = combat::player(10, [100, 10, 10, 10, 10, 0], &combat::Gear { kind: Some(combat::MELEE), ..Default::default() });
+    let attack = Attack { attacker: 1, country: 0, fighter: &fighter, kind: combat::MELEE, slack: 40.0, range: 0, rec: 0, cross_road: false };
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, quiet[0], &attack, &defs, no_loot(), now, &mut || 0) else { panic!("a hit") };
+    assert!(killed);
+    assert_eq!(logged(&zones, 1), ["kill w"]);
+    assert!(a_ev.try_recv().is_err(), "exp = false: no Kill event for the experience");
+    assert!(zones.ground.guard().get(&1).is_none_or(|g| g.items.is_empty()));
+    // The default gives both.
+    let normal = spawn(1, (true, true));
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, normal[0], &attack, &defs, no_loot(), now, &mut || 0) else { panic!("a hit") };
+    assert!(killed);
+    assert!(matches!(a_ev.try_recv().ok(), Some(ZoneEvent::Kill { mob_id: 7, .. })));
+}

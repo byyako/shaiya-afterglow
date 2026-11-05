@@ -133,6 +133,25 @@ pub(super) fn generate(
     now: Instant,
     rand: &mut impl FnMut() -> u32,
 ) -> (usize, u32) {
+    generate_around(zones, world, zone, mobs, players, def, spot, 10, count, now, rand, &mut Vec::new())
+}
+
+/// [`generate`] with the radius round the spot (10 is the original's) and the object ids of the monsters made handed back.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn generate_around(
+    zones: &Zones,
+    world: &World,
+    zone: u16,
+    mobs: &mut MobMap,
+    players: &HashMap<u32, Placed>,
+    def: &MobDef,
+    spot: [f32; 3],
+    radius: u32,
+    count: i64,
+    now: Instant,
+    rand: &mut impl FnMut() -> u32,
+    ids: &mut Vec<u32>,
+) -> (usize, u32) {
     let free =
         |p: [f32; 3]| world.is_safe_pos(zone, p) && !world.is_blocked(zone, p[0].round_ties_even() as i32, p[2].round_ties_even() as i32);
     let (mut tries, mut done, mut limit, mut made, mut last) = (0i64, 0i64, count, 0, 0);
@@ -141,8 +160,8 @@ pub(super) fn generate(
         if tries > count * 10 {
             break;
         }
-        let dx = (rand() % 20) as f32 - 10.0;
-        let dz = (rand() % 20) as f32 - 10.0;
+        // A radius of 0 puts every monster on the spot itself.
+        let (dx, dz) = if radius == 0 { (0.0, 0.0) } else { ((rand() % (2 * radius)) as f32 - radius as f32, (rand() % (2 * radius)) as f32 - radius as f32) };
         let mut at = [spot[0] + dx, spot[1], spot[2] + dz];
         if !free(at) {
             at = spot;
@@ -154,6 +173,7 @@ pub(super) fn generate(
         }
         let new = zones.new_mob(def, at, usize::MAX, mobs::Origin::Area, now, rand);
         mobs.insert(new);
+        ids.push(new.id);
         let packets = mob_enter(&new, true);
         for p in players.values().filter(|p| in_view(p.cell, new.cell)) {
             packets.iter().for_each(|packet| p.send(packet));

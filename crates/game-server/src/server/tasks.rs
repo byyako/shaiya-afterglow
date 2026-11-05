@@ -474,6 +474,8 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
         ctx.zones.lua(now, &ctx.data.world, &live.mobs, loot, &mut rand);
         ctx.zones.fields(now, &ctx.data.world, &live.mobs, loot, &mut rand);
         ctx.zones.recover(now, &live.mobs, loot, &mut rand);
+        // The monsters scripts spawned go when their time is over, quietly (the bodies pass takes them away).
+        ctx.zones.expire_ext_spawns(now);
         ctx.zones.remove_bodies(now, &live.mobs, &mut rand);
         ctx.zones.expire_items(now);
         ctx.zones.expire_invites(now);

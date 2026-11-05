@@ -99,6 +99,50 @@ impl<S: Backend> ScriptWorld for ContextWorld<S> {
         }
     }
 
+    fn spawn(&self, extension: &str, mob_id: u16, count: usize, map: u16, x: f32, z: f32, radius: u32, lifetime: u32, exp: bool, drops: bool) -> Vec<u32> {
+        let Some(c) = self.ctx.upgrade() else { return Vec::new() };
+        if !c.data.world.is_safe_pos(map, [x, 0.0, z]) {
+            return Vec::new();
+        }
+        let live = c.data.live();
+        let mut rng = rand::rng();
+        use rand::Rng;
+        // The height of the nearest player on the map (the API gives x and z only), else 0.
+        let y = c
+            .zones
+            .players_of(map)
+            .into_iter()
+            .map(|(_, _, _, at)| at)
+            .min_by(|a, b| crate::zone::distance(*a, [x, a[1], z]).total_cmp(&crate::zone::distance(*b, [x, b[1], z])))
+            .map_or(0.0, |at| at[1]);
+        c.zones.ext_spawn(
+            extension,
+            &c.data.world,
+            &live.mobs,
+            mob_id,
+            count,
+            map,
+            [x, y, z],
+            radius,
+            Duration::from_secs(u64::from(lifetime)),
+            (exp, drops),
+            Instant::now(),
+            &mut || rng.random::<u32>() & 0x7fff,
+        )
+    }
+
+    fn despawn(&self, extension: &str, uids: &[u32]) -> usize {
+        self.ctx.upgrade().map_or(0, |c| c.zones.ext_despawn(extension, uids, Instant::now()))
+    }
+
+    fn alive(&self, extension: &str, uids: &[u32]) -> usize {
+        self.ctx.upgrade().map_or(0, |c| c.zones.ext_alive(extension, uids))
+    }
+
+    fn spawn_count(&self, extension: &str) -> usize {
+        self.ctx.upgrade().map_or(0, |c| c.zones.ext_spawn_count(extension))
+    }
+
     fn order(&self, id: u32, queued: crate::script::event::Queued) -> bool {
         self.ctx.upgrade().is_some_and(|c| c.zones.script_order(id, queued))
     }

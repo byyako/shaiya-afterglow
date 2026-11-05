@@ -5061,3 +5061,27 @@ async fn script_orders_give_and_take_items_gold_and_buffs_and_move_the_player() 
     bob.write(say(chat::OP_NORMAL, b"!ghost")).await;
     assert_eq!(next_server_whisper(&mut bob).await, "ghost 0");
 }
+
+#[tokio::test]
+async fn killing_a_monster_runs_the_kill_script() {
+    use shaiya_proto::combat as cp;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(&ctx, &[("k", "game.on('kill', function(p, mob, near) game.set('kills', (game.get('kills') or 0) + 1) game.set('last', p.name .. ' ' .. mob.id .. ' ' .. mob.name) end)")]);
+    let mut client = Client::connect(addr).await;
+    let id = enter_world(&mut client, 7, [5; 16], true).await;
+    ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
+    client.write(step(598.0, 1779.0)).await;
+    client.write(shaiya_proto::encode(cp::OP_ATTACK_MOB, &1u32.to_le_bytes())).await;
+    timeout(Duration::from_secs(5), async { while client_has_no_death(&mut client).await {} }).await.expect("the monster dies");
+    let store = ctx.zones.script_store();
+    timeout(Duration::from_secs(5), async { while store.get_global("k", "kills").is_none() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("the script ran");
+    assert_eq!(store.get_global("k", "kills"), Some(serde_json::json!(1)));
+    assert_eq!(store.get_global("k", "last"), Some(serde_json::json!("Walker 1 ")), "the test world has no names");
+    let _ = id;
+}
+
+/// Reads one packet; true while it is not the monster's death.
+async fn client_has_no_death(client: &mut Client) -> bool {
+    frame::opcode(&client.read().await.unwrap()) != shaiya_proto::combat::OP_MOB_DEATH
+}

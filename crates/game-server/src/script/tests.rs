@@ -686,6 +686,19 @@ mod acting {
         fn tell_staff(&self, text: &str) {
             self.sent.lock().unwrap().push(format!("staff: {text}"));
         }
+        fn spawn(&self, e: &str, mob: u16, n: usize, map: u16, x: f32, z: f32, r: u32, life: u32, exp: bool, drops: bool) -> Vec<u32> {
+            self.sent.lock().unwrap().push(format!("spawn {e} {mob} x{n} map {map} at {x},{z} r{r} {life}s exp {exp} drops {drops}"));
+            (1..=n as u32).collect()
+        }
+        fn despawn(&self, _: &str, uids: &[u32]) -> usize {
+            uids.len()
+        }
+        fn alive(&self, _: &str, uids: &[u32]) -> usize {
+            uids.len().saturating_sub(1)
+        }
+        fn spawn_count(&self, _: &str) -> usize {
+            7
+        }
         fn order(&self, id: u32, queued: crate::script::event::Queued) -> bool {
             self.sent.lock().unwrap().push(format!("order {id}: {:?}", queued.order));
             id != 3
@@ -813,6 +826,31 @@ mod acting {
     }
 
     #[test]
+    fn spawn_despawn_and_alive_pass_their_arguments_and_check_them() {
+        let (ext, fake) = with_world("");
+        let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
+        run("local ids = game.spawn(7, 3, 35, 100.5, 200, { lifetime = 60, radius = 0, drops = false }) assert(#ids == 3 and ids[3] == 3) assert(game.alive(ids) == 2) assert(game.despawn(ids) == 3)").unwrap();
+        run("game.spawn(7, 1, 1, 0, 0, { lifetime = 10 })").unwrap();
+        assert_eq!(fake.sent.lock().unwrap().as_slice(), ["spawn t 7 x3 map 35 at 100.5,200 r0 60s exp true drops false", "spawn t 7 x1 map 1 at 0,0 r10 10s exp true drops true"]);
+        assert_eq!(ext.spawn_count(), 7);
+        for (code, expect) in [
+            ("game.spawn(7, 51, 1, 0, 0, { lifetime = 60 })", "from 1 to 50"),
+            ("game.spawn(7, 1, 1, 0, 0)", "options table"),
+            ("game.spawn(7, 1, 1, 0, 0, {})", "lifetime"),
+            ("game.spawn(7, 1, 1, 0, 0, { lifetime = 9 })", "from 10 to 3600"),
+            ("game.spawn(7, 1, 1, 0, 0, { lifetime = 3601 })", "from 10 to 3600"),
+            ("game.spawn(7, 1, 1, 0, 0, { lifetime = 60, radius = 51 })", "from 0 to 50"),
+            ("game.spawn(7, 1, 1, 0, 0, { lifetime = 60, colour = 1 })", "the options are"),
+            ("game.spawn(0, 1, 1, 0, 0, { lifetime = 60 })", "mob id"),
+            ("game.despawn({'x'})", "ids game.spawn gave"),
+        ] {
+            let (fresh, _) = with_world("");
+            let error = fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code}")).to_string();
+            assert!(error.contains(expect), "{code}: {error}");
+        }
+    }
+
+    #[test]
     fn events_bring_their_arguments() {
         let (ext, fake) = with_world(
             "game.on('kill', function(p, mob, near)
@@ -831,7 +869,7 @@ mod acting {
             ext
         };
         let fire = |event: Event, payload: Payload| {
-            let _ = set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &payload));
+            let _ = set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &*set.shared().world, &payload));
         };
         fire(Event::Kill, Payload::Kill { p: a.clone(), mob: mob.clone(), near: vec![a.clone(), b.clone()] });
         fire(Event::PvpKill, Payload::PvpKill { killer: a.clone(), victim: b.clone(), last_hit: None, near: vec![a.clone()] });

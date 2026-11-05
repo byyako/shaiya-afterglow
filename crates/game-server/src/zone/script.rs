@@ -5,7 +5,9 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::script::event::{Job, Payload};
+use crate::mobs::{MobDefs, MobMap};
+use crate::world::World;
+use crate::script::event::{Job, Killer, MobInfo, Payload, PlayerRef};
 use crate::script::runner;
 use crate::script::world::PlayerView;
 use crate::script::{Event, ScriptSet};
@@ -158,5 +160,181 @@ impl Zones {
             Some(p) => p.members.iter().copied().filter(|m| maps.values().any(|players| players.contains_key(m))).collect(),
             None => vec![id],
         }
+    }
+}
+
+/// Per extension, the monsters alive at most (`game.spawn`, section 7.4), and the most one call makes.
+pub const SPAWNS_ALIVE: usize = 300;
+pub const SPAWNS_PER_CALL: usize = 50;
+
+/// A monster an extension spawned: who, until when, and whether it gives experience and drops.
+#[derive(Clone, Debug)]
+pub(super) struct ExtSpawn {
+    pub extension: String,
+    pub map: u16,
+    pub until: Instant,
+    pub exp: bool,
+    pub drops: bool,
+}
+
+fn player_ref(p: &Placed) -> PlayerRef {
+    PlayerRef { id: p.occupant.id, name: String::from_utf8_lossy(&p.occupant.shape.name).trim_end_matches('\0').to_owned() }
+}
+
+/// A player id as a reference: its name while it is in the zone; empty when it has left (the zone's lock is held, so the name cannot
+/// be asked elsewhere).
+fn named(players: &HashMap<u32, Placed>, id: u32) -> PlayerRef {
+    players.get(&id).map_or_else(|| PlayerRef { id, name: String::new() }, player_ref)
+}
+
+impl Zones {
+    /// A monster died with a player of most damage and a fair kill: `kill`, then `boss_kill` for a boss group's boss (section 5).
+    /// Called with the zone's locks held; it only queues (section 4.3).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn raise_kill(&self, players: &HashMap<u32, Placed>, top: u32, mobs: &MobMap, uid: u32, level: u16, map: u16, near: &[u32]) {
+        let Some(mob) = mobs.mobs.get(&uid).copied() else { return };
+        let boss = matches!(mob.origin, crate::mobs::Origin::Boss(_));
+        let make = |zones: &Zones| Payload::Kill {
+            p: named(players, top),
+            mob: MobInfo {
+                id: mob.mob_id,
+                uid,
+                name: String::new(),
+                level,
+                map,
+                x: mob.position[0],
+                z: mob.position[2],
+                boss,
+                spawned: zones.ext_spawns.guard().get(&uid).map(|s| s.extension.clone()),
+            },
+            near: near.iter().map(|&m| named(players, m)).collect(),
+        };
+        self.raise(Event::Kill, || make(self));
+        if boss {
+            self.raise(Event::BossKill, || make(self));
+        }
+    }
+
+    /// A player killed another for the faction (`ZoneEvent::PlayerKill` goes): `pvp_kill`.
+    pub(super) fn raise_pvp_kill(&self, players: &HashMap<u32, Placed>, killer: u32, victim: u32, last_hit: u32, near: &[u32]) {
+        self.raise(Event::PvpKill, || Payload::PvpKill {
+            killer: named(players, killer),
+            victim: named(players, victim),
+            last_hit: (last_hit != 0).then(|| named(players, last_hit)),
+            near: near.iter().map(|&m| named(players, m)).collect(),
+        });
+    }
+
+    /// A player died: `death` with who killed it of record (`kind` is the combat packet's killer kind).
+    pub(super) fn raise_death(&self, players: &HashMap<u32, Placed>, victim: u32, kind: u8, killer: u32, pvp: bool) {
+        self.raise(Event::Death, || Payload::Death {
+            victim: named(players, victim),
+            killer: match kind {
+                shaiya_proto::combat::KILLER_PLAYER => Killer::Player(named(players, killer)),
+                shaiya_proto::combat::KILLER_NPC => Killer::Npc(killer),
+                _ => Killer::Monster(killer),
+            },
+            pvp,
+        });
+    }
+
+    /// What a spawned monster gives when it dies: `(experience, drops)`; both for any other monster.
+    pub(super) fn spawn_gives(&self, uid: u32) -> (bool, bool) {
+        self.ext_spawns.guard().get(&uid).map_or((true, true), |s| (s.exp, s.drops))
+    }
+
+    /// `game.spawn` (section 7.4): monsters like `LuaCreateMob`'s, never respawning, within `radius` of the spot, removed quietly at
+    /// `lifetime`; at most [`SPAWNS_PER_CALL`] a call and [`SPAWNS_ALIVE`] alive for the extension. Their object ids.
+    #[allow(clippy::too_many_arguments)]
+    pub fn ext_spawn(
+        &self,
+        extension: &str,
+        world: &World,
+        defs: &MobDefs,
+        mob_id: u16,
+        count: usize,
+        zone: u16,
+        spot: [f32; 3],
+        radius: u32,
+        lifetime: std::time::Duration,
+        gives: (bool, bool),
+        now: Instant,
+        rand: &mut impl FnMut() -> u32,
+    ) -> Vec<u32> {
+        let Some(def) = admin::usable_def(defs, mob_id) else { return Vec::new() };
+        let room = SPAWNS_ALIVE.saturating_sub(self.ext_spawns.guard().values().filter(|s| s.extension == extension).count());
+        let count = count.min(SPAWNS_PER_CALL).min(room);
+        if count == 0 {
+            return Vec::new();
+        }
+        let maps = self.maps.guard();
+        let mut all = self.mobs.guard();
+        let Some(players) = maps.get(&zone) else { return Vec::new() };
+        let mobs = all.entry(zone).or_default();
+        let mut ids = Vec::new();
+        admin::generate_around(self, world, zone, mobs, players, &def, spot, radius, count as i64, now, rand, &mut ids);
+        let mut spawns = self.ext_spawns.guard();
+        for &id in &ids {
+            spawns.insert(id, ExtSpawn { extension: extension.to_owned(), map: zone, until: now + lifetime, exp: gives.0, drops: gives.1 });
+        }
+        ids
+    }
+
+    /// The extension's monsters of `uids` that are still alive.
+    pub fn ext_alive(&self, extension: &str, uids: &[u32]) -> usize {
+        let spawns = self.ext_spawns.guard();
+        let mine: Vec<(u32, u16)> = uids.iter().filter_map(|u| spawns.get(u).filter(|s| s.extension == extension).map(|s| (*u, s.map))).collect();
+        drop(spawns);
+        let all = self.mobs.guard();
+        mine.iter().filter(|(u, map)| all.get(map).and_then(|m| m.mobs.get(u)).is_some_and(|m| m.dead_until.is_none())).count()
+    }
+
+    /// How many monsters the extension has alive.
+    pub fn ext_spawn_count(&self, extension: &str) -> usize {
+        self.ext_spawns.guard().values().filter(|s| s.extension == extension).count()
+    }
+
+    /// Takes the extension's monsters of `uids` away quietly (as `MobRemove2`: removed at the next body pass with `0x0602`, nothing
+    /// gained). How many were its own and living.
+    pub fn ext_despawn(&self, extension: &str, uids: &[u32], now: Instant) -> usize {
+        let mine: Vec<(u32, u16)> = {
+            let spawns = self.ext_spawns.guard();
+            uids.iter().filter_map(|u| spawns.get(u).filter(|s| s.extension == extension).map(|s| (*u, s.map))).collect()
+        };
+        self.remove_spawns(&mine, now)
+    }
+
+    /// The pass that ends the spawns whose lifetime is over (the monster updater's second).
+    pub fn expire_ext_spawns(&self, now: Instant) -> usize {
+        let due: Vec<(u32, u16)> = self.ext_spawns.guard().iter().filter(|(_, s)| s.until <= now).map(|(&u, s)| (u, s.map)).collect();
+        if due.is_empty() {
+            return 0;
+        }
+        self.remove_spawns(&due, now)
+    }
+
+    fn remove_spawns(&self, list: &[(u32, u16)], now: Instant) -> usize {
+        let maps = self.maps.guard();
+        let mut all = self.mobs.guard();
+        let mut removed = 0;
+        for &(uid, zone) in list {
+            let Some(mobs) = all.get_mut(&zone) else { continue };
+            let Some(m) = mobs.mobs.get(&uid).copied() else { continue };
+            if m.dead_until.is_some() {
+                continue;
+            }
+            // A boss group's boss would be taken away as `MobRemove2` does; these are not bosses, but the call is the same one.
+            self.boss_death(zone, maps.get(&zone), mobs, &m, true);
+            if let Some(m) = mobs.mobs.get_mut(&uid) {
+                m.dead_until = Some(now);
+            }
+            removed += 1;
+        }
+        removed
+    }
+
+    /// A body is gone: the spawn's record goes with it.
+    pub(super) fn forget_ext_spawn(&self, uid: u32) {
+        self.ext_spawns.guard().remove(&uid);
     }
 }

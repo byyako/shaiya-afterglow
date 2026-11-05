@@ -246,7 +246,7 @@ impl ExtScript {
 
     /// Monsters this extension spawned that are still alive (`game.spawn`, step 7).
     pub fn spawn_count(&self) -> usize {
-        0
+        self.shared.world.spawn_count(&self.name)
     }
 
     pub fn timer_count(&self) -> usize {

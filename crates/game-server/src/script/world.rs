@@ -49,6 +49,14 @@ pub trait ScriptWorld: Send + Sync {
     fn order(&self, id: u32, queued: super::event::Queued) -> bool;
     /// Tells an extension's callback how an order came out (queued for the script thread, never run on the caller's stack).
     fn answer(&self, extension: &str, callback: u64, outcome: super::event::Outcome);
+    /// `game.spawn`: monsters of `mob_id` near the spot, removed after `lifetime` seconds; their object ids (fewer than asked, or
+    /// none, when the map, the spot or the extension's room says so).
+    #[allow(clippy::too_many_arguments)]
+    fn spawn(&self, extension: &str, mob_id: u16, count: usize, map: u16, x: f32, z: f32, radius: u32, lifetime: u32, exp: bool, drops: bool) -> Vec<u32>;
+    /// The extension's monsters of `uids` taken away quietly / still alive; how many monsters it has alive.
+    fn despawn(&self, extension: &str, uids: &[u32]) -> usize;
+    fn alive(&self, extension: &str, uids: &[u32]) -> usize;
+    fn spawn_count(&self, extension: &str) -> usize;
     /// `(word, help, staff)` of every command of every enabled extension, for a `!help`.
     fn commands(&self) -> Vec<(String, String, u8)>;
 }
@@ -86,6 +94,18 @@ impl ScriptWorld for NullWorld {
         None
     }
     fn tell_staff(&self, _: &str) {}
+    fn spawn(&self, _: &str, _: u16, _: usize, _: u16, _: f32, _: f32, _: u32, _: u32, _: bool, _: bool) -> Vec<u32> {
+        Vec::new()
+    }
+    fn despawn(&self, _: &str, _: &[u32]) -> usize {
+        0
+    }
+    fn alive(&self, _: &str, _: &[u32]) -> usize {
+        0
+    }
+    fn spawn_count(&self, _: &str) -> usize {
+        0
+    }
     fn order(&self, _: u32, _: super::event::Queued) -> bool {
         false
     }
