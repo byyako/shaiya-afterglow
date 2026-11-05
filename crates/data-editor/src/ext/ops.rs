@@ -44,6 +44,14 @@ pub struct ArtFile {
     pub sha256: String,
 }
 
+/// One script file as read from the folder (`docs/plans/ext-5-lua.md` section 3.2).
+#[derive(Clone, Debug)]
+pub struct ScriptFile {
+    pub path: String,
+    pub source: String,
+    pub sha256: String,
+}
+
 /// Everything an install reads from the extension's folder.
 #[derive(Clone, Debug)]
 pub struct Plan {
@@ -52,6 +60,20 @@ pub struct Plan {
     pub entries: Vec<Entry>,
     pub migrations: Vec<Migration>,
     pub art: Vec<ArtFile>,
+    /// The manifest's `scripts` in order, read and compiled.
+    pub scripts: Vec<ScriptFile>,
+    /// What the dry run of the scripts' load registered (`ext check`, `ext show`).
+    pub summary: Option<game_server::script::Summary>,
+}
+
+/// The script input the game server's dry run takes: the files in order and the options at their defaults.
+pub fn script_input(name: &str, scripts: &[ScriptFile], options: &BTreeMap<String, game_server::script::OptionSpec>) -> game_server::script::ExtInput {
+    let specs: Vec<(String, game_server::script::OptionSpec)> = options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    game_server::script::ExtInput {
+        name: name.to_owned(),
+        scripts: scripts.iter().map(|f| (f.path.clone(), f.source.clone())).collect(),
+        options: game_server::script::options::defaults(&specs),
+    }
 }
 
 /// Reads and validates what needs no database: the manifest, the rows files, the migrations' names and the art files.
@@ -101,7 +123,27 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
         let bytes = std::fs::read(dir.join(&a.file)).map_err(|e| format!("[client] art {}: {}: {e}", a.member, a.file))?;
         art.push(ArtFile { member: a.member.clone(), file: a.file.clone(), sha256: hex(&bytes) });
     }
-    Ok(Plan { dir: dir.to_owned(), manifest, entries, migrations, art })
+    let mut scripts = Vec::new();
+    let mut total = 0usize;
+    for path in &manifest.scripts {
+        let bytes = std::fs::read(dir.join(path)).map_err(|e| format!("scripts: {path}: {e}"))?;
+        if bytes.len() > super::manifest::MAX_SCRIPT_BYTES {
+            return Err(format!("scripts: {path} is {} bytes; a script is at most {} KiB", bytes.len(), super::manifest::MAX_SCRIPT_BYTES / 1024));
+        }
+        total += bytes.len();
+        if total > super::manifest::MAX_SCRIPTS_TOTAL {
+            return Err(format!("scripts: the files together are over {} MiB", super::manifest::MAX_SCRIPTS_TOTAL / 1024 / 1024));
+        }
+        let sha256 = hex(&bytes);
+        let source = String::from_utf8(bytes).map_err(|_| format!("scripts: {path} is not UTF-8 text"))?;
+        scripts.push(ScriptFile { path: path.clone(), source, sha256 });
+    }
+    let summary = if scripts.is_empty() {
+        None
+    } else {
+        Some(game_server::script::check(&script_input(&manifest.name, &scripts, &manifest.options), None).map_err(|e| format!("scripts: {e:#}"))?)
+    };
+    Ok(Plan { dir: dir.to_owned(), manifest, entries, migrations, art, scripts, summary })
 }
 
 fn range_texts(list: &[IdRange]) -> String {
@@ -643,7 +685,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .bind(&manifest_json)
             .execute(&mut *conn)
             .await?;
-        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client"] {
+        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client", "ext_scripts", "ext_options"] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
         }
     } else {
@@ -674,6 +716,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     for (rule_name, rule) in &m.rules {
         sqlx::query(sql(format!("INSERT INTO {c}.ext_rules (extension, name, rule) VALUES ($1, $2, $3)"))).bind(name).bind(rule_name).bind(rule).execute(&mut *conn).await?;
     }
+    write_scripts(conn, s, plan).await?;
     for f in &m.features {
         sqlx::query(sql(format!("INSERT INTO {c}.ext_client (extension, kind, name) VALUES ($1, 'feature', $2)"))).bind(name).bind(f).execute(&mut *conn).await?;
     }
@@ -776,6 +819,17 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         }
     }
 
+    // The items the scripts take over exist now (the extension's own rows are in the live table).
+    if let Some(summary) = &plan.summary {
+        for text in &summary.items {
+            let Some((t, id)) = text.split_once('/').and_then(|(t, i)| Some((t.parse::<i64>().ok()?, i.parse::<i64>().ok()?))) else { continue };
+            let found: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.items WHERE itemid = $1)", s.defs))).bind(t * 1000 + id).fetch_one(&mut *conn).await?;
+            if !found {
+                return refuse(format!("scripts: game.on_item names item {text}, which does not exist"));
+            }
+        }
+    }
+
     // On top: the edits.
     let problems = rewrite_edits(conn, s).await?;
     out.push(format!("{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings, {} rules", m.settings.len(), m.rules.len()));
@@ -783,6 +837,26 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     out.extend(warnings.into_iter().map(|w| format!("warning: {w}")));
     out.extend(problems);
     Ok(out)
+}
+
+/// Stores the extension's scripts (in order) and option specs (replacing the old ones when the caller deleted them first).
+async fn write_scripts(conn: &mut PgConnection, s: &Schemas, plan: &Plan) -> Result<()> {
+    let c = &s.content;
+    let name = plan.manifest.name.as_str();
+    for (seq, f) in plan.scripts.iter().enumerate() {
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_scripts (extension, seq, path, source, sha256) VALUES ($1, $2, $3, $4, $5)")))
+            .bind(name)
+            .bind(seq as i16)
+            .bind(&f.path)
+            .bind(&f.source)
+            .bind(&f.sha256)
+            .execute(&mut *conn)
+            .await?;
+    }
+    for (key, spec) in &plan.manifest.options {
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_options (extension, name, spec) VALUES ($1, $2, $3)"))).bind(name).bind(key).bind(spec.to_json()).execute(&mut *conn).await?;
+    }
+    Ok(())
 }
 
 fn describe(e: &Entry, c: &Computed, t: &ExtTable) -> String {
@@ -808,10 +882,103 @@ fn next_steps(plan: &Plan, wrote_items_or_skills: bool, wrote_drops: bool, clien
     if !plan.manifest.rules.is_empty() {
         out.push("next: `console <server id> reload` puts its rules in force".to_owned());
     }
+    if !plan.scripts.is_empty() {
+        out.push("next: `console <server id> reload` puts its scripts in force".to_owned());
+    }
     if !plan.manifest.features.is_empty() {
         out.push(format!("the extension needs these fixes.dll features in the client: {}", plan.manifest.features.join(", ")));
     }
     out
+}
+
+/// The scripts of a plan as `ext check` and `install` print them: the files, the options, the dry run's summary.
+fn script_lines(plan: &Plan) -> Vec<String> {
+    let Some(summary) = &plan.summary else { return Vec::new() };
+    let mut out = vec![format!("scripts (API {}): {} files, {} options; the dry run of the load registers:", plan.manifest.api.unwrap_or(0), plan.scripts.len(), plan.manifest.options.len())];
+    out.extend(summary.to_string().lines().map(|l| format!("  {l}")));
+    out
+}
+
+/// `ext show`'s lines for the scripts: the files, the options with their defaults and the editor's values, the dry run.
+async fn show_scripts(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<Vec<String>> {
+    let c = &s.content;
+    let files: Vec<(String, String, String)> = sqlx::query_as(sql(format!("SELECT path, source, sha256 FROM {c}.ext_scripts WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
+    let specs: Vec<(String, Value)> = sqlx::query_as(sql(format!("SELECT name, spec FROM {c}.ext_options WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
+    if files.is_empty() && specs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for (path, source, sha) in &files {
+        out.push(format!("  script {path}: {} bytes, sha256 {sha}", source.len()));
+    }
+    let values: Vec<(String, String)> = sqlx::query_as(sql(format!("SELECT name, value FROM {c}.setting_values WHERE name LIKE $1 ORDER BY name"))).bind(format!("ext.{name}.%")).fetch_all(&mut *conn).await?;
+    let mut parsed = Vec::new();
+    for (key, spec) in &specs {
+        let spec = game_server::script::OptionSpec::parse(spec).with_context(|| format!("stored option {key}"))?;
+        let set = values.iter().find(|(n, _)| *n == format!("ext.{name}.{key}")).map(|(_, v)| v.clone());
+        out.push(format!("  option {key} ({}) default {}{}: {}", spec.ty.name(), spec.default, set.map(|v| format!(", data editor {v}")).unwrap_or_default(), spec.doc));
+        parsed.push((key.clone(), spec));
+    }
+    let input = game_server::script::ExtInput {
+        name: name.to_owned(),
+        scripts: files.iter().map(|(p, src, _)| (p.clone(), src.clone())).collect(),
+        options: game_server::script::options::defaults(&parsed),
+    };
+    match game_server::script::check(&input, None) {
+        Ok(summary) => {
+            out.push("  dry run of the load registers:".to_owned());
+            out.extend(summary.to_string().lines().map(|l| format!("    {l}")));
+        }
+        Err(e) => out.push(format!("  dry run of the load FAILS: {e:#}")),
+    }
+    Ok(out)
+}
+
+/// Everything `ext upgrade` would write for an extension, except the scripts and options: what `ext scripts` compares (the rows, the
+/// ranges, settings, rules, client records, migrations and the manifest without `api`, `scripts` and `options`).
+async fn ext_snapshot(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<Vec<(String, Value)>> {
+    let c = &s.content;
+    let mut out = Vec::new();
+    let manifest: Value = sqlx::query_scalar(sql(format!(
+        "SELECT ((to_jsonb(e) - 'upgraded_at' - 'installed_at' - 'manifest') || jsonb_build_object('manifest', e.manifest - 'api' - 'scripts' - 'options')) FROM {c}.extensions e WHERE e.name = $1"
+    )))
+    .bind(name)
+    .fetch_one(&mut *conn)
+    .await?;
+    out.push(("the manifest, title or description".to_owned(), manifest));
+    for (label, table, drop, order) in [
+        ("rows", "ext_rows", "", "t.seq"),
+        ("item and skill ids", "ext_ranges", "", "to_jsonb(t)::text"),
+        ("settings", "ext_settings", "", "to_jsonb(t)::text"),
+        ("rules", "ext_rules", "", "to_jsonb(t)::text"),
+        ("client features and art", "ext_client", "", "to_jsonb(t)::text"),
+        ("migrations", "ext_migrations", " - 'applied_at'", "t.version"),
+        ("client item rows", "client_items", "", "to_jsonb(t)::text"),
+        ("client skill rows", "client_skills", "", "to_jsonb(t)::text"),
+        ("server-only rows", "server_only", "", "to_jsonb(t)::text"),
+    ] {
+        let rows: Value = sqlx::query_scalar(sql(format!("SELECT coalesce(jsonb_agg(to_jsonb(t){drop} ORDER BY {order}), '[]'::jsonb) FROM {c}.{table} t WHERE t.extension = $1"))).bind(name).fetch_one(&mut *conn).await?;
+        out.push((label.to_owned(), rows));
+    }
+    Ok(out)
+}
+
+fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Option<String> {
+    let short = |v: &Value| {
+        let t = v.to_string();
+        if t.len() > 160 { format!("{}…", t.chars().take(157).collect::<String>()) } else { t }
+    };
+    for ((label, a), (_, b)) in before.iter().zip(after) {
+        if a == b {
+            continue;
+        }
+        if let (Some(x), Some(y)) = (a.as_array(), b.as_array()) {
+            let n = x.iter().zip(y).position(|(p, q)| p != q).unwrap_or(x.len().min(y.len()));
+            return Some(format!("{label}: installed {} / folder {} (entry {}: installed {} / folder {})", x.len(), y.len(), n + 1, x.get(n).map(&short).unwrap_or("none".into()), y.get(n).map(&short).unwrap_or("none".into())));
+        }
+        return Some(format!("{label}: installed {} / folder {}", short(a), short(b)));
+    }
+    None
 }
 
 impl Editor {
@@ -830,6 +997,7 @@ impl Editor {
         let wrote = plan.entries.iter().any(|e| matches!(e.kind, Kind::Item | Kind::Skill));
         let drops = plan.entries.iter().any(|e| e.kind == Kind::Drop);
         let client = plan.entries.iter().any(|e| e.client.is_some() || e.server_only.is_some());
+        lines.extend(script_lines(plan));
         lines.extend(next_steps(plan, wrote, drops, client));
         lines
     }
@@ -907,6 +1075,56 @@ impl Editor {
         Ok(Self::report_lines(&plan, lines))
     }
 
+    /// `ext scripts <folder>` (`docs/plans/ext-5-lua.md` section 3.3): replaces the scripts and option specs of the installed
+    /// extension of the same version, without a version bump. Everything else in the folder must be as installed.
+    pub async fn ext_scripts(&self, dir: &Path) -> Result<Vec<String>> {
+        let plan = Self::read_plan(dir)?;
+        let mut tx = self.begin_locked().await?;
+        self.require_defs_import(&mut tx).await?;
+        let name = plan.manifest.name.clone();
+        let Some(have) = installed(&mut tx, &self.s, &name).await? else {
+            return refuse(format!("{name} is not installed; use `data-editor ext install {}`", dir.display()));
+        };
+        if plan.manifest.version != have.version {
+            return refuse(format!(
+                "{name} {} is installed and the folder has {}: `ext scripts` replaces the scripts of the same version; use `ext upgrade` for a new one",
+                have.version, plan.manifest.version
+            ));
+        }
+        // What `ext upgrade` would write, in a savepoint that is rolled back: the folder must change nothing but the scripts.
+        let before = ext_snapshot(&mut tx, &self.s, &name).await?;
+        sqlx::query("SAVEPOINT ext_scripts_check").execute(&mut *tx).await?;
+        let prior = read_prior(&mut tx, &self.s, &name).await?;
+        let simulated = apply_plan(&mut tx, &self.s, &plan, Some(prior)).await;
+        let after = match &simulated {
+            Ok(_) => Some(ext_snapshot(&mut tx, &self.s, &name).await?),
+            Err(_) => None,
+        };
+        sqlx::query("ROLLBACK TO SAVEPOINT ext_scripts_check").execute(&mut *tx).await?;
+        const CHANGED: &str = "rows, rules, settings or migrations changed: use `ext upgrade` with a higher version";
+        if let Err(e) = simulated {
+            return refuse(format!("{CHANGED} ({e:#})"));
+        }
+        if let Some(difference) = first_difference(&before, &after.unwrap_or_default()) {
+            return refuse(format!("{CHANGED} (first difference, {difference})"));
+        }
+        let c = &self.s.content;
+        for table in ["ext_scripts", "ext_options"] {
+            sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(&name).execute(&mut *tx).await?;
+        }
+        write_scripts(&mut tx, &self.s, &plan).await?;
+        sqlx::query(sql(format!("UPDATE {c}.extensions SET manifest = $2 WHERE name = $1"))).bind(&name).bind(&plan.manifest.json).execute(&mut *tx).await?;
+        log_entry(&mut tx, &self.s, &name, "scripts", json!({"version": have.version.to_string(), "files": plan.scripts.len(), "options": plan.manifest.options.len()})).await?;
+        tx.commit().await?;
+        let mut lines = vec![format!("{name} {}: scripts replaced", have.version)];
+        lines.extend(script_lines(&plan));
+        if plan.scripts.is_empty() {
+            lines.push("the folder has no scripts: the extension has none now".to_owned());
+        }
+        lines.push("next: `console <server id> reload` puts them in force".to_owned());
+        Ok(lines)
+    }
+
     /// `ext remove <name> [--force]`. `confirm` is asked, with the lines of what `--force` deletes, before it deletes anything.
     pub async fn ext_remove(&self, name: &str, force: bool, confirm: impl FnOnce(&[String]) -> Result<bool>) -> Result<Vec<String>> {
         let s = &self.s;
@@ -962,6 +1180,8 @@ impl Editor {
             lines.push(format!("dropped the schema {schema}"));
         }
         let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        // The cascade takes the scripts, the options and the values the scripts stored (`script_values`, `script_globals`).
         sqlx::query(sql(format!("DELETE FROM {c}.extensions WHERE name = $1"))).bind(name).execute(&mut *tx).await?;
         let problems = rewrite_edits(&mut tx, s).await?;
         log_entry(&mut tx, s, name, "remove", json!({"version": version, "rows": rows.iter().map(|(t, k, _)| format!("{t} {k}")).collect::<Vec<_>>(), "shipped_client_rows": shipped})).await?;
@@ -971,6 +1191,9 @@ impl Editor {
         lines.push("next: restart the game servers".to_owned());
         if rules > 0 {
             lines.push("next: `console <server id> reload` takes its rules out of force".to_owned());
+        }
+        if scripts > 0 {
+            lines.push("next: `console <server id> reload` takes its scripts out of force (its stored values went with it)".to_owned());
         }
         if shipped > 0 {
             lines.push(format!("a client patch is due: {shipped} client rows were in an earlier patch and are gone now"));
@@ -1004,6 +1227,7 @@ impl Editor {
         sqlx::query(sql(format!("UPDATE {c}.extensions SET enabled = $2 WHERE name = $1"))).bind(name).bind(enabled).execute(&mut *tx).await?;
         log_entry(&mut tx, s, name, if enabled { "enable" } else { "disable" }, json!({})).await?;
         let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
         tx.commit().await?;
         let mut out = vec![
             format!("{name} {}: its settings defaults and rules {}; its rows stay", if enabled { "enabled" } else { "disabled" }, if enabled { "count again" } else { "stop counting" }),
@@ -1012,26 +1236,30 @@ impl Editor {
         if rules > 0 {
             out.push(format!("next: `console <server id> reload` {} its rules", if enabled { "puts in force" } else { "takes out of force" }));
         }
+        if scripts > 0 {
+            out.push(format!("next: `console <server id> reload` {} its scripts", if enabled { "puts in force" } else { "takes out of force" }));
+        }
         Ok(out)
     }
 
     /// `ext list`.
     pub async fn ext_list(&self) -> Result<Vec<String>> {
         let c = &self.s.content;
-        let rows: Vec<(String, String, bool, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
+        let rows: Vec<(String, String, bool, i64, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled, (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
                     (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name),
-                    (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
+                    (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name),
+                    (SELECT count(*) FROM {c}.ext_scripts x WHERE x.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
         )))
         .fetch_all(&self.pool)
         .await?;
         if rows.is_empty() {
             return Ok(vec!["no extensions installed".to_owned()]);
         }
-        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>9} {:>6}", "name", "version", "state", "rows", "client", "settings", "rules")];
-        for (name, version, enabled, r, cl, se, ru) in rows {
-            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {se:>9} {ru:>6}", if enabled { "enabled" } else { "disabled" }));
+        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>9} {:>6} {:>7}", "name", "version", "state", "rows", "client", "settings", "rules", "scripts")];
+        for (name, version, enabled, r, cl, se, ru, sc) in rows {
+            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {se:>9} {ru:>6} {sc:>7}", if enabled { "enabled" } else { "disabled" }));
         }
         Ok(out)
     }
@@ -1059,6 +1287,7 @@ impl Editor {
         for (rule_name, rule) in rules {
             out.push(format!("  rule {name}/{rule_name} = {rule}"));
         }
+        out.extend(show_scripts(&mut conn, s, name).await?);
         let rows: Vec<(String, String, String, Value)> = sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
         for (tbl, key, action, row) in rows {
             let t = super::tables::find(&tbl);

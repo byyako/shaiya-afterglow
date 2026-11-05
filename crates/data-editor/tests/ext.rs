@@ -178,7 +178,7 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
     let cases: Vec<(&str, Folder, &str)> = vec![
         ("format 2", Folder::new().edit("extension.toml", "format = 1", "format = 2"), "needs a newer data-editor"),
         ("an unknown manifest key", Folder::new().edit("extension.toml", "[ids]", "extra = 1\n[ids]"), "unknown key `extra`"),
-        ("options", Folder::new().edit("extension.toml", "[ids]", "options = 1\n[ids]"), "`options` is reserved for a later chunk"),
+        ("options", Folder::new().edit("extension.toml", "[ids]", "options = 1\n[ids]"), "`options` must be a table of tables"),
         ("rules not a table", Folder::new().edit("extension.toml", "[ids]", "rules = 1\n[ids]"), "`rules` must be a table of tables"),
         ("a rule that is not a table", Folder::new().append("extension.toml", "[rules]\nx = 1"), "[rules.x] must be a table"),
         ("a rule with a bad key", Folder::new().append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 0"), "extension.toml rules.gap.gap: 0 is not 1 to 255"),
@@ -187,8 +187,8 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
         ("a rule that only turns off", Folder::new().append("extension.toml", "[rules.safe]\nenabled = false"), "rules.safe: a rule needs a type"),
         ("a rule with a prefix", Folder::new().append("extension.toml", "[rules.\"kb/safe\"]\ntype = \"deny\"\npoint = \"attack\""), "without a prefix"),
         ("a rule named for a setting", Folder::new().append("extension.toml", "[rules.\"setting.market_maps\"]\ntype = \"deny\"\npoint = \"attack\""), "belong to the settings"),
-        ("scripts", Folder::new().edit("extension.toml", "[ids]", "scripts = 1\n[ids]"), "`scripts` is reserved for a later chunk"),
-        ("api", Folder::new().edit("extension.toml", "[ids]", "api = 1\n[ids]"), "`api` is reserved for a later chunk"),
+        ("scripts", Folder::new().edit("extension.toml", "[ids]", "scripts = 1\n[ids]"), "`scripts` must be a list"),
+        ("api", Folder::new().edit("extension.toml", "[ids]", "api = 1\n[ids]"), "`api` without `scripts`"),
         ("type 101", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"101/5\""), "item type 101"),
         ("a typeid past the group's count", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"43/5\""), "holds 1 to 4"),
         ("a group with no records", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"26/1\""), "has no records"),
@@ -618,7 +618,7 @@ async fn an_extensions_rules_are_stored_resolved_and_follow_enable_upgrade_and_r
     let stored = db.scalar(format!("SELECT rule AS v FROM {}.ext_rules WHERE extension = 'kb' AND name = 'gap'", db.s.content)).await;
     assert_eq!(stored["v"], json!({ "type": "level_gap", "gap": 20 }));
     let list = db.editor.ext_list().await.unwrap();
-    assert!(list[0].contains("rules") && list.iter().any(|l| l.starts_with("kb ") && l.trim_end().ends_with(" 2")), "{list:#?}");
+    assert!(list[0].contains("rules") && list.iter().any(|l| l.starts_with("kb ") && l.split_whitespace().rev().take(2).collect::<Vec<_>>() == ["0", "2"]), "{list:#?}");
     let shown = db.editor.ext_show("kb").await.unwrap();
     assert!(has(&shown, "rule kb/gap = ") && has(&shown, "rule kb/no-gain = "), "{shown:#?}");
 

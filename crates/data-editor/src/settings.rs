@@ -9,7 +9,7 @@
 //! clear of the numeric key code in `store` and `apply`.
 
 use anyhow::Result;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use sqlx::{AssertSqlSafe, PgConnection};
 
 use crate::apply::Report;
@@ -26,11 +26,23 @@ fn sql(text: String) -> AssertSqlSafe<String> {
     AssertSqlSafe(text)
 }
 
-/// A setting's name as a key: a game setting of the registry. `ext.<name>.<key>` (an extension's own options) is reserved for chunk 5.
+/// `ext.<extension>.<option>` as its two parts: the editor's layer of an extension's option (`docs/plans/ext-5-lua.md` section 3.4).
+pub fn ext_key(name: &str) -> Option<(&str, &str)> {
+    let rest = name.strip_prefix("ext.")?;
+    let (extension, option) = rest.split_once('.')?;
+    (crate::ext::manifest::valid_name(extension) && game_server::script::options::valid_key(option)).then_some((extension, option))
+}
+
+/// A setting's name as a key: a game setting of the registry, or `ext.<extension>.<option>` (whether the extension is installed and
+/// has the option is checked where the value is, against the database).
 pub fn key(text: &str) -> Check<String> {
     let name = text.trim();
     if name.starts_with("ext.") {
-        return Err(format!("{name}: extension options are reserved for chunk 5 (docs/plans/ext-1-foundation.md 7.5)"));
+        return if ext_key(name).is_some() {
+            Ok(name.to_owned())
+        } else {
+            Err(format!("{name:?} is not an extension option (ext.<extension>.<option>, the option's key being a-z, 0-9 and _)"))
+        };
     }
     if game_server::config::setting(name).is_none() {
         return Err(format!("{name:?} is not a game setting (docs/server/settings.md)"));
@@ -58,11 +70,55 @@ pub fn value_text(value: &Value) -> Check<String> {
     })
 }
 
-/// The text of `value` when the game server accepts it for the setting `name`.
-fn validated(name: &str, value: &Value) -> Check<String> {
+/// The text of `value` when the game server accepts it for the setting `name`. For an extension's option (`ext.<extension>.<option>`)
+/// the text is the value as JSON (`5`, `"text"`, `[35,36]`), checked against the option's spec in `content.ext_options`; a user may
+/// also give a number, a boolean or a list as text (`"5"`, `"[1,2]"`), which is read as JSON unless the option is a string.
+async fn validated(conn: &mut PgConnection, s: &Schemas, name: &str, value: &Value) -> Result<Check<String>> {
+    let Some((extension, option)) = ext_key(name) else { return Ok(plain(name, value)) };
+    let spec = match option_spec(conn, s, extension, option).await? {
+        Ok(spec) => spec,
+        Err(why) => return Ok(Err(why)),
+    };
+    let typed = match value {
+        Value::String(text) if spec.ty != game_server::script::OptType::String => match serde_json::from_str::<Value>(text) {
+            Ok(v) => v,
+            Err(_) => return Ok(Err(format!("{text:?} is not a {} (give JSON: a number, true, false or a list)", spec.ty.name()))),
+        },
+        other => other.clone(),
+    };
+    Ok(spec.check(&typed).map(|()| typed.to_string()).map_err(|e| format!("{e:#}")))
+}
+
+fn plain(name: &str, value: &Value) -> Check<String> {
     let text = value_text(value)?;
     game_server::config::check_setting(name, &text).map_err(|e| format!("{e:#}"))?;
     Ok(text)
+}
+
+/// The spec of an extension's option; the reason in `Err` when the extension or the option is not there.
+async fn option_spec(conn: &mut PgConnection, s: &Schemas, extension: &str, option: &str) -> Result<Check<game_server::script::OptionSpec>> {
+    let spec: Option<Value> = sqlx::query_scalar(sql(format!("SELECT spec FROM {}.ext_options WHERE extension = $1 AND name = $2", s.content)))
+        .bind(extension)
+        .bind(option)
+        .fetch_optional(&mut *conn)
+        .await?;
+    if let Some(spec) = spec {
+        return Ok(Ok(game_server::script::OptionSpec::parse(&spec)?));
+    }
+    let known: Vec<String> = sqlx::query_scalar(sql(format!("SELECT name FROM {}.ext_options WHERE extension = $1 ORDER BY name", s.content))).bind(extension).fetch_all(&mut *conn).await?;
+    let installed: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.extensions WHERE name = $1)", s.content))).bind(extension).fetch_one(&mut *conn).await?;
+    Ok(Err(if !installed {
+        format!("the extension {extension} is not installed")
+    } else if known.is_empty() {
+        format!("the extension {extension} has no options")
+    } else {
+        format!("the extension {extension} has no option {option:?} (its options: {})", known.join(", "))
+    }))
+}
+
+/// When a change of the setting `name` takes effect: an extension's option at `reload`, the rest at the next start.
+fn effect_of(name: &str) -> Effect {
+    if ext_key(name).is_some() { Effect::Live } else { Effect::Restart }
 }
 
 /// The override now in the table.
@@ -95,11 +151,16 @@ fn only_field(field: &str) -> Result<()> {
 
 async fn set(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, field: &str, value: &Value) -> Result<()> {
     only_field(field)?;
-    let new = user(validated(name, value))?;
+    let new = user(validated(conn, run.s, name, value).await?)?;
+    set_text(conn, run, name, new).await
+}
+
+/// `set` with the text already validated (an `unset` puts the stored original back).
+async fn set_text(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, new: String) -> Result<()> {
     let s = run.s;
     let Some(present) = current(conn, s, name).await? else {
         // No override yet: setting a value makes one.
-        return add(conn, run, name, &json!({ FIELD: new })).await;
+        return add_text(conn, run, name, new).await;
     };
     if present == new {
         return Ok(());
@@ -149,7 +210,7 @@ async fn set(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, field: &str
         .execute(&mut *conn)
         .await?;
     log(conn, run, TARGET, name, Some(FIELD), action, Some(&before), Some(&after)).await?;
-    run.effects.insert(Effect::Restart);
+    run.effects.insert(effect_of(name));
     Ok(())
 }
 
@@ -163,7 +224,8 @@ async fn unset(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, field: &s
             .fetch_optional(&mut *conn)
             .await?;
     match stored {
-        Some(Some(original)) => set(conn, run, name, field, &original).await,
+        Some(Some(Value::String(original))) => set_text(conn, run, name, original).await,
+        Some(Some(_)) => refuse("the stored original is not a value"),
         Some(None) => refuse("the override was added by the edits: it has no original value (remove it instead)"),
         None => refuse("this value has no edit to undo"),
     }
@@ -175,7 +237,12 @@ async fn add(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, fields: &Va
         return refuse(format!("a setting has one field, {FIELD} (got {other:?})"));
     }
     let Some(value) = given.get(FIELD) else { return refuse(format!("a new override needs the field {FIELD}")) };
-    let new = user(validated(name, value))?;
+    let new = user(validated(conn, run.s, name, value).await?)?;
+    add_text(conn, run, name, new).await
+}
+
+/// `add` with the text already validated.
+async fn add_text(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, new: String) -> Result<()> {
     let s = run.s;
     if current(conn, s, name).await?.is_some() {
         return refuse("an override of this setting exists already (set its value, or remove it)");
@@ -191,7 +258,7 @@ async fn add(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, fields: &Va
     let row: Map<String, Value> = Map::from_iter([(FIELD.to_owned(), Value::String(new))]);
     record_added(conn, run, TARGET, name, &row).await?;
     log(conn, run, TARGET, name, None, "add", None, Some(&Value::Object(row))).await?;
-    run.effects.insert(Effect::Restart);
+    run.effects.insert(effect_of(name));
     Ok(())
 }
 
@@ -231,7 +298,7 @@ async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Resul
     }
     sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content))).bind(name).execute(&mut *conn).await?;
     log(conn, run, TARGET, name, None, "remove", Some(&json), None).await?;
-    run.effects.insert(Effect::Restart);
+    run.effects.insert(effect_of(name));
     Ok(())
 }
 
@@ -271,7 +338,7 @@ async fn restore(conn: &mut PgConnection, run: &mut Run<'_>, snapshot: &Value) -
         }
     }
     log(conn, run, TARGET, &snap.key, None, "restore", None, Some(snapshot)).await?;
-    run.effects.insert(Effect::Restart);
+    run.effects.insert(effect_of(&snap.key));
     Ok(())
 }
 
@@ -301,7 +368,15 @@ pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Repo
     .fetch_all(&mut *conn)
     .await?;
     for (name, value, cs) in fields {
-        let checked = key(&name).and_then(|n| validated(&n, &value));
+        let checked = match key(&name) {
+            // An extension's option is stored as JSON text; the stored text is read back as the value it was.
+            Ok(n) if ext_key(&n).is_some() => match value.as_str().map(serde_json::from_str::<Value>) {
+                Some(Ok(typed)) => validated(conn, s, &n, &typed).await?,
+                _ => Err("the stored value is not JSON".to_owned()),
+            },
+            Ok(n) => validated(conn, s, &n, &value).await?,
+            Err(why) => Err(why),
+        };
         let text = match checked {
             Ok(text) => text,
             Err(why) => {

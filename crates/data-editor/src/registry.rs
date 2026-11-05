@@ -1151,7 +1151,9 @@ mod tests {
         assert_eq!(setting.side, Side::Content);
         assert_eq!(setting.key_text(" market_maps ").unwrap(), "market_maps");
         assert!(setting.key_text("market_mapz").unwrap_err().contains("not a game setting"));
-        assert!(setting.key_text("ext.welcome.text").unwrap_err().contains("reserved for chunk 5"));
+        assert_eq!(setting.key_text(" ext.welcome.text ").unwrap(), "ext.welcome.text", "an extension's option is keyed by ext.<extension>.<option>");
+        assert!(setting.key_text("ext.Welcome.text").unwrap_err().contains("not an extension option"));
+        assert!(setting.key_text("ext.welcome").unwrap_err().contains("not an extension option"));
         assert!(setting.parse_key("market_maps").is_err(), "no numbers in a setting's key");
         assert_eq!(target("mob").unwrap().key_text("2133").unwrap(), "2133");
         assert_eq!(setting.field("value").unwrap().effect, Effect::Restart);

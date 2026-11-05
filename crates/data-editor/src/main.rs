@@ -36,6 +36,7 @@ const USAGE: &str = "usage: data-editor <command>
   ext check <folder>                 everything an install checks, writing nothing
   ext install [--skip-installed] <folder>
   ext upgrade <folder>               a folder with a higher version of an installed extension
+  ext scripts <folder>               replaces only the scripts and options of the installed extension (same version)
   ext remove <name> [--force [--yes]]
                                      puts every row back to the original; refuses while players hold its items
                                      or other data points at its rows (--force deletes the held items after a confirmation)
@@ -228,6 +229,7 @@ async fn ext(editor: &Editor, mut args: Vec<String>) -> Result<()> {
             print(editor.ext_install(&folder(&args)?, skip).await?)
         }
         "upgrade" => print(editor.ext_upgrade(&folder(&args)?).await?),
+        "scripts" => print(editor.ext_scripts(&folder(&args)?).await?),
         "remove" => {
             let force = take_flag(&mut args, "--force");
             let yes = take_flag(&mut args, "--yes");
@@ -251,7 +253,7 @@ async fn ext(editor: &Editor, mut args: Vec<String>) -> Result<()> {
         }
         "enable" => print(editor.ext_set_enabled(args.first().context("ext enable needs a name")?, true).await?),
         "disable" => print(editor.ext_set_enabled(args.first().context("ext disable needs a name")?, false).await?),
-        _ => bail!("usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"),
+        _ => bail!("usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | scripts <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"),
     }
     Ok(())
 }

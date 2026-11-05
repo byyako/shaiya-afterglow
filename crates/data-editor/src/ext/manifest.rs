@@ -10,8 +10,10 @@ use super::ids::{self, IdRange};
 /// The manifest format this data-editor reads.
 pub const FORMAT: i64 = 1;
 
-/// Keys that belong to later chunks: refused, so that an extension cannot rely on them being ignored.
-const RESERVED: &[&str] = &["options", "scripts", "api"];
+/// The most script files an extension lists, the largest one and all together (`docs/plans/ext-5-lua.md` section 3.1).
+pub const MAX_SCRIPTS: usize = 64;
+pub const MAX_SCRIPT_BYTES: usize = 256 * 1024;
+pub const MAX_SCRIPTS_TOTAL: usize = 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Art {
@@ -32,6 +34,12 @@ pub struct Manifest {
     /// The extension's rules (`docs/plans/ext-2-rules.md` section 4.4), by name without the extension's prefix, each as the JSON of its
     /// table; the game server's parser checks them (`ext check`, `ext install`).
     pub rules: BTreeMap<String, Value>,
+    /// The Lua API version the scripts are written for; with `scripts` (section 3.1 of the scripts chunk).
+    pub api: Option<u32>,
+    /// The script files, in load order.
+    pub scripts: Vec<String>,
+    /// The options, by key, each as the manifest wrote it (validated by the game server's `OptionSpec`).
+    pub options: BTreeMap<String, game_server::script::OptionSpec>,
     pub features: Vec<String>,
     pub art: Vec<Art>,
     /// The manifest as read, for `content.extensions.manifest`.
@@ -52,8 +60,10 @@ pub fn valid_name(name: &str) -> bool {
         && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
-fn reserved(key: &str) -> String {
-    format!("`{key}` is reserved for a later chunk (docs/plans/ext-1-foundation.md 5.2)")
+/// A script path: `^[a-z0-9_-]+(/[a-z0-9_-]+)*\.lua$`.
+pub fn valid_script_path(path: &str) -> bool {
+    let Some(stem) = path.strip_suffix(".lua") else { return false };
+    !stem.is_empty() && stem.split('/').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-'))
 }
 
 fn string(table: &Table, key: &str, required: bool) -> Result<Option<String>, String> {
@@ -78,9 +88,6 @@ fn strings(table: &Table, key: &str) -> Result<Vec<String>, String> {
 
 fn only_keys(table: &Table, allowed: &[&str], place: &str) -> Result<(), String> {
     for key in table.keys() {
-        if RESERVED.contains(&key.as_str()) && place == "the manifest" {
-            return Err(reserved(key));
-        }
         if !allowed.contains(&key.as_str()) {
             return Err(format!("unknown key `{key}` in {place}"));
         }
@@ -121,7 +128,7 @@ impl Manifest {
             }
             Some(other) => return Err(format!("`format` must be {FORMAT}, not {other}")),
         }
-        only_keys(&table, &["format", "name", "version", "title", "description", "authors", "license", "ids", "settings", "rules", "client"], "the manifest")?;
+        only_keys(&table, &["format", "name", "version", "title", "description", "authors", "license", "ids", "settings", "rules", "api", "scripts", "options", "client"], "the manifest")?;
         let name = string(&table, "name", true)?.unwrap_or_default();
         if !valid_name(&name) {
             return Err(format!("name {name:?} must match ^[a-z][a-z0-9-]{{1,39}}$"));
@@ -162,6 +169,8 @@ impl Manifest {
             }
         }
 
+        let (api, scripts, options) = scripts_part(&table)?;
+
         let (mut features, mut art) = (Vec::new(), Vec::new());
         if let Some(value) = table.get("client") {
             let client = value.as_table().ok_or("`client` must be a table")?;
@@ -183,8 +192,67 @@ impl Manifest {
             }
         }
         let json = serde_json::to_value(&table).map_err(|e| e.to_string())?;
-        Ok(Manifest { name, version, title, description, items, skills, settings, rules, features, art, json })
+        Ok(Manifest { name, version, title, description, items, skills, settings, rules, api, scripts, options, features, art, json })
     }
+}
+
+/// `api`, `scripts` and `[options.<key>]` (`docs/plans/ext-5-lua.md` section 3.1).
+fn scripts_part(table: &Table) -> Result<(Option<u32>, Vec<String>, BTreeMap<String, game_server::script::OptionSpec>), String> {
+    let api = match table.get("api") {
+        None => None,
+        Some(toml::Value::Integer(n)) if *n >= 1 => Some(u32::try_from(*n).map_err(|_| format!("api = {n} is not an API version"))?),
+        Some(other) => return Err(format!("`api` must be a whole number from 1, not {other}")),
+    };
+    let scripts = match table.get("scripts") {
+        None => Vec::new(),
+        Some(toml::Value::Array(items)) => {
+            let mut out: Vec<String> = Vec::new();
+            for v in items {
+                let Some(path) = v.as_str() else { return Err("`scripts` must be a list of strings".into()) };
+                if !valid_script_path(path) {
+                    return Err(format!("scripts: {path:?} is not a script path (^[a-z0-9_-]+(/[a-z0-9_-]+)*\\.lua$, inside the extension's folder)"));
+                }
+                if out.iter().any(|p| p == path) {
+                    return Err(format!("scripts: {path:?} is listed twice"));
+                }
+                out.push(path.to_owned());
+            }
+            if out.is_empty() || out.len() > MAX_SCRIPTS {
+                return Err(format!("`scripts` lists 1 to {MAX_SCRIPTS} files (got {})", out.len()));
+            }
+            out
+        }
+        Some(other) => return Err(format!("`scripts` must be a list, not {}", other.type_str())),
+    };
+    let mut options = BTreeMap::new();
+    if let Some(value) = table.get("options") {
+        let tables = value.as_table().ok_or("`options` must be a table of tables, [options.<key>]")?;
+        if tables.len() > game_server::script::options::MAX_OPTIONS {
+            return Err(format!("[options]: at most {} options (got {})", game_server::script::options::MAX_OPTIONS, tables.len()));
+        }
+        for (key, v) in tables {
+            if !game_server::script::options::valid_key(key) {
+                return Err(format!("[options.{key}]: the key must match ^[a-z][a-z0-9_]{{0,39}}$"));
+            }
+            let spec = v.as_table().ok_or_else(|| format!("[options.{key}] must be a table"))?;
+            let json = serde_json::to_value(spec).map_err(|e| format!("[options.{key}]: {e}"))?;
+            options.insert(key.clone(), game_server::script::OptionSpec::parse(&json).map_err(|e| format!("[options.{key}]: {e}"))?);
+        }
+    }
+    match (api, scripts.is_empty()) {
+        (Some(_), true) => return Err("`api` without `scripts`: api names the Lua API version the scripts are written for".into()),
+        (None, false) => return Err("`scripts` without `api`: say which Lua API version they are written for (api = 1)".into()),
+        _ => {}
+    }
+    if scripts.is_empty() && !options.is_empty() {
+        return Err("[options] without `scripts`: options belong to the scripts that read them".into());
+    }
+    if let Some(api) = api
+        && api > game_server::script::API_VERSION
+    {
+        return Err(format!("needs a newer game server: API {api}, this one has {}", game_server::script::API_VERSION));
+    }
+    Ok((api, scripts, options))
 }
 
 fn check_own_overlaps(ranges: &[IdRange], what: &str) -> Result<(), String> {
@@ -239,6 +307,7 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
         assert_eq!(m.settings["market_maps"], "35,36", "a list is joined like the old variable's text");
         assert_eq!(m.rules["no-pvp-gain"], serde_json::json!({ "type": "pvp_gain", "maps": [35, 36], "exp": 0 }));
         assert_eq!(m.rules.len(), 1);
+        assert_eq!((m.api, m.scripts.is_empty(), m.options.is_empty()), (None, true, true));
         assert_eq!(m.features, ["a"]);
         assert_eq!(m.art, [Art { member: "Item/Icon/x.dds".into(), file: "art/x.dds".into() }]);
         assert_eq!(m.json["name"], "kill-boost");
@@ -248,6 +317,73 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
     fn a_minimal_manifest_needs_only_the_required_keys() {
         let m = Manifest::parse("format = 1\nname = \"ab\"\nversion = \"0.1.0\"\ntitle = \"t\"\ndescription = \"d\"\n").unwrap();
         assert!(m.items.is_empty() && m.skills.is_empty() && m.settings.is_empty() && m.rules.is_empty());
+    }
+
+    #[test]
+    fn scripts_api_and_options_parse() {
+        let text = r#"
+format = 1
+name = "kill-streak"
+version = "1.0.0"
+title = "t"
+description = "d"
+api = 1
+scripts = ["main.lua", "lib/more_2.lua"]
+
+[options.announce_at]
+type = "integers"
+default = [5, 10]
+doc = "Streaks announced."
+
+[options.bounty_gold]
+type = "integer"
+default = 100000
+min = 0
+max = 100000000
+doc = "Gold."
+"#;
+        let m = Manifest::parse(text).unwrap();
+        assert_eq!((m.api, m.scripts.as_slice()), (Some(1), ["main.lua".to_owned(), "lib/more_2.lua".to_owned()].as_slice()));
+        assert_eq!(m.options.keys().collect::<Vec<_>>(), ["announce_at", "bounty_gold"]);
+        assert_eq!(m.options["bounty_gold"].max, Some(serde_json::json!(100000000)));
+        assert_eq!(m.json["api"], 1, "the manifest keeps api, scripts and options as written");
+        assert_eq!(m.json["options"]["announce_at"]["default"], serde_json::json!([5, 10]));
+    }
+
+    #[test]
+    fn script_manifests_are_refused_by_key() {
+        let head = "format = 1\nname = \"ks\"\nversion = \"1.0.0\"\ntitle = \"t\"\ndescription = \"d\"\n";
+        let opt = "\n[options.x]\ntype = \"integer\"\ndefault = 1\ndoc = \"d\"\n";
+        let cases: Vec<(String, &str)> = vec![
+            (format!("{head}scripts = [\"main.lua\"]\n"), "`scripts` without `api`"),
+            (format!("{head}api = 1\n"), "`api` without `scripts`"),
+            (format!("{head}api = 2\nscripts = [\"main.lua\"]\n"), "needs a newer game server: API 2, this one has 1"),
+            (format!("{head}api = 0\nscripts = [\"main.lua\"]\n"), "`api` must be a whole number from 1"),
+            (format!("{head}api = \"1\"\nscripts = [\"main.lua\"]\n"), "`api` must be a whole number"),
+            (format!("{head}api = 1\nscripts = []\n"), "`scripts` lists 1 to 64 files (got 0)"),
+            (format!("{head}api = 1\nscripts = [\"../x.lua\"]\n"), "is not a script path"),
+            (format!("{head}api = 1\nscripts = [\"/x.lua\"]\n"), "is not a script path"),
+            (format!("{head}api = 1\nscripts = [\"Main.lua\"]\n"), "is not a script path"),
+            (format!("{head}api = 1\nscripts = [\"main.txt\"]\n"), "is not a script path"),
+            (format!("{head}api = 1\nscripts = [\"a//b.lua\"]\n"), "is not a script path"),
+            (format!("{head}api = 1\nscripts = [\"main.lua\", \"main.lua\"]\n"), "listed twice"),
+            (format!("{head}api = 1\nscripts = [1]\n"), "list of strings"),
+            (format!("{head}api = 1\nscripts = [{}]\n", (0..65).map(|i| format!("\"f{i}.lua\"")).collect::<Vec<_>>().join(", ")), "1 to 64 files"),
+            (format!("{head}{}", opt.trim_start()), "[options] without `scripts`"),
+            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.X]\ntype = \"integer\"\ndefault = 1\ndoc = \"d\"\n"), "[options.X]: the key must match"),
+            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = \"a\"\ndoc = \"d\"\n"), "[options.x]: default:"),
+            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = 1\n"), "[options.x]: doc is required"),
+            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options]\nx = 1\n"), "[options.x] must be a table"),
+        ];
+        for (text, needle) in cases {
+            let error = Manifest::parse(&text).unwrap_err();
+            assert!(error.contains(needle), "wanted {needle:?}, got {error:?}");
+        }
+        // 65 options.
+        let many: String = (0..65).map(|i| format!("[options.o{i}]\ntype = \"boolean\"\ndefault = true\ndoc = \"d\"\n")).collect();
+        let error = Manifest::parse(&format!("{head}api = 1\nscripts = [\"m.lua\"]\n{many}")).unwrap_err();
+        assert!(error.contains("at most 64 options"), "{error}");
+        assert!(valid_script_path("a.lua") && valid_script_path("a/b-c_d/e1.lua") && !valid_script_path(".lua") && !valid_script_path("a/.lua"));
     }
 
     #[test]
@@ -265,11 +401,11 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
             (GOOD.replace("kill-boost", "k"), "must match"),
             (GOOD.replace("1.0.0", "1.0"), "not a semantic version"),
             (format!("{GOOD}\nextra = 1\n").replace("[ids]", "extra = 1\n[ids]"), "unknown key `extra` in the manifest"),
-            (GOOD.replace("[ids]", "options = 1\n[ids]"), "`options` is reserved for a later chunk"),
+            (GOOD.replace("[ids]", "options = 1\n[ids]"), "`options` must be a table of tables"),
             (no_rules().replace("[ids]", "rules = 1\n[ids]"), "`rules` must be a table of tables"),
             (no_rules().replace("[ids]", "[rules]\nx = 1\n[ids]"), "[rules.x] must be a table"),
-            (GOOD.replace("[ids]", "scripts = 1\n[ids]"), "`scripts` is reserved for a later chunk"),
-            (GOOD.replace("[ids]", "api = 1\n[ids]"), "`api` is reserved for a later chunk"),
+            (GOOD.replace("[ids]", "scripts = 1\n[ids]"), "`scripts` must be a list"),
+            (GOOD.replace("[ids]", "api = 1\n[ids]"), "`api` without `scripts`"),
             (GOOD.replace("items = [", "monsters = [\"1\"]\nitems = ["), "unknown key `monsters` in [ids]"),
             (GOOD.replace("100/212-214", "101/5"), "[ids] items: item type 101"),
             (GOOD.replace("200/1-3", "327"), "[ids] skills: skill 327"),

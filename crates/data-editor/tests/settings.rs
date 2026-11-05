@@ -74,8 +74,9 @@ async fn bad_setting_lines_never_reach_the_draft() {
     let cases = [
         (set("setting", "trade_chat_minlevel", "value", json!(12)), "is not a game setting"),
         (set("setting", "database_url", "value", json!("x")), "is not a game setting"),
-        (set("setting", "ext.welcome.welcome_text", "value", json!("hi")), "reserved for chunk 5"),
-        (add("setting", "ext.welcome.welcome_text", json!({"value": "hi"})), "reserved for chunk 5"),
+        (set("setting", "ext.welcome.welcome_text", "value", json!("hi")), "the extension welcome is not installed"),
+        (add("setting", "ext.welcome.welcome_text", json!({"value": "hi"})), "the extension welcome is not installed"),
+        (add("setting", "ext.Welcome", json!({"value": "hi"})), "is not an extension option"),
         (set("setting", "trade_chat_min_level", "value", json!("ten")), "not a whole number"),
         (set("setting", "slot_payout_percent", "value", json!(0)), "1 to 1000"),
         (set("setting", "kill_boost_skills", "value", json!("200/1:101")), "times 101"),
