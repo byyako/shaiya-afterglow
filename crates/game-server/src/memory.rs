@@ -65,6 +65,8 @@ pub struct MemoryBackend {
     pub next_live: Mutex<Option<std::result::Result<crate::server::Live, String>>>,
     /// What `reload` reads as the rules' database layers (`rule_layers`); tests set it.
     pub rule_layers: Mutex<crate::rules::RuleSources>,
+    /// What `reload` reads as the extensions' scripts (`script_sources`); tests set it with `set_script_sources`.
+    pub script_sources: Mutex<crate::script::sources::ScriptSources>,
     /// The obelisks' owners as last saved, by map and number.
     pub obelisk_owners: Mutex<std::collections::BTreeMap<(u16, u16), crate::obelisk::Owner>>,
     /// Treat every pending deletion as due.
@@ -217,6 +219,11 @@ pub struct StoredAccount {
 }
 
 impl MemoryBackend {
+    /// Sets what the next `reload` reads as the extensions' scripts (`docs/plans/ext-5-lua.md` section 9.2).
+    pub fn set_script_sources(&self, sources: crate::script::sources::ScriptSources) {
+        *self.script_sources.guard() = sources;
+    }
+
     /// What `CharacterStore::load` puts in `PlayCharacter::mall`.
     fn mall_of(&self, user_id: u32, server_id: u8, character_id: u32) -> Mall {
         let mall = self.mall.guard();
@@ -1232,6 +1239,10 @@ impl AdminStore for MemoryBackend {
 
     async fn rule_layers(&self) -> Result<crate::rules::RuleSources> {
         Ok(self.rule_layers.guard().clone())
+    }
+
+    async fn script_sources(&self) -> Result<crate::script::sources::ScriptSources> {
+        Ok(self.script_sources.guard().clone())
     }
 
     async fn set_account_status(&self, user_id: u32, status: i16) -> Result<()> {

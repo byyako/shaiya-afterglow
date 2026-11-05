@@ -754,6 +754,10 @@ async fn gm_chat<S: Backend>(
     if ctx.zones.bans_of(id).chat.is_some_and(|until| !until.passed(Instant::now())) || !chat::markup_is_safe(message) {
         return Ok(());
     }
+    // A `!word` a script registered, for staff too (`docs/plans/ext-5-lua.md` section 7.2): queued, not chat.
+    if opcode == ap::OP_CHAT_NORMAL && super::script::command(ctx, character, state, message) {
+        return Ok(());
+    }
     match opcode {
         // With a Message To Server armed: to everyone as `0x1108` instead (`CUser::PacketAdminChat`).
         ap::OP_CHAT_NORMAL if state.chat_item_armed => {

@@ -49,6 +49,7 @@ mod obelisk;
 mod party;
 mod pvp;
 mod ranking;
+mod script;
 mod scripted;
 mod trade;
 mod vehicle;
@@ -704,6 +705,11 @@ pub struct Zones {
     /// The rules in force (`docs/plans/ext-2-rules.md` section 5): swapped whole by `reload`. A leaf lock, held for the clone of the
     /// `Arc` only (section 8).
     rules: std::sync::RwLock<std::sync::Arc<crate::rules::RuleSet>>,
+    /// The extensions' scripts in force and the script thread's queue (`docs/plans/ext-5-lua.md` section 4.1): `zone/script.rs`.
+    scripts: std::sync::Arc<crate::script::runner::ScriptCell>,
+    script_jobs: OnceLock<crate::script::runner::Jobs>,
+    /// The staff level each online staff member entered with, for `p:staff()`. A leaf lock.
+    script_staff: Mutex<HashMap<u32, u8>>,
 }
 
 /// A packet for the players within `range` of a spot.
@@ -1726,6 +1732,9 @@ impl Zones {
             quests: Mutex::default(),
             smooth: AtomicBool::new(false),
             rules: std::sync::RwLock::default(),
+            scripts: std::sync::Arc::default(),
+            script_jobs: OnceLock::new(),
+            script_staff: Mutex::default(),
         }
     }
 

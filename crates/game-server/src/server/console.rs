@@ -42,6 +42,7 @@ async fn carry_out<S: Backend>(ctx: &Context<S>, command: Command) -> Vec<String
         Command::Restart(minutes) => vec![quit(ctx, console::quit_duration(minutes), true)],
         Command::Reload => vec![reload(ctx).await],
         Command::Rules => rules_answer(ctx),
+        Command::Scripts => super::script::answer(ctx),
         Command::QuitCancel => vec![quit_cancel(ctx).await],
         Command::AllOut => vec![format!("{} connections closed", ctx.online.kick_all(Kick::Operator { op: 0 }))],
         Command::Close => {
@@ -197,22 +198,37 @@ pub async fn countdown<S: Backend>(ctx: Arc<Context<S>>) {
     }
 }
 
-/// `reload` (`docs/plans/done/data-editing.md` section 7, `docs/plans/ext-2-rules.md` section 4.6): the monsters and drop tables, the config
-/// file's rules and the database's rules (the enabled extensions' and the data editor's) are read again and put in force together;
-/// on any error nothing is swapped. Living monsters keep what they were spawned with (the section 2 table of the plan says per field).
-/// The settings are not taken: one whose value in the file differs from the value in force is named, and waits for the next start.
+/// `reload` (`docs/plans/done/data-editing.md` section 7, `docs/plans/ext-2-rules.md` section 4.6, `docs/plans/ext-5-lua.md` section 9.2): the
+/// monsters and drop tables, the config file's rules and the database's rules (the enabled extensions' and the data editor's), and the
+/// extensions' scripts with their options, are read again and put in force together; on any error nothing is swapped. Living monsters
+/// keep what they were spawned with (the section 2 table of the plan says per field). The settings are not taken: one whose value in
+/// the file differs from the value in force is named, and waits for the next start.
 async fn reload<S: Backend>(ctx: &Context<S>) -> String {
     let started = Instant::now();
     match read_everything(ctx).await {
-        Ok((live, rules, changed)) => {
-            let (monsters, grades, box_sets, rule_count) = (live.mobs.len(), live.drops.grade_count(), live.drops.box_count(), rules.len());
-            ctx.data.set_live(live);
-            ctx.zones.set_rules(rules);
+        Ok(read) => {
+            let (monsters, grades, box_sets, rule_count) = (read.live.mobs.len(), read.live.drops.grade_count(), read.live.drops.box_count(), read.rules.len());
+            ctx.data.set_live(read.live);
+            ctx.zones.set_rules(read.rules);
+            // The scripts are swapped with the rules: the old states finish the calls they are in and are dropped (section 9.2).
+            let scripted = read.scripts.map(|set| {
+                let files: usize = read.script_files;
+                let extensions = set.extensions().len();
+                ctx.zones.set_ext_scripts(set);
+                (files, extensions)
+            });
             let ms = started.elapsed().as_millis();
             tracing::info!(monsters, grades, box_sets, rules = rule_count, ms, "monsters, drops and rules reloaded");
-            let mut answer = format!("reloaded: {monsters} monsters, {grades} drop grades, {box_sets} box sets, {rule_count} rules ({ms} ms)");
-            if !changed.is_empty() {
-                let names = changed.join(", ");
+            let mut answer = format!("reloaded: {monsters} monsters, {grades} drop grades, {box_sets} box sets, {rule_count} rules");
+            if let Some((files, extensions)) = scripted.filter(|(_, extensions)| *extensions > 0) {
+                answer.push_str(&format!(", {files} scripts of {extensions} extensions"));
+            }
+            answer.push_str(&format!(" ({ms} ms)"));
+            for warning in &read.warnings {
+                tracing::warn!("{warning}");
+            }
+            if !read.changed.is_empty() {
+                let names = read.changed.join(", ");
                 tracing::warn!(settings = %names, "settings changed in the file take effect at the next start");
                 answer.push_str(&format!("; settings changed in the file take effect at the next start: {names}"));
             }
@@ -225,9 +241,22 @@ async fn reload<S: Backend>(ctx: &Context<S>) -> String {
     }
 }
 
-/// Everything `reload` reads before it swaps anything: the live tables, the rules resolved over the config file and the database, and
-/// the settings whose value in the file is not the one in force.
-async fn read_everything<S: Backend>(ctx: &Context<S>) -> anyhow::Result<(crate::server::Live, crate::rules::RuleSet, Vec<String>)> {
+/// What `reload` read, before it swaps anything.
+struct Reloaded {
+    live: crate::server::Live,
+    rules: crate::rules::RuleSet,
+    /// The settings whose value in the file is not the one in force.
+    changed: Vec<String>,
+    /// The extensions' scripts loaded afresh; `None` with `scripts = false` (nothing is loaded, restart to change it).
+    scripts: Option<crate::script::ScriptSet>,
+    /// Script files across the enabled extensions.
+    script_files: usize,
+    warnings: Vec<String>,
+}
+
+/// Everything `reload` reads before it swaps anything: the live tables, the rules resolved over the config file and the database, the
+/// scripts loaded afresh over their options, and the settings whose value in the file is not the one in force.
+async fn read_everything<S: Backend>(ctx: &Context<S>) -> anyhow::Result<Reloaded> {
     let live = ctx.store.load_live(&ctx.data.skills).await?;
     let file = crate::config::read_config_file(ctx.config.config_path.as_deref())?;
     let mut sources = ctx.store.rule_layers().await?;
@@ -235,13 +264,27 @@ async fn read_everything<S: Backend>(ctx: &Context<S>) -> anyhow::Result<(crate:
     sources.setting_layers = ctx.rule_setting_layers.clone();
     // The settings stay as they were at start, so the rules they make do too.
     let (rules, _) = crate::rules::resolve(&ctx.config, &sources)?;
+    let (mut scripts, mut script_files, mut warnings) = (None, 0, Vec::new());
+    if ctx.config.scripts {
+        let mut script_sources = ctx.store.script_sources().await?;
+        script_sources.file = file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
+        let resolution = crate::script::sources::resolve_options(&script_sources)?;
+        warnings = resolution.warnings.clone();
+        let set = ctx.load_script_set(&script_sources, &resolution);
+        // A script that does not load fails the whole reload (the operator is there to read the error).
+        if let Some((_, why)) = set.failed().first() {
+            anyhow::bail!("{why}");
+        }
+        script_files = script_sources.extensions.iter().map(|e| e.scripts.len()).sum();
+        scripts = Some(set);
+    }
     let changed = file
         .iter()
         .flat_map(|f| f.values.iter())
         .filter(|(name, value, _)| ctx.settings_in_force.iter().find(|(n, _)| n == name).is_none_or(|(_, in_force)| in_force != value))
         .map(|(name, _, _)| name.clone())
         .collect();
-    Ok((live, rules, changed))
+    Ok(Reloaded { live, rules, changed, scripts, script_files, warnings })
 }
 
 /// `rules`: one line per rule in force, `<name> <type> <where from> <hits>`.

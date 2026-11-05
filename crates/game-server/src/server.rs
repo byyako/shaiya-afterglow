@@ -71,6 +71,7 @@ mod my_shop;
 mod pvp;
 mod record;
 mod refused;
+pub mod script;
 mod tasks;
 mod vehicles;
 
@@ -200,6 +201,10 @@ pub struct Context<S> {
     /// `reload` compares the config file with, and puts on the rules the settings make (`docs/plans/ext-2-rules.md` section 4.6).
     pub settings_in_force: Vec<(String, String)>,
     pub rule_setting_layers: Vec<(String, String)>,
+    /// The names of the items, monsters and skills, for the scripts' `item_name` and `mob_name` (`main` loads them).
+    pub names: crate::game_log::Names,
+    /// The context itself, weakly, once `attach_scripts` ran: the world the scripts act on (`server/script.rs`).
+    script_me: std::sync::OnceLock<std::sync::Weak<Context<S>>>,
 }
 
 impl<S> Context<S> {
@@ -207,6 +212,11 @@ impl<S> Context<S> {
     pub fn set_game_log(&mut self, log: crate::game_log::GameLog) {
         self.zones.set_game_log(log.clone());
         self.game_log = log;
+    }
+
+    /// The names of the definitions the scripts' `item_name` and `mob_name` answer with.
+    pub fn set_names(&mut self, names: crate::game_log::Names) {
+        self.names = names;
     }
 
     /// Remembers the settings as resolved at start (see `settings_in_force`).
@@ -260,6 +270,8 @@ impl<S> Context<S> {
             restart: AtomicBool::new(false),
             settings_in_force: Vec::new(),
             rule_setting_layers: Vec::new(),
+            names: Default::default(),
+            script_me: std::sync::OnceLock::new(),
         }
     }
 }
@@ -1187,6 +1199,8 @@ struct WorldState {
     chat_bucket: Bucket,
     /// Log lines a client can make as often as it likes, one per kind per interval (R4, R18).
     logs: LogGates,
+    /// Which events of the extensions' scripts were raised for this character (`server/script.rs`).
+    script: script::Track,
 }
 
 impl WorldState {
@@ -1304,6 +1318,7 @@ async fn in_world<S: Backend>(
         mall: mall::MallState::new(&character.mall),
         chat_bucket: Bucket::new(ctx.config.chat_per_sec, ctx.config.chat_burst, Instant::now()),
         logs: LogGates::new(),
+        script: script::Track { id: character.id, name: character.name.clone(), ..Default::default() },
     };
     sync_quests(ctx, character.id, &state.quests);
     // The guilds know the player from now on (`CGuild::ConnectUser`, `docs/original/guild.md` section 10).
@@ -1378,6 +1393,8 @@ async fn in_world<S: Backend>(
     {
         tracing::warn!(%error, id = character.id, "could not put the duel stakes back");
     }
+    // Out of the world for the scripts: `map_leave` and `logout` are queued, never run here (section 4.3).
+    script::gone(ctx, &mut state);
     if state.dead
         && !state.fallen
         && let Err(error) = leave_dead(ctx, player, &mut character, &mut state).await
@@ -1829,6 +1846,7 @@ async fn world_loop<S: Backend>(
                     conn.send(ctx.zones.change_speeds(map, id, attack, movement)).await?;
                 }
                 state.entered = true;
+                script::entered(ctx, state);
                 // Entering a zone starts the move check again (`CUser::EnterZone`).
                 state.move_check.reset(Instant::now(), state.position);
                 tracing::info!(%peer, user_id = player.user_id, id, map, "in the world");
@@ -2381,6 +2399,11 @@ async fn world_loop<S: Backend>(
                 // Without the terminating zero, which would make the log file binary to grep.
                 let shown = String::from_utf8_lossy(text.strip_suffix(&[0]).unwrap_or(text));
                 tracing::debug!(%peer, id, opcode = format_args!("{opcode:#06x}"), text = %shown, "chat");
+                // A `!word` a script registered is not chat: it was counted in the bucket above and is queued for the script thread
+                // (`docs/plans/ext-5-lua.md` section 7.2); no lock is held here.
+                if opcode == chat::OP_NORMAL && script::command(ctx, character, state, text) {
+                    continue;
+                }
                 match opcode {
                     chat::OP_NORMAL if state.chat_item_armed => {
                         said(ctx, character, state, Heard::Trade, None, text);
@@ -3133,6 +3156,7 @@ async fn leave_zone<S: Backend>(conn: &mut Connection, ctx: &Context<S>, state: 
         }
     }
     state.entered = false;
+    script::left_zone(ctx, state);
     Ok(())
 }
 

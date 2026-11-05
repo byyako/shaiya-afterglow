@@ -823,6 +823,9 @@ pub trait AdminStore: Send + Sync + 'static {
     /// The database layers of the rules, read again by `reload` (`docs/plans/ext-2-rules.md` section 4.6): the enabled extensions'
     /// and the data editor's. An error means nothing was read.
     fn rule_layers(&self) -> impl Future<Output = Result<crate::rules::RuleSources>> + Send;
+    /// The enabled extensions' scripts, option specs, the data editor's option values and the scripts' globals, read again by `reload`
+    /// (`docs/plans/ext-5-lua.md` section 9.2). The config file's `[ext.<name>]` is the caller's. An error means nothing was read.
+    fn script_sources(&self) -> impl Future<Output = Result<crate::script::sources::ScriptSources>> + Send;
     /// `F601`, `F602`: the account's status word (the staff level in bits 4 to 6).
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send;
     /// An account by name, ignoring case, with its status; `None` when there is none (or it is deleted).
@@ -1302,6 +1305,9 @@ impl<T: AdminStore> AdminStore for std::sync::Arc<T> {
     }
     fn rule_layers(&self) -> impl Future<Output = Result<crate::rules::RuleSources>> + Send {
         (**self).rule_layers()
+    }
+    fn script_sources(&self) -> impl Future<Output = Result<crate::script::sources::ScriptSources>> + Send {
+        (**self).script_sources()
     }
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send {
         (**self).set_account_status(user_id, status)

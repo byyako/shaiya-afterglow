@@ -29,6 +29,8 @@ pub enum Command {
     Reload,
     /// `rules`: the rules in force with how often each matched (`docs/plans/ext-2-rules.md` section 4.7).
     Rules,
+    /// `scripts`: the extensions' scripts in force with their state (`docs/plans/ext-5-lua.md` section 9.3).
+    Scripts,
     AllOut,
     Close,
     Open,
@@ -52,7 +54,7 @@ struct Entry {
     example: &'static str,
 }
 
-const TABLE: [Entry; 18] = [
+const TABLE: [Entry; 19] = [
     Entry { word: "help", usage: "help [command]", sentence: "lists the commands, or tells how one is used.", example: "help kick" },
     Entry {
         word: "info",
@@ -89,6 +91,12 @@ const TABLE: [Entry; 18] = [
         usage: "rules",
         sentence: "lists the rules in force: name, type, where from, and how often each matched since the start or the last reload.",
         example: "rules",
+    },
+    Entry {
+        word: "scripts",
+        usage: "scripts",
+        sentence: "lists the extensions' scripts: running, disabled after errors or not loaded, with handlers, timers and errors.",
+        example: "scripts",
     },
     Entry { word: "allout", usage: "allout", sentence: "disconnects every player, saved; the server keeps running.", example: "allout" },
     Entry { word: "close", usage: "close", sentence: "stops new logins to this server (as /server off).", example: "close" },
@@ -223,6 +231,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
         },
         "reload" if rest.is_empty() => Ok(Command::Reload),
         "rules" if rest.is_empty() => Ok(Command::Rules),
+        "scripts" if rest.is_empty() => Ok(Command::Scripts),
         "allout" if rest.is_empty() => Ok(Command::AllOut),
         "close" if rest.is_empty() => Ok(Command::Close),
         "open" if rest.is_empty() => Ok(Command::Open),
@@ -296,6 +305,7 @@ mod tests {
             (".restart 15", Command::Restart(Some(15))),
             ("reload", Command::Reload),
             (".rules", Command::Rules),
+            ("scripts", Command::Scripts),
             ("allout", Command::AllOut),
             ("close", Command::Close),
             ("open", Command::Open),
@@ -376,7 +386,7 @@ mod tests {
     #[test]
     fn help_lists_every_command_and_explains_each() {
         let all = help();
-        assert_eq!(all.len(), 18);
+        assert_eq!(all.len(), 19);
         assert!(all.contains(&"exp <factor> | exp off".to_owned()));
         let lines = help_for("exp").unwrap();
         assert_eq!(lines[0], "usage: exp <factor> | exp off");

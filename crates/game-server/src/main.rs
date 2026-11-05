@@ -69,12 +69,8 @@ async fn main() -> Result<()> {
     }
     let (rules, _) = game_server::rules::resolve(&config, &rule_sources)?;
     tracing::info!(rules = rules.len(), "rules in force");
-    // The options of the extensions' scripts (an error in a layer stops the start); the scripts themselves load in step 4.
-    let options = game_server::script::sources::resolve_options(&script_sources)?;
-    for warning in &options.warnings {
-        tracing::warn!("{warning}");
-    }
-    tracing::info!(extensions = options.extensions.len(), scripts = config.scripts, "extensions with scripts");
+    // The options of the extensions' scripts (an error in a layer stops the start); the scripts load once the context exists.
+    game_server::script::sources::resolve_options(&script_sources)?;
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
     let creation = CreationData {
@@ -143,21 +139,30 @@ async fn main() -> Result<()> {
     tracing::info!(products = products.len(), item_mall = config.item_mall, "item mall loaded");
     let backend = PgBackend::new(pool.clone(), config.delete_delay);
     let data = GameData { creation, exp, world, items, status, live: live.shared(), skills, quests, kill_grades, products };
+    // The names of the definitions: the game log writes them into its records, the scripts' `item_name` and `mob_name` read them.
+    let names = pg::load_game_log_names(&pool).await.context("loading the names of the game log")?;
     let game_log = if config.game_log {
-        let names = pg::load_game_log_names(&pool).await.context("loading the names of the game log")?;
         tracing::info!(chat = config.game_chat_log, days = config.game_log_days, "game log on");
-        Some(GameLog::spawn(pool.clone(), &config, names))
+        Some(GameLog::spawn(pool.clone(), &config, names.clone()))
     } else {
         tracing::info!("game log off (log = false)");
         None
     };
     let mut ctx = Context::new(config, backend, data);
     ctx.set_settings(&settings);
+    ctx.set_names(names);
     if let Some(game_log) = game_log {
         ctx.set_game_log(game_log);
     }
     ctx.zones.set_rules(rules);
     let ctx = Arc::new(ctx);
+    // The extensions' scripts (`docs/plans/ext-5-lua.md` section 9.1): an extension whose scripts do not load runs without them.
+    if ctx.config.scripts {
+        let set = game_server::server::script::load_at_start(&ctx, &script_sources)?;
+        ctx.start_scripts(set);
+    } else {
+        tracing::info!("scripts off (scripts = false)");
+    }
     load_kill_counts(&ctx).await.context("loading the factions' kill counts")?;
     let mob_id = load_mob_id(&ctx).await.context("loading the monsters' id counter")?;
     tracing::info!(mob_id, "monster id counter loaded");

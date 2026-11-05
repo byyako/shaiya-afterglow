@@ -97,7 +97,7 @@ fn a_huge_string_is_a_memory_error_and_disables_the_extension() {
     let err = ext.call::<_, String>("login", Limit::EVENT, ()).err().expect("memory error").to_string();
     assert!(err.contains("extension t: login:"), "{err}");
     assert!(ext.is_disabled(), "one memory error disables");
-    assert!(ext.disabled_reason().unwrap().contains("out of memory"));
+    assert!(ext.disabled_reason().unwrap().contains("a memory error"));
     // Disabled: nothing runs.
     assert_eq!(ext.call::<_, ()>("login", Limit::EVENT, ()), Ok(None));
     assert!(ext.run("test", Limit::EVENT, |lua| lua.load("return 1").eval::<i64>()).is_err(), "nor is anything else");
@@ -235,7 +235,7 @@ fn two_extensions_cannot_share_a_command_or_an_item() {
     let b = input("b", "game.command('x', function() end)");
     let c = input("c", "game.on_item({'1/1'}, function() end)");
     let d = input("d", "game.command('y', function() end) game.on('login', function() end) game.on('exp', function() end)");
-    let set = ScriptSet::load(&[a, b, c, d], None, 16);
+    let set = ScriptSet::load(&[a, b, c, d], LoadContext::default(), 16);
     assert_eq!(set.extensions().iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["a", "d"]);
     let failed: Vec<&str> = set.failed().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(failed, ["b", "c"]);
@@ -619,5 +619,189 @@ mod layers {
         }
         assert!(crate::config::check_setting("script_memory_mb", "many").is_err());
         assert!(crate::config::check_setting("script_memory_mb", "256").is_ok() && crate::config::check_setting("script_memory_mb", "1").is_ok());
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------ reads and acting (step 4)
+
+mod acting {
+    use super::*;
+    use crate::script::event::{Killer, MobInfo, Payload, PlayerRef};
+    use crate::script::world::{PlayerView, ScriptWorld};
+    use std::sync::Mutex as StdMutex;
+
+    #[derive(Default)]
+    struct Fake {
+        sent: StdMutex<Vec<String>>,
+    }
+
+    fn view(id: u32, name: &str) -> PlayerView {
+        PlayerView { id, name: name.to_owned(), level: 40 + id as u16, country: (id % 2) as u8, map: 1, position: [1.0, 2.5, 3.0], kills: 7, job: 2, staff: 0, guild: (id == 1).then_some(9) }
+    }
+
+    impl ScriptWorld for Fake {
+        fn player(&self, id: u32) -> Option<PlayerView> {
+            (1..=3).contains(&id).then(|| view(id, ["", "Alice", "Bob", "Carol"][id as usize]))
+        }
+        fn find(&self, name: &str) -> Option<PlayerView> {
+            (1..=3).filter_map(|i| self.player(i)).find(|v| v.name.eq_ignore_ascii_case(name))
+        }
+        fn online(&self, max: usize) -> Vec<PlayerView> {
+            (1..=3).filter_map(|i| self.player(i)).take(max).collect()
+        }
+        fn online_count(&self) -> usize {
+            3
+        }
+        fn party(&self, id: u32) -> Vec<u32> {
+            if id == 1 || id == 2 { vec![1, 2] } else { vec![id] }
+        }
+        fn whisper(&self, id: u32, text: &str) {
+            self.sent.lock().unwrap().push(format!("whisper {id}: {text}"));
+        }
+        fn notice_to(&self, id: u32, text: &str) {
+            self.sent.lock().unwrap().push(format!("notice {id}: {text}"));
+        }
+        fn notice_all(&self, text: &str) {
+            self.sent.lock().unwrap().push(format!("all: {text}"));
+        }
+        fn notice_faction(&self, country: u8, text: &str) {
+            self.sent.lock().unwrap().push(format!("faction {country}: {text}"));
+        }
+        fn notice_map(&self, map: u16, text: &str) {
+            self.sent.lock().unwrap().push(format!("map {map}: {text}"));
+        }
+        fn banner(&self, name: &str, text: &str) {
+            self.sent.lock().unwrap().push(format!("banner {name}: {text}"));
+        }
+        fn item_name(&self, t: u8, i: u8) -> Option<String> {
+            ((t, i) == (25, 1)).then(|| "Potion".to_owned())
+        }
+        fn mob_name(&self, id: u16) -> Option<String> {
+            (id == 7).then(|| "Boar".to_owned())
+        }
+        fn tell_staff(&self, text: &str) {
+            self.sent.lock().unwrap().push(format!("staff: {text}"));
+        }
+        fn commands(&self) -> Vec<(String, String, u8)> {
+            vec![("hi".into(), "says hi".into(), 0)]
+        }
+    }
+
+    fn with_world(source: &str) -> (ExtScript, Arc<Fake>) {
+        let fake = Arc::new(Fake::default());
+        let ctx = LoadContext { world: Some(fake.clone()), ..LoadContext::default() };
+        (ExtScript::load(&input("t", source), &ctx, 16, false).unwrap(), fake)
+    }
+
+    #[test]
+    fn the_reads_give_what_the_world_says() {
+        let (ext, _) = with_world("");
+        assert_eq!(eval::<String>(&ext, "local p = game.player(1) return p.name .. ' ' .. p.id .. ' ' .. p:level() .. ' ' .. p:faction() .. ' ' .. p:map() .. ' ' .. p:kills() .. ' ' .. p:job() .. ' ' .. p:staff()"), "Alice 1 41 fury 1 7 2 0");
+        assert_eq!(eval::<String>(&ext, "local x, y, z = game.player(2):position() return x .. ',' .. y .. ',' .. z"), "1,2.5,3");
+        assert_eq!(eval::<String>(&ext, "return game.player(2):faction()"), "light");
+        assert_eq!(eval::<i64>(&ext, "return game.player(1):guild()"), 9);
+        assert!(eval::<bool>(&ext, "return game.player(2):guild() == nil and game.player(99) == nil and game.player(-1) == nil and game.player(1.5) == nil"));
+        assert!(eval::<bool>(&ext, "return game.find('bOB').id == 2 and game.find('nobody') == nil"));
+        assert_eq!(eval::<i64>(&ext, "return #game.online() * 10 + game.online_count()"), 33);
+        assert!(eval::<bool>(&ext, "return game.player(1) == game.find('alice') and game.player(1) ~= game.player(2) and tostring(game.player(3)) == 'Carol'"), "handles compare by id");
+        assert_eq!(eval::<i64>(&ext, "local m = game.player(2):party() return #m * 100 + m[1].id * 10 + m[2].id"), 212);
+        assert_eq!(eval::<i64>(&ext, "return #game.player(3):party()"), 1);
+        assert!(eval::<bool>(&ext, "return game.player(1):online() and game.player(1):has_feature('x') == false"));
+        assert!(eval::<bool>(&ext, "return game.item_name(25, 1) == 'Potion' and game.item_name(1, 1) == nil and game.mob_name(7) == 'Boar' and game.mob_name(8) == nil"));
+        assert_eq!(eval::<String>(&ext, "local c = game.commands()[1] return c.word .. c.help .. c.staff"), "hisays hi0");
+        // An offline player reads nil (the handle of a player that the world no longer has).
+        let offline = "local p = game.player(1) p.id = 77 return p:level() == nil and p:map() == nil and p:online() == false";
+        assert!(eval::<bool>(&ext, offline));
+    }
+
+    #[test]
+    fn messages_and_notices_follow_the_text_rules() {
+        let (ext, fake) = with_world("");
+        let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
+        run("local p = game.player(2) p:message('hello') p:notice('Hi\\200there') game.notice_all('news') game.notice_faction('fury', 'f') game.notice_map(35, 'm') game.banner('b') game.banner('c', 'Boss')").unwrap();
+        assert_eq!(
+            fake.sent.lock().unwrap().as_slice(),
+            ["whisper 2: hello", "notice 2: Hi?there", "all: news", "faction 1: f", "map 35: m", "banner Notice: b", "banner Boss: c"],
+            "a byte outside 0x20 to 0x7E becomes ?"
+        );
+        fake.sent.lock().unwrap().clear();
+        // A long message is cut into whisper lines of 120 bytes.
+        run(&format!("game.player(2):message(string.rep('x', 250))")).unwrap();
+        let sent = fake.sent.lock().unwrap().clone();
+        assert_eq!(sent.iter().map(|s| s.len() - "whisper 2: ".len()).collect::<Vec<_>>(), [120, 120, 10]);
+        for (code, expect) in [
+            ("game.player(2):notice(string.rep('x', 128))", "at most 127"),
+            ("game.player(2):message(string.rep('x', 1201))", "at most 1200"),
+            ("game.notice_all(string.rep('x', 2000))", "at most 1999"),
+            ("game.notice_map(1, string.rep('x', 128))", "at most 127"),
+            ("game.banner(string.rep('x', 128))", "at most 127"),
+            ("game.banner('x', string.rep('n', 21))", "at most 20"),
+            ("game.player(2):message('<<999c01 crash')", "colour marker"),
+            ("game.player(2):message({})", "is a string"),
+            ("game.notice_faction('both', 'x')", "\"light\" or \"fury\""),
+        ] {
+            // A fault each: a state of its own keeps them from adding up to a disabled extension.
+            let (fresh, _) = with_world("");
+            let error = fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code} should fail")).to_string();
+            assert!(error.contains(expect), "{code}: {error}");
+        }
+    }
+
+    #[test]
+    fn rates_limit_notices_to_many_and_messages_to_one() {
+        let (ext, fake) = with_world("");
+        let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
+        // Five messages a second to one player; the sixth is a Lua error (a fault), another player is not limited.
+        run("for i = 1, 5 do game.player(2):message('m' .. i) end").unwrap();
+        let error = run("game.player(2):message('m6')").err().expect("limited").to_string();
+        assert!(error.contains("at most 5 messages and notices a second to one player"), "{error}");
+        run("game.player(3):message('other')").unwrap();
+        assert_eq!(fake.sent.lock().unwrap().len(), 6);
+        // Twenty notices to many a minute.
+        run("for i = 1, 20 do game.notice_all('n' .. i) end").unwrap();
+        let error = run("game.banner('one more')").err().expect("limited").to_string();
+        assert!(error.contains("at most 20 notices and banners a minute"), "{error}");
+        assert_eq!(ext.fault_count(), 2);
+        assert!(!ext.is_disabled());
+    }
+
+    #[test]
+    fn events_bring_their_arguments() {
+        let (ext, fake) = with_world(
+            "game.on('kill', function(p, mob, near)
+               game.log(p.name .. ' ' .. mob.name .. ' ' .. mob.id .. ' ' .. mob.uid .. ' ' .. mob.level .. ' ' .. mob.map .. ' ' .. mob.x .. ',' .. mob.z .. ' ' .. tostring(mob.boss) .. ' ' .. tostring(mob.spawned) .. ' near ' .. #near .. ' ' .. near[2].name)
+             end)
+             game.on('pvp_kill', function(killer, victim, last, near) game.log('pvp ' .. killer.name .. ' ' .. victim.name .. ' ' .. tostring(last and last.name) .. ' ' .. #near) end)
+             game.on('death', function(victim, by, killer, pvp) game.log('death ' .. victim.name .. ' ' .. by .. ' ' .. tostring(type(killer) == 'table' and killer.name or killer) .. ' ' .. tostring(pvp)) end)
+             game.on('map_enter', function(p, map) game.log('enter ' .. p.name .. ' ' .. map) end)",
+        );
+        ext.shared().capture_log();
+        let a = PlayerRef { id: 1, name: "Alice".into() };
+        let b = PlayerRef { id: 2, name: "Bob".into() };
+        let mob = MobInfo { id: 7, uid: 99, name: "Boar".into(), level: 12, map: 1, x: 5.0, z: 6.0, boss: false, spawned: None };
+        let set = {
+            let ext = Arc::new(ext);
+            ext
+        };
+        let fire = |event: Event, payload: Payload| {
+            let _ = set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &payload));
+        };
+        fire(Event::Kill, Payload::Kill { p: a.clone(), mob: mob.clone(), near: vec![a.clone(), b.clone()] });
+        fire(Event::PvpKill, Payload::PvpKill { killer: a.clone(), victim: b.clone(), last_hit: None, near: vec![a.clone()] });
+        fire(Event::Death, Payload::Death { victim: b.clone(), killer: Killer::Player(a.clone()), pvp: true });
+        fire(Event::Death, Payload::Death { victim: b.clone(), killer: Killer::Monster(55), pvp: false });
+        fire(Event::MapEnter, Payload::MapEnter { p: a, map: 35 });
+        assert_eq!(
+            set.shared().captured(),
+            [
+                "Alice Boar 7 99 12 1 5,6 false nil near 2 Bob",
+                "pvp Alice Bob nil 1",
+                "death Bob player Alice true",
+                "death Bob monster 55 false",
+                "enter Alice 35"
+            ]
+        );
+        assert_eq!(set.fault_count(), 0);
+        let _ = fake;
     }
 }

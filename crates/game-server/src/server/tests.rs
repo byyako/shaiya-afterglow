@@ -98,3 +98,26 @@ fn a_rules_factor_of_one_changes_nothing_and_the_others_truncate() {
     assert_eq!(item_then_rules(101, 1.5, 0.5), (75, 75));
     assert_eq!(item_then_rules(100, 1.5, 1.0), (150, 150), "no rule: the item factor alone");
 }
+
+#[test]
+fn script_commands_are_parsed_from_chat_lines() {
+    use super::script::{may_use, parse_command};
+    let cmd = |t: &[u8]| parse_command(t);
+    assert_eq!(cmd(b"!bounty Bob 1000\0"), Some(("bounty".into(), "Bob 1000".into())));
+    assert_eq!(cmd(b"!streak"), Some(("streak".into(), String::new())));
+    assert_eq!(cmd(b"!Streak\0"), Some(("streak".into(), String::new())), "any case");
+    assert_eq!(cmd(b"!hi   spaced  out  \0"), Some(("hi".into(), "spaced  out".into())));
+    // The 8 bytes the client puts in front with a chat colour.
+    assert_eq!(cmd(b"<<012c05!hi there\0"), Some(("hi".into(), "there".into())));
+    assert_eq!(cmd(b"<<012c05!hi"), Some(("hi".into(), String::new())));
+    // Not commands: the whisper prefix (a space), no word, a word with other characters, a marker that is not one, text before it.
+    for text in [&b"! name text"[..], b"!", b"!\0", b"!bad-word x", b"!hi,there", b"<<12c05!hi", b"<<012x05!hi", b"<<012c0", b"hello !hi", b" !hi", b"", b"!!hi"] {
+        assert_eq!(cmd(text), None, "{:?}", String::from_utf8_lossy(text));
+    }
+    // The text is cut at its first zero.
+    assert_eq!(cmd(b"!a\0!b"), Some(("a".into(), String::new())));
+    // Staff levels: 0 is everyone, n staff of levels 1 to n.
+    assert!(may_use(0, 0) && may_use(0, 5));
+    assert!(!may_use(3, 0), "a player cannot use a staff command");
+    assert!(may_use(3, 1) && may_use(3, 3) && !may_use(3, 4) && !may_use(1, 2));
+}

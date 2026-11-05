@@ -272,7 +272,7 @@ pub enum Entry {
 }
 
 /// The names the texts carry (items, monsters, skills), by their definitions' ids; a missing one is written empty.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Names {
     /// Item type and type id.
     pub items: HashMap<(u8, u8), String>,

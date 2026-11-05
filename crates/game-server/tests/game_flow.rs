@@ -4729,3 +4729,195 @@ async fn reload_puts_new_rules_in_force_and_a_broken_one_changes_nothing() {
     assert!(run("rules").await[0].starts_with("safe deny editor:3 "));
     std::fs::remove_file(&path).unwrap();
 }
+
+// ------------------------------------------------------------------------------------------------ the extensions' scripts
+// (docs/plans/ext-5-lua.md section 12, steps 4 to 9)
+
+use game_server::script::sources::{ScriptExtension, ScriptSources};
+
+type TestContext = Arc<Context<Arc<MemoryBackend>>>;
+
+/// The sources of the extensions `(name, main.lua)` as the database would hold them, installed in this order and all enabled.
+fn script_sources(scripts: &[(&str, &str)]) -> ScriptSources {
+    ScriptSources {
+        extensions: scripts
+            .iter()
+            .map(|(name, source)| ScriptExtension { name: (*name).to_owned(), scripts: vec![("main.lua".to_owned(), (*source).to_owned())], ..Default::default() })
+            .collect(),
+        installed: scripts.iter().map(|(name, _)| ((*name).to_owned(), true)).collect(),
+        ..Default::default()
+    }
+}
+
+/// Loads the extensions' scripts as `main` does and starts the script thread; a script that does not load fails the test.
+fn put_scripts(ctx: &TestContext, scripts: &[(&str, &str)]) {
+    let set = game_server::server::script::load_at_start(ctx, &script_sources(scripts)).unwrap();
+    assert!(set.failed().is_empty(), "{:?}", set.failed());
+    ctx.start_scripts(set);
+}
+
+/// The text of the next whisper from the server, within five seconds.
+async fn next_server_whisper(client: &mut Client) -> String {
+    timeout(Duration::from_secs(5), async {
+        loop {
+            let packet = client.read().await.unwrap();
+            if frame::opcode(&packet) == chat::OP_WHISPER {
+                return whisper_texts(&[packet]).remove(0);
+            }
+        }
+    })
+    .await
+    .expect("a whisper within five seconds")
+}
+
+async fn console(ctx: &TestContext, line: &'static str) -> Vec<String> {
+    game_server::server::console::line(ctx, line, "test", game_server::game_log::Header::none(), 0).await
+}
+
+#[tokio::test]
+async fn a_script_welcomes_a_player_at_login() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(&ctx, &[("welcome", "game.on('login', function(p) p:message('Welcome, ' .. p.name .. '!') p:notice('Hi ' .. p.name) end)")]);
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    assert_eq!(next_server_whisper(&mut client).await, "Welcome, Walker!");
+    let notice = read_op(&mut client, ap::OP_NOTICE_TO).await;
+    assert_eq!(notice, ap::notice(ap::OP_NOTICE_TO, b"Hi Walker\0"));
+    assert_eq!(console(&ctx, "scripts").await, ["welcome running 1 handlers timers 0 spawns 0 faults 0"]);
+}
+
+#[tokio::test]
+async fn a_script_command_answers_and_is_not_relayed() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(
+        &ctx,
+        &[(
+            "talk",
+            "game.command('hi', function(p, args) p:message('hello ' .. args) end, { help = 'says hello' })\n\
+             game.command('gm', function(p, args) p:message('staff only') end, { staff = 3 })",
+        )],
+    );
+    let (mut alice, alice_id, mut bob, _bob_id) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    alice.write(say(chat::OP_NORMAL, b"!hi there")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "hello there");
+    // A colour marker in front (the client adds one with a chat colour), any case, no arguments.
+    alice.write(say(chat::OP_NORMAL, b"<<003c01!HI")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "hello ");
+    // Not chat: Bob (a few units away) hears none of it. Words nobody registered, a staff command typed by a player and the whisper
+    // prefix with its space stay chat, in order, and "plain" is the first line he gets after them.
+    let lines: [&[u8]; 4] = [b"!nothing here", b"!gm now", b"! alice hi", b"plain"];
+    for text in lines {
+        alice.write(say(chat::OP_NORMAL, text)).await;
+    }
+    for text in lines {
+        let mut zeroed = text.to_vec();
+        zeroed.push(0);
+        assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, &zeroed));
+    }
+}
+
+#[tokio::test]
+async fn a_script_timer_sends_a_notice() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(&ctx, &[("ads", "game.after(1, function() game.notice_all('Visit the shop') end)")]);
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    let notice = timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.expect("the timer's notice");
+    assert_eq!(notice, ap::world_notice("Visit the shop").unwrap());
+    assert_eq!(ctx.zones.ext_scripts().extensions()[0].timer_count(), 0, "a one-shot timer is gone once it ran");
+}
+
+#[tokio::test]
+async fn reload_swaps_scripts_and_a_broken_one_changes_nothing() {
+    use game_server::mobs::MobAttack;
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    ctx.start_scripts(game_server::script::ScriptSet::empty());
+    let (mut alice, _, _bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    // Nothing is registered: the line is chat, and `scripts` says so.
+    assert_eq!(console(&ctx, "scripts").await, ["no scripts"]);
+
+    backend.set_script_sources(script_sources(&[("a", "game.command('ver', function(p) p:message('one') end)")]));
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
+    let answer = console(&ctx, "reload").await;
+    assert!(answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets, 3 rules, 1 scripts of 1 extensions ("), "{answer:?}");
+    alice.write(say(chat::OP_NORMAL, b"!ver")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "one");
+
+    // A script that does not compile fails the whole reload: the monsters, the rules and the old script stay.
+    let hp_before = ctx.data.live().mobs.get(1).unwrap().hp;
+    backend.set_script_sources(script_sources(&[("a", "game.command('ver', function(p) p:message('two') end\n")]));
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 5000)));
+    let answer = console(&ctx, "reload").await;
+    assert!(answer[0].starts_with("reload failed, nothing changed: extension a: a/main.lua:") , "{answer:?}");
+    assert_eq!(ctx.data.live().mobs.get(1).unwrap().hp, hp_before, "the monsters are as they were");
+    assert_eq!(ctx.zones.rules().len(), 3);
+    alice.write(say(chat::OP_NORMAL, b"!ver")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "one");
+
+    // The fixed script replaces the old one.
+    backend.set_script_sources(script_sources(&[("a", "game.command('ver', function(p) p:message('two') end)")]));
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
+    assert!(console(&ctx, "reload").await[0].contains("1 scripts of 1 extensions"));
+    alice.write(say(chat::OP_NORMAL, b"!ver")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "two");
+}
+
+#[tokio::test]
+async fn a_failing_script_is_disabled_and_the_server_carries_on() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(&ctx, &[("bad", "game.on('login', function(p) p:message('hi') error('boom') end)")]);
+    // Five logins in a minute, each of which errors after its whisper.
+    for round in 0..6 {
+        backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
+        let mut client = Client::connect(addr).await;
+        enter_world(&mut client, 7, [5; 16], round == 0).await;
+        if round < 5 {
+            assert_eq!(next_server_whisper(&mut client).await, "hi", "login {round}");
+            // The fault is counted after the handler ran: wait for it before the next login.
+            timeout(Duration::from_secs(5), async { while ctx.zones.ext_scripts().extensions()[0].fault_count() < round + 1 { tokio::time::sleep(Duration::from_millis(10)).await } })
+                .await
+                .expect("the fault");
+        }
+        // Out of the world before the next connection.
+        drop(client);
+        timeout(Duration::from_secs(5), async { while ctx.zones.locate(1).is_some() { tokio::time::sleep(Duration::from_millis(20)).await } }).await.expect("left the world");
+    }
+    let lines = console(&ctx, "scripts").await;
+    assert!(lines[0].starts_with("bad disabled (5 errors in 60 s: login: ") && lines[0].contains("boom") && lines[0].contains("faults 5"), "{lines:?}");
+    // The sixth login (the last round above) got no whisper because the extension was disabled, and the world goes on: a seventh
+    // connection enters and hears nothing.
+    backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], false).await;
+    let heard = timeout(Duration::from_millis(600), async {
+        loop {
+            if frame::opcode(&client.read().await.unwrap()) == chat::OP_WHISPER {
+                return;
+            }
+        }
+    })
+    .await;
+    assert!(heard.is_err(), "no whisper once disabled");
+}
+
+#[tokio::test]
+async fn scripts_off_loads_nothing() {
+    use game_server::mobs::MobAttack;
+    let backend = Arc::new(MemoryBackend::default());
+    let config = Config { scripts: false, ..config(true) };
+    let (addr, ctx) = start_with(backend.clone(), config).await;
+    ctx.start_scripts(game_server::script::ScriptSet::empty());
+    let (mut alice, _, _bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    backend.set_script_sources(script_sources(&[("a", "game.command('ver', function(p) p:message('one') end)")]));
+    *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
+    let answer = console(&ctx, "reload").await;
+    assert!(answer[0].starts_with("reloaded: 1 monsters, 1 drop grades, 0 box sets, 3 rules ("), "no scripts clause: {answer:?}");
+    assert_eq!(console(&ctx, "scripts").await, ["no scripts"]);
+    alice.write(say(chat::OP_NORMAL, b"!ver")).await;
+    assert_eq!(next_chat(&mut alice).await, chat::by_id(chat::OP_NORMAL, 1, b"!ver\0"), "the line stays chat");
+}

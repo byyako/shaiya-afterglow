@@ -72,6 +72,8 @@ pub fn config(check_ip: bool) -> Config {
         kill_rate: 1,
         kill_boost_skills: Vec::new(),
         console_level: 1,
+        scripts: true,
+        script_memory_mb: 16,
         mini_game: true,
         slot_payout_percent: 220,
         card_win_chances: [420, 200, 130, 100, 80],

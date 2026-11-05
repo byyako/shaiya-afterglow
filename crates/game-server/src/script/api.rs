@@ -13,7 +13,9 @@ use std::time::{Duration, Instant};
 
 use mlua::{Lua, MultiValue, Table, Value};
 
+use super::act;
 use super::options::{self, ResolvedOption};
+use super::world::ScriptWorld;
 use super::{Event, Point};
 
 /// The longest log line, bytes, and the most lines a second (section 7.4 `game.log`).
@@ -69,6 +71,8 @@ pub struct LoadContext {
     pub item_exists: Option<Arc<dyn Fn(u8, u8) -> bool + Send + Sync>>,
     pub taken_commands: HashSet<String>,
     pub taken_items: HashSet<(u8, u8)>,
+    /// What the API acts on; `None` is a world with nobody in it (a dry run, a unit test).
+    pub world: Option<Arc<dyn ScriptWorld>>,
 }
 
 #[derive(Default)]
@@ -83,6 +87,8 @@ pub struct Shared {
     pub name: String,
     pub regs: Mutex<Registrations>,
     ctx: LoadContext,
+    pub world: Arc<dyn ScriptWorld>,
+    pub rates: Mutex<act::Rates>,
     log: Mutex<LogState>,
     /// A dry run (the data editor's `check`) logs nothing.
     dry: bool,
@@ -92,7 +98,8 @@ pub struct Shared {
 impl Shared {
     pub fn new(name: &str, ctx: LoadContext, dry: bool) -> Arc<Self> {
         let regs = Registrations { open: true, ..Registrations::default() };
-        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
+        let world = ctx.world.clone().unwrap_or_else(act::null_world);
+        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, rates: Mutex::default(), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
     }
 
     fn regs(&self) -> std::sync::MutexGuard<'_, Registrations> {
@@ -366,6 +373,7 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
             Ok(removed)
         })?,
     )?;
+    act::install(lua, shared, &game)?;
     lua.globals().set("game", game)?;
     Ok(())
 }

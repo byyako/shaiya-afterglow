@@ -5,10 +5,14 @@
 //! `mob_lua.rs` and `zone/lua.rs` (the original's monster scripts) are apart from this module and share nothing with it
 //! (section 8.4).
 
+pub mod act;
 pub mod api;
+pub mod event;
 pub mod options;
+pub mod runner;
 pub mod sandbox;
 pub mod sources;
+pub mod world;
 
 #[cfg(test)]
 mod tests;
@@ -234,6 +238,16 @@ impl ExtScript {
         self.shared.regs.lock().unwrap_or_else(|e| e.into_inner()).items.iter().copied().collect()
     }
 
+    /// Whether the timer `id` is still set (a one-shot one is gone once it came due).
+    pub fn has_timer(&self, id: u32) -> bool {
+        self.shared.regs.lock().unwrap_or_else(|e| e.into_inner()).timers.iter().any(|t| t.id == id)
+    }
+
+    /// Monsters this extension spawned that are still alive (`game.spawn`, step 7).
+    pub fn spawn_count(&self) -> usize {
+        0
+    }
+
     pub fn timer_count(&self) -> usize {
         self.shared.regs.lock().unwrap_or_else(|e| e.into_inner()).timers.len()
     }
@@ -306,13 +320,25 @@ impl ExtScript {
         })
     }
 
+    /// As [`ExtScript::call`], with the arguments built inside the state (a table needs the state to be made in).
+    pub fn call_built<R: FromLuaMulti>(&self, hook: &str, limit: Limit, build: impl FnOnce(&Lua) -> mlua::Result<mlua::MultiValue>) -> Result<Option<R>, ScriptError> {
+        if self.is_disabled() || !self.handles(hook) {
+            return Ok(None);
+        }
+        self.run(hook, limit, |lua| match api::handler_fn(lua, hook) {
+            Some(f) => f.call::<R>(build(lua)?).map(Some),
+            None => Ok(None),
+        })
+    }
+
     /// Counts a fault at `label`; the message is the extension, the handler and the error's first line.
     pub fn fault(&self, label: &str, err: &mlua::Error) -> ScriptError {
         self.fault_at(Instant::now(), label, err)
     }
 
     pub(crate) fn fault_at(&self, now: Instant, label: &str, err: &mlua::Error) -> ScriptError {
-        let msg = format!("extension {}: {label}: {}", self.name, one_line(err));
+        let detail = format!("{label}: {}", one_line(err));
+        let msg = format!("extension {}: {detail}", self.name);
         self.fault_total.fetch_add(1, Ordering::Relaxed);
         let memory = sandbox::is_memory_error(err);
         let mut faults = self.faults.lock().unwrap_or_else(|e| e.into_inner());
@@ -330,7 +356,7 @@ impl ExtScript {
         let too_many = faults.recent.len() >= FAULTS_TO_DISABLE;
         drop(faults);
         if memory || too_many {
-            let reason = if memory { format!("out of memory: {}", one_line(err)) } else { format!("{FAULTS_TO_DISABLE} errors in {} s: {}", FAULT_WINDOW.as_secs(), msg) };
+            let reason = if memory { format!("a memory error: {detail}") } else { format!("{FAULTS_TO_DISABLE} errors in {} s: {detail}", FAULT_WINDOW.as_secs()) };
             self.disable(reason);
         }
         ScriptError(msg)
@@ -389,13 +415,17 @@ impl ScriptSet {
     }
 
     /// Loads every extension in order (section 9.1). A clash with an earlier extension (a command word, an item) is the later one's
-    /// load error. `item_exists` checks `on_item` ids against the definitions.
-    pub fn load(inputs: &[ExtInput], item_exists: Option<Arc<dyn Fn(u8, u8) -> bool + Send + Sync>>, memory_mb: u32) -> ScriptSet {
+    /// load error. `base` carries what `on_item` ids are checked against and the world the API acts on.
+    pub fn load(inputs: &[ExtInput], base: LoadContext, memory_mb: u32) -> ScriptSet {
         let mut set = ScriptSet::default();
-        let mut ctx = LoadContext { item_exists, ..LoadContext::default() };
+        let mut ctx = base;
         for input in inputs {
             match ExtScript::load(input, &ctx, memory_mb, false) {
                 Ok(ext) => {
+                    // A disabled extension is told to the staff who may type console commands (section 8.3).
+                    if let Some(world) = ctx.world.clone() {
+                        ext.set_on_disable(Box::new(move |name, reason| world.tell_staff(&format!("extension {name}: scripts disabled after {reason}"))));
+                    }
                     let ext = Arc::new(ext);
                     for (word, meta) in ext.commands() {
                         ctx.taken_commands.insert(word.clone());

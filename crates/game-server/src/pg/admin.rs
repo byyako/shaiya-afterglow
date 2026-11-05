@@ -13,6 +13,11 @@ impl AdminStore for PgBackend {
         crate::config::read_rule_layers(&mut conn).await
     }
 
+    async fn script_sources(&self) -> Result<crate::script::sources::ScriptSources> {
+        let mut conn = self.pool.acquire().await?;
+        crate::config::read_script_sources(&mut conn).await
+    }
+
     async fn set_account_status(&self, user_id: u32, status: i16) -> Result<()> {
         sqlx::query("UPDATE accounts SET status = $2 WHERE id = $1").bind(i32::try_from(user_id)?).bind(status).execute(&self.pool).await?;
         Ok(())
