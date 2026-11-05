@@ -186,5 +186,12 @@ them live), as do `kill_count`, `kill_boost_skills`, `trade_chat_cooldown_secs` 
 
 ## 9. Not yet
 
-The points are the eight above. Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, item use,
-damage and the stat formulas, item loss on death) are for later waves; Lua scripts will ask the same points (extensions chunk 5).
+The points are the eight above. Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, item use
+by effect, damage and the stat formulas, item loss on death) are for later waves.
+
+## 10. After the rules, scripts
+
+An extension's Lua scripts (`docs/server/scripts.md`) are asked at seven of these points, **after** the rules: a rule's refusal is final
+(no script is asked), a script may refuse what the rules let through, and the numbers the rules changed (experience, the counted kill,
+the enchant jump) are the ones a script is given and may change again. The attack point is not asked of scripts (it is asked for every
+blow); rules own attacks. Scripts also have two points of their own, chat and item use.

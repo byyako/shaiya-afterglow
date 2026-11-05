@@ -162,7 +162,7 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
 | Chunk 1 foundation, part B: the settings in layers (`config/game.toml`, the start-up-only environment, `game-server config`), the editor's `setting` target, the settings docs | **built** 2026-11-03 (rehearsed on the drill, then on the live dev box; live-test items in section 58) |
 | Chunk 2 rules and hooks (spec, build) | spec written and **built** 2026-11-04 (`docs/plans/ext-2-rules.md`, `docs/server/rules.md`; rehearsed on the drill, then on the live dev box; live-test items in section 59) |
 | Chunk 5 Lua (spec) | spec written 2026-11-04 (`docs/plans/ext-5-lua.md`; four decisions in its section 1) |
-| Chunk 5 Lua (build), release 0.3.0 | **next** (the spec's Build section, steps 1 to 10) |
+| Chunk 5 Lua (build), release 0.3.0 | **built** 2026-11-04 (`docs/plans/ext-5-lua.md`, `docs/server/scripts.md`; rehearsed on the drill, then on the live dev box with the four reference extensions installed disabled; live-test items in section 60); the release 0.3.0 itself waits for the maintainer |
 | Chunk 3 item effects, chunk 4 pets (spec, build), release 0.4.0 | not started |
 
 ## Frozen or later (not scheduled)

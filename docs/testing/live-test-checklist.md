@@ -1655,3 +1655,37 @@ reload. `target/release/game-server rules` shows what is in force, and `.rules` 
 - [ ] `.reload` typed in the game by a level-1 staff member after editing a rule puts it in force without a restart and answers with the
       rule count; a rule with a typo (`target/release/game-server rules --check` shows the line) makes `.reload` answer "reload failed,
       nothing changed" and the old rules stay.
+
+## 60. Scripts (extensions chunk 5; `docs/plans/ext-5-lua.md`, `docs/server/scripts.md`)
+
+The four bundled extensions (`extensions/kill-streak`, `welcome`, `boss-rewards`, `monster-madness`) are installed on the live dev box and
+**disabled**. Turn one on with `target/release/data-editor ext enable <name>` and `target/release/console 1 reload`; turn it off with
+`ext disable` and `reload`. Options go in `config/game.toml` under `[ext.<name>]` (then `reload`). `target/release/console 1 scripts`
+(or `.scripts` in the game, as staff) shows what runs and any errors; `target/release/game-server config` lists the options with their layers.
+
+- [ ] `welcome`: at login the character is whispered the text and shown a notice, both with its own name. Set `adverts = ["Visit us", "Join
+      a guild"]` and `advert_minutes = 1` under `[ext.welcome]` and reload: a notice goes out every minute, the two lines in turn, then with
+      `advert_kind = "banner"` as the centre-screen line (**how the banner and the notices read in the client is open**: client research
+      entry 22). `!help`, `!online` and `!time` answer with a whisper, and a second player standing next to the first sees none of the
+      three lines.
+- [ ] `kill-streak` (set `bounty_from = 2` and `announce_at = [2, 3]` under `[ext.kill-streak]`, reload): two kills of enemy players (two
+      different victims, or the same one with `repeat_secs = 0`) announce the streak to everyone as a notice; when the streaker is killed,
+      the killer's gold rises by the bounty and a notice names both; `!bounty <name> <gold>` takes the gold at once and the next kill of
+      that player pays it on top; `!streak` and `!bounties` answer; a kill of the same victim within `repeat_secs` does not raise the streak.
+- [ ] `boss-rewards` (set `item = "25/1"`, `item_count = 3`, `buff = "<a buff skill>/1"` under `[ext.boss-rewards]`, reload): a party that
+      kills a boss of a boss group gets, each member near the boss, the item in the bag and the buff icon, and everyone reads the
+      announcement. A player kill gives `pvp_gold` to the killer (and the members near).
+- [ ] `monster-madness`: a staff member of level 1 to 3 types `!madness <monster id> 20 5` in the game: twenty of that monster stand
+      around, the zone is told, they fight and drop as ordinary monsters, and after five minutes (or when the last falls) the end is
+      announced; `!madness stop` takes them away at once without drops. A player typing `!madness` just speaks.
+- [ ] A typo in a script: copy `extensions/welcome` to a scratch folder, break `main.lua`, run `target/release/data-editor ext scripts
+      <folder>` (it refuses to compile and names file and line), then fix a text and run it again; `target/release/console 1 reload`
+      puts the change in force, and a broken file reached by hand makes `reload` answer "reload failed, nothing changed: extension
+      welcome: welcome/main.lua:…" while everything keeps running as before.
+- [ ] `.scripts` lists the four with their state, and `target/release/game-server config` shows each one's options and where they come from.
+- [ ] A script that errors five times in a minute is disabled: the staff on duty get a whisper naming it and the reason, `.scripts` shows
+      `disabled (…)`, and the server and the other extensions carry on; `reload` runs it again.
+- [ ] Stored values survive: `!streak` after a relog shows the same best streak; after `ext disable kill-streak` and `ext enable
+      kill-streak` (with a `reload` each) it still does; `ext remove kill-streak` drops it.
+- [ ] `monster-madness` with `item = "<an item id>"` set: using that item starts a madness around the user and uses one up (what the client
+      shows for the item with nothing used up, `"keep"`, is not verified).

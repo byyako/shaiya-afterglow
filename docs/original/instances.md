@@ -411,6 +411,9 @@ ranking map, R, `docs/original/guild-ranking.md` section 10; G stays refused; `c
   ends with an error naming the script, logged at error, as any Lua error ends it (the hook's `only_lua_attack` is cleared); `CMob` (the monster's id) and
   `LuaMob(CMob)`, whose methods reach the server's functions only while one of the monster's hooks runs. A monster with no script
   (1890, `104.lua`) or one that does not load keeps the stack machine and the fight **without hooks**, as in the original.
+- **Apart from the extensions' scripts** (`docs/server/scripts.md`, `crate::script`): those run in Lua states of their own, one per
+  extension, with another API (`game`), other limits and a thread of their own; `mob_lua.rs` and `zone/lua.rs` share nothing with them and
+  are unchanged by them. An extension can spawn monsters (`game.spawn`) but never gives one a script.
 - **Per monster** (`MobMap::lua`): its Lua state, its stack (section 10) and fields (section 9), made at its first Lua pass (`Init`
   then); `MobState::Lua(target)`. The status the rest of the code asks is the stack's top: a hit misses a Lua monster going home (3) or
   unbeatable; it recovers as an idle monster in state 0.

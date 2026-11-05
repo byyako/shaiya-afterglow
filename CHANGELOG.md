@@ -52,6 +52,25 @@
 - `cross_faction_trade_maps`, `market_maps` and `trade_chat_min_level` keep working and make a rule each; nothing else changes by default.
 - Migration 0032 (`content.ext_rules`, `content.rule_values`) runs at the next start. No step for an operator.
 
+**Lua scripts for extensions** (extensions chunk 5; `docs/plans/ext-5-lua.md`, `docs/server/scripts.md`)
+- An extension may carry Lua scripts (`api = 1`, `scripts = ["main.lua"]`, `[options.<key>]` in `extension.toml`). `data-editor ext check`
+  compiles them and runs the load in a state that does nothing, naming the file and line of an error and listing what the scripts
+  register; `install` and `upgrade` store them in the database; `data-editor ext scripts <folder>` replaces only the scripts and options
+  of an installed extension, for the edit loop. The game server reads the scripts from the database and `console <id> reload` puts them
+  in force with the rules, all or nothing.
+- Scripts react to events (`login`, `logout`, `map_enter`, `map_leave`, `kill`, `boss_kill`, `pvp_kill`, `death`, timers, and players'
+  `!commands` typed as chat), act through a small versioned API (items, gold, buffs, teleports, notices, monsters spawned for a while,
+  values stored per character and per extension), and are asked after the rules at the points trade, personal shop, trade chat, chat,
+  experience, player kills and deaths, enchanting and the use of the items they take over. Events run on one script thread, never inside a
+  zone lock; a point runs on the asking connection in 5 ms.
+- The sandbox: Lua 5.1 with `math`, `string`, `table` and a reduced `os`; no file, process, network or SQL; instruction, time and memory
+  limits; five errors in 60 seconds (or one memory error) disable that extension's scripts and tell the staff; the original's monster Lua is
+  untouched.
+- Options in layers: the manifest default, `[ext.<name>]` in `config/game.toml`, the data editor's `ext.<name>.<key>`; `game-server config`
+  lists them with their layer. New settings `scripts` and `script_memory_mb`; the console's `scripts`; the answer of `reload` names the scripts.
+- Four bundled extensions, none installed by default: `kill-streak`, `welcome`, `boss-rewards`, `monster-madness`.
+- Migration 0033 (`content.ext_scripts`, `ext_options`, `script_values`, `script_globals`) runs at the next start. No step for an operator.
+
 **Upgrading from 0.2.0** (breaking changes; nothing is converted automatically):
 1. **Settings**: the game settings are no longer environment variables. Stop the game server, start the new one once: it refuses to start
    and prints the `config/game.toml` lines for every `GAME_…` setting it found (in `.env` too). Put them in `config/game.toml` (on a VPS:

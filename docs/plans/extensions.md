@@ -76,7 +76,7 @@ folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the d
 
 ## 3. What exists today
 
-- **Lua** (`mlua`, Lua 5.1, vendored): runs only the original's monster scripts (`zone/lua.rs`, `mob_lua.rs`). No hooks for custom content.
+- **Lua** (`mlua`, Lua 5.1, vendored): runs the original's monster scripts (`zone/lua.rs`, `mob_lua.rs`) and, since chunk 5, the extensions' scripts (`script/`, below).
 - **Settings** (built, chunk 1 part B, `docs/plans/ext-1-foundation.md` section 7): the one-off flags this chapter generalises
   (`cross_faction_trade_maps`, `market_maps`, `trade_chat_min_level`, `kill_boost_skills`, `kill_count`, `kill_rate`, `exp_rate`, …) are
   entries of one registry in `config.rs` (`SETTINGS`), read in four layers: the built-in defaults, the enabled extensions' defaults,
@@ -92,8 +92,12 @@ folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the d
   layers, a compiled `RuleSet` in `Zones`), eight points in the core (attack, trade, personal shop, trade chat, experience, player kills,
   player deaths, enchant), `reload`, `game-server rules`, the console's `rules`, the editor's `rule` target and the manifest's `[rules]`;
   `cross_faction_trade_maps`, `market_maps` and `trade_chat_min_level` make a rule each.
-- **Hooks**: the rules' eight points are the first; no Rust trait, no Lua beyond the original's monster scripts. The server is one crate
-  of about 60,000 lines; behaviour sits where the original's code did.
+- **Scripts** (built, chunk 5, `docs/plans/ext-5-lua.md`, `docs/server/scripts.md`): `script/` in the game server (a sandboxed Lua state
+  per extension, the `game` API version 1, events on one script thread, points asked after the rules, stored values, options in layers);
+  the manifest's `api`, `scripts` and `[options]`; `data-editor ext scripts`; `reload` and the console's `scripts`; four reference
+  extensions in `extensions/`. The original's monster Lua (`mob_lua.rs`, `zone/lua.rs`) is separate and unchanged.
+- **Hooks**: the rules' eight points are the first, and the scripts ask seven of them (and two of their own) after the rules; no Rust
+  trait. The server is one crate of about 70,000 lines; behaviour sits where the original's code did.
 
 ## 4. The catalogue (the maintainer's list of changes other servers sell)
 
@@ -276,7 +280,8 @@ before; the client rows and the DLL feature request go to `docs/testing/client-r
 
 ### 7.5 Chunk 5, Lua
 
-**Specified** 2026-11-04 (`docs/plans/ext-5-lua.md`, the maintainer's decisions in its section 1); not built.
+**Specified** 2026-11-04 (`docs/plans/ext-5-lua.md`, the maintainer's decisions in its section 1); **built** 2026-11-04 (steps 1 to 10; the spec's top
+line lists what the build settled where the text left a choice).
 
 **Needs**: chunk 2 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`, the way the server runs the
 original's monster scripts (`mob_lua.rs`, `zone/lua.rs`, `docs/original/instances.md` sections 9 to 15), the `mlua` version and features in

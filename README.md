@@ -237,6 +237,12 @@ console's `reload` puts them in force without a restart, `target/release/game-se
 rule comes from, and `game-server rules --check` checks the file first ([`docs/server/rules.md`](docs/server/rules.md)); the data editor
 and the extensions can carry rules too.
 
+**Scripts**: an extension may carry Lua scripts that react to events (a login, a kill, a timer), answer `!commands` typed in chat, give
+items, gold and buffs, spawn monsters for a while, store values per character, and refuse or change a number at the places the rules are
+asked. Four are bundled in `extensions/` and none is installed by default: kill streaks with bounties, a welcome text with adverts, rewards for
+boss and player kills, and `!madness` for staff. `data-editor ext install extensions/<name>` and `console 1 reload` put one in force;
+`console 1 scripts` shows what runs ([`docs/server/scripts.md`](docs/server/scripts.md), for operators and for authors).
+
 For a public server on a VPS (systemd units, firewall, backups, updates, copying the game data instead of importing it), see
 [`docs/server/deploy.md`](docs/server/deploy.md).
 
@@ -363,6 +369,7 @@ How a feature is built: the original's behaviour is read from the binaries first
 - [`docs/original/protocol-notes.md`](docs/original/protocol-notes.md): packet framing and encryption.
 - [`docs/server/settings.md`](docs/server/settings.md): every setting.
 - [`docs/server/rules.md`](docs/server/rules.md): the rules: scope, types, layers, `reload`, the editor and extensions.
+- [`docs/server/scripts.md`](docs/server/scripts.md): the extensions' Lua scripts: installing, options, `reload`, the API for authors.
 - [`docs/server/deviations.md`](docs/server/deviations.md): every place where the server knowingly differs from the original, by kind, with its setting.
 - [`docs/server/deploy.md`](docs/server/deploy.md): running on a VPS.
 - [`docs/original/client-login.md`](docs/original/client-login.md): pointing the client at the server.

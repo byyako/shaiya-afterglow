@@ -1,6 +1,6 @@
 # Extensions chunk 5, Lua (spec and build plan)
 
-**Specified 2026-11-04; not built.** Chunk 5 of `docs/plans/extensions.md` (section 6, work item 7.5). Chunks 1 and 2 are built
+**Specified 2026-11-04; built 2026-11-04** (steps 1 to 10, one commit each, rehearsed on the drill, then on the live dev box). Chunk 5 of `docs/plans/extensions.md` (section 6, work item 7.5). Chunks 1 and 2 are built
 (`docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`, the operator's page `docs/server/rules.md`): extensions with their
 manifest and their rows, settings in four layers, rules at eight points of the core, `reload`. This chunk adds **scripts**: Lua files an
 extension carries, stored in the database at install, run by the game server in a sandbox of their own. A script **reacts to events**
@@ -8,6 +8,33 @@ extension carries, stored in the database at install, run by the game server in 
 for a while, values stored per character), and may **refuse an action or change a number** at the points of chunk 2, after the rules. It
 also opens the extension's **options** (the manifest's `[options]`, the file's `[ext.<name>]`, the editor's `ext.<name>.<key>`), reserved
 since chunk 1 for their first consumer. Release **0.3.0** follows this chunk (`docs/plans/extensions.md` section 2a decision 4).
+
+**What the build settled where the text left a choice** (everything else is as written):
+- The module has more files than section 4.1 lists: `options.rs` (option specs and `game.options`), `act.rs` (the reads, messages, notices
+  and orders of the API and the player handle), `event.rs` (job and order types), `points.rs` (the combination of the points),
+  `sources.rs` (what the database and the file hold; `resolve_options`), `world.rs` (`ScriptWorld`, `NullWorld`), `zone/script.rs` and
+  `server/script.rs` on the server's side. The extensions' stored globals travel in `ScriptSources` (no `Backend::script_globals`);
+  `Backend` has `script_sources`, `script_values` and `write_script_values`.
+- Migration 0033 also widens the `ext_log` action list with `scripts`. `[options]` without `scripts` is refused with the rest of the manifest
+  tests. An editor value is stored in `content.setting_values` as JSON text; a plain string is accepted for a string option. `ext remove` leaves
+  the editor's option values (read later as a warning for an extension that is not installed); an editor value for an option an upgrade took
+  away is a warning, not an error, and a file line for it is an error.
+- `reload`'s answer gains `, <n> scripts of <m> extensions` only when some extension has scripts, so the answers of a server without scripts
+  are unchanged. A script that does not load at start leaves that extension without scripts; the whole start fails only for an option error.
+- `exp` and `pvp_kills` answers both **multiply** (6.2): `pvp_kills` takes the whole number as a multiplier of the counted kill, each
+  extension being asked with the product so far. The attack point is not asked, as decided.
+- `pvp_kill` is raised only for a counted kill (one the kill share reaches someone for), `death` after it. `trade_check` returns a boolean; a
+  script's trade refusal answers `START_BUSY` straight on the connection, so the whisper follows it.
+- Stored values: a character's are in the cache from the login query to the end of its `logout` handlers (that is what "online" means for
+  `p:get`/`p:set`); writes not yet sent are laid over a login's rows. An extension enabled by `reload` sees online players' values from
+  their next login. `p:staff()` is the staff level the player entered the world with.
+- `item_use`: `"keep"` is answered with nothing (the reuse time is armed); whether the client wants a packet is for the live test.
+- `game.spawn` takes the height of the nearest player on the map; a count above 50 is a Lua error and the 300-alive cap trims the call; the
+  options table with `lifetime` is required. Texts to players above their limit are Lua errors (not cut); a message longer than 120 bytes is
+  cut into lines (up to 1,200 bytes).
+- Item and monster names come from the game log's name tables, loaded at start whether or not the game log is on (`Context::names`).
+- A pathological Lua pattern (`string.find` on a long string) is a single library call the instruction hook cannot interrupt; only the
+  state's memory limit and the author's care bound it.
 
 Background read for this spec: `docs/plans/extensions.md` sections 2, 2a, 5, 6, 7.5; `docs/plans/ext-1-foundation.md` sections 5 and 7;
 `docs/plans/ext-2-rules.md`; `docs/server/rules.md`; `crates/game-server/src/rules/`, `mob_lua.rs`, `zone/lua.rs`, `config.rs`,

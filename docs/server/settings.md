@@ -74,8 +74,8 @@ The layers, lowest first; a later one beats an earlier one:
 
 Settings take effect at the next start (`tools/game-server.sh restart`); the console's `exp`, `killrate`, `shop` and `maxusers` still
 change their four values live until then. The table `[rules]` of the file holds the rules (`docs/server/rules.md`), which `reload` puts in
-force live; the tables `[ext.<name>]` of the file, and the editor's `ext.<name>.<key>` keys, are reserved for a later chunk and refused
-(`docs/plans/ext-1-foundation.md` section 7.5). Errors name the place: `config/game.toml line 4:
+force live; the tables `[ext.<name>]` of the file, and the editor's `ext.<name>.<key>` keys, hold the options of the
+extensions' scripts (`docs/server/scripts.md`) and take effect at `reload`, like the scripts they belong to. Errors name the place: `config/game.toml line 4:
 unknown setting "trade_chat_minlevel"`, `config/game.toml line 6: market_maps: map id "x"`, `extension kill-boost: kill_boost_skills: …`,
 `data editor (change set 12): slot_payout_percent: …`.
 
@@ -130,6 +130,8 @@ At start the server logs one line per setting that is not at its default, with i
 | `card_win_chances` | `400,200,100,50,10` | the double-up's chance (per mille, rounds 1 to 5) that the card falls on the guessed side; the default is the original's (fairer odds, for example `420,200,130,100,80`, are an operator's choice; used only with `mini_game`) |
 | `console_level` | `1` | 1 to 5: staff levels 1 to this may type `.command` lines (`.help`, `.info`, `.exp 2`, …) in the game; the answers are whispers from `Server` |
 | `max_connections` | `5000` | total connections |
+| `scripts` | `true` | the enabled extensions' Lua scripts run (`docs/server/scripts.md`); `false` loads no script at all, whatever is installed (an addition: none is installed by default) |
+| `script_memory_mb` | `16` | the memory limit of one extension's Lua state, 1 to 256 MB; a script that passes it is an error and disables its extension |
 
 ## Data editor (`data-editor`)
 
