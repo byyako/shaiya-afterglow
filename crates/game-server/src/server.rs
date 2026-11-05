@@ -1630,6 +1630,7 @@ async fn world_loop<S: Backend>(
                     }
                     ZoneEvent::Recalled { .. } => {}
                     ZoneEvent::Mall => mall::inbox(conn, ctx, player.user_id, state).await?,
+                    ZoneEvent::Script => script::carry_out(conn, ctx, player, character, state).await?,
                     ZoneEvent::Admin => {
                         for order in ctx.zones.take_admin_orders(id) {
                             admin::carry_out(conn, ctx, player, character, state, order).await?;

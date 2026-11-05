@@ -74,6 +74,25 @@ impl Zones {
         self.script_job(Job::Event { event, payload: make() });
     }
 
+    /// Leaves an order for a player and wakes its connection (the way a GM's order goes, `admin_order`). False when the player is not
+    /// in a zone here (nothing is left).
+    pub fn script_order(&self, target: u32, queued: crate::script::event::Queued) -> bool {
+        let maps = self.maps.guard();
+        let Some(p) = maps.values().find_map(|players| players.get(&target)) else { return false };
+        let mut orders = self.script_orders.guard();
+        orders.entry(target).or_default().push(queued);
+        if p.occupant.events.send(ZoneEvent::Script).is_err() {
+            orders.remove(&target);
+            return false;
+        }
+        true
+    }
+
+    /// The orders left for a character, in order.
+    pub fn take_script_orders(&self, id: u32) -> Vec<crate::script::event::Queued> {
+        self.script_orders.guard().remove(&id).unwrap_or_default()
+    }
+
     /// The staff level a player entered the world with (0 for a player): what `p:staff()` answers.
     pub fn set_script_staff(&self, id: u32, level: Option<u8>) {
         let mut staff = self.script_staff.guard();

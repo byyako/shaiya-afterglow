@@ -803,16 +803,16 @@ async fn gm_chat<S: Backend>(
     Ok(())
 }
 
-/// `F702`: `count` of the item into the GM's own bags, `min(left, stack)` to each empty slot in order, all saved in one write
+/// `F702` and the scripts' `give_item`: `count` of the item into the character's bags, how many fitted came back; `min(left, stack)` to each empty slot in order, all saved in one write
 /// (section 7.2). True when all of it fitted.
-async fn make_items<S: Backend>(
+pub(super) async fn give_items<S: Backend>(
     conn: &mut Connection,
     ctx: &Context<S>,
     character: &PlayCharacter,
     state: &mut WorldState,
     def: &crate::inventory::ItemDef,
     count: u8,
-) -> Result<bool> {
+) -> Result<u8> {
     let id = character.id;
     let stack = def.max_count.max(1);
     let mut left = count;
@@ -839,7 +839,7 @@ async fn make_items<S: Backend>(
         }
     }
     if count == 0 || changes.is_empty() {
-        return Ok(false);
+        return Ok(0);
     }
     let Some(rows) = ctx.store.trade(id, 0, &changes).await? else {
         bail!("the database refused items the server could place: {changes:?}");
@@ -849,7 +849,19 @@ async fn make_items<S: Backend>(
     }
     record::created(ctx, character, state, &changes, &rows);
     send_item_changes(conn, state, &changes, true).await?;
-    Ok(left == 0)
+    Ok(count - left)
+}
+
+/// `F702`: all of it fitted?
+async fn make_items<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    state: &mut WorldState,
+    def: &crate::inventory::ItemDef,
+    count: u8,
+) -> Result<bool> {
+    Ok(count > 0 && give_items(conn, ctx, character, state, def, count).await? == count)
 }
 
 /// `FA09`, `FA0A`, `FA11`, `FA12`: the GM moves at once (deviation 6) through the ordinary move.

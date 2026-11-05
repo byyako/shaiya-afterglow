@@ -24,6 +24,7 @@ pub const BANNER_MAX: usize = 127;
 /// Rate limits (section 7.4): notices to many and banners per minute for the extension, messages and notices per second per player.
 const MANY_PER_MINUTE: usize = 20;
 const MESSAGES_PER_SECOND: u32 = 5;
+const ORDERS_PER_SECOND: u32 = 50;
 
 const PLAYER_META: &str = "script.player_meta";
 
@@ -32,6 +33,7 @@ const PLAYER_META: &str = "script.player_meta";
 pub struct Rates {
     many: VecDeque<Instant>,
     players: HashMap<u32, (Instant, u32)>,
+    orders: HashMap<u32, (Instant, u32)>,
 }
 
 impl Rates {
@@ -44,6 +46,22 @@ impl Rates {
             return false;
         }
         self.many.push_back(now);
+        true
+    }
+
+    /// One more order for `id`; false when the second's fifty are used.
+    fn order(&mut self, id: u32, now: Instant) -> bool {
+        if self.orders.len() > 2000 {
+            self.orders.retain(|_, (t, _)| now.saturating_duration_since(*t) < Duration::from_secs(1));
+        }
+        let slot = self.orders.entry(id).or_insert((now, 0));
+        if now.saturating_duration_since(slot.0) >= Duration::from_secs(1) {
+            *slot = (now, 0);
+        }
+        if slot.1 >= ORDERS_PER_SECOND {
+            return false;
+        }
+        slot.1 += 1;
         true
     }
 
@@ -321,6 +339,95 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     game.set("set", lua.create_function(move |lua, (key, value): (String, Value)| {
         let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))?;
         s.store.set_global(&s.name, &key, v).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))
+    })?)?;
+
+    // Orders (section 4.4): left for the player's own connection; the callback hears how it came out, later, on the script thread.
+    use super::event::{Order, Outcome, Queued};
+    let whole = |lua: &Lua, what: &str, v: &Value, low: f64, high: f64| -> mlua::Result<f64> {
+        let n = match v {
+            Value::Integer(i) => *i as f64,
+            Value::Number(n) => *n,
+            _ => return Err(script_error(lua, format!("{what}: a number is wanted"))),
+        };
+        if n.fract() != 0.0 || n < low || n > high {
+            return Err(script_error(lua, format!("{what}: a whole number from {low} to {high} is wanted (got {n})")));
+        }
+        Ok(n)
+    };
+    let queue = |lua: &Lua, shared: &Shared, this: &Table, what: &str, order: Order, callback: Option<Value>, failed: Outcome| -> mlua::Result<()> {
+        let id = id_of(this)?;
+        if !shared.rates.lock().unwrap_or_else(|e| e.into_inner()).order(id, Instant::now()) {
+            return Err(script_error(lua, format!("{what}: rate limit, at most {ORDERS_PER_SECOND} orders a second for one player")));
+        }
+        let callback = match callback {
+            None | Some(Value::Nil) => None,
+            Some(Value::Function(f)) => {
+                let cb = shared.next_callback.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                super::api::keep_callback(lua, cb, f)?;
+                Some(cb)
+            }
+            Some(other) => return Err(script_error(lua, format!("{what}: the callback is a function (got {})", other.type_name()))),
+        };
+        let queued = Queued { extension: shared.name.clone(), callback, order };
+        if !shared.world.order(id, queued) {
+            // Not online here: answered at once, but behind the handler that asked (never inside it).
+            if let Some(cb) = callback {
+                shared.world.answer(&shared.name, cb, failed);
+            }
+        }
+        Ok(())
+    };
+    let queue = Arc::new(queue);
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("give_item", lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
+        let order = Order::GiveItem {
+            item_type: whole(lua, "p:give_item type", &t, 1.0, 255.0)? as u8,
+            type_id: whole(lua, "p:give_item type_id", &i, 1.0, 255.0)? as u8,
+            count: whole(lua, "p:give_item count", &n, 1.0, 255.0)? as u8,
+        };
+        q(lua, &s, &this, "p:give_item", order, cb, Outcome::Count(0))
+    })?)?;
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("take_item", lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
+        let order = Order::TakeItem {
+            item_type: whole(lua, "p:take_item type", &t, 1.0, 255.0)? as u8,
+            type_id: whole(lua, "p:take_item type_id", &i, 1.0, 255.0)? as u8,
+            count: whole(lua, "p:take_item count", &n, 1.0, 255.0)? as u8,
+        };
+        q(lua, &s, &this, "p:take_item", order, cb, Outcome::Done(false))
+    })?)?;
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("give_gold", lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
+        let order = Order::GiveGold(whole(lua, "p:give_gold", &n, 1.0, 2_147_483_647.0)? as u32);
+        q(lua, &s, &this, "p:give_gold", order, cb, Outcome::Count(0))
+    })?)?;
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("take_gold", lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
+        let order = Order::TakeGold(whole(lua, "p:take_gold", &n, 1.0, 2_147_483_647.0)? as u32);
+        q(lua, &s, &this, "p:take_gold", order, cb, Outcome::Done(false))
+    })?)?;
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("add_buff", lua.create_function(move |lua, (this, skill, level, cb): (Table, Value, Value, Option<Value>)| {
+        let order = Order::AddBuff {
+            skill: whole(lua, "p:add_buff skill", &skill, 1.0, 65535.0)? as u16,
+            level: whole(lua, "p:add_buff level", &level, 1.0, 255.0)? as u8,
+        };
+        q(lua, &s, &this, "p:add_buff", order, cb, Outcome::Done(false))
+    })?)?;
+    let (s, q) = (shared.clone(), queue.clone());
+    methods.set("teleport", lua.create_function(move |lua, (this, map, x, y, z, cb): (Table, Value, Value, Value, Value, Option<Value>)| {
+        let coord = |v: &Value, what: &str| -> mlua::Result<f32> {
+            match v {
+                Value::Integer(i) => Ok(*i as f32),
+                Value::Number(n) if n.is_finite() => Ok(*n as f32),
+                _ => Err(script_error(lua, format!("p:teleport {what}: a number is wanted"))),
+            }
+        };
+        let order = Order::Teleport {
+            map: whole(lua, "p:teleport map", &map, 0.0, 65535.0)? as u16,
+            position: [coord(&x, "x")?, coord(&y, "y")?, coord(&z, "z")?],
+        };
+        q(lua, &s, &this, "p:teleport", order, cb, Outcome::Done(false))
     })?)?;
 
     let meta = lua.create_table()?;

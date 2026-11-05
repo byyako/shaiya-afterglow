@@ -125,6 +125,16 @@ pub fn handle(set: &ScriptSet, store: &super::store::Store, job: Job) {
                 f.call::<()>((act::player_handle(lua, &p)?, args))
             });
         }
+        Job::OrderDone { extension, callback, outcome } => {
+            let Some(ext) = set.extensions().iter().find(|e| e.name == extension) else { return };
+            let _ = ext.run("order callback", Limit::EVENT, |lua| {
+                let Some(f) = api::take_callback(lua, callback) else { return Ok(()) };
+                match outcome {
+                    super::event::Outcome::Count(n) => f.call::<()>(n),
+                    super::event::Outcome::Done(ok) => f.call::<()>(ok),
+                }
+            });
+        }
         Job::Forget { id, session } => store.end_char(id, session),
         Job::Wake => {}
     }

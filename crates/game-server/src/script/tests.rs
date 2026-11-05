@@ -686,6 +686,13 @@ mod acting {
         fn tell_staff(&self, text: &str) {
             self.sent.lock().unwrap().push(format!("staff: {text}"));
         }
+        fn order(&self, id: u32, queued: crate::script::event::Queued) -> bool {
+            self.sent.lock().unwrap().push(format!("order {id}: {:?}", queued.order));
+            id != 3
+        }
+        fn answer(&self, _: &str, callback: u64, outcome: crate::script::event::Outcome) {
+            self.sent.lock().unwrap().push(format!("answer {callback}: {outcome:?}"));
+        }
         fn commands(&self) -> Vec<(String, String, u8)> {
             vec![("hi".into(), "says hi".into(), 0)]
         }
@@ -767,6 +774,42 @@ mod acting {
         assert!(error.contains("at most 20 notices and banners a minute"), "{error}");
         assert_eq!(ext.fault_count(), 2);
         assert!(!ext.is_disabled());
+    }
+
+    #[test]
+    fn orders_are_queued_with_their_callbacks_and_checked_and_limited() {
+        let (ext, fake) = with_world("");
+        let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
+        run("local p = game.player(2) p:give_item(25, 1, 3, function() end) p:take_item(25, 1, 2) p:give_gold(500) p:take_gold(7, function() end) p:add_buff(223, 1) p:teleport(2, 1, 2.5, 3)").unwrap();
+        // Player 3 is "not online": the order is refused by the world and the callback is answered at once, as a queued job.
+        run("game.player(3):give_gold(5, function() end)").unwrap();
+        let sent = fake.sent.lock().unwrap().clone();
+        assert_eq!(sent[0], "order 2: GiveItem { item_type: 25, type_id: 1, count: 3 }");
+        assert_eq!(sent[1], "order 2: TakeItem { item_type: 25, type_id: 1, count: 2 }");
+        assert_eq!(sent[2], "order 2: GiveGold(500)");
+        assert_eq!(sent[3], "order 2: TakeGold(7)");
+        assert_eq!(sent[4], "order 2: AddBuff { skill: 223, level: 1 }");
+        assert_eq!(sent[5], "order 2: Teleport { map: 2, position: [1.0, 2.5, 3.0] }");
+        assert_eq!(&sent[6..], ["order 3: GiveGold(5)", "answer 3: Count(0)"]);
+        for (code, expect) in [
+            ("game.player(2):give_item(25, 1, 0)", "from 1 to 255"),
+            ("game.player(2):give_item(25, 1, 256)", "from 1 to 255"),
+            ("game.player(2):give_item(0, 1, 1)", "from 1 to 255"),
+            ("game.player(2):give_item(25, 1, 1.5)", "whole number"),
+            ("game.player(2):give_gold(0)", "from 1 to 2147483647"),
+            ("game.player(2):take_gold(2147483648)", "from 1 to 2147483647"),
+            ("game.player(2):add_buff(0, 1)", "from 1 to 65535"),
+            ("game.player(2):teleport(1, 0/0, 0, 0)", "a number is wanted"),
+            ("game.player(2):give_gold(5, 'not a function')", "callback is a function"),
+        ] {
+            let (fresh, _) = with_world("");
+            let error = fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code}")).to_string();
+            assert!(error.contains(expect), "{code}: {error}");
+        }
+        // Fifty orders a second for one player.
+        run("for i = 1, 50 do game.player(1):give_gold(1) end").unwrap();
+        let error = run("game.player(1):give_gold(1)").err().expect("limited").to_string();
+        assert!(error.contains("at most 50 orders a second"), "{error}");
     }
 
     #[test]

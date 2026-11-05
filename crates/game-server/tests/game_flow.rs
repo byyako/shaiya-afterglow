@@ -4956,3 +4956,108 @@ async fn a_value_a_command_set_is_read_after_a_relog() {
     assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 1, "n".to_owned())), Some(&serde_json::json!(2)));
     assert_eq!(ctx.zones.script_store().get_global("count", "total"), Some(serde_json::json!(2)));
 }
+
+#[tokio::test]
+async fn script_orders_give_and_take_items_gold_and_buffs_and_move_the_player() {
+    use game_server::skills::{self, SkillDef};
+    // A buff (Large Increase EXP, skill 223) and a skill that is not one (300).
+    let mut data = data();
+    let buff = SkillDef {
+        id: 223,
+        level: 1,
+        country: 6,
+        jobs: [true; 6],
+        type_effect: skills::BUFF,
+        kind: game_server::buffs::ABILITIES,
+        keep_time: 720,
+        target_type: 2,
+        success_type: 1,
+        success_value: 100,
+        keep_on_death: true,
+        abilities: [(35, 1), (0, 0), (0, 0)],
+        ..Default::default()
+    };
+    data.skills = std::mem::take(&mut data.skills).with([buff, SkillDef { id: 300, level: 1, country: 6, jobs: [true; 6], ..Default::default() }]);
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start_with_data(backend.clone(), config(true), data).await;
+    put_scripts(
+        &ctx,
+        &[(
+            "orders",
+            r#"
+            local function reply(p, what) return function(r) p:message(what .. ' ' .. tostring(r)) end end
+            game.on('login', function(p) if p.name == 'Alice' then ALICE = p end end)
+            game.command('give', function(p) p:give_item(25, 1, 3, reply(p, 'gave')) end)
+            game.command('swords', function(p) p:give_item(5, 1, 255, reply(p, 'swords')) end)
+            game.command('nothing', function(p) p:give_item(99, 99, 1, reply(p, 'nothing')) end)
+            game.command('take', function(p, args) p:take_item(25, 1, tonumber(args), reply(p, 'took')) end)
+            game.command('pay', function(p, args) p:take_gold(tonumber(args), reply(p, 'paid')) end)
+            game.command('gold', function(p, args) p:give_gold(tonumber(args), reply(p, 'got')) end)
+            game.command('buff', function(p, args) p:add_buff(tonumber(args), 1, reply(p, 'buff')) end)
+            game.command('away', function(p, args) p:teleport(tonumber(args), 165.25, 119.4, 397.89, reply(p, 'away')) end)
+            game.command('ghost', function(p) ALICE:give_gold(5, reply(p, 'ghost')) end)
+            game.command('bad', function(p) p:give_item(25, 1, 256) end)
+            "#,
+        )],
+    );
+    let (mut alice, alice_id, mut bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    let potions = |backend: &MemoryBackend| backend.stored(alice_id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>();
+
+    // An item: into the bag (`0x0204` for the new slot), saved, and the callback hears how many.
+    assert_eq!(potions(&backend), 10);
+    alice.write(say(chat::OP_NORMAL, b"!give")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "gave 3");
+    assert_eq!(potions(&backend), 13);
+    // A full bag gives what fits.
+    alice.write(say(chat::OP_NORMAL, b"!swords")).await;
+    let said = next_server_whisper(&mut alice).await;
+    let given: u32 = said.strip_prefix("swords ").unwrap().parse().unwrap();
+    let swords = backend.stored(alice_id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (5, 1)).count() as u32;
+    assert!(given > 0 && given < 255 && swords == given + 1, "{said}: {swords} swords in all (one is worn)");
+    alice.write(say(chat::OP_NORMAL, b"!nothing")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "nothing 0", "an item the game does not have");
+    // Taking: all or nothing.
+    alice.write(say(chat::OP_NORMAL, b"!take 5")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "took true");
+    assert_eq!(potions(&backend), 8);
+    alice.write(say(chat::OP_NORMAL, b"!take 100")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "took false");
+    assert_eq!(potions(&backend), 8);
+    // (Five messages a second to one player is the API's limit: a pause between the groups.)
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    // Gold: too little leaves it and calls back false; enough takes it; giving stops at what the hand holds.
+    alice.write(say(chat::OP_NORMAL, b"!pay 5000")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "paid false");
+    assert_eq!(backend.stored(alice_id).unwrap().0, 1000);
+    alice.write(say(chat::OP_NORMAL, b"!pay 300")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "paid true");
+    assert_eq!(backend.stored(alice_id).unwrap().0, 700);
+    alice.write(say(chat::OP_NORMAL, b"!gold 2000000000")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "got 2000000000");
+    alice.write(say(chat::OP_NORMAL, b"!gold 2000000000")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "got 2000000000");
+    alice.write(say(chat::OP_NORMAL, b"!gold 2000000000")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, format!("got {}", u32::MAX - 4_000_000_700));
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    // A buff skill applies; one that is not a buff is refused.
+    alice.write(say(chat::OP_NORMAL, b"!buff 223")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "buff true");
+    alice.write(say(chat::OP_NORMAL, b"!buff 300")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "buff false");
+    // A move to another map, or to one the world does not have.
+    alice.write(say(chat::OP_NORMAL, b"!away 99")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "away false");
+    alice.write(say(chat::OP_NORMAL, b"!away 2")).await;
+    // Alice is out of her zone until her client loads the map, so she hears no whisper; she is told where she is.
+    let moved = w::position(alice_id, 2, [165.25, 119.4, 397.89]);
+    assert_eq!(read_op(&mut alice, frame::opcode(&moved)).await, moved);
+    // A count out of range is a Lua error (a fault), not an order.
+    bob.write(say(chat::OP_NORMAL, b"!bad")).await;
+    let faults = || ctx.zones.ext_scripts().extensions()[0].fault_count();
+    timeout(Duration::from_secs(5), async { while faults() == 0 { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("the fault");
+    // A player who is not in a zone any more: false at once.
+    drop(alice);
+    timeout(Duration::from_secs(5), async { while ctx.zones.locate(alice_id).is_some() { tokio::time::sleep(Duration::from_millis(20)).await } }).await.expect("left");
+    bob.write(say(chat::OP_NORMAL, b"!ghost")).await;
+    assert_eq!(next_server_whisper(&mut bob).await, "ghost 0");
+}

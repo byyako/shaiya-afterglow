@@ -30,6 +30,7 @@ const HANDLERS: &str = "script.handlers";
 const COMMANDS: &str = "script.commands";
 const ITEMS: &str = "script.items";
 const TIMERS: &str = "script.timers";
+const CALLBACKS: &str = "script.callbacks";
 
 /// A command word `^[a-z][a-z0-9_]{0,15}$`.
 pub fn valid_command_word(word: &str) -> bool {
@@ -92,6 +93,8 @@ pub struct Shared {
     pub world: Arc<dyn ScriptWorld>,
     pub store: Arc<super::store::Store>,
     pub rates: Mutex<act::Rates>,
+    /// The ids of the callbacks of orders.
+    pub next_callback: std::sync::atomic::AtomicU64,
     log: Mutex<LogState>,
     /// A dry run (the data editor's `check`) logs nothing.
     dry: bool,
@@ -103,7 +106,7 @@ impl Shared {
         let regs = Registrations { open: true, ..Registrations::default() };
         let world = ctx.world.clone().unwrap_or_else(act::null_world);
         let store = ctx.store.clone().unwrap_or_default();
-        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, store, rates: Mutex::default(), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
+        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, store, rates: Mutex::default(), next_callback: std::sync::atomic::AtomicU64::new(1), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
     }
 
     fn regs(&self) -> std::sync::MutexGuard<'_, Registrations> {
@@ -176,7 +179,7 @@ fn registry_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
 
 /// Builds the `game` table (and `print`) in `lua` for the extension `shared.name`.
 pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> mlua::Result<()> {
-    for name in [HANDLERS, COMMANDS, ITEMS, TIMERS] {
+    for name in [HANDLERS, COMMANDS, ITEMS, TIMERS, CALLBACKS] {
         lua.set_named_registry_value(name, lua.create_table()?)?;
     }
     let game = lua.create_table()?;
@@ -413,6 +416,19 @@ pub fn item_fn(lua: &Lua, item_type: u8, type_id: u8) -> Option<mlua::Function> 
 
 pub fn timer_fn(lua: &Lua, id: u32) -> Option<mlua::Function> {
     registry_table(lua, TIMERS).ok()?.raw_get::<Option<mlua::Function>>(id).ok().flatten()
+}
+
+/// Keeps the callback of an order until its result comes; the id it will be told with.
+pub fn keep_callback(lua: &Lua, id: u64, f: mlua::Function) -> mlua::Result<()> {
+    registry_table(lua, CALLBACKS)?.raw_set(id as f64, f)
+}
+
+/// Takes an order's callback out (it is told once).
+pub fn take_callback(lua: &Lua, id: u64) -> Option<mlua::Function> {
+    let t = registry_table(lua, CALLBACKS).ok()?;
+    let f = t.raw_get::<Option<mlua::Function>>(id as f64).ok().flatten();
+    let _ = t.raw_set(id as f64, Value::Nil);
+    f
 }
 
 pub fn drop_timer_fn(lua: &Lua, id: u32) {

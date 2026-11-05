@@ -441,12 +441,27 @@ async fn item_skill<S: Backend>(
         return Ok(Done::Failed);
     }
     let used = consume(ctx, character, state, at.0, at.1).await?;
+    buff_self(conn, ctx, character, state, country, &def).await?;
+    Ok(used)
+}
+
+/// A buff skill applied to the character itself (`CUser::BuffUser(self, 1)`): `0x0511`, the skill applied. The item path's second half
+/// and the scripts' `add_buff`; the caller has checked that it is a buff and not refused.
+pub(super) async fn buff_self<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    character: &mut PlayCharacter,
+    state: &mut WorldState,
+    country: u8,
+    def: &SkillDef,
+) -> Result<()> {
+    let (id, map) = (character.id, state.map);
     let gear = gear(ctx, state);
     let fighter = combat::player(character.level, state.totals.stats, &gear);
     let cast = SkillCast {
         caster: id,
         country,
-        skill: &def,
+        skill: def,
         fighter: &fighter,
         rec: state.totals.stats[2],
         cross_road: gear.cross_road,
@@ -464,14 +479,14 @@ async fn item_skill<S: Backend>(
         ctx.zones.use_skill(map, SkillTarget::Player(id), &cast, &live.mobs, loot, Instant::now(), &mut || rng.random::<u32>() & 0x7fff)
     };
     // Nothing to apply when the player is not in a zone any more (it cannot happen on this task); the item is used.
-    let Some(outcome) = outcome else { return Ok(used) };
+    let Some(outcome) = outcome else { return Ok(()) };
     for packet in outcome.packets {
         conn.send(packet).await?;
     }
     if let Some(effects) = ctx.zones.buff_effects(map, id) {
         buffs_changed(conn, ctx, character, state, effects).await?;
     }
-    Ok(used)
+    Ok(())
 }
 
 /// A recall rune's destination (section 9): its level cap, the map loaded, of no `CreateType`, the position on it, and no logout

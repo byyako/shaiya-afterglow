@@ -148,6 +148,8 @@ pub enum ZoneEvent {
     Recalled { zone: u16, position: [f32; 3] },
     /// A GM left orders for the player (`Zones::take_admin_orders`, `docs/plans/done/gm-commands.md`): this connection carries them out.
     Admin,
+    /// A script left orders for the player (`Zones::take_script_orders`, `docs/plans/ext-5-lua.md` section 4.4).
+    Script,
     /// The item mall has something for the account (`OnlineUsers::take_mall`, `docs/original/item-mall.md` deviations 5 and 6): a gift
     /// that came, or its points changed.
     Mall,
@@ -692,6 +694,8 @@ pub struct Zones {
     ranking: Mutex<crate::ranking::Battle>,
     /// What GMs asked of other players' connections, by character (`admin::AdminOrder`). Taken after `maps`, held briefly.
     admin_orders: Mutex<HashMap<u32, Vec<AdminOrder>>>,
+    /// What scripts asked of players' connections, by character (`script::event::Queued`). Taken after `maps`, held briefly.
+    script_orders: Mutex<HashMap<u32, Vec<crate::script::event::Queued>>>,
     /// The chat and move bans by character (deviation 9 of `docs/original/gm-commands.md`). Taken alone, held briefly.
     bans: Mutex<HashMap<u32, Bans>>,
     /// The GMs listening to players' chat (`admin::Listens`). Taken alone, held briefly.
@@ -1727,6 +1731,7 @@ impl Zones {
             ranking_map: world.ranking_map(),
             ranking: Mutex::default(),
             admin_orders: Mutex::default(),
+            script_orders: Mutex::default(),
             bans: Mutex::default(),
             listens: Mutex::default(),
             quests: Mutex::default(),

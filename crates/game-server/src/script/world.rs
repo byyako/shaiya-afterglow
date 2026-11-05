@@ -45,6 +45,10 @@ pub trait ScriptWorld: Send + Sync {
     fn mob_name(&self, mob_id: u16) -> Option<String>;
     /// A line to each staff member online who may type console commands (a disabled extension).
     fn tell_staff(&self, text: &str);
+    /// Leaves an order for the player's own connection; false when the player is not online here (nothing is left).
+    fn order(&self, id: u32, queued: super::event::Queued) -> bool;
+    /// Tells an extension's callback how an order came out (queued for the script thread, never run on the caller's stack).
+    fn answer(&self, extension: &str, callback: u64, outcome: super::event::Outcome);
     /// `(word, help, staff)` of every command of every enabled extension, for a `!help`.
     fn commands(&self) -> Vec<(String, String, u8)>;
 }
@@ -82,6 +86,10 @@ impl ScriptWorld for NullWorld {
         None
     }
     fn tell_staff(&self, _: &str) {}
+    fn order(&self, _: u32, _: super::event::Queued) -> bool {
+        false
+    }
+    fn answer(&self, _: &str, _: u64, _: super::event::Outcome) {}
     fn commands(&self) -> Vec<(String, String, u8)> {
         Vec::new()
     }

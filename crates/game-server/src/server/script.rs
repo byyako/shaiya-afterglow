@@ -6,7 +6,7 @@
 use std::sync::Weak;
 
 use super::*;
-use crate::script::event::{Job, Payload, PlayerRef};
+use crate::script::event::{Job, Order, Outcome, Payload, PlayerRef};
 use crate::script::sources::{Resolution, ScriptSources, resolve_options};
 use crate::script::world::{PlayerView, ScriptWorld};
 use crate::script::{Event, ExtInput, LoadContext, ScriptSet};
@@ -96,6 +96,16 @@ impl<S: Backend> ScriptWorld for ContextWorld<S> {
             for piece in text.as_bytes().chunks(120) {
                 c.zones.send_to_char(id, &chat::whisper(false, SERVER_NAME, &zeroed(&String::from_utf8_lossy(piece))));
             }
+        }
+    }
+
+    fn order(&self, id: u32, queued: crate::script::event::Queued) -> bool {
+        self.ctx.upgrade().is_some_and(|c| c.zones.script_order(id, queued))
+    }
+
+    fn answer(&self, extension: &str, callback: u64, outcome: crate::script::event::Outcome) {
+        if let Some(c) = self.ctx.upgrade() {
+            c.zones.script_job(Job::OrderDone { extension: extension.to_owned(), callback, outcome });
         }
     }
 
@@ -294,6 +304,16 @@ pub(super) fn gone<S: Backend>(ctx: &Context<S>, state: &mut WorldState) {
         ctx.zones.set_script_staff(state.script.id, None);
         ctx.zones.raise(Event::Logout, || Payload::Logout { p: state.script.player() });
     }
+    // Orders still waiting are answered "no" (section 4.4).
+    for queued in ctx.zones.take_script_orders(state.script.id) {
+        if let Some(callback) = queued.callback {
+            let outcome = match queued.order {
+                Order::GiveItem { .. } | Order::GiveGold(_) => Outcome::Count(0),
+                _ => Outcome::Done(false),
+            };
+            ctx.zones.script_job(Job::OrderDone { extension: queued.extension, callback, outcome });
+        }
+    }
     // The stored values leave the cache behind the `logout` handlers (the writes stay queued).
     if let Some(session) = state.script.session.take() {
         ctx.zones.script_forget(state.script.id, session);
@@ -365,4 +385,116 @@ fn cut_line(mut line: String) -> String {
         line.push('…');
     }
     line
+}
+
+// ------------------------------------------------------------------------------------------------------------ the orders
+
+/// The orders scripts left for this connection's character, carried out with the code the GM orders and the item paths use
+/// (section 4.4); each result goes back to the callback as a job, so no script is ever re-entered from here.
+pub(super) async fn carry_out<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    player: &Player,
+    character: &mut PlayCharacter,
+    state: &mut WorldState,
+) -> Result<()> {
+    for queued in ctx.zones.take_script_orders(character.id) {
+        let outcome = one(conn, ctx, player, character, state, &queued.order).await?;
+        tracing::debug!(id = character.id, extension = %queued.extension, order = ?queued.order, ?outcome, "script order");
+        if let Some(callback) = queued.callback {
+            ctx.zones.script_job(Job::OrderDone { extension: queued.extension, callback, outcome });
+        }
+    }
+    Ok(())
+}
+
+async fn one<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    player: &Player,
+    character: &mut PlayCharacter,
+    state: &mut WorldState,
+    order: &Order,
+) -> Result<Outcome> {
+    let id = character.id;
+    // Nothing is done for a character that is leaving (a logout under way).
+    if state.logout.is_some() {
+        return Ok(match order {
+            Order::GiveItem { .. } | Order::GiveGold(_) => Outcome::Count(0),
+            _ => Outcome::Done(false),
+        });
+    }
+    Ok(match *order {
+        Order::GiveItem { item_type, type_id, count } => {
+            let Some(def) = ctx.data.items.get(item_type, type_id).copied() else { return Ok(Outcome::Count(0)) };
+            Outcome::Count(u32::from(admin::give_items(conn, ctx, character, state, &def, count).await?))
+        }
+        Order::TakeItem { item_type, type_id, count } => {
+            // All or nothing, from the bags (not the warehouse, not what is worn).
+            let mut units: Vec<_> = state
+                .inventory
+                .items()
+                .filter(|i| i.item_type == item_type && i.type_id == type_id && i.bag != 0 && state.inventory.is_bag((i.bag, i.slot)))
+                .map(|i| (i.bag, i.slot, i.count))
+                .collect();
+            units.sort();
+            if units.iter().map(|u| u32::from(u.2)).sum::<u32>() < u32::from(count) {
+                return Ok(Outcome::Done(false));
+            }
+            let mut left = count;
+            let mut changes = Vec::new();
+            for (bag, slot, have) in units {
+                if left == 0 {
+                    break;
+                }
+                let take = left.min(have);
+                changes.push(if take == have { SlotChange::Remove { bag, slot } } else { SlotChange::SetCount { bag, slot, count: have - take } });
+                left -= take;
+            }
+            let Some(rows) = ctx.store.trade(id, 0, &changes).await? else { bail!("the database refused taking {changes:?}") };
+            record::removed(ctx, character, state, &changes, &rows);
+            for change in &changes {
+                state.inventory.apply(change);
+            }
+            super::send_item_changes(conn, state, &changes, false).await?;
+            Outcome::Done(true)
+        }
+        Order::GiveGold(n) => {
+            // At most 2^32 - 1 in hand; the rest is not given.
+            let given = n.min(u32::MAX - state.money);
+            if given == 0 {
+                return Ok(Outcome::Count(0));
+            }
+            if ctx.store.trade(id, i64::from(given), &[]).await?.is_none() {
+                return Ok(Outcome::Count(0));
+            }
+            state.money += given;
+            conn.send(w::set_money(state.money)).await?;
+            Outcome::Count(given)
+        }
+        Order::TakeGold(n) => {
+            if state.money < n || ctx.store.trade(id, -i64::from(n), &[]).await?.is_none() {
+                return Ok(Outcome::Done(false));
+            }
+            state.money -= n;
+            conn.send(w::set_money(state.money)).await?;
+            Outcome::Done(true)
+        }
+        Order::AddBuff { skill, level } => {
+            let Some(def) = ctx.data.skills.get(skill, level).copied() else { return Ok(Outcome::Done(false)) };
+            if def.type_effect != skills::BUFF || state.dead || ctx.zones.item_skill_refused(state.map, id, &def) {
+                return Ok(Outcome::Done(false));
+            }
+            super::items::buff_self(conn, ctx, character, state, player.faction.map_or(0, |f| f.country), &def).await?;
+            Outcome::Done(true)
+        }
+        Order::Teleport { map, position } => {
+            // As a GM's summon: not while dead, entering or a move under way; only to a map and spot the world has.
+            if state.dead || state.item_move.is_some() || !state.entered || !ctx.data.world.is_safe_pos(map, position) {
+                return Ok(Outcome::Done(false));
+            }
+            super::move_player(conn, ctx, state, id, map, position, None).await?;
+            Outcome::Done(true)
+        }
+    })
 }

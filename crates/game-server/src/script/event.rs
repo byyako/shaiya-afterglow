@@ -48,6 +48,32 @@ pub enum Payload {
     Death { victim: PlayerRef, killer: Killer, pvp: bool },
 }
 
+/// What a script does to a player (section 4.4): carried out by that player's own connection.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Order {
+    GiveItem { item_type: u8, type_id: u8, count: u8 },
+    TakeItem { item_type: u8, type_id: u8, count: u8 },
+    GiveGold(u32),
+    TakeGold(u32),
+    AddBuff { skill: u16, level: u8 },
+    Teleport { map: u16, position: [f32; 3] },
+}
+
+/// An order waiting for its connection: for which extension, and the callback to tell the result to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Queued {
+    pub extension: String,
+    pub callback: Option<u64>,
+    pub order: Order,
+}
+
+/// What an order came to, as the callback gets it: a count (items given, gold given) or whether it was done.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Outcome {
+    Count(u32),
+    Done(bool),
+}
+
 /// One unit of work for the script thread (section 4.2).
 #[derive(Clone, Debug)]
 pub enum Job {
@@ -55,6 +81,8 @@ pub enum Job {
     Event { event: super::Event, payload: Payload },
     /// A player's `!word args`, for the extension that registered the word.
     Command { extension: String, word: String, p: PlayerRef, args: String },
+    /// An order a connection carried out (or could not): the callback of the extension that gave it.
+    OrderDone { extension: String, callback: u64, outcome: Outcome },
     /// The character's stored values leave the cache (after its `logout` handlers ran): `session` is the login they belong to.
     Forget { id: u32, session: u64 },
     /// The set of scripts was swapped: look at the timers again.
