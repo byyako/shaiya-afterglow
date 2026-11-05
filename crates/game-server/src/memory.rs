@@ -67,6 +67,11 @@ pub struct MemoryBackend {
     pub rule_layers: Mutex<crate::rules::RuleSources>,
     /// What `reload` reads as the extensions' scripts (`script_sources`); tests set it with `set_script_sources`.
     pub script_sources: Mutex<crate::script::sources::ScriptSources>,
+    /// The scripts' stored values as written: `(extension, character or 0 for the extension's own, key)` → value.
+    pub script_values: Mutex<std::collections::BTreeMap<(String, u32, String), serde_json::Value>>,
+    /// Batches `write_script_values` received, and a switch to make the next one fail (tests).
+    pub script_writes: Mutex<Vec<Vec<crate::script::store::ScriptWrite>>>,
+    pub fail_script_writes: std::sync::atomic::AtomicBool,
     /// The obelisks' owners as last saved, by map and number.
     pub obelisk_owners: Mutex<std::collections::BTreeMap<(u16, u16), crate::obelisk::Owner>>,
     /// Treat every pending deletion as due.
@@ -1243,6 +1248,26 @@ impl AdminStore for MemoryBackend {
 
     async fn script_sources(&self) -> Result<crate::script::sources::ScriptSources> {
         Ok(self.script_sources.guard().clone())
+    }
+
+    async fn script_values(&self, character_id: u32) -> Result<Vec<(String, String, serde_json::Value)>> {
+        Ok(self.script_values.guard().iter().filter(|((_, c, _), _)| *c == character_id).map(|((e, _, k), v)| (e.clone(), k.clone(), v.clone())).collect())
+    }
+
+    async fn write_script_values(&self, batch: &[crate::script::store::ScriptWrite]) -> Result<()> {
+        if self.fail_script_writes.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            bail!("the database refused the write");
+        }
+        let mut values = self.script_values.guard();
+        for w in batch {
+            let key = (w.extension.clone(), w.character.unwrap_or(0), w.key.clone());
+            match &w.value {
+                Some(v) => values.insert(key, v.clone()),
+                None => values.remove(&key),
+            };
+        }
+        self.script_writes.guard().push(batch.to_vec());
+        Ok(())
     }
 
     async fn set_account_status(&self, user_id: u32, status: i16) -> Result<()> {

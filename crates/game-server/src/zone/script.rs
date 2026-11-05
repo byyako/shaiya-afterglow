@@ -52,6 +52,20 @@ impl Zones {
         }
     }
 
+    /// The stored values of the scripts (`docs/plans/ext-5-lua.md` section 7.6).
+    pub fn script_store(&self) -> Arc<crate::script::store::Store> {
+        self.scripts.store.clone()
+    }
+
+    /// A character's stored values leave the cache once its `logout` handlers ran (queued behind them); at once when the queue
+    /// cannot take the job.
+    pub fn script_forget(&self, id: u32, session: u64) {
+        let queued = self.script_jobs.get().is_some_and(|jobs| jobs.send(Job::Forget { id, session }));
+        if !queued {
+            self.scripts.store.end_char(id, session);
+        }
+    }
+
     /// Raises an event: queued when an enabled extension handles it, `make` building the payload only then.
     pub fn raise(&self, event: Event, make: impl FnOnce() -> Payload) {
         if self.script_jobs.get().is_none() || self.scripts.get().for_event(event).is_empty() {

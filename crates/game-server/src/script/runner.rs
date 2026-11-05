@@ -20,6 +20,8 @@ const FULL_WARN: Duration = Duration::from_secs(10);
 #[derive(Default)]
 pub struct ScriptCell {
     set: RwLock<Arc<ScriptSet>>,
+    /// The stored values, shared by every extension's state.
+    pub store: Arc<super::store::Store>,
 }
 
 impl ScriptCell {
@@ -41,8 +43,8 @@ pub struct Jobs {
 }
 
 impl Jobs {
-    /// Queues a job; a full queue drops it with a warning (at most one line every 10 s).
-    pub fn send(&self, job: Job) {
+    /// Queues a job; a full queue drops it with a warning (at most one line every 10 s) and says so.
+    pub fn send(&self, job: Job) -> bool {
         if self.tx.try_send(job).is_err() {
             self.dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let mut last = self.last_full.lock().unwrap_or_else(|e| e.into_inner());
@@ -51,7 +53,9 @@ impl Jobs {
                 *last = Some(now);
                 tracing::warn!(dropped = self.dropped.load(std::sync::atomic::Ordering::Relaxed), "the script queue is full or stopped: an event was dropped");
             }
+            return false;
         }
+        true
     }
 }
 
@@ -84,14 +88,14 @@ fn run(rx: &Receiver<Job>, cell: &ScriptCell) {
         let set = cell.get();
         let wait = next_timer(&set).map_or(IDLE, |at| at.saturating_duration_since(Instant::now()).min(IDLE));
         match rx.recv_timeout(wait) {
-            Ok(job) => handle(&cell.get(), job),
+            Ok(job) => handle(&cell.get(), &cell.store, job),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
         // The jobs that came while this one ran, before the timers (they are in order).
         loop {
             match rx.try_recv() {
-                Ok(job) => handle(&cell.get(), job),
+                Ok(job) => handle(&cell.get(), &cell.store, job),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return,
             }
@@ -105,7 +109,7 @@ fn next_timer(set: &ScriptSet) -> Option<Instant> {
 }
 
 /// Runs one job against the set in force.
-pub fn handle(set: &ScriptSet, job: Job) {
+pub fn handle(set: &ScriptSet, store: &super::store::Store, job: Job) {
     match job {
         Job::Event { event, payload } => {
             for ext in set.for_event(event) {
@@ -121,6 +125,7 @@ pub fn handle(set: &ScriptSet, job: Job) {
                 f.call::<()>((act::player_handle(lua, &p)?, args))
             });
         }
+        Job::Forget { id, session } => store.end_char(id, session),
         Job::Wake => {}
     }
 }

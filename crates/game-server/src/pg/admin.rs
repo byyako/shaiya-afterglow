@@ -18,6 +18,59 @@ impl AdminStore for PgBackend {
         crate::config::read_script_sources(&mut conn).await
     }
 
+    async fn script_values(&self, character_id: u32) -> Result<Vec<(String, String, serde_json::Value)>> {
+        Ok(sqlx::query_as("SELECT extension, key, value FROM content.script_values WHERE character_id = $1")
+            .bind(i32::try_from(character_id)?)
+            .fetch_all(&self.pool)
+            .await?)
+    }
+
+    async fn write_script_values(&self, batch: &[crate::script::store::ScriptWrite]) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        for w in batch {
+            match (w.character, &w.value) {
+                (Some(character), Some(value)) => {
+                    sqlx::query(
+                        "INSERT INTO content.script_values (extension, character_id, key, value) \
+                         SELECT $1, $2, $3, $4 WHERE EXISTS (SELECT 1 FROM characters WHERE id = $2) AND EXISTS (SELECT 1 FROM content.extensions WHERE name = $1) \
+                         ON CONFLICT (extension, character_id, key) DO UPDATE SET value = EXCLUDED.value",
+                    )
+                    .bind(&w.extension)
+                    .bind(i32::try_from(character)?)
+                    .bind(&w.key)
+                    .bind(value)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                (Some(character), None) => {
+                    sqlx::query("DELETE FROM content.script_values WHERE extension = $1 AND character_id = $2 AND key = $3")
+                        .bind(&w.extension)
+                        .bind(i32::try_from(character)?)
+                        .bind(&w.key)
+                        .execute(&mut *tx)
+                        .await?;
+                }
+                (None, Some(value)) => {
+                    sqlx::query(
+                        "INSERT INTO content.script_globals (extension, key, value) \
+                         SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM content.extensions WHERE name = $1) \
+                         ON CONFLICT (extension, key) DO UPDATE SET value = EXCLUDED.value",
+                    )
+                    .bind(&w.extension)
+                    .bind(&w.key)
+                    .bind(value)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                (None, None) => {
+                    sqlx::query("DELETE FROM content.script_globals WHERE extension = $1 AND key = $2").bind(&w.extension).bind(&w.key).execute(&mut *tx).await?;
+                }
+            }
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn set_account_status(&self, user_id: u32, status: i16) -> Result<()> {
         sqlx::query("UPDATE accounts SET status = $2 WHERE id = $1").bind(i32::try_from(user_id)?).bind(status).execute(&self.pool).await?;
         Ok(())

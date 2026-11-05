@@ -136,7 +136,14 @@ impl<S: Backend> Context<S> {
             Some(weak) => Arc::new(move |t, i| weak.upgrade().is_some_and(|c| c.data.items.get(t, i).is_some())),
             None => Arc::new(|_, _| true),
         };
-        ScriptSet::load(&inputs, LoadContext { item_exists: Some(exists), world: Some(self.script_world()), ..LoadContext::default() }, self.config.script_memory_mb)
+        // The extensions' own values come in with the scripts, the writes not sent yet over them (section 7.6).
+        let store = self.zones.script_store();
+        store.retain_globals(&sources.extensions.iter().map(|e| e.name.clone()).collect::<Vec<_>>());
+        for e in &sources.extensions {
+            store.set_globals(&e.name, e.globals.clone());
+        }
+        let base = LoadContext { item_exists: Some(exists), world: Some(self.script_world()), store: Some(store), ..LoadContext::default() };
+        ScriptSet::load(&inputs, base, self.config.script_memory_mb)
     }
 
     /// Puts `set` in force and starts the script thread (once): the start of the server (`main`) and the tests call it.
@@ -230,11 +237,33 @@ pub(super) struct Track {
     pub login: bool,
     /// The zone `map_enter` was raised for (and `map_leave` is due).
     pub map: Option<u16>,
+    /// The generation of the stored values loaded for this login (they leave the cache after `logout`).
+    pub session: Option<u64>,
 }
 
 impl Track {
     fn player(&self) -> PlayerRef {
         PlayerRef { id: self.id, name: self.name.clone() }
+    }
+}
+
+/// The first zone entry of a login: the character's stored values come in before `login` is queued (one query), for the extensions
+/// that are loaded. Without scripts nothing is read.
+pub(super) async fn load_values<S: Backend>(ctx: &Context<S>, state: &mut WorldState) {
+    if state.script.session.is_some() || state.script.login {
+        return;
+    }
+    let set = ctx.zones.ext_scripts();
+    if set.extensions().is_empty() {
+        return;
+    }
+    match ctx.store.script_values(state.script.id).await {
+        Ok(rows) => {
+            let rows = rows.into_iter().filter(|(e, _, _)| set.extensions().iter().any(|x| x.name == *e)).collect();
+            state.script.session = Some(ctx.zones.script_store().begin_char(state.script.id, rows));
+        }
+        // Without them a `set` would write over what the database has: the player's values stay unloaded (reads nil, sets fail).
+        Err(error) => tracing::warn!(%error, id = state.script.id, "could not load the character's script values"),
     }
 }
 
@@ -264,6 +293,40 @@ pub(super) fn gone<S: Backend>(ctx: &Context<S>, state: &mut WorldState) {
     if std::mem::take(&mut state.script.login) {
         ctx.zones.set_script_staff(state.script.id, None);
         ctx.zones.raise(Event::Logout, || Payload::Logout { p: state.script.player() });
+    }
+    // The stored values leave the cache behind the `logout` handlers (the writes stay queued).
+    if let Some(session) = state.script.session.take() {
+        ctx.zones.script_forget(state.script.id, session);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------ the writer
+
+/// The writes the scripts queued, sent in one transaction; put back (and warned about) when the database refuses. Called every 2 seconds
+/// by the writer task and at shutdown.
+pub async fn flush_script_values<S: Backend>(ctx: &Context<S>) -> bool {
+    let store = ctx.zones.script_store();
+    let batch = store.take_pending();
+    if batch.is_empty() {
+        return true;
+    }
+    match ctx.store.write_script_values(&batch).await {
+        Ok(()) => true,
+        Err(error) => {
+            tracing::warn!(%error, writes = batch.len(), "could not write the scripts' stored values; they are tried again");
+            store.requeue(batch);
+            false
+        }
+    }
+}
+
+/// The writer task (section 7.6): every 2 seconds the values the scripts set since are written.
+pub async fn script_writer<S: Backend>(ctx: Arc<Context<S>>) {
+    let mut tick = tokio::time::interval(Duration::from_secs(2));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tick.tick().await;
+        flush_script_values(&ctx).await;
     }
 }
 

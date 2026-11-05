@@ -299,6 +299,30 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
         Ok(())
     })?)?;
 
+    // Stored values (section 7.5): a character's own while it is loaded (from the login to the end of its `logout` handlers).
+    let s = shared.clone();
+    methods.set("get", lua.create_function(move |lua, (this, key): (Table, String)| {
+        match s.store.get(&s.name, id_of(&this)?, &key) {
+            Some(v) => super::store::to_lua(lua, &v),
+            None => Ok(Value::Nil),
+        }
+    })?)?;
+    let s = shared.clone();
+    methods.set("set", lua.create_function(move |lua, (this, key, value): (Table, String, Value)| {
+        let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))?;
+        s.store.set(&s.name, id_of(&this)?, &key, v).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))
+    })?)?;
+    let s = shared.clone();
+    game.set("get", lua.create_function(move |lua, key: String| match s.store.get_global(&s.name, &key) {
+        Some(v) => super::store::to_lua(lua, &v),
+        None => Ok(Value::Nil),
+    })?)?;
+    let s = shared.clone();
+    game.set("set", lua.create_function(move |lua, (key, value): (String, Value)| {
+        let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))?;
+        s.store.set_global(&s.name, &key, v).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))
+    })?)?;
+
     let meta = lua.create_table()?;
     meta.raw_set("__index", methods)?;
     meta.raw_set(

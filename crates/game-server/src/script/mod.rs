@@ -12,6 +12,7 @@ pub mod options;
 pub mod runner;
 pub mod sandbox;
 pub mod sources;
+pub mod store;
 pub mod world;
 
 #[cfg(test)]

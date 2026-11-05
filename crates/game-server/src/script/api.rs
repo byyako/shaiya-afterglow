@@ -73,6 +73,8 @@ pub struct LoadContext {
     pub taken_items: HashSet<(u8, u8)>,
     /// What the API acts on; `None` is a world with nobody in it (a dry run, a unit test).
     pub world: Option<Arc<dyn ScriptWorld>>,
+    /// The stored values; `None` is a store of its own (a dry run, a unit test).
+    pub store: Option<Arc<super::store::Store>>,
 }
 
 #[derive(Default)]
@@ -88,6 +90,7 @@ pub struct Shared {
     pub regs: Mutex<Registrations>,
     ctx: LoadContext,
     pub world: Arc<dyn ScriptWorld>,
+    pub store: Arc<super::store::Store>,
     pub rates: Mutex<act::Rates>,
     log: Mutex<LogState>,
     /// A dry run (the data editor's `check`) logs nothing.
@@ -99,7 +102,8 @@ impl Shared {
     pub fn new(name: &str, ctx: LoadContext, dry: bool) -> Arc<Self> {
         let regs = Registrations { open: true, ..Registrations::default() };
         let world = ctx.world.clone().unwrap_or_else(act::null_world);
-        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, rates: Mutex::default(), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
+        let store = ctx.store.clone().unwrap_or_default();
+        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, store, rates: Mutex::default(), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
     }
 
     fn regs(&self) -> std::sync::MutexGuard<'_, Registrations> {

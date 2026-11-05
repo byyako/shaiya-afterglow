@@ -4921,3 +4921,38 @@ async fn scripts_off_loads_nothing() {
     alice.write(say(chat::OP_NORMAL, b"!ver")).await;
     assert_eq!(next_chat(&mut alice).await, chat::by_id(chat::OP_NORMAL, 1, b"!ver\0"), "the line stays chat");
 }
+
+#[tokio::test]
+async fn a_value_a_command_set_is_read_after_a_relog() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(
+        &ctx,
+        &[("count", "game.command('count', function(p) local n = (p:get('n') or 0) + 1 p:set('n', n) game.set('total', (game.get('total') or 0) + 1) p:message('n=' .. n) end)")],
+    );
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    client.write(say(chat::OP_NORMAL, b"!count")).await;
+    assert_eq!(next_server_whisper(&mut client).await, "n=1");
+    // The write goes to the database in a batch: a refused one is put back and tried again.
+    backend.fail_script_writes.store(true, Ordering::SeqCst);
+    assert!(!game_server::server::script::flush_script_values(&ctx).await);
+    assert!(backend.script_values.guard().is_empty());
+    assert!(game_server::server::script::flush_script_values(&ctx).await);
+    assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 1, "n".to_owned())), Some(&serde_json::json!(1)));
+    assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 0, "total".to_owned())), Some(&serde_json::json!(1)));
+    drop(client);
+    timeout(Duration::from_secs(5), async { while ctx.zones.locate(1).is_some() || ctx.zones.script_store().is_loaded(1) { tokio::time::sleep(Duration::from_millis(20)).await } })
+        .await
+        .expect("left the world, the values out of the cache");
+
+    // Logged in again, before anything was written the second time: the value is the stored one.
+    backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], false).await;
+    client.write(say(chat::OP_NORMAL, b"!count")).await;
+    assert_eq!(next_server_whisper(&mut client).await, "n=2");
+    assert!(game_server::server::script::flush_script_values(&ctx).await);
+    assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 1, "n".to_owned())), Some(&serde_json::json!(2)));
+    assert_eq!(ctx.zones.script_store().get_global("count", "total"), Some(serde_json::json!(2)));
+}

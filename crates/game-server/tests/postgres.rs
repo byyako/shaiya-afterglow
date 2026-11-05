@@ -1864,3 +1864,75 @@ async fn item_writes_return_the_rows_they_touch() {
     assert!(backend.trade(id, 0, &[SlotChange::Remove { bag: 1, slot: 0 }]).await.unwrap().is_none());
     db.drop().await;
 }
+
+/// The scripts' stored values (`docs/plans/ext-5-lua.md` section 7.6) against the real `content` tables, which the throwaway schema of
+/// the other tests cannot hide: the rows it makes carry a random name and are removed at the end.
+#[tokio::test]
+async fn script_values_are_written_coalesced_deleted_and_cascade() {
+    use game_server::script::store::Store;
+    dotenvy::dotenv().ok();
+    let Ok(url) = std::env::var("DATABASE_URL") else {
+        eprintln!("DATABASE_URL not set: skipping the PostgreSQL tests");
+        return;
+    };
+    let pool = PgPoolOptions::new().max_connections(2).connect(&url).await.unwrap();
+    sqlx::migrate!("../../db/migrations").run(&pool).await.unwrap();
+    let backend = PgBackend::new(pool.clone(), Duration::from_secs(7200));
+    let tag = format!("t{:08x}", rand::random::<u32>());
+    let (ext_a, ext_b) = (format!("{tag}-a"), format!("{tag}-b"));
+    for ext in [&ext_a, &ext_b] {
+        sqlx::query("INSERT INTO content.extensions (name, version, title, description, manifest) VALUES ($1, '1.0.0', 't', 'd', '{}')").bind(ext).execute(&pool).await.unwrap();
+    }
+    let user: i32 = sqlx::query_scalar("INSERT INTO accounts (username, password_hash) VALUES ($1, 'x') RETURNING id").bind(&tag).fetch_one(&pool).await.unwrap();
+    let CreateOutcome::Created(character) = backend.create(&hero(user as u32, 0, &tag)).await.unwrap() else { panic!("not created") };
+    let count = |ext: String, table: &'static str| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, i64>(AssertSqlSafe(format!("SELECT count(*) FROM content.{table} WHERE extension = '{ext}'"))).fetch_one(&pool).await.unwrap() }
+    };
+
+    // 100 sets of one key leave one write, and one row with the last value.
+    let store = Store::default();
+    store.begin_char(character, Vec::new());
+    for n in 0..100 {
+        store.set(&ext_a, character, "streak", Some(serde_json::json!(n))).unwrap();
+    }
+    store.set(&ext_a, character, "name", Some(serde_json::json!("Walker"))).unwrap();
+    store.set(&ext_b, character, "best", Some(serde_json::json!(true))).unwrap();
+    store.set_globals(&ext_a, Vec::new());
+    store.set_global(&ext_a, "bounty.1", Some(serde_json::json!(5000))).unwrap();
+    let batch = store.take_pending();
+    assert_eq!(batch.len(), 4);
+    backend.write_script_values(&batch).await.unwrap();
+    assert_eq!(count(ext_a.clone(), "script_values").await, 2);
+    let mut rows = backend.script_values(character).await.unwrap();
+    rows.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    assert_eq!(
+        rows,
+        [
+            (ext_a.clone(), "name".to_owned(), serde_json::json!("Walker")),
+            (ext_a.clone(), "streak".to_owned(), serde_json::json!(99)),
+            (ext_b.clone(), "best".to_owned(), serde_json::json!(true)),
+        ]
+    );
+    assert_eq!(count(ext_a.clone(), "script_globals").await, 1);
+
+    // A value deleted, a global changed; a write for a character that is gone is skipped, not an error that blocks the batch.
+    store.set(&ext_a, character, "name", None).unwrap();
+    store.set_global(&ext_a, "bounty.1", Some(serde_json::json!(7500))).unwrap();
+    let mut batch = store.take_pending();
+    batch.push(game_server::script::store::ScriptWrite { extension: ext_a.clone(), character: Some(2_000_000_000), key: "x".into(), value: Some(serde_json::json!(1)) });
+    backend.write_script_values(&batch).await.unwrap();
+    assert_eq!(count(ext_a.clone(), "script_values").await, 1);
+    let global: serde_json::Value = sqlx::query_scalar("SELECT value FROM content.script_globals WHERE extension = $1").bind(&ext_a).fetch_one(&pool).await.unwrap();
+    assert_eq!(global, serde_json::json!(7500));
+
+    // The extension's removal takes its values; a character's deletion takes the rest.
+    sqlx::query("DELETE FROM content.extensions WHERE name = $1").bind(&ext_a).execute(&pool).await.unwrap();
+    assert_eq!((count(ext_a.clone(), "script_values").await, count(ext_a.clone(), "script_globals").await), (0, 0));
+    assert_eq!(count(ext_b.clone(), "script_values").await, 1);
+    sqlx::query("DELETE FROM characters WHERE id = $1").bind(character as i32).execute(&pool).await.unwrap();
+    assert_eq!(count(ext_b.clone(), "script_values").await, 0);
+
+    sqlx::query("DELETE FROM content.extensions WHERE name = $1").bind(&ext_b).execute(&pool).await.unwrap();
+    sqlx::query("DELETE FROM accounts WHERE id = $1").bind(user).execute(&pool).await.unwrap();
+}

@@ -1846,6 +1846,7 @@ async fn world_loop<S: Backend>(
                     conn.send(ctx.zones.change_speeds(map, id, attack, movement)).await?;
                 }
                 state.entered = true;
+                script::load_values(ctx, state).await;
                 script::entered(ctx, state);
                 // Entering a zone starts the move check again (`CUser::EnterZone`).
                 state.move_check.reset(Instant::now(), state.position);

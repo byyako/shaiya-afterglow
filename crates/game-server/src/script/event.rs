@@ -55,6 +55,8 @@ pub enum Job {
     Event { event: super::Event, payload: Payload },
     /// A player's `!word args`, for the extension that registered the word.
     Command { extension: String, word: String, p: PlayerRef, args: String },
+    /// The character's stored values leave the cache (after its `logout` handlers ran): `session` is the login they belong to.
+    Forget { id: u32, session: u64 },
     /// The set of scripts was swapped: look at the timers again.
     Wake,
 }

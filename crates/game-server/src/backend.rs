@@ -826,6 +826,10 @@ pub trait AdminStore: Send + Sync + 'static {
     /// The enabled extensions' scripts, option specs, the data editor's option values and the scripts' globals, read again by `reload`
     /// (`docs/plans/ext-5-lua.md` section 9.2). The config file's `[ext.<name>]` is the caller's. An error means nothing was read.
     fn script_sources(&self) -> impl Future<Output = Result<crate::script::sources::ScriptSources>> + Send;
+    /// A character's stored values of all extensions, `(extension, key, value)` (`docs/plans/ext-5-lua.md` section 7.6).
+    fn script_values(&self, character_id: u32) -> impl Future<Output = Result<Vec<(String, String, serde_json::Value)>>> + Send;
+    /// Writes a batch of stored-value changes in one transaction; a write for a character or extension that is gone is skipped.
+    fn write_script_values(&self, batch: &[crate::script::store::ScriptWrite]) -> impl Future<Output = Result<()>> + Send;
     /// `F601`, `F602`: the account's status word (the staff level in bits 4 to 6).
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send;
     /// An account by name, ignoring case, with its status; `None` when there is none (or it is deleted).
@@ -1308,6 +1312,12 @@ impl<T: AdminStore> AdminStore for std::sync::Arc<T> {
     }
     fn script_sources(&self) -> impl Future<Output = Result<crate::script::sources::ScriptSources>> + Send {
         (**self).script_sources()
+    }
+    fn script_values(&self, character_id: u32) -> impl Future<Output = Result<Vec<(String, String, serde_json::Value)>>> + Send {
+        (**self).script_values(character_id)
+    }
+    fn write_script_values(&self, batch: &[crate::script::store::ScriptWrite]) -> impl Future<Output = Result<()>> + Send {
+        (**self).write_script_values(batch)
     }
     fn set_account_status(&self, user_id: u32, status: i16) -> impl Future<Output = Result<()>> + Send {
         (**self).set_account_status(user_id, status)

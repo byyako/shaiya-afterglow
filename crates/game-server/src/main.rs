@@ -188,6 +188,7 @@ async fn main() -> Result<()> {
     spawn("monster id saver", |ctx| Box::pin(save_mob_ids(ctx)));
     spawn("ranking clock", |ctx| Box::pin(ranking_clock(ctx)));
     spawn("rules clock", |ctx| Box::pin(rules_clock(ctx)));
+    spawn("script values writer", |ctx| Box::pin(game_server::server::script::script_writer(ctx)));
     spawn("market pass", |ctx| Box::pin(market_pass(ctx)));
     let notified = ctx.clone();
     supervise("account notifications", move || account_notifications(pool.clone(), notified.clone()));
@@ -213,6 +214,10 @@ async fn main() -> Result<()> {
         tracing::warn!("some connections did not close in time; their last changes may be lost");
     }
     flush_saves(&ctx, SHUTDOWN_GRACE).await;
+    // The values the scripts set in the last two seconds.
+    if !game_server::server::script::flush_script_values(&ctx).await {
+        tracing::warn!("the scripts' stored values were not all written");
+    }
     if !flush_writers(&ctx, SHUTDOWN_GRACE).await {
         tracing::warn!("the guild or friend changes were not all written in time");
     }

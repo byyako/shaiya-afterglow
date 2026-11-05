@@ -17,6 +17,10 @@ fn load(source: &str) -> Result<ExtScript> {
     ExtScript::load(&input("t", source), &LoadContext::default(), DEFAULT_MEMORY_MB, false)
 }
 
+fn run_ok(ext: &ExtScript, code: &str) {
+    ext.run("test", Limit::EVENT, |lua| lua.load(code).exec()).expect("the chunk runs");
+}
+
 fn eval<R: FromLua>(ext: &ExtScript, code: &str) -> R {
     ext.run("test", Limit::EVENT, |lua| lua.load(code).eval::<R>()).expect("the chunk runs")
 }
@@ -631,7 +635,7 @@ mod acting {
     use std::sync::Mutex as StdMutex;
 
     #[derive(Default)]
-    struct Fake {
+    pub(super) struct Fake {
         sent: StdMutex<Vec<String>>,
     }
 
@@ -804,4 +808,126 @@ mod acting {
         assert_eq!(set.fault_count(), 0);
         let _ = fake;
     }
+}
+
+// ------------------------------------------------------------------------------------------------------ stored values (step 5)
+
+mod stored {
+    use super::*;
+    use crate::script::store::{MAX_CHAR_KEYS, MAX_GLOBAL_KEYS, ScriptWrite, Store, check_value, valid_key};
+
+    #[test]
+    fn keys_and_values_are_limited() {
+        for ok in ["a", "streak", "bounty.12", "a:b-c_d", &"k".repeat(64)] {
+            assert!(valid_key(ok), "{ok}");
+        }
+        for bad in ["", "A", "has space", "ü", &"k".repeat(65), "a/b"] {
+            assert!(!valid_key(bad), "{bad}");
+        }
+        assert!(check_value(&json!(true)).is_ok() && check_value(&json!(1.5)).is_ok() && check_value(&json!("x".repeat(1000))).is_ok());
+        assert!(check_value(&json!("x".repeat(1001))).unwrap_err().contains("1001 bytes"));
+        assert!(check_value(&json!([1])).is_err() && check_value(&json!({"a": 1})).is_err() && check_value(&json!(null)).is_err());
+    }
+
+    #[test]
+    fn counts_are_limited_per_character_and_extension_and_for_the_extensions_own() {
+        let store = Store::default();
+        store.begin_char(1, Vec::new());
+        for n in 0..MAX_CHAR_KEYS {
+            store.set("a", 1, &format!("k{n}"), Some(json!(n))).unwrap();
+        }
+        assert!(store.set("a", 1, "one-more", Some(json!(1))).unwrap_err().contains("200 keys"));
+        store.set("a", 1, "k0", Some(json!("changed"))).unwrap();
+        store.set("b", 1, "one-more", Some(json!(1))).unwrap();
+        store.set("a", 1, "k1", None).unwrap();
+        store.set("a", 1, "one-more", Some(json!(1))).unwrap();
+        for n in 0..MAX_GLOBAL_KEYS {
+            store.set_global("a", &format!("g{n}"), Some(json!(n))).unwrap();
+        }
+        assert!(store.set_global("a", "one-more", Some(json!(1))).unwrap_err().contains("10000 keys"));
+        store.set_global("a", "g0", None).unwrap();
+        store.set_global("a", "one-more", Some(json!(1))).unwrap();
+        assert!(store.set("a", 2, "k", Some(json!(1))).unwrap_err().contains("not online"));
+        assert!(store.set("a", 1, "Bad", Some(json!(1))).is_err());
+    }
+
+    #[test]
+    fn writes_are_coalesced_overlaid_at_login_and_requeued() {
+        let store = Store::default();
+        let session = store.begin_char(1, vec![("a".into(), "old".into(), json!(1)), ("a".into(), "gone".into(), json!(2))]);
+        for n in 0..100 {
+            store.set("a", 1, "streak", Some(json!(n))).unwrap();
+        }
+        store.set("a", 1, "gone", None).unwrap();
+        assert_eq!(store.get("a", 1, "old"), Some(json!(1)));
+        assert_eq!(store.get("a", 1, "gone"), None);
+        assert_eq!(store.pending_len(), 2);
+        // Out of the cache, the writes stay; a login before they were written sees them over the database's older rows.
+        store.end_char(1, session);
+        assert!(!store.is_loaded(1) && store.pending_len() == 2);
+        store.begin_char(1, vec![("a".into(), "streak".into(), json!(-1)), ("a".into(), "gone".into(), json!(2))]);
+        assert_eq!(store.get("a", 1, "streak"), Some(json!(99)));
+        assert_eq!(store.get("a", 1, "gone"), None);
+        // A logout that comes after a newer login does not take the new values out.
+        let first = store.begin_char(2, Vec::new());
+        let second = store.begin_char(2, Vec::new());
+        store.end_char(2, first);
+        assert!(store.is_loaded(2));
+        store.end_char(2, second);
+        assert!(!store.is_loaded(2));
+        // A failed write goes back unless something newer was queued.
+        let batch = store.take_pending();
+        assert_eq!(batch.len(), 2);
+        store.set("a", 1, "streak", Some(json!(1000))).unwrap();
+        store.requeue(batch);
+        let again: Vec<ScriptWrite> = store.take_pending();
+        assert_eq!(again.iter().find(|w| w.key == "streak").unwrap().value, Some(json!(1000)));
+        assert_eq!(again.len(), 2);
+        // The extension's own values: the database's, the unsent writes over them, the removed extensions forgotten.
+        store.set_global("a", "bounty.1", Some(json!(5))).unwrap();
+        store.set_globals("a", vec![("bounty.1".into(), json!(1)), ("bounty.2".into(), json!(2))]);
+        assert_eq!((store.get_global("a", "bounty.1"), store.get_global("a", "bounty.2")), (Some(json!(5)), Some(json!(2))));
+        store.retain_globals(&["b".to_owned()]);
+        assert_eq!(store.get_global("a", "bounty.2"), None);
+    }
+
+    #[test]
+    fn scripts_get_and_set_values_for_loaded_players_and_for_the_extension() {
+        let store = Arc::new(Store::default());
+        let world = Arc::new(super::acting_world());
+        let ctx = LoadContext { world: Some(world), store: Some(store.clone()), ..LoadContext::default() };
+        let ext = ExtScript::load(&input("t", ""), &ctx, 16, false).unwrap();
+        store.begin_char(2, vec![("t".into(), "streak".into(), json!(4))]);
+        assert_eq!(eval::<f64>(&ext, "return game.player(2):get('streak')"), 4.0);
+        assert!(eval::<bool>(&ext, "return game.player(2):get('nothing') == nil and game.player(3):get('streak') == nil"));
+        run_ok(&ext, "local p = game.player(2) p:set('streak', p:get('streak') + 1) p:set('name', 'Bob') p:set('ok', true) p:set('half', 0.5)");
+        assert_eq!(store.get("t", 2, "streak"), Some(json!(5)), "whole numbers are kept whole");
+        assert_eq!(store.get("t", 2, "half"), Some(json!(0.5)));
+        assert!(eval::<bool>(&ext, "local p = game.player(2) return p:get('name') == 'Bob' and p:get('ok') == true"));
+        run_ok(&ext, "game.player(2):set('name', nil)");
+        assert_eq!(store.get("t", 2, "name"), None);
+        run_ok(&ext, "game.set('bounty.2', 1000) game.set('x', 'y')");
+        assert_eq!(eval::<f64>(&ext, "return game.get('bounty.2')"), 1000.0);
+        assert!(eval::<bool>(&ext, "return game.get('nothing') == nil"));
+        // Errors: a player whose values are not loaded, a table, a bad key, too long a string, a value that is not finite.
+        for (code, expect) in [
+            ("game.player(3):set('k', 1)", "not online here"),
+            ("game.player(2):set('k', {})", "table is not stored"),
+            ("game.player(2):set('Bad Key', 1)", "not a key"),
+            ("game.player(2):set('k', string.rep('x', 1001))", "1001 bytes"),
+            ("game.player(2):set('k', 1/0)", "not finite"),
+            ("game.set('k', function() end)", "function is not stored"),
+        ] {
+            let (fresh, _) = (ExtScript::load(&input("t", ""), &ctx, 16, false).unwrap(), ());
+            let error = fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code}")).to_string();
+            assert!(error.contains(expect), "{code}: {error}");
+        }
+        // Two extensions do not see each other's values.
+        let other = ExtScript::load(&input("u", ""), &ctx, 16, false).unwrap();
+        assert!(eval::<bool>(&other, "return game.player(2):get('streak') == nil and game.get('bounty.2') == nil"));
+    }
+}
+
+fn acting_world() -> acting::Fake {
+    acting::Fake::default()
 }
