@@ -452,3 +452,172 @@ fn event_and_point_names_round_trip() {
     assert_eq!(api::parse_item("a/1"), None);
     assert_eq!(api::parse_item("1/2/3"), None);
 }
+
+// ----------------------------------------------------------------------------------------------------------------- the layers (step 3)
+
+mod layers {
+    use super::*;
+    use crate::config::{Layer, read_file};
+    use crate::script::sources::{FileOptions, ScriptExtension, ScriptSources, resolve_options};
+
+    fn ext(name: &str, specs: &[(&str, serde_json::Value)]) -> ScriptExtension {
+        ScriptExtension {
+            name: name.to_owned(),
+            scripts: vec![("main.lua".to_owned(), String::new())],
+            options: specs.iter().map(|(k, v)| ((*k).to_owned(), OptionSpec::parse(v).unwrap())).collect(),
+            globals: Vec::new(),
+        }
+    }
+
+    fn sources(file: Option<&str>) -> ScriptSources {
+        let mut s = ScriptSources {
+            extensions: vec![
+                ext(
+                    "kill-streak",
+                    &[
+                        ("bounty_gold", json!({"type": "integer", "default": 100000, "doc": "d", "min": 0, "max": 100000000})),
+                        ("announce_at", json!({"type": "integers", "default": [5, 10], "doc": "d"})),
+                        ("maps", json!({"type": "maps", "default": [], "doc": "d"})),
+                    ],
+                ),
+                ext("welcome", &[("text", json!({"type": "string", "default": "Welcome, {name}!", "doc": "d"}))]),
+            ],
+            installed: vec![("kill-streak".to_owned(), true), ("welcome".to_owned(), true), ("off".to_owned(), false), ("plain".to_owned(), true)],
+            ..ScriptSources::default()
+        };
+        if let Some(text) = file {
+            let layer = read_file("config/game.toml", text).unwrap();
+            s.file = Some(FileOptions { path: layer.path, options: layer.options });
+        }
+        s
+    }
+
+    fn value<'a>(r: &'a crate::script::sources::Resolution, ext: &str, key: &str) -> (&'a serde_json::Value, &'a Layer) {
+        let e = r.extensions.iter().find(|e| e.extension == ext).unwrap();
+        let (o, layer) = e.options.iter().find(|(o, _)| o.key == key).unwrap();
+        (&o.value, layer)
+    }
+
+    #[test]
+    fn each_layer_lies_over_the_one_below() {
+        let mut s = sources(Some("guild_party_size = 2\n\n[ext.kill-streak]\nbounty_gold = 5000\nannounce_at = [3]\n\n[ext.welcome]\ntext = \"Hi {name}\"\n"));
+        let r = resolve_options(&s).unwrap();
+        assert_eq!((value(&r, "kill-streak", "bounty_gold"), value(&r, "kill-streak", "maps")), ((&json!(5000), &Layer::File), (&json!([]), &Layer::Default)));
+        assert_eq!(value(&r, "kill-streak", "announce_at"), (&json!([3]), &Layer::File));
+        assert_eq!(value(&r, "welcome", "text"), (&json!("Hi {name}"), &Layer::File));
+        // The editor beats the file.
+        s.editor = vec![("ext.kill-streak.bounty_gold".to_owned(), "7".to_owned(), Some(14)), ("ext.kill-streak.maps".to_owned(), "[35,\"40-42\"]".to_owned(), None)];
+        let r = resolve_options(&s).unwrap();
+        assert_eq!(value(&r, "kill-streak", "bounty_gold"), (&json!(7), &Layer::Editor(Some(14))));
+        assert_eq!(value(&r, "kill-streak", "maps"), (&json!([35, "40-42"]), &Layer::Editor(None)));
+        assert_eq!(value(&r, "kill-streak", "announce_at"), (&json!([3]), &Layer::File), "untouched keys keep their layer");
+        assert!(r.warnings.is_empty());
+        // The loader's input carries the values in force.
+        let inputs = r.inputs(&s);
+        assert_eq!(inputs.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["kill-streak", "welcome"]);
+        assert_eq!(inputs[0].options.iter().find(|o| o.key == "bounty_gold").unwrap().value, json!(7));
+        // `game-server config` lists them with their layers.
+        let shown = r.show();
+        assert!(shown.contains("[ext.kill-streak]") && shown.contains("bounty_gold = 7") && shown.contains("# data editor (change set 14)"), "{shown}");
+        assert!(shown.contains("announce_at = [3]") && shown.contains("# config file"), "{shown}");
+        assert!(shown.contains("text = \"Hi {name}\"") && shown.contains("# config file"), "{shown}");
+        assert!(shown.contains("maps = [35, \"40-42\"]") && shown.contains("# data editor\n"), "{shown}");
+        let defaults = resolve_options(&sources(None)).unwrap().show();
+        assert!(defaults.contains("bounty_gold = 100000") && defaults.contains("# extension default") && !defaults.contains("config file"), "{defaults}");
+        // The options as Lua sees them.
+        let mut input = inputs.into_iter().next().unwrap();
+        input.scripts = vec![("main.lua".to_owned(), "game.on('login', function() return game.options.bounty_gold + #game.options.announce_at end)".to_owned())];
+        let loaded = ExtScript::load(&input, &LoadContext::default(), 16, false).unwrap();
+        assert_eq!(loaded.call::<_, i64>("login", Limit::EVENT, ()).unwrap(), Some(8));
+    }
+
+    #[test]
+    fn errors_name_the_place_and_the_key() {
+        let cases = [
+            ("[ext.kill-streak]\nbounty_gold = -5\n", "config/game.toml line 2: ext.kill-streak.bounty_gold: -5 is below 0"),
+            ("\n\n[ext.kill-streak]\nbounty_gold = 200000000\n", "config/game.toml line 4: ext.kill-streak.bounty_gold: 200000000 is above 100000000"),
+            ("[ext.kill-streak]\nbounty_gold = \"lots\"\n", "config/game.toml line 2: ext.kill-streak.bounty_gold: \"lots\" is not a whole number"),
+            ("[ext.kill-streak]\nbounty_gold = 1.5\n", "ext.kill-streak.bounty_gold: 1.5 is not a whole number"),
+            ("[ext.kill-streak]\nannounce_at = [1, \"x\"]\n", "line 2: ext.kill-streak.announce_at: \"x\" is not a whole number"),
+            ("[ext.kill-streak]\nmaps = [\"9-3\"]\n", "line 2: ext.kill-streak.maps: \"9-3\" is not a map range"),
+            ("[ext.kill-streak]\nnothing = 1\n", "config/game.toml line 2: ext.kill-streak.nothing: the extension kill-streak has no option \"nothing\" (its options: bounty_gold, announce_at, maps)"),
+            ("[ext.plain]\nx = 1\n", ""),
+            ("[ext.welcome]\ntext = 5\n", "line 2: ext.welcome.text: 5 is not a string"),
+            ("[ext.welcome]\ntext = \"caf\\u00e9\"\n", "ext.welcome.text: \"café\" holds a character that is not printable ASCII"),
+        ];
+        for (file, expect) in cases {
+            let result = resolve_options(&sources(Some(file)));
+            if expect.is_empty() {
+                // An enabled extension without scripts is not in the set: a warning.
+                assert!(result.unwrap().warnings[0].contains("has no scripts"));
+                continue;
+            }
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains(expect), "{file:?}: {error}");
+        }
+        let mut s = sources(None);
+        s.editor = vec![("ext.kill-streak.bounty_gold".to_owned(), "-1".to_owned(), Some(14))];
+        assert_eq!(resolve_options(&s).unwrap_err().to_string(), "data editor (change set 14): ext.kill-streak.bounty_gold: -1 is below 0");
+        s.editor = vec![("ext.welcome.text".to_owned(), "plain words".to_owned(), Some(3))];
+        assert!(resolve_options(&s).unwrap_err().to_string().starts_with("data editor (change set 3): ext.welcome.text: the value \"plain words\" is not JSON"));
+        s.editor = vec![("ext.welcome".to_owned(), "1".to_owned(), None)];
+        assert!(resolve_options(&s).unwrap_err().to_string().contains("not an extension option"));
+    }
+
+    #[test]
+    fn layers_for_an_extension_that_does_not_count_are_warnings() {
+        let mut s = sources(Some("[ext.off]\nx = 1\n[ext.gone]\ny = 2\n[ext.welcome]\ntext = \"ok\"\n"));
+        s.editor = vec![
+            ("ext.off.x".to_owned(), "1".to_owned(), Some(2)),
+            ("ext.welcome.removed_option".to_owned(), "1".to_owned(), None),
+            ("ext.gone.y".to_owned(), "1".to_owned(), None),
+        ];
+        let r = resolve_options(&s).unwrap();
+        assert_eq!(value(&r, "welcome", "text"), (&json!("ok"), &Layer::File), "the rest still counts");
+        let w = r.warnings.join("\n");
+        assert!(w.contains("config/game.toml line 2: [ext.off] is ignored: the extension off is disabled"), "{w}");
+        assert!(w.contains("line 4: [ext.gone] is ignored: the extension gone is not installed"), "{w}");
+        assert!(w.contains("data editor (change set 2): ext.off.x is ignored: the extension off is disabled"), "{w}");
+        assert!(w.contains("ext.welcome.removed_option is ignored: the extension welcome has no option \"removed_option\" (its options: text)"), "{w}");
+        assert_eq!(r.warnings.len(), 5);
+    }
+
+    #[test]
+    fn the_file_reads_extension_tables_with_their_lines() {
+        let layer = read_file("g.toml", "guild_party_size = 2\n# c\n[ext.a-b]\nn = 3\ns = \"x\"\nl = [1, \"2-3\"]\nb = true\nf = 0.5\n\n[ext.cd]\nq = 1\n").unwrap();
+        assert_eq!(layer.values.len(), 1);
+        let got: Vec<(String, String, serde_json::Value, usize)> = layer.options.iter().map(|o| (o.extension.clone(), o.key.clone(), o.value.clone(), o.line)).collect();
+        assert_eq!(
+            got,
+            [
+                ("a-b".to_owned(), "b".to_owned(), json!(true), 7),
+                ("a-b".to_owned(), "f".to_owned(), json!(0.5), 8),
+                ("a-b".to_owned(), "l".to_owned(), json!([1, "2-3"]), 6),
+                ("a-b".to_owned(), "n".to_owned(), json!(3), 4),
+                ("a-b".to_owned(), "s".to_owned(), json!("x"), 5),
+                ("cd".to_owned(), "q".to_owned(), json!(1), 11),
+            ],
+            "keys in the table's order, each with its line"
+        );
+        assert!(read_file("g.toml", "").unwrap().options.is_empty());
+    }
+
+    #[test]
+    fn the_script_settings_have_defaults_and_ranges() {
+        use crate::config::{Sources, Startup, resolve};
+        let startup = Startup { bind: "0.0.0.0:1".parse().unwrap(), database_url: "x".into(), server_id: 1, config: None };
+        let (config, _) = resolve(&startup, &Sources::default()).unwrap();
+        assert!(config.scripts);
+        assert_eq!(config.script_memory_mb, 16);
+        let file = |text: &str| Sources { file: Some(read_file("g.toml", text).unwrap()), ..Sources::default() };
+        let (config, all) = resolve(&startup, &file("scripts = false\nscript_memory_mb = 64\n")).unwrap();
+        assert!(!config.scripts);
+        assert_eq!(config.script_memory_mb, 64);
+        assert_eq!(all.iter().find(|r| r.name == "scripts").unwrap().layer, Layer::File);
+        for bad in ["0", "257", "-1"] {
+            assert!(resolve(&startup, &file(&format!("script_memory_mb = {bad}\n"))).is_err(), "{bad}");
+        }
+        assert!(crate::config::check_setting("script_memory_mb", "many").is_err());
+        assert!(crate::config::check_setting("script_memory_mb", "256").is_ok() && crate::config::check_setting("script_memory_mb", "1").is_ok());
+    }
+}

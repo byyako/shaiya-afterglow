@@ -32,10 +32,18 @@ async fn main() -> Result<()> {
     if let Some(word) = args.next() {
         match (word.as_str(), args.next().as_deref()) {
             ("config", Some("--example")) => print!("{}", game_server::config::example()),
-            ("config", None) => print!("{}", game_server::config::show(&Config::inspect().await?.1)),
+            ("config", None) => {
+                let (_, resolved, _, scripts) = Config::inspect().await?;
+                print!("{}", game_server::config::show(&resolved));
+                let options = game_server::script::sources::resolve_options(&scripts)?;
+                print!("{}", options.show());
+                for warning in &options.warnings {
+                    eprintln!("warning: {warning}");
+                }
+            }
             // `game-server rules [--check [file]]` (`docs/plans/ext-2-rules.md` section 4.7).
             ("rules", None) => {
-                let (config, _, sources) = Config::inspect().await?;
+                let (config, _, sources, _) = Config::inspect().await?;
                 print!("{}", game_server::rules::show(&game_server::rules::resolve(&config, &sources)?.1));
             }
             ("rules", Some("--check")) => {
@@ -55,12 +63,18 @@ async fn main() -> Result<()> {
 
     // The settings, from the start-up environment, the config file and the database; the migrations ran on the one connection that
     // read the database layers (`Config::load`), then the pool, whose size is a setting.
-    let (config, settings, rule_sources) = Config::load().await?;
+    let (config, settings, rule_sources, script_sources) = Config::load().await?;
     for setting in settings.iter().filter(|s| s.value != s.default && s.layer != game_server::config::Layer::Default) {
         tracing::info!(setting = setting.name, value = %setting.value, layer = %setting.layer, "setting not at its default");
     }
     let (rules, _) = game_server::rules::resolve(&config, &rule_sources)?;
     tracing::info!(rules = rules.len(), "rules in force");
+    // The options of the extensions' scripts (an error in a layer stops the start); the scripts themselves load in step 4.
+    let options = game_server::script::sources::resolve_options(&script_sources)?;
+    for warning in &options.warnings {
+        tracing::warn!("{warning}");
+    }
+    tracing::info!(extensions = options.extensions.len(), scripts = config.scripts, "extensions with scripts");
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
     let creation = CreationData {

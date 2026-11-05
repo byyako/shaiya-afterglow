@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::rules::{FileRule, RuleSources};
+use crate::script::sources::ScriptSources;
 use crate::skills::{KillBoost, SkillMatch};
 
 #[derive(Clone, Debug)]
@@ -111,6 +112,10 @@ pub struct Config {
     pub card_win_chances: [u32; 5],
     /// The staff levels that may type console commands in the game, 1 to this level (section 6 step 5).
     pub console_level: u8,
+    /// The extensions' Lua scripts load (`docs/plans/ext-5-lua.md` section 8.2); false loads none at all.
+    pub scripts: bool,
+    /// The memory limit of one extension's Lua state, MB (1 to 256).
+    pub script_memory_mb: u32,
     /// `GAME_CONFIG`, the config file's path as named at start (`None`: `config/game.toml`); `reload` reads the file again from it
     /// (`docs/plans/ext-2-rules.md` section 4.6).
     pub config_path: Option<String>,
@@ -188,6 +193,8 @@ pub const SETTINGS: &[Setting] = &[
     s("card_win_chances", "400,200,100,50,10", Kind::Text, "The double-up's chance in per mille, rounds 1 to 5, that the card falls on the guessed side; the default is the original's.", card_win_ok),
     s("console_level", "1", Kind::Number, "1 to 5: staff levels 1 to this may type .command lines in the game.", console_level_ok),
     s("max_connections", "5000", Kind::Number, "Total connections.", uint::<usize>),
+    s("scripts", "true", Kind::Flag, "The enabled extensions' Lua scripts run; false loads no script at all (an operator's switch).", any),
+    s("script_memory_mb", "16", Kind::Number, "The memory limit of one extension's Lua state in MB, 1 to 256; a script past it is an error and disables its extension.", script_memory_ok),
 ];
 
 /// The setting called `name`.
@@ -249,6 +256,10 @@ fn slot_payout_ok(text: &str) -> Result<()> {
 fn card_win_ok(text: &str) -> Result<()> {
     card_win_chances(text).map(drop)
 }
+fn script_memory_ok(text: &str) -> Result<()> {
+    script_memory_mb(text).map(drop)
+}
+
 fn console_level_ok(text: &str) -> Result<()> {
     console_level(text).map(drop)
 }
@@ -298,6 +309,18 @@ pub struct FileLayer {
     pub values: Vec<(String, String, usize)>,
     /// The `[rules.<name>]` tables (`docs/plans/ext-2-rules.md` section 4.2).
     pub rules: Vec<FileRule>,
+    /// The `[ext.<name>]` tables: the extensions' option values (`docs/plans/ext-5-lua.md` section 3.4).
+    pub options: Vec<FileOption>,
+}
+
+/// One `<key> = <value>` of an `[ext.<extension>]` table, with its line; checked against the option's spec by
+/// `script::resolve_options`.
+#[derive(Clone, Debug)]
+pub struct FileOption {
+    pub extension: String,
+    pub key: String,
+    pub value: serde_json::Value,
+    pub line: usize,
 }
 
 /// An override of the data editor: `(name, value, change set)`.
@@ -398,6 +421,11 @@ fn toml_to_json(value: &toml::Value) -> Result<serde_json::Value, String> {
     })
 }
 
+fn valid_extension_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    (2..=40).contains(&bytes.len()) && bytes[0].is_ascii_lowercase() && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+}
+
 fn line_of(text: &str, offset: usize) -> usize {
     text[..offset.min(text.len())].bytes().filter(|&b| b == b'\n').count() + 1
 }
@@ -408,19 +436,36 @@ pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
     let fail = |line: usize, message: String| anyhow::anyhow!("{path} line {line}: {message}");
     let spans = toml::de::DeTable::parse(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
     let values: toml::Table = toml::from_str(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
-    let mut file = FileLayer { path: path.to_owned(), values: Vec::new(), rules: Vec::new() };
+    let mut file = FileLayer { path: path.to_owned(), values: Vec::new(), rules: Vec::new(), options: Vec::new() };
     for (key, value) in spans.get_ref().iter() {
         let name: &str = key.get_ref();
         let line = line_of(text, key.span().start);
         let parsed = &values[name];
         match name {
             "ext" => {
-                let first = match value.get_ref() {
-                    toml::de::DeValue::Table(table) => table.iter().next().map(|(k, v)| (k.get_ref().to_string(), line_of(text, v.span().start.max(k.span().start)))),
-                    _ => None,
+                let (toml::Value::Table(tables), toml::de::DeValue::Table(spanned)) = (parsed, value.get_ref()) else {
+                    return Err(fail(line, "ext: write one table per extension, [ext.<name>] (docs/server/scripts.md)".into()));
                 };
-                let (extension, at) = first.unwrap_or_else(|| ("<name>".to_owned(), line));
-                return Err(fail(at, format!("[ext.{extension}] is reserved for chunk 5 (docs/plans/ext-1-foundation.md 7.5)")));
+                for (ext_key, ext_value) in spanned.iter() {
+                    let extension: &str = ext_key.get_ref();
+                    let ext_line = line_of(text, ext_key.span().start);
+                    if !valid_extension_name(extension) {
+                        return Err(fail(ext_line, format!("ext.{extension}: not an extension name (^[a-z][a-z0-9-]{{1,39}}$)")));
+                    }
+                    let (toml::Value::Table(body), toml::de::DeValue::Table(keys)) = (&tables[extension], ext_value.get_ref()) else {
+                        return Err(fail(ext_line, format!("ext.{extension}: an extension's options are a table, [ext.{extension}]")));
+                    };
+                    for (opt_key, opt_value) in keys.iter() {
+                        let key: &str = opt_key.get_ref();
+                        let key_line = line_of(text, opt_key.span().start);
+                        if matches!(opt_value.get_ref(), toml::de::DeValue::Table(_)) {
+                            return Err(fail(key_line, format!("ext.{extension}.{key}: an option is a value, not a table")));
+                        }
+                        let json = toml_to_json(&body[key]).map_err(|e| fail(key_line, format!("ext.{extension}.{key}: {e}")))?;
+                        file.options.push(FileOption { extension: extension.to_owned(), key: key.to_owned(), value: json, line: key_line });
+                    }
+                }
+                continue;
             }
             "rules" => {
                 let (toml::Value::Table(tables), toml::de::DeValue::Table(spanned)) = (parsed, value.get_ref()) else {
@@ -535,6 +580,8 @@ impl Config {
             slot_payout_percent: slot_payout_percent(&var("slot_payout_percent")).context("slot_payout_percent")?,
             card_win_chances: card_win_chances(&var("card_win_chances")).context("card_win_chances")?,
             console_level: console_level(&var("console_level")).context("console_level")?,
+            scripts: flag(&var("scripts")),
+            script_memory_mb: script_memory_mb(&var("script_memory_mb")).context("script_memory_mb")?,
             config_path: startup.config.clone(),
         })
     }
@@ -542,17 +589,17 @@ impl Config {
     /// Reads the start-up environment, the config file and the database layers (one connection, which also runs the migrations; the
     /// pool is built after, with the resolved `db_pool`) and resolves the settings (section 7.3). The rules' layers come with them
     /// (`docs/plans/ext-2-rules.md` section 4.3); `rules::resolve` puts them together.
-    pub async fn load() -> Result<(Config, Vec<Resolved>, RuleSources)> {
+    pub async fn load() -> Result<(Config, Vec<Resolved>, RuleSources, ScriptSources)> {
         Self::read(true).await
     }
 
     /// As [`Config::load`] for `game-server config` and `game-server rules`: no migrations, and a database without the `content`
     /// schema (before 0.3.0) has no database layers.
-    pub async fn inspect() -> Result<(Config, Vec<Resolved>, RuleSources)> {
+    pub async fn inspect() -> Result<(Config, Vec<Resolved>, RuleSources, ScriptSources)> {
         Self::read(false).await
     }
 
-    async fn read(migrate: bool) -> Result<(Config, Vec<Resolved>, RuleSources)> {
+    async fn read(migrate: bool) -> Result<(Config, Vec<Resolved>, RuleSources, ScriptSources)> {
         use sqlx::Connection;
         let startup = Startup::from_env()?;
         let mut sources = Sources { file: read_config_file(startup.config.as_deref())?, ..Sources::default() };
@@ -575,17 +622,20 @@ impl Config {
             .fetch_all(&mut conn)
             .await?;
             let edits: bool = sqlx::query_scalar("SELECT to_regclass('edits.fields') IS NOT NULL").fetch_one(&mut conn).await?;
+            // The extensions' option values (`ext.<extension>.<option>`) are the scripts' layer, not a game setting.
             let query = if edits {
                 "SELECT v.name, v.value, (SELECT max(f.change_set) FROM edits.fields f WHERE f.target = 'setting' AND f.key = v.name) \
-                 FROM content.setting_values v ORDER BY v.name"
+                 FROM content.setting_values v WHERE v.name NOT LIKE 'ext.%' ORDER BY v.name"
             } else {
-                "SELECT name, value, NULL::integer FROM content.setting_values ORDER BY name"
+                "SELECT name, value, NULL::integer FROM content.setting_values WHERE name NOT LIKE 'ext.%' ORDER BY name"
             };
             sources.editor = sqlx::query_as(query).fetch_all(&mut conn).await?;
         }
         let layers = read_rule_layers(&mut conn).await?;
         rules.extensions = layers.extensions;
         rules.editor = layers.editor;
+        let mut scripts = read_script_sources(&mut conn).await?;
+        scripts.file = sources.file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
         conn.close().await?;
         let (config, resolved) = resolve(&startup, &sources)?;
         rules.setting_layers = resolved
@@ -593,8 +643,77 @@ impl Config {
             .filter(|r| matches!(r.name, "cross_faction_trade_maps" | "market_maps" | "trade_chat_min_level"))
             .map(|r| (r.name.to_owned(), r.layer.to_string()))
             .collect();
-        Ok((config, resolved, rules))
+        Ok((config, resolved, rules, scripts))
     }
+}
+
+/// The database's side of the scripts (`docs/plans/ext-5-lua.md` section 9.1): the enabled extensions' scripts and option specs in
+/// install order, the data editor's option values, the installed extensions. Empty before migration 0033.
+pub async fn read_script_sources(conn: &mut sqlx::PgConnection) -> Result<ScriptSources> {
+    read_script_sources_in(conn, "content", "edits").await
+}
+
+/// As [`read_script_sources`] with the schemas named (the tests of the data editor keep theirs apart). The names are the caller's own,
+/// never a user's.
+pub async fn read_script_sources_in(conn: &mut sqlx::PgConnection, content: &str, edits: &str) -> Result<ScriptSources> {
+    use sqlx::AssertSqlSafe;
+    let mut out = ScriptSources::default();
+    let present: bool = sqlx::query_scalar(AssertSqlSafe(format!(
+        "SELECT to_regclass('{content}.ext_scripts') IS NOT NULL AND to_regclass('{content}.ext_options') IS NOT NULL AND to_regclass('{content}.script_globals') IS NOT NULL"
+    )))
+    .fetch_one(&mut *conn)
+    .await?;
+    if !present {
+        return Ok(out);
+    }
+    out.installed = sqlx::query_as(AssertSqlSafe(format!("SELECT name, enabled FROM {content}.extensions ORDER BY install_seq"))).fetch_all(&mut *conn).await?;
+    let scripts: Vec<(String, String, String)> = sqlx::query_as(AssertSqlSafe(format!(
+        "SELECT s.extension, s.path, s.source FROM {content}.ext_scripts s JOIN {content}.extensions e ON e.name = s.extension \
+         WHERE e.enabled ORDER BY e.install_seq, s.seq"
+    )))
+    .fetch_all(&mut *conn)
+    .await?;
+    for (extension, path, source) in scripts {
+        match out.extensions.last_mut() {
+            Some(e) if e.name == extension => e.scripts.push((path, source)),
+            _ => out.extensions.push(crate::script::sources::ScriptExtension { name: extension, scripts: vec![(path, source)], ..Default::default() }),
+        }
+    }
+    let options: Vec<(String, String, String)> = sqlx::query_as(AssertSqlSafe(format!(
+        "SELECT o.extension, o.name, o.spec::text FROM {content}.ext_options o JOIN {content}.extensions e ON e.name = o.extension \
+         WHERE e.enabled ORDER BY o.extension, o.name"
+    )))
+    .fetch_all(&mut *conn)
+    .await?;
+    for (extension, name, spec) in options {
+        let json: serde_json::Value = serde_json::from_str(&spec).with_context(|| format!("content.ext_options {extension}.{name}"))?;
+        let spec = crate::script::OptionSpec::parse(&json).with_context(|| format!("content.ext_options {extension}.{name}"))?;
+        if let Some(e) = out.extensions.iter_mut().find(|e| e.name == extension) {
+            e.options.push((name, spec));
+        }
+    }
+    let globals: Vec<(String, String, String)> =
+        sqlx::query_as(AssertSqlSafe(format!("SELECT extension, key, value::text FROM {content}.script_globals ORDER BY extension, key"))).fetch_all(&mut *conn).await?;
+    for (extension, key, value) in globals {
+        let json: serde_json::Value = serde_json::from_str(&value).with_context(|| format!("content.script_globals {extension}.{key}"))?;
+        if let Some(e) = out.extensions.iter_mut().find(|e| e.name == extension) {
+            e.globals.push((key, json));
+        }
+    }
+    let settings: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{content}.setting_values') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+    if settings {
+        let has_edits: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+        let query = if has_edits {
+            format!(
+                "SELECT v.name, v.value, (SELECT max(f.change_set) FROM {edits}.fields f WHERE f.target = 'setting' AND f.key = v.name) \
+                 FROM {content}.setting_values v WHERE v.name LIKE 'ext.%' ORDER BY v.name"
+            )
+        } else {
+            format!("SELECT name, value, NULL::integer FROM {content}.setting_values WHERE name LIKE 'ext.%' ORDER BY name")
+        };
+        out.editor = sqlx::query_as(AssertSqlSafe(query)).fetch_all(&mut *conn).await?;
+    }
+    Ok(out)
 }
 
 /// The database layers of the rules (`docs/plans/ext-2-rules.md` section 4.3): the enabled extensions' (`content.ext_rules`, in
@@ -695,6 +814,8 @@ pub fn example() -> String {
     }
     out.push_str("\n# [rules]\n");
     out.push_str(crate::rules::EXAMPLE);
+    out.push_str("\n");
+    out.push_str(crate::script::sources::EXAMPLE);
     out
 }
 
@@ -732,6 +853,14 @@ fn kill_rate(text: &str) -> Result<u32> {
 }
 
 /// The staff level the console is open to, 1 to 5.
+fn script_memory_mb(text: &str) -> Result<u32> {
+    let mb: u32 = text.trim().parse()?;
+    if !(1..=256).contains(&mb) {
+        anyhow::bail!("{mb} is not 1 to 256 (megabytes)");
+    }
+    Ok(mb)
+}
+
 fn console_level(text: &str) -> Result<u8> {
     let level: u8 = text.trim().parse()?;
     anyhow::ensure!((1..=5).contains(&level), "{level} is not 1 to 5");
@@ -869,6 +998,8 @@ mod tests {
             slot_payout_percent: 100,
             card_win_chances: [400, 200, 100, 50, 10],
             console_level: 1,
+            scripts: true,
+            script_memory_mb: 16,
             config_path: None,
         };
         assert_eq!(format!("{config:?}"), format!("{expected:?}"));
@@ -932,8 +1063,8 @@ mod tests {
         assert_eq!(message, "config/game.toml line 4: unknown setting \"trade_chat_minlevel\"");
         let message = file_error("a = \n");
         assert!(message.starts_with("config/game.toml line 1:"), "{message}");
-        let message = file_error("guild_party_size = 2\n\n[ext.welcome]\nwelcome_text = \"x\"\n");
-        assert!(message.contains("line 3") && message.contains("[ext.welcome] is reserved for chunk 5"), "{message}");
+        let message = file_error("guild_party_size = 2\n\n[ext.Welcome]\nwelcome_text = \"x\"\n");
+        assert!(message.contains("line 3") && message.contains("not an extension name"), "{message}");
         let message = file_error("# 1\n# 2\n\n\n\n\n\n\n[rules]\nx = 1\n");
         assert!(message.contains("line 10") && message.contains("rules.x: a rule is a table"), "{message}");
         let message = file_error("[market]\nx = 1\n");
@@ -1070,8 +1201,12 @@ message = \"Too far apart.\"
         assert!(message.contains("line 1") && message.contains("a date cannot be in a rule"), "{message}");
         let message = file_error("[rules.x]\nfactor = nan\n");
         assert!(message.contains("line 1") && message.contains("is not a number a rule can hold"), "{message}");
-        let message = file_error("guild_party_size = 2\n[ext.welcome]\nx = 1\n");
-        assert!(message.contains("[ext.welcome] is reserved for chunk 5"), "[ext.…] stays refused: {message}");
+        let message = file_error("guild_party_size = 2\n[ext.welcome]\nx = 1\n[ext.welcome.deeper]\ny = 2\n");
+        assert!(message.contains("line 4") && message.contains("ext.welcome.deeper: an option is a value, not a table"), "nested tables are refused: {message}");
+        let message = file_error("ext = 3\n");
+        assert!(message.starts_with("config/game.toml line 1: ext:") && message.contains("[ext.<name>]"), "{message}");
+        let message = file_error("[ext.welcome]\nwhen = 1979-05-27T07:32:00Z\n");
+        assert!(message.contains("line 2") && message.contains("ext.welcome.when: a date cannot be in a rule"), "{message}");
     }
 
     #[test]

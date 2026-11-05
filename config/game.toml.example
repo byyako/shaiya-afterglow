@@ -127,6 +127,12 @@
 # Total connections.
 # max_connections = 5000
 
+# The enabled extensions' Lua scripts run; false loads no script at all (an operator's switch).
+# scripts = true
+
+# The memory limit of one extension's Lua state in MB, 1 to 256; a script past it is an error and disables its extension.
+# script_memory_mb = 16
+
 # [rules]
 # The rules (docs/server/rules.md): named, scoped allow/deny/change statements the server asks at a few places, e.g. no experience in
 # a map, a level gap that stops fights, jumps in enchanting. One [rules.<name>] table each; `reload` (console) puts changes in force.
@@ -159,3 +165,8 @@
 # days = [1, 2, 3, 4, 5]
 # hours = "18-22"
 # message = "No fighting here in the evening."
+
+# An enabled extension's options (its README lists them; `game-server config` shows each with where its value comes from):
+# [ext.kill-streak]
+# bounty_gold = 100000
+# announce_at = [5, 10, 15]

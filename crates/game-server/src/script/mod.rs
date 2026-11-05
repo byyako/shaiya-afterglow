@@ -8,6 +8,7 @@
 pub mod api;
 pub mod options;
 pub mod sandbox;
+pub mod sources;
 
 #[cfg(test)]
 mod tests;
