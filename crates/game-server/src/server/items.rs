@@ -97,7 +97,10 @@ pub(super) async fn use_item<S: Backend>(
         }
         return Ok(());
     }
-    if effect == Effect::Refused || !item_use::may_use(&def, character.level, character.family, character.grow) {
+    // An item a script took over (`game.on_item`) is asked after the core's level, race and mode test and the reuse time, so the
+    // core's own refusal of its effect waits for the script's answer (`docs/plans/ext-5-lua.md` section 6.1).
+    let scripted_item = super::script::owns_item(ctx, def.item_type, def.type_id);
+    if (effect == Effect::Refused && !scripted_item) || !item_use::may_use(&def, character.level, character.family, character.grow) {
         tracing::debug!(id, bag, slot, item = def.item_id, ?effect, "item use refused");
         return conn.send(it::use_failed(id)).await;
     }
@@ -111,7 +114,26 @@ pub(super) async fn use_item<S: Backend>(
         return conn.send(it::use_failed(id)).await;
     };
     let country = player.faction.map_or(0, |f| f.country);
-    let done = match effect {
+    // The script that took the item over answers: "use" (one used up), "keep" (done, nothing used up), false (refused) or nothing
+    // (the core's own use). The connection's own task, no lock held (section 4.3).
+    let scripted = if scripted_item {
+        let unit = state.inventory.get(bag, slot).cloned().expect("the item was found above");
+        match super::script::item_use(ctx, character, &unit, bag, slot) {
+            (crate::script::points::ItemUse::Use, _) => Some(Done::UsedUp),
+            (crate::script::points::ItemUse::Keep, _) => Some(Done::Pending),
+            (crate::script::points::ItemUse::Refused(_), refusal) => {
+                if let Some(refusal) = refusal {
+                    super::refused::tell_refused(conn, state, &refusal).await?;
+                }
+                Some(Done::Failed)
+            }
+            (crate::script::points::ItemUse::Core, _) if effect == Effect::Refused => Some(Done::Failed),
+            (crate::script::points::ItemUse::Core, _) => None,
+        }
+    } else {
+        None
+    };
+    let done = if let Some(early) = scripted { early } else { match effect {
         Effect::Skill { id: skill_id, level } if request.kind != it::KIND_SELF => {
             let target = (request.kind, request.target.unwrap_or(0));
             item_skill_on(conn, ctx, character, state, country, (skill_id, level), target).await?
@@ -262,7 +284,7 @@ pub(super) async fn use_item<S: Backend>(
             Done::Failed
         }
         Effect::QuestItem { .. } | Effect::Refused => unreachable!("handled above"),
-    };
+    } };
     match done {
         Done::UsedUp => {
             tracing::info!(id, bag, slot, item = def.item_id, special = def.special, "item used");

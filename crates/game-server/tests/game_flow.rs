@@ -4624,10 +4624,22 @@ async fn deny_rules_for_trade_chat_and_a_personal_shop_whisper_their_message() {
 
 /// Kills the first monster of the test world with `rules` in force and returns the experience packet (`0x0508`) it gave.
 async fn exp_for_the_first_monster(rules: &[(&str, serde_json::Value)]) -> Vec<u8> {
+    exp_for_the_first_monster_with(rules, &[]).await
+}
+
+/// As [`exp_for_the_first_monster`], with the extensions' scripts `(name, main.lua)` loaded too.
+async fn exp_for_the_first_monster_with(rules: &[(&str, serde_json::Value)], scripts: &[(&str, &str)]) -> Vec<u8> {
+    exp_run(rules, scripts).await.0
+}
+
+async fn exp_run(rules: &[(&str, serde_json::Value)], scripts: &[(&str, &str)]) -> (Vec<u8>, TestContext) {
     use shaiya_proto::combat as cp;
     let backend = backend_with_session([5; 16]);
     let (addr, ctx) = start(backend.clone(), true).await;
     put_rules(&ctx, rules);
+    if !scripts.is_empty() {
+        put_scripts(&ctx, scripts);
+    }
     let mut client = Client::connect(addr).await;
     let id = enter_world(&mut client, 7, [5; 16], true).await;
     ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
@@ -4645,7 +4657,7 @@ async fn exp_for_the_first_monster(rules: &[(&str, serde_json::Value)]) -> Vec<u
         }
     }
     assert_eq!(frame::opcode(&client.read().await.unwrap()), cp::OP_ATTACK_MOB);
-    client.read().await.unwrap()
+    (client.read().await.unwrap(), ctx)
 }
 
 #[tokio::test]
@@ -5084,4 +5096,132 @@ async fn killing_a_monster_runs_the_kill_script() {
 /// Reads one packet; true while it is not the monster's death.
 async fn client_has_no_death(client: &mut Client) -> bool {
     frame::opcode(&client.read().await.unwrap()) != shaiya_proto::combat::OP_MOB_DEATH
+}
+
+#[tokio::test]
+async fn an_exp_script_changes_the_experience_after_the_rules() {
+    use shaiya_proto::combat as cp;
+    let returns = |n: &str| format!("game.on('exp', function(p, gain, source) return {n} end)");
+    assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("2"))]).await, cp::exp_gain(288, 0), "a factor of 2 doubles the gain");
+    assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("1"))]).await, cp::exp_gain(144, 0), "1 leaves the number as it was");
+    assert_eq!(exp_for_the_first_monster_with(&[], &[("x", "game.on('exp', function() end)")]).await, cp::exp_gain(144, 0));
+    assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("200"))]).await, cp::exp_gain(144, 0), "a wrong answer changes nothing");
+    // The rules' factor first, the scripts' on top: 0.5 x 3 (a gain past 300 would level the character up).
+    let double = [("double", serde_json::json!({ "type": "exp", "factor": 0.5 }))];
+    assert_eq!(exp_for_the_first_monster_with(&double, &[("x", &returns("3"))]).await, cp::exp_gain(216, 0));
+    // The script sees the gain after the rules and the source.
+    let sees = "game.on('exp', function(p, gain, source) game.set('saw', gain .. ' ' .. source) end)";
+    let (_, ctx) = exp_run(&double, &[("x", sees)]).await;
+    let store = ctx.zones.script_store();
+    timeout(Duration::from_secs(5), async { while store.get_global("x", "saw").is_none() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("asked");
+    assert_eq!(store.get_global("x", "saw"), Some(serde_json::json!("72 mob")), "the gain after the rules: 144 x 0.5");
+}
+
+#[tokio::test]
+async fn a_chat_script_drops_a_line_and_a_trade_chat_refusal_whispers_and_uses_no_cooldown() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start_with(backend.clone(), Config { trade_chat_min_level: 0, ..config(true) }).await;
+    put_scripts(
+        &ctx,
+        &[(
+            "filter",
+            "game.on('chat', function(p, channel, text, to) if text:find('badword') then return false, 'Mind your language, ' .. p.name .. ' (' .. channel .. ')' end end)
+             game.on('trade_chat', function(p, text) if text:find('scam') then return false, 'No scams' end end)",
+        )],
+    );
+    let (mut alice, alice_id, mut bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    alice.write(say(chat::OP_NORMAL, b"a badword here")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "Mind your language, Alice (normal)");
+    alice.write(say(chat::OP_NORMAL, b"fine")).await;
+    // Bob heard only the second line.
+    assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, b"fine\0"));
+    // A whisper names its target.
+    let mut whisper = b"bob".to_vec();
+    whisper.resize(21, 0);
+    whisper.extend_from_slice(&[10, b'b', b'a', b'd', b'w', b'o', b'r', b'd', b'!', b'!', 0]);
+    alice.write(shaiya_proto::encode(chat::OP_WHISPER, &whisper)).await;
+    // (The refusal's whisper is limited to one in ten seconds, and was told; the line is dropped all the same: Bob hears none.)
+    alice.write(say(chat::OP_NORMAL, b"after")).await;
+    assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, b"after\0"));
+    // Trade chat: refused with a whisper and no cooldown used, so an allowed line follows at once (the cooldown is 300 ms).
+    alice.write(say(chat::OP_TRADE, b"scam coins")).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "No scams");
+    alice.write(say(chat::OP_TRADE, b"wts potions")).await;
+    assert_eq!(next_chat(&mut bob).await, chat::by_name(chat::OP_TRADE, b"Alice", b"wts potions\0"));
+}
+
+#[tokio::test]
+async fn a_shop_and_a_trade_script_refuse_after_the_rules() {
+    use shaiya_proto::my_shop as mp;
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start_with(backend.clone(), Config { market_maps: vec![], ..config(true) }).await;
+    put_scripts(
+        &ctx,
+        &[(
+            "closed",
+            "game.on('personal_shop', function(p) game.set('shop', p.name) return false, 'Shops are closed' end)
+             game.on('trade', function(a, b) game.set('trade', a.name .. '>' .. b.name) return false, 'No trading with ' .. b.name end)",
+        )],
+    );
+    let (mut alice, _, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    alice.write(shaiya_proto::encode(w::OP_MOTION, &[w::MOTION_SIT])).await;
+    alice.write(shaiya_proto::encode(mp::OP_BEGIN, &[])).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "Shops are closed");
+    // A trade request: the refusal is START_BUSY, as the core's, and a whisper.
+    alice.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    alice.write(shaiya_proto::encode(tp::OP_REQUEST, &bob_id.to_le_bytes())).await;
+    assert_eq!(read_op(&mut alice, tp::OP_START).await, tp::start(bob_id, tp::START_BUSY));
+    assert_eq!(next_server_whisper(&mut alice).await, "No trading with Bob");
+    let store = ctx.zones.script_store();
+    assert_eq!(store.get_global("closed", "shop"), Some(serde_json::json!("Alice")));
+    assert_eq!(store.get_global("closed", "trade"), Some(serde_json::json!("Alice>Bob")));
+    // A rule's refusal is final: no script is asked.
+    store.set_global("closed", "trade", None).unwrap();
+    put_rules(&ctx, &[("no-trade", serde_json::json!({ "type": "deny", "point": "trade", "message": "Rule says no" }))]);
+    alice.write(shaiya_proto::encode(tp::OP_REQUEST, &bob_id.to_le_bytes())).await;
+    assert_eq!(next_server_whisper(&mut alice).await, "Rule says no");
+    assert_eq!(store.get_global("closed", "trade"), None, "the script was not asked");
+}
+
+#[tokio::test]
+async fn an_item_a_script_took_over_is_used_kept_refused_or_left_to_the_core() {
+    for (mode, expect) in [("use", "used"), ("keep", "kept"), ("no", "refused"), ("core", "core")] {
+        let backend = backend_with_session([5; 16]);
+        let (addr, ctx) = start(backend.clone(), true).await;
+        put_scripts(&ctx, &[("potion", &format!("game.on_item({{'25/1'}}, function(p, item) game.set('count', item.count) local mode = '{mode}' if mode == 'use' then return 'use' elseif mode == 'keep' then return 'keep' elseif mode == 'no' then return false, 'Not that' end end)"))]);
+        let mut client = Client::connect(addr).await;
+        let id = enter_world(&mut client, 7, [5; 16], true).await;
+        client.write(shaiya_proto::encode(it::OP_USE, &[1, 0])).await;
+        let marker = shaiya_proto::encode(w::OP_MOTION, &[0]);
+        client.write(marker.clone()).await;
+        let mut seen = Vec::new();
+        loop {
+            let packet = client.read().await.unwrap();
+            if packet == w::motion(id, 0) {
+                break;
+            }
+            seen.push(packet);
+        }
+        let potions = backend.stored(id).unwrap().1.iter().find(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| i.count);
+        match expect {
+            "used" => assert!(seen.contains(&it::used(id, 1, 0, 25, 1, 9)) && potions == Some(9), "{mode}: {seen:x?}"),
+            "kept" => assert!(!seen.iter().any(|p| frame::opcode(p) == it::OP_USE || *p == it::use_failed(id)) && potions == Some(10), "{mode}: {seen:x?}"),
+            "refused" => assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["Not that"] && potions == Some(10), "{mode}: {seen:x?}"),
+            _ => assert!(seen.contains(&it::used(id, 1, 0, 25, 1, 9)) && potions == Some(9), "the core's own use: {seen:x?}"),
+        }
+        assert_eq!(ctx.zones.script_store().get_global("potion", "count"), Some(serde_json::json!(10)), "the script saw the stack");
+    }
+}
+
+#[tokio::test]
+async fn a_point_handler_in_an_endless_loop_does_not_stop_the_players_action() {
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    put_scripts(&ctx, &[("loop", "game.on('chat', function() while true do end end)")]);
+    let (mut alice, alice_id, mut bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
+    let started = std::time::Instant::now();
+    alice.write(say(chat::OP_NORMAL, b"hello")).await;
+    assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, b"hello\0"), "the line goes out");
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert_eq!(ctx.zones.ext_scripts().extensions()[0].fault_count(), 1);
 }

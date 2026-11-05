@@ -321,7 +321,12 @@ pub(super) async fn enchant<S: Backend>(
         if jump.value != 1 {
             tracing::debug!(id, map = state.map, point = "enchant", rules = ?jump.rules, before = 1, after = jump.value, "changed by rules");
         }
-        e.jump = jump.value;
+        // The scripts after the rules: the jump so far in, a jump out (1 to 19); no lock is held here (section 4.3).
+        let item_unit = state.inventory.get(item.0, item.1).map(|i| (i.item_type, i.type_id, e.step));
+        e.jump = match item_unit {
+            Some(unit) => super::script::enchant_jump(ctx, character, state.map, unit, jump.value),
+            None => jump.value,
+        };
     }
     let o = e.outcome(&state.inventory, &ctx.data.items, success);
     let name_before = state.inventory.get(item.0, item.1).map(|i| i.craft_name.clone()).unwrap_or_default();

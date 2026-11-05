@@ -9,6 +9,7 @@ pub mod act;
 pub mod api;
 pub mod event;
 pub mod options;
+pub mod points;
 pub mod runner;
 pub mod sandbox;
 pub mod sources;
@@ -171,6 +172,8 @@ pub struct ExtScript {
     fault_total: AtomicU64,
     /// Told when the extension is disabled: the extension's name and the reason (step 4 sets the staff whisper here).
     on_disable: Mutex<Option<Box<dyn Fn(&str, &str) + Send + Sync>>>,
+    /// The ids of the refusals this extension makes, one per point (`points.rs`).
+    refusal_ids: [u32; 8],
 }
 
 impl ExtScript {
@@ -202,6 +205,7 @@ impl ExtScript {
             is_disabled: AtomicBool::new(false),
             fault_total: AtomicU64::new(0),
             on_disable: Mutex::new(None),
+            refusal_ids: ExtScript::fresh_refusal_ids(),
         })
     }
 

@@ -78,6 +78,22 @@ impl Zones {
         None
     }
 
+    /// Whether `trade_request` would let the request through now (the core's checks and the rules), changing and sending nothing: the
+    /// script's `trade` point is asked between this and the request (`docs/plans/ext-5-lua.md` section 6.1).
+    pub fn trade_check(&self, map: u16, me: u32, target: u32) -> bool {
+        let rules = self.rules();
+        let maps = self.maps.guard();
+        let Some(players) = maps.get(&map) else { return false };
+        let (Some(requester), Some(asked)) = (players.get(&me), players.get(&target)) else { return false };
+        let trades = self.trades();
+        if trades.busy(me) || target == me || trades.busy(target) {
+            return false;
+        }
+        let (a, b) = (pvp::who(requester), pvp::who(asked));
+        let faction_ok = a.country == b.country || rules.cross_faction_trade(map, &a, &b);
+        faction_ok && !staking(&maps, me) && !staking(&maps, target) && rules.trade(map, &a, &b).is_none()
+    }
+
     /// `0x0A02` (section 2.2): yes opens both windows; no tells the requester with its own id, as the original.
     pub fn trade_answer(&self, me: u32, yes: bool) {
         let maps = self.maps.guard();

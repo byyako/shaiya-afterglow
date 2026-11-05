@@ -35,6 +35,11 @@ pub(super) async fn packet<S: Backend>(
                 }
                 return Ok(());
             }
+            // The scripts after the core and the rules; no lock is held here (`docs/plans/ext-5-lua.md` section 4.3).
+            if let Some(refusal) = super::script::shop_refusal(ctx, character, map) {
+                super::refused::tell_refused(conn, state, &refusal).await?;
+                return Ok(());
+            }
             ctx.zones.shop_begin(map, id);
         }
         mp::OP_END => ctx.zones.shop_finish(map, id),

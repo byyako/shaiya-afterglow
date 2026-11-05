@@ -1589,7 +1589,11 @@ async fn world_loop<S: Backend>(
                             ctx.game_log.action(crate::game_log::death_by_mob(record::header(character, state), u32::from(mob.mob_id), None, &name));
                         }
                         // A death a `pvp_gain` rule with `deaths = false` covers is not counted (`docs/plans/ext-2-rules.md` point 7).
-                        if counted && ctx.zones.rules().pvp_deaths(state.map, &rules_who(character, player.faction.map_or(0, |f| f.country))) {
+                        // The scripts are asked after the rules (a rule's `false` is final); no lock is held here.
+                        if counted
+                            && ctx.zones.rules().pvp_deaths(state.map, &rules_who(character, player.faction.map_or(0, |f| f.country)))
+                            && script::death_counts(ctx, character, state.map)
+                        {
                             death_counted(conn, ctx, character, state).await?;
                         }
                         if let Some(killer) = loss {
@@ -1939,6 +1943,14 @@ async fn world_loop<S: Backend>(
             }
             tp::OP_REQUEST if state.entered => {
                 let Some(target) = tp::parse_id(payload) else { continue };
+                // The scripts are asked after the core and the rules say yes, and before the request is made (no lock held here).
+                if ctx.zones.trade_check(map, id, target)
+                    && let Some(refusal) = script::trade_refusal(ctx, character, map, target)
+                {
+                    conn.send(tp::start(target, tp::START_BUSY)).await?;
+                    refused::tell_refused(conn, state, &refusal).await?;
+                    continue;
+                }
                 if let Some(refusal) = ctx.zones.trade_request(map, id, target, Instant::now()) {
                     tracing::debug!(id, map, point = "trade", rule = &*refusal.name, "refused by a rule");
                     refused::tell_refused(conn, state, &refusal).await?;
@@ -2406,6 +2418,24 @@ async fn world_loop<S: Backend>(
                 if opcode == chat::OP_NORMAL && script::command(ctx, character, state, text) {
                     continue;
                 }
+                // The `chat` point: after the ban, flood and markup checks and the commands, before the line goes out; not the trade
+                // channel, which has its own point below. A line a script refuses is dropped. No lock is held here (section 4.3).
+                if opcode != chat::OP_TRADE {
+                    let channel = match opcode {
+                        chat::OP_NORMAL => "normal",
+                        chat::OP_WHISPER => "whisper",
+                        chat::OP_ZONE => "zone",
+                        chat::OP_SHOUT => "shout",
+                        chat::OP_PARTY => "party",
+                        chat::OP_GUILD => "guild",
+                        chat::OP_PARTY_LEADER => "union",
+                        _ => "all",
+                    };
+                    if let Some(refusal) = script::chat_refusal(ctx, crate::script::Point::Chat, character, map, channel, target.as_deref(), text) {
+                        refused::tell_refused(conn, state, &refusal).await?;
+                        continue;
+                    }
+                }
                 match opcode {
                     chat::OP_NORMAL if state.chat_item_armed => {
                         said(ctx, character, state, Heard::Trade, None, text);
@@ -2442,6 +2472,9 @@ async fn world_loop<S: Backend>(
                             refused::tell_refused(conn, state, &refusal).await?;
                         } else if state.next_trade.is_some_and(|next| Instant::now() < next) {
                             tracing::debug!(%peer, id, "trade chat refused: too soon");
+                        } else if let Some(refusal) = script::chat_refusal(ctx, crate::script::Point::TradeChat, character, map, "", None, text) {
+                            // After the rules and the cooldown test; a line a script refused uses no cooldown. No lock is held here.
+                            refused::tell_refused(conn, state, &refusal).await?;
                         } else {
                             ctx.zones.send_country(country, None, &chat::by_name(opcode, name, text));
                             state.next_trade = Some(Instant::now() + config.trade_chat_cooldown);
@@ -4018,7 +4051,11 @@ async fn award_exp<S: Backend>(
     // A race's two families belong to one faction (creation checks it), so the faction is the family over two.
     let changed = ctx.zones.rules().exp_factor(state.map, &rules_who(character, character.family / 2), source);
     let (before_rules, bonus_before) = (gain, bonus);
-    let (gain, bonus) = ruled_exp(gain, bonus, changed.value);
+    // The scripts after the rules, each asked with the gain so far; their factors multiply into the rules' and the product is applied
+    // once. This is a connection's `async fn` with no lock held (section 4.3); a product of exactly 1 changes nothing.
+    let after_rules = (f64::from(gain) * changed.value) as u32;
+    let scripted = script::exp_factor(ctx, character, state.map, after_rules, source);
+    let (gain, bonus) = ruled_exp(gain, bonus, changed.value * scripted);
     if changed.value != 1.0 {
         tracing::debug!(id = character.id, map = state.map, point = "exp", rules = ?changed.rules, before = before_rules + bonus_before, after = gain + bonus, "changed by rules");
     }

@@ -542,3 +542,169 @@ async fn one<S: Backend>(
         }
     })
 }
+
+// ------------------------------------------------------------------------------------------------------------ the points
+// (`docs/plans/ext-5-lua.md` section 6). Each runs on the asking connection's task with no lock of the zones, the context or the
+// connection held: the callers are `async` functions of the connection owning `state`, and say so where they ask.
+
+use crate::rules::Refusal;
+use crate::script::{Point, act};
+use mlua::{Lua, MultiValue, Value};
+
+/// The character as a script handle.
+pub(super) fn me(character: &PlayCharacter) -> PlayerRef {
+    PlayerRef { id: character.id, name: character.name.clone() }
+}
+
+fn handle(lua: &Lua, p: &PlayerRef) -> mlua::Result<Value> {
+    act::player_handle(lua, p).map(Value::Table)
+}
+
+fn text(lua: &Lua, bytes: &[u8]) -> mlua::Result<Value> {
+    let bytes = bytes.split(|&b| b == 0).next().unwrap_or(bytes);
+    Ok(Value::String(lua.create_string(bytes)?))
+}
+
+fn refuse<S>(ctx: &Context<S>, point: Point, id: u32, map: u16, build: &dyn Fn(&Lua) -> mlua::Result<MultiValue>) -> Option<Refusal> {
+    let set = ctx.zones.ext_scripts();
+    if set.for_point(point).is_empty() {
+        return None;
+    }
+    let refusal = set.refuse(point, build);
+    if let Some(r) = &refusal {
+        tracing::debug!(id, map, point = point.name(), script = &*r.name, "refused by a script");
+    }
+    refusal
+}
+
+/// `trade`: the requester asks `target` (`tp::OP_REQUEST`, asked after `Zones::trade_check` and before the request).
+pub(super) fn trade_refusal<S>(ctx: &Context<S>, asker: &PlayCharacter, map: u16, target: u32) -> Option<Refusal> {
+    if ctx.zones.ext_scripts().for_point(Point::Trade).is_empty() {
+        return None;
+    }
+    let asked = PlayerRef { id: target, name: ctx.zones.name_of(target)? };
+    let me = me(asker);
+    refuse(ctx, Point::Trade, asker.id, map, &|lua| Ok(MultiValue::from_iter([handle(lua, &me)?, handle(lua, &asked)?])))
+}
+
+/// `personal_shop`: the character sits and may set up a shop here by the core and the rules.
+pub(super) fn shop_refusal<S>(ctx: &Context<S>, character: &PlayCharacter, map: u16) -> Option<Refusal> {
+    let me = me(character);
+    refuse(ctx, Point::PersonalShop, character.id, map, &|lua| Ok(MultiValue::from_iter([handle(lua, &me)?])))
+}
+
+/// `trade_chat` and `chat`: the line, as the player typed it (`chat` has the channel and a whisper's target too).
+pub(super) fn chat_refusal<S>(ctx: &Context<S>, point: Point, character: &PlayCharacter, map: u16, channel: &str, to: Option<&[u8]>, line: &[u8]) -> Option<Refusal> {
+    let me = me(character);
+    refuse(ctx, point, character.id, map, &|lua| {
+        let mut args = vec![handle(lua, &me)?];
+        if point == Point::Chat {
+            args.push(Value::String(lua.create_string(channel)?));
+        }
+        args.push(text(lua, line)?);
+        if point == Point::Chat {
+            args.push(match to {
+                Some(name) => text(lua, name)?,
+                None => Value::Nil,
+            });
+        }
+        Ok(MultiValue::from_iter(args))
+    })
+}
+
+/// `exp`: the factor the scripts give the gain (after the rules), 1 when none is asked.
+pub(super) fn exp_factor<S>(ctx: &Context<S>, character: &PlayCharacter, map: u16, gain: u32, source: crate::rules::ExpSource) -> f64 {
+    let set = ctx.zones.ext_scripts();
+    if set.for_point(Point::Exp).is_empty() {
+        return 1.0;
+    }
+    let me = me(character);
+    let source = match source {
+        crate::rules::ExpSource::Mob => "mob",
+        crate::rules::ExpSource::Party => "party",
+        crate::rules::ExpSource::Quest => "quest",
+        crate::rules::ExpSource::Pvp => "pvp",
+    };
+    let factor = set.factor(Point::Exp, f64::from(gain), &|lua, so_far| {
+        Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Number(so_far.floor()), Value::String(lua.create_string(source)?)]))
+    });
+    if factor != 1.0 {
+        tracing::debug!(id = character.id, map, point = "exp", extension = "scripts", before = gain, factor, "changed by scripts");
+    }
+    factor
+}
+
+/// `pvp_kills`: the multiplier the scripts give the counted kill (`times` is what the rules gave), 1 when none is asked.
+pub(super) fn kills_times<S>(ctx: &Context<S>, character: &PlayCharacter, map: u16, times: u32) -> u32 {
+    let set = ctx.zones.ext_scripts();
+    if set.for_point(Point::PvpKills).is_empty() {
+        return 1;
+    }
+    let me = me(character);
+    let factor = set.times(times, &|lua, so_far| Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Integer(i64::from(so_far))])));
+    if factor != 1 {
+        tracing::debug!(id = character.id, map, point = "pvp_kills", before = times, after = times.saturating_mul(factor), "changed by scripts");
+    }
+    factor
+}
+
+/// `pvp_death`: whether the scripts let the death count.
+pub(super) fn death_counts<S>(ctx: &Context<S>, character: &PlayCharacter, map: u16) -> bool {
+    let set = ctx.zones.ext_scripts();
+    if set.for_point(Point::PvpDeath).is_empty() {
+        return true;
+    }
+    let me = me(character);
+    let counts = set.death_counts(&|lua| Ok(MultiValue::from_iter([handle(lua, &me)?])));
+    if !counts {
+        tracing::debug!(id = character.id, map, point = "pvp_death", "not counted by scripts");
+    }
+    counts
+}
+
+/// `enchant`: the jump after the scripts (`jump` is what the rules gave); `item` is the enchanted item's type, type id and step.
+pub(super) fn enchant_jump<S>(ctx: &Context<S>, character: &PlayCharacter, map: u16, item: (u8, u8, u8), jump: u8) -> u8 {
+    let set = ctx.zones.ext_scripts();
+    if set.for_point(Point::Enchant).is_empty() {
+        return jump;
+    }
+    let me = me(character);
+    let after = set.jump(jump, &|lua, so_far| {
+        let table = lua.create_table()?;
+        table.raw_set("type", item.0)?;
+        table.raw_set("type_id", item.1)?;
+        table.raw_set("step", item.2)?;
+        Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Table(table), Value::Integer(i64::from(so_far))]))
+    });
+    if after != jump {
+        tracing::debug!(id = character.id, map, point = "enchant", before = jump, after, "changed by scripts");
+    }
+    after
+}
+
+/// `item_use`: the extension that took the item over answers (section 6.1). `Core` for an item no script registered.
+pub(super) fn item_use<S>(ctx: &Context<S>, character: &PlayCharacter, item: &crate::backend::ItemUnit, bag: u8, slot: u8) -> (crate::script::points::ItemUse, Option<Refusal>) {
+    use crate::script::points::ItemUse;
+    let set = ctx.zones.ext_scripts();
+    let Some(owner) = set.item_owner(item.item_type, item.type_id) else { return (ItemUse::Core, None) };
+    let me = me(character);
+    let answer = owner.item_use(item.item_type, item.type_id, &|lua| {
+        let table = lua.create_table()?;
+        table.raw_set("type", item.item_type)?;
+        table.raw_set("type_id", item.type_id)?;
+        table.raw_set("bag", bag)?;
+        table.raw_set("slot", slot)?;
+        table.raw_set("count", item.count)?;
+        Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Table(table)]))
+    });
+    let refusal = match &answer {
+        ItemUse::Refused(text) => Some(Refusal { rule: owner.item_refusal_id(), name: std::sync::Arc::from(format!("{}/item_use", owner.name)), text: text.clone() }),
+        _ => None,
+    };
+    (answer, refusal)
+}
+
+/// Whether a script owns the item (so the core's refusal tests wait for it).
+pub(super) fn owns_item<S>(ctx: &Context<S>, item_type: u8, type_id: u8) -> bool {
+    ctx.zones.ext_scripts().item_owner(item_type, type_id).is_some()
+}

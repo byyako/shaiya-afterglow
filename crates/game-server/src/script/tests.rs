@@ -1012,3 +1012,155 @@ mod stored {
 fn acting_world() -> acting::Fake {
     acting::Fake::default()
 }
+
+// ------------------------------------------------------------------------------------------------------------ the points (step 8)
+
+mod points {
+    use super::*;
+    use crate::script::points::ItemUse;
+    use mlua::{MultiValue, Value};
+
+    fn set(sources: &[(&str, &str)]) -> ScriptSet {
+        let inputs: Vec<ExtInput> = sources.iter().map(|(n, s)| input(n, s)).collect();
+        let set = ScriptSet::load(&inputs, LoadContext::default(), 16);
+        assert!(set.failed().is_empty(), "{:?}", set.failed());
+        set
+    }
+
+    fn args(lua: &mlua::Lua) -> mlua::Result<MultiValue> {
+        Ok(MultiValue::from_iter([Value::Integer(7), Value::String(lua.create_string("x")?)]))
+    }
+
+    fn faults(set: &ScriptSet) -> Vec<u64> {
+        set.extensions().iter().map(|e| e.fault_count()).collect()
+    }
+
+    #[test]
+    fn the_first_refusal_wins_and_the_later_ones_are_not_asked() {
+        let set = set(&[
+            ("a", "game.on('chat', function() end)"),
+            ("b", "game.on('chat', function(n, s) game.set('b', 1) return false, 'No ' .. s end)"),
+            ("c", "game.on('chat', function() game.set('asked', true) return false end)"),
+        ]);
+        let refusal = set.refuse(Point::Chat, &args).expect("b refuses");
+        assert_eq!((&*refusal.name, refusal.text.as_deref()), ("b/chat", Some("No x")));
+        assert_ne!(refusal.rule, 0);
+        // c was not asked (its store is its own: nothing was set).
+        assert_eq!(set.extensions()[2].shared().store.get_global("c", "asked"), None);
+        // A refusal id per extension and point; the same one every time.
+        assert_eq!(set.refuse(Point::Chat, &args).unwrap().rule, refusal.rule);
+        assert_eq!(faults(&set), [0, 0, 0]);
+        // Nothing registered at another point: allowed.
+        assert!(set.refuse(Point::Trade, &args).is_none());
+    }
+
+    #[test]
+    fn refusal_texts_are_checked_and_wrong_answers_are_faults_that_allow() {
+        let t = |body: &str| {
+            let s = set(&[("a", &format!("game.on('trade', function() {body} end)"))]);
+            (s.refuse(Point::Trade, &args), s.extensions()[0].fault_count())
+        };
+        assert_eq!(t("return false").0.map(|r| r.text), Some(None), "refused, silent");
+        assert_eq!(t("return false, 'café'").0.unwrap().text, None, "not ASCII: silent");
+        assert_eq!(t("return false, string.rep('x', 101)").0.unwrap().text, None);
+        assert_eq!(t("return false, '<<999c01 x'").0.unwrap().text, None, "unsafe markup");
+        assert_eq!(t("return false, string.rep('x', 100)").0.unwrap().text.map(|t| t.len()), Some(100));
+        assert!(t("return true").0.is_none() && t("return nil").0.is_none() && t("").0.is_none());
+        let (r, f) = t("return 'no'");
+        assert!(r.is_none() && f == 1, "a string is a wrong answer: allowed, one fault");
+        let (r, f) = t("error('boom')");
+        assert!(r.is_none() && f == 1);
+    }
+
+    #[test]
+    fn factors_multiply_and_each_extension_is_asked_with_the_number_so_far() {
+        let set = set(&[
+            ("a", "game.on('exp', function(p, gain, source) game.set('seen', gain .. source) return 2 end)"),
+            ("b", "game.on('exp', function(p, gain, source) game.set('seen', gain .. source) return 3 end)"),
+            ("c", "game.on('exp', function() end)"),
+        ]);
+        let f = set.factor(Point::Exp, 100.0, &|lua, gain| Ok(MultiValue::from_iter([Value::Integer(1), Value::Number(gain), Value::String(lua.create_string("mob")?)])));
+        assert_eq!(f, 6.0);
+        assert_eq!(set.extensions()[0].shared().store.get_global("a", "seen"), Some(json!("100mob")));
+        assert_eq!(set.extensions()[1].shared().store.get_global("b", "seen"), Some(json!("200mob")), "b hears 100 x 2");
+        // Nobody answers: 1, exactly.
+        let none = super::points::set(&[("a", "game.on('exp', function() end)")]);
+        assert_eq!(none.factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 1.0);
+        assert_eq!(ScriptSet::empty().factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 1.0);
+        // Factors may be fractions and 0.
+        let half = super::points::set(&[("a", "game.on('exp', function() return 0.5 end)"), ("b", "game.on('exp', function() return 0 end)")]);
+        assert_eq!(half.factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 0.0);
+    }
+
+    #[test]
+    fn wrong_factors_change_nothing_and_count_as_faults() {
+        for answer in ["200", "-1", "'two'", "true", "{}", "0/0"] {
+            let s = super::points::set(&[("a", &format!("game.on('exp', function() return {answer} end)"))]);
+            assert_eq!(s.factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 1.0, "{answer}");
+            assert_eq!(s.extensions()[0].fault_count(), 1, "{answer}");
+        }
+        let s = super::points::set(&[("a", "game.on('pvp_kills', function() return 1.5 end)")]);
+        assert_eq!(s.times(1, &|_, _| Ok(MultiValue::new())), 1);
+        assert_eq!(faults(&s), [1]);
+        let s = super::points::set(&[("a", "game.on('pvp_kills', function() return 101 end)")]);
+        assert_eq!(s.times(1, &|_, _| Ok(MultiValue::new())), 1);
+        let s = super::points::set(&[("a", "game.on('enchant', function() return false end)")]);
+        assert_eq!(s.jump(1, &|_, _| Ok(MultiValue::new())), 1, "false from enchant: a wrong answer");
+        assert_eq!(faults(&s), [1]);
+        let s = super::points::set(&[("a", "game.on('enchant', function() return 20 end)")]);
+        assert_eq!(s.jump(2, &|_, _| Ok(MultiValue::new())), 2);
+    }
+
+    #[test]
+    fn kills_deaths_and_jumps_combine_as_the_text_says() {
+        let s = super::points::set(&[
+            ("a", "game.on('pvp_kills', function(p, times) game.set('t', times) return 2 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 3 end)"),
+            ("b", "game.on('pvp_kills', function(p, times) game.set('t', times) return 5 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 4 end)"),
+        ]);
+        let times = s.times(3, &|_, t| Ok(MultiValue::from_iter([Value::Integer(1), Value::Integer(i64::from(t))])));
+        assert_eq!(times, 10, "2 x 5 multiply");
+        assert_eq!(s.extensions()[0].shared().store.get_global("a", "t"), Some(json!(3)));
+        assert_eq!(s.extensions()[1].shared().store.get_global("b", "t"), Some(json!(6)), "b is asked with 3 x 2");
+        let jump = s.jump(1, &|_, j| Ok(MultiValue::from_iter([Value::Integer(1), Value::Nil, Value::Integer(i64::from(j))])));
+        assert_eq!(jump, 4, "the last answer stands");
+        assert_eq!(s.extensions()[1].shared().store.get_global("b", "j"), Some(json!(3)), "b is asked with the jump a gave");
+        let zero = super::points::set(&[("a", "game.on('pvp_kills', function() return 0 end)")]);
+        assert_eq!(zero.times(1, &|_, _| Ok(MultiValue::new())), 0);
+        // A death is not counted when any extension says false.
+        let d = super::points::set(&[("a", "game.on('pvp_death', function() return true end)"), ("b", "game.on('pvp_death', function() return false end)")]);
+        assert!(!d.death_counts(&|_| Ok(MultiValue::new())));
+        assert!(super::points::set(&[("a", "game.on('pvp_death', function() end)")]).death_counts(&|_| Ok(MultiValue::new())));
+        assert!(ScriptSet::empty().death_counts(&|_| Ok(MultiValue::new())));
+    }
+
+    #[test]
+    fn an_item_is_used_kept_refused_or_left_to_the_core() {
+        let s = set(&[("a", "game.on_item({'25/1'}, function(p, item) if item.count == 1 then return 'use' elseif item.count == 2 then return 'keep' elseif item.count == 3 then return false, 'Not now' elseif item.count == 4 then return 'wat' elseif item.count == 5 then error('boom') end end)")]);
+        let ask = |count: i64| {
+            s.extensions()[0].item_use(25, 1, &|lua| {
+                let t = lua.create_table()?;
+                t.raw_set("count", count)?;
+                Ok(MultiValue::from_iter([Value::Integer(1), Value::Table(t)]))
+            })
+        };
+        assert_eq!(ask(1), ItemUse::Use);
+        assert_eq!(ask(2), ItemUse::Keep);
+        assert_eq!(ask(3), ItemUse::Refused(Some("Not now".into())));
+        assert_eq!(ask(0), ItemUse::Core);
+        assert_eq!(ask(4), ItemUse::Core);
+        assert_eq!(ask(5), ItemUse::Core);
+        assert_eq!(faults(&s), [2], "the wrong answer and the error");
+        assert_eq!(s.item_owner(25, 1).map(|e| e.name.as_str()), Some("a"));
+        assert!(s.item_owner(25, 2).is_none());
+    }
+
+    #[test]
+    fn a_point_in_an_endless_loop_ends_within_its_limit_and_counts_a_fault() {
+        let s = set(&[("a", "game.on('chat', function() while true do end end)"), ("b", "game.on('chat', function() return false, 'second' end)")]);
+        let t = std::time::Instant::now();
+        let refusal = s.refuse(Point::Chat, &args).expect("b still refuses");
+        assert!(t.elapsed() < Duration::from_secs(1), "{:?}", t.elapsed());
+        assert_eq!(refusal.text.as_deref(), Some("second"));
+        assert_eq!(faults(&s), [1, 0]);
+    }
+}
