@@ -386,6 +386,14 @@ class Expectations(unittest.TestCase):
             return fm.pvp_skill_damage(h, skill, r)[1][0]
         self.close(ex.pvp_skill(h, skill).per_attempt, self.sample(one))
 
+    def test_pvp_blow_mean_is_exact(self):
+        """A physical PvP blow's mean against every spread and luck value: the whole-number grid keeps it exact (fractional midpoints
+        ran about 0.5 low)."""
+        a = Fighter(level=60, luc=15, critical=2, attack_var=54, kinds=[Numbers(147, 149, 932, 165) for _ in range(3)])
+        t = Fighter(level=60, luc=14, kinds=[Numbers(71, 72, 521, 614) for _ in range(3)])
+        exact = [fm.pvp_strike(a, t, MELEE, False, False, 0, iter((0, u, r, 99)).__next__)[1] for u in range(54) for r in range(15)]
+        self.assertAlmostEqual(ex.pvp_attack(a, t, MELEE).normal, sum(exact) / len(exact), delta=0.05)
+
 
 if __name__ == "__main__":
     unittest.main()

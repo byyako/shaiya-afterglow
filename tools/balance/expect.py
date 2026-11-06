@@ -47,6 +47,26 @@ def uniform(lo: int, hi: int):
     return [(lo + (k + 0.5) * step - 0.5, 1.0 / GRID) for k in range(GRID)]
 
 
+def uniform_int(lo: int, hi: int):
+    """As `uniform`, for a formula that adds the roll as a whole number (the physical PvP blow): every stratum is a run of whole numbers,
+    stood for by its middle value, or by its two middle values at half weight each for an even run, so the points stay whole numbers and
+    keep the exact mean (fractional midpoints, cut by the formula's truncation, ran about 0.5 low)."""
+    n = hi - lo + 1
+    if n <= 0:
+        return [(lo, 1.0)]
+    if n <= GRID:
+        return [(lo + k, 1.0 / n) for k in range(n)]
+    points = []
+    for k in range(GRID):
+        a, b = lo + k * n // GRID, lo + (k + 1) * n // GRID
+        m = b - a
+        if m % 2:
+            points.append((a + m // 2, m / n))
+        else:
+            points += [(a + m // 2 - 1, m / n / 2), (a + m // 2, m / n / 2)]
+    return points
+
+
 def spread(var: int):
     return uniform(0, var - 1) if var > 0 else [(0, 1.0)]
 
@@ -179,12 +199,12 @@ def _pvp_physical(a: fm.Fighter, t: fm.Fighter, kind: int, bonus: int, factor: f
                   absorption: int) -> tuple[float, float, float]:
     r2 = luck_mean(a.luc) * F_1_4
     normal = critical = 0.0
-    for u, wu in spread(a.attack_var):
-        d0 = max(bonus + a.kinds[kind].attack - t.kinds[kind].defence + int(u), 0)
+    for u, wu in (uniform_int(0, a.attack_var - 1) if a.attack_var > 0 else [(0, 1.0)]):
+        d0 = max(bonus + a.kinds[kind].attack - t.kinds[kind].defence + u, 0)
         if kind == fm.RANGED and close and not cross_road:
             d0 = i32(d0 * F_0_7)
         d0 = i32(d0 * factor)
-        for r, wr in luck(a.luc):
+        for r, wr in (uniform_int(1, a.luc) if a.luc > 0 else [(0, 1.0)]):
             d = i32(r * F_0_1 + d0)
             c = d * 0.5 + r2 + d
             if kind == fm.RANGED and close:

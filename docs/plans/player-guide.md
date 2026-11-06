@@ -177,8 +177,10 @@ Other results:
 - **The worked examples** (A a level-60 ultimate fighter with Hallowed Spear +3 and the Daynorth set; B against monster 1811, level 62;
   C against a defender; D Flame Choir Lv3 from a mage on a priest; E monster 1811's blow with and without an elemental upper armour and
   absorption) were worked by hand and checked with `tools/balance/` (`formulas.py` with fixed rolls for the ranges, `expect.py` for the
-  averages): every range agrees exactly. `expect.py`'s averages of physical PvP blows run about 0.5 low (its 17-point grid truncates
-  fractional spread values in `_pvp_physical`), so the pages give "about" figures there; no formula disagrees.
+  averages): every range agrees exactly. `expect.py`'s averages of physical PvP blows ran about 0.5 low (its 17-point grid truncated
+  fractional spread values in `_pvp_physical`), so the pages give "about" figures there; no formula disagrees. Fixed 2026-11-05: the
+  physical PvP path uses whole-number grid points (`expect.uniform_int`), example C's mean is now the exact 344.9, and
+  `test_formulas.py` checks it against every spread and luck value.
 - **The full status table** (every level) is not published: the home page says no data tables are distributed, so the page gives
   levels 1, 15, 30, 45 and 60 and names the source. To publish it, the maintainer decides.
 - `1-formulas.md` section 3.5 gives weapon speeds 2 to 7 as 3000 to 1500 ms; speed 2 is 2,750 ms (the guide has the right table).
