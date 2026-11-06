@@ -200,6 +200,9 @@ armour piece**, nothing else. How much, and how likely each step is, comes from 
   (70 % for +1, 1 % for +6, one in a million for +13 and above). Since the material always counts against the roll, a chance of one in
   a million can never come up: with these tables a weapon stops at +12 and armour at +14. The original server ships with the file, so
   the values above are the original's.
+- **The client agrees with the file at every step**: its character window and its weapon tooltip add exactly the attack row above,
+  and its armour tooltip shows "Absorption" as 5 a step (section 12). The client works these out itself and reads them from no file, so a
+  server using other values shows players numbers the client does not.
 
 Source: [Lapis and enchanting](../original/lapis.md) sections 2 and 5 (`CGameData::InitItemEnchant`, `CUser::ItemLapisianAdd`).
 
@@ -325,12 +328,16 @@ no packet carries them. HP, SP and MP come from the server.
 | the window | the server |
 |---|---|
 | attack = trunc(STR × 1.3) + trunc(DEX × 0.2) + items + lapis + enchant + buffs (the top of the range adds the spread); ranged weapons STR + trunc(DEX × 0.2) + trunc(LUC × 0.3) + ... | the same, but the fractions are added before cutting, so the server's number can be **1 higher** |
-| enchant attack from its own formula, the same as the original's file (+3 = 21, +10 = 106, +20 = 311) | the file's values |
+| enchant attack from its own formula, the same as the original's file at every step (+3 = 21, +4 = 31, +10 = 106, +20 = 311); the weapon's tooltip adds the same | the file's values |
+| no armour enchant in the window; the armour's **tooltip** shows "Absorption" 5 × the step | the file's values (5 a step) |
 | no faction bonus, no wear, no weapon or shield mastery, no armour enchant | all of these |
 | no hit, evasion, critical, ranged defence or absorption | used in every blow |
 
 So the window is right for a fresh, unworn set without mastery skills or the faction bonus, and shows too little otherwise (or too much
-for a worn item). Source: [Character window](../client/research-balance.md), "The character window" (US `game.exe`).
+for a worn item). Source: [Character window](../client/research-balance.md), "The character window" (US `game.exe`). The enchant lines
+were checked again in `game.exe` for this guide: the formula at 0x4c4920 (its factor 1/3 at 0x6ac568) gives 0, 7, 14, 21, 31 ... 311 for
+steps 0 to 20; the window calls it at 0x4f48f4 and the weapon tooltip at 0x4a0cb0 for enchant values 1 to 50; the armour tooltip
+computes 5 × (value − 50) at 0x4a2830 and prints it with message 485, "Absorption".
 
 ## 13. Worked example A: a level-60 ultimate fighter
 
@@ -386,6 +393,6 @@ The server follows the original for everything on this page, with these differen
   reach in play).
 - **Its enchant values are the built-in tables** (a flat 7 attack and 5 absorption a step, the low chances), not the original's file:
   from +4 a weapon has less attack than the original gives and than the window shows, and weapons stop at +12, armour at +14. This
-  difference was found while writing this guide and waits for a decision.
+  difference was found while writing this guide; the server is to load the original's file instead (planned, not built yet).
 
 The full list: [Deviations](../server/deviations.md).

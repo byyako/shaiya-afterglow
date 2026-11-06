@@ -189,7 +189,10 @@ guards](../original/guards.md) section 6).
 
 ## 7. Blocks, reflection and giving up SP or MP
 
-These come only from buffs; **a shield has no block of its own** (it is a defence item).
+These come only from buffs; **a shield has no block of its own** (it is a defence item). In the original server nothing sets or reads
+a block for an item: the only writers of the block state are the buff code, its removal, death and resets, and every shield in the data
+carries only defence, magic defence, stats and HP/SP/MP. The client shows no block value either: its messages have no such item line
+(the only "block" messages, 402 and 403, belong to the friends block list).
 
 | buff | skills | what it does |
 |---|---|---|

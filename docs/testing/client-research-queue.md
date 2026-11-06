@@ -26,6 +26,14 @@ it in the server spec it names.
     the DLL work; the server then reads it (the original closes the connection on an unknown opcode; the server side checks what this
     server does with one before relying on it). Until then
     `has_feature` answers `false`.
+24. **For the client side to fold in: the enchant lines and item blocks, read for the player guide** (2026-11-05, read-only,
+    authorised by the maintainer; in `docs/guide/character-numbers.md` section 12 and `docs/guide/elements-defences.md` section 7).
+    The enchant formula `0x4c4920` (factor 1/3 at `0x6ac568`) gives 0, 7, 14, 21, 31 ... 311 for steps 0 to 20, the original patch's
+    `ItemEnchant.ini` attack row; it is called by the character window (`0x4f48f4`) and by the weapon tooltip (`0x4a0cb0`), for
+    enchant values 1 to 50. The armour tooltip computes `5 × (value − 50)` at `0x4a2830` and prints it with message 485 "Absorption".
+    No item line shows a block; messages 402 and 403 ("Succeeded in blocking", "Failed to block") are the friends block list's (used
+    next to the block-memo handler `0x555980`). What it changes: nothing on the server; `docs/plans/enchant-table.md` relies on the
+    client using the file's values. Suggested home: `docs/client/research-balance.md`, "The character window".
 
 ## Answered
 
