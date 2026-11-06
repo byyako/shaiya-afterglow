@@ -24,7 +24,9 @@ shipped configuration).
   linking only).
 - **Extraction** takes the lapis back out. On a failure they are lost.
 - **Enchanting** with a Lapisia and the right material raises a weapon's attack or an armour's absorption, up to +20. Each step is
-  harder: a weapon's first step works 70 % of the time, step 12 and above one time in a million.
+  harder. The chances and what each step adds come from a data file the server reads at start (`Data/ItemEnchant.ini`): with the
+  shipped file a weapon's first step works 90 % of the time and +20 can be reached, rarely; the built-in tables, used only without
+  the file, stop weapons at +12 and armour at +14 (section 5).
 - **Absorption** takes a fixed amount off every hit, but a hit always does at least 1 damage.
 - **Recreation Runes and unidentified items** roll new random craft stats; three items of the same kind can be remade into one with
   fresh stats.
@@ -112,7 +114,24 @@ skill (an applied skill with `+0x32` = 95) is not overridden (the existing buffs
 name is ten two-digit numbers; numbers 1 to 9 are the crafted stats (built, `docs/original/stats.md`); the tenth, `v` (characters 18 and
 19), is the **enchant level**: `v` 1 to 20 a weapon step, 51 to 70 an armour step `v − 50`; anything else nothing. A weapon step `s` adds
 **attack** `E[s].weapon` (unless in a shape), an armour step **absorption** `E[s].armour`, from `g_LapisianEnchantAddValue` (0x542100):
-step `s` → weapon `7s`, armour `5s` (step 20: 140 and 100).
+step `s` → weapon `7s`, armour `5s` (step 20: 140 and 100) **as built in**; the server's start overwrites this table (below).
+
+**The enchant tables come from a data file** (confirmed, `CGameData::InitItemEnchant` 0x4c7ab0, called from `CGameData::LoadData`
+0x4bf320 at start): it opens `data/ItemEnchant.ini` (when that fails it logs "CGameData::InitItemEnchant fopen error" and the built-in
+tables stay) and, for steps 00 to 20, sets **both** `g_LapisianEnchantPercentRate` (0x542058, section 5) and `g_LapisianEnchantAddValue`
+(0x542100) from `GetPrivateProfileIntA` with a default of **0** for a missing key (sections `LapisianEnchantPercentRate` and
+`LapisianEnchantAddValue`, keys `WeaponStepNN` and `DefenseStepNN`). The file of the original server patch
+(`PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_Game/Data/ItemEnchant.ini`) gives:
+
+| step | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| weapon attack | 7 | 14 | 21 | 31 | 41 | 51 | 64 | 77 | 90 | 106 | 122 | 138 | 157 | 176 | 195 | 217 | 239 | 261 | 286 | 311 |
+| armour absorption | 5 | 10 | 15 | 20 | 25 | 30 | 35 | 40 | 45 | 50 | 55 | 60 | 65 | 70 | 75 | 80 | 85 | 90 | 95 | 100 |
+
+The weapon row is `Σ (3 × max(1, ⌈k/3⌉) + 4)` for `k` = 1 to the step, the formula the US client's character window uses
+(`docs/client/research-balance.md`); the armour row equals the built-in `5s`. A second copy in the original files
+(`PSM_Client/Bin/Data/`) has 99 % for every rate and a different attack row from step 14 (175, 200, 245, 300, 350, 425, 500): a
+private-server edit, not the original's.
 
 **Absorption** (`CUser::Damage` 0x44c1e0, after give up SP/MP): HP damage `d` > 0 with absorption `A` > 0: `d ≤ A` → `d` = 1 and `d − 1`
 absorbed; otherwise `d − A` and `A` absorbed. When something was absorbed: **`0x0525`** (4 bytes: `u16 absorbed`) to the player ("<n>
@@ -210,7 +229,16 @@ Then the money − price. The roll (`SRandom`, a Mersenne Twister seeded with `t
 | weapon | 700000 | 500000 | 300000 | 90000 | 30000 | 10000 | 3000 | 1000 | 300 | 100 | 30 | 10 | 1 | 1 | 1 |
 | armour | 990000 | 980000 | 970000 | 300000 | 100000 | 30000 | 10000 | 3000 | 1000 | 300 | 100 | 30 | 10 | 3 | 1 |
 
-(The equipment counts as armour when it is not a weapon, real types 1 to 15.) Either way **one Lapisia** and **`materialCount`** of the
+(The equipment counts as armour when it is not a weapon, real types 1 to 15.) This is the **built-in** table; at start the server
+replaces it with `Data/ItemEnchant.ini` (section 2). The original patch's file, in the same millionths (the rate of the step being left):
+
+| step | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 to 19 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| weapon | 900000 | 800000 | 700000 | 600000 | 400000 | 200000 | 100000 | 80000 | 60000 | 10000 | 6000 | 2000 | 1000 | 600 | 200 | 0 |
+| armour | 990000 | 980000 | 970000 | 800000 | 600000 | 400000 | 200000 | 100000 | 80000 | 60000 | 10000 | 6000 | 2000 | 1000 | 600 (14), 200 (15 to 19) | 0 |
+
+With the built-in table the material count (at least 1) makes a rate of 1 impossible, so weapons stop at +12 and armour at +14; with the
+file every step to +20 can succeed (step 20 is refused by check 4 anyway). Either way **one Lapisia** and **`materialCount`** of the
 material are used up (slots emptied at 0). The answer **`0x0805`** (36 bytes, `TP_LAPISIAN_ADD`): `u8 success, u8 lapisiaBag, u8
 lapisiaSlot, u8 Lapisia left, u8 materialBag, u8 materialSlot, u8 material left (0 without), u8 equipBag, u8 equipSlot, u32 money, char
 craftName[21]`.
@@ -306,7 +334,9 @@ place is emptied, and the player gets **`0x0206`** (7 bytes: `u8 bag, u8 slot, u
 - The decisions are pure functions (`lapis.rs`); the item changes are saved in one transaction with the money (`trade`), with two new
   changes: gems and craft name of a place.
 - Random numbers come from the server's generator (`rand() % n` where the original uses `rand`, a uniform draw below 1000000 for the
-  enchant); the rates are the original's.
+  enchant). **The enchant rates and add values are the built-in tables of section 5 and 2** (`lapis::ENCHANT_RATES`, a flat 7 attack and 5
+  absorption a step); the server does not read an `ItemEnchant.ini`, so it differs from the original with its shipped file (rates from
+  step 0, attack from step 4). Not decided yet (2026-11-05).
 - The absorption of section 2 is applied to monster blows (and since to player blows, `docs/original/pvp.md` section 9, and the guards' kind 3,
   `docs/original/guards.md` section 6); `0x0525` tells the player. Lapis state blocks make monster skills of that
   state miss.

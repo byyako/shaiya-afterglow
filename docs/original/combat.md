@@ -126,7 +126,7 @@ and `effect1` to `effect4`. An equipped item's level is **0 while its quality is
 |---|---|
 | 5 weapon | `m_nAttackRange += byRange`; attack speed (`docs/original/stats.md`); **`itemAttack += effect1[level]`, `itemAttackVar += effect2[level]`** |
 | 8 to 12 accessories | range, attack and move speed; `itemAttack += effect1`, `itemAttackVar += effect2`, `itemDefence += effect3`, `itemMagicDefence += effect4` (full values) |
-| others (armour) | **`itemDefence += effect3[level]`, `itemMagicDefence += effect4[level]`**; the shield also its block value |
+| others (armour) | **`itemDefence += effect3[level]`, `itemMagicDefence += effect4[level]`**; slot 6 also `itemDefence += m_byShieldValue` (shield mastery, `docs/original/stats.md` section 2; a shield has no block value) |
 
 **Monster** (`CMob::SetAttack` 0x4902f0, at creation; from its definition, `add` 0 without buffs):
 
@@ -191,6 +191,9 @@ The owner is the killer of record (0 without one).
 3. Sequence items (`GetSequenceItem`, `SequenceItemCreate.ini`, monsters with `Money1` above 0): built, `docs/original/quest-drops.md` section 4.
 4. **Gold**: with chance **30 %** (`rand() % 100 < 30`): `Money1 + rand() % Money2` (without the second part when `Money2` is 0); when above 0,
    a gold item (type 26, type id 0, count 1, the amount) on the ground.
+
+Nothing of the killer is read but its id, zone, map and party (confirmed, 0x4a5ea0): **no stat (LUC included), level, buff or grade changes
+a drop chance**; the chances are the monster's definition alone.
 
 **On the ground** (`CZone::EnterItem` 0x417320): at the monster's position plus `rand() % 1000 / 1000 − 0.5` on x and on z, **y = 0**; a new
 object id (the items' own counter); removal at **now + 60 s**; owner as above. **`0x0401`** (22 bytes: `u32 id, u8 kind` 2 for a fresh drop,

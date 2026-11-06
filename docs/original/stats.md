@@ -46,7 +46,12 @@ For every slot: STR to LUC += the item's `wConstStr` to `wConstLuc`; max HP += `
 |---|---|
 | 5 weapon | range `byRange`, attack speed `byAttackTime` (and a per-weapon-type value from passive skills), attack (effects 1 and 2 by quality level, not covered here) |
 | 8 to 12 (accessories) | range, attack speed, **move speed `bySpeed`**, effects 1 to 4 |
-| others (armour) | defence and magic defence (effects 3 and 4 by quality level, not covered here); the shield also its block value |
+| others (armour) | defence and magic defence (effects 3 and 4 by quality level, not covered here); slot 6 also the shield-mastery value (below) |
+
+**Slot 6 and shield mastery** (confirmed, 0x454c70 and `CUser::AddSkillPassive` 0x489a80, `wType` 10): whatever item is put in slot 6, its
+defence gets **`m_byShieldValue`** (`+0x1334`), the sum of the shield-mastery passives learned (`docs/original/skills.md` section 5). A
+shield has **no block value** of its own: nothing in `ItemEquipmentAdd` or `CUser::ChkBlock` (0x44c5a0) reads one, and blocks come only
+from buffs (`wType` 85, 86, 92; `docs/original/skills-buffs.md` section 10). (The earlier "block value" here was this mastery value.)
 
 **Crafted stats** (`m_wCraftExpansionAddValue`), for items whose definition allows them (`stItemInfo` `+0x4a`, the `server` column, not 0, and
 `+0x3e`, the `reqwis` column, 1 to 99; `CItem::CopyCraftExpassion` 0x4ba670): the 20-character craft name is read as ten two-digit numbers;
