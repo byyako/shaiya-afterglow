@@ -151,8 +151,11 @@ nothing changes nothing, and a wrong answer (a factor of 200, a string from `exp
 | `enchant` | `p`, `item` (`type`, `type_id`, `step`), `jump` | a jump 1 to 19 |
 
 `game.on_item({ "25/1", "100/131" }, fn)` takes over the use of items (each `"type/type_id"` must exist; two extensions cannot take the
-same one). `fn(p, item)` (`item` has `type`, `type_id`, `bag`, `slot`, `count`) is asked after the level, race and reuse checks and
-returns `"use"` (one is used up), `"keep"` (done, nothing used up), `false[, text]` (refused) or nothing (the core's own use).
+same one). `fn(p, item)` (`item` has `type`, `type_id`, `bag`, `slot`, `count` and `effect`, the type of the item's extension effect
+in force such as `"level_up"`, or `nil`) is asked after the level, race and reuse checks and
+returns `"use"` (one is used up), `"keep"` (done, nothing used up), `false[, text]` (refused) or nothing (the core's own use, or, for an
+item that has an extension effect, that effect: `docs/server/effects.md` section 4). The order of an item's use is the core's checks, the
+rules' `item_use` point, the reuse group, this script, the extension's effect, the core's effect.
 
 With several extensions, in install order: the first refusal ends the asking; factors multiply (each extension is asked with the number
 the earlier ones gave); `enchant`'s last answer stands. A refusal's text is whispered from `Server` (printable ASCII, up to 100 bytes),

@@ -1689,3 +1689,24 @@ The four bundled extensions (`extensions/kill-streak`, `welcome`, `boss-rewards`
       kill-streak` (with a `reload` each) it still does; `ext remove kill-streak` drops it.
 - [ ] `monster-madness` with `item = "<an item id>"` set: using that item starts a madness around the user and uses one up (what the client
       shows for the item with nothing used up, `"keep"`, is not verified).
+
+## 61. Item effects and skill abilities (extensions chunk 3; `docs/plans/ext-3-effects.md`, `docs/server/effects.md`)
+
+For one or two real clients with **client data patch 110 installed** (it carries the names, texts and looks of the new items; without it they
+show as `???`). The Kill Boost Stones are upgraded to 1.1.0 on the live dev box. The three new extensions (`level-stones`, `perfect-lapisia`,
+`stat-runes`) are installed and **disabled**. Turn one on with `target/release/data-editor ext enable <name>` and
+`tools/game-server.sh restart` (effects are read at start); give the items with the GM's `/make <type> <type id> [count]`
+(`/make 100 215`). This section answers client research entries 25 to 27 (`docs/testing/client-research-queue.md`).
+
+1. [ ] The Kill Boost Stones after the upgrade: a stone's buff makes a player kill count 2, 5 or 10 times, as before (section 58's items).
+2. [ ] `level-stones`: the Level Stone raises a level-10 character to 11 with the level-up effect, the new points and full bars; Level Stone
+       (30) from level 20 shows level 30 at once (research entry 25: does the client send the use at all for an item with special 0?); at 30
+       it is refused with the whisper `This item cannot raise your level any further.` and stays in the bag; the stone's name and text show in
+       the tooltip.
+3. [ ] `perfect-lapisia`: the Perfect Weapon Lapisia goes into the enchant window (entry 26) and always succeeds, sometimes by two or three
+       steps; the item's tooltip and other players' view show the new step. The Perfect Armor Lapisia does the same on armour.
+4. [ ] `stat-runes`: the STR Recreation Rune opens the recreation window (entry 27) and changes only STR; on an item without STR it fails
+       and the rune stays.
+5. [ ] A `deny item_use` rule for the stones on one map (uncomment the example of `config/game.toml.example`, `console 1 reload`): the stone is
+       refused there with the rule's message and works elsewhere; a Level Stone refused there can be used elsewhere at once.
+6. [ ] Disabled again (`ext disable level-stones`, restart): the stones are refused and kept.

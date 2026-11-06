@@ -237,6 +237,11 @@ console's `reload` puts them in force without a restart, `target/release/game-se
 rule comes from, and `game-server rules --check` checks the file first ([`docs/server/rules.md`](docs/server/rules.md)); the data editor
 and the extensions can carry rules too.
 
+**Item effects and skill abilities** are the extensions' other addition: an extension's rows may give an item a named effect (a stone that
+raises the level, a Lapisia that always succeeds, a rune that redraws one number) or a skill an ability (a kill that counts five times),
+and the rules can keep an item off a map (`item_use`). Three reference extensions are in `extensions/`
+([`docs/server/effects.md`](docs/server/effects.md), for operators and for authors).
+
 **Scripts**: an extension may carry Lua scripts that react to events (a login, a kill, a timer), answer `!commands` typed in chat, give
 items, gold and buffs, spawn monsters for a while, store values per character, and refuse or change a number at the places the rules are
 asked. Four are bundled in `extensions/` and none is installed by default: kill streaks with bounties, a welcome text with adverts, rewards for
@@ -369,6 +374,7 @@ How a feature is built: the original's behaviour is read from the binaries first
 - [`docs/original/protocol-notes.md`](docs/original/protocol-notes.md): packet framing and encryption.
 - [`docs/server/settings.md`](docs/server/settings.md): every setting.
 - [`docs/server/rules.md`](docs/server/rules.md): the rules: scope, types, layers, `reload`, the editor and extensions.
+- [`docs/server/effects.md`](docs/server/effects.md): item effects and skill abilities: the reference extensions, the `effect` and `abilities` keys, how an item's use is decided, adding a type.
 - [`docs/server/scripts.md`](docs/server/scripts.md): the extensions' Lua scripts: installing, options, `reload`, the API for authors.
 - [`docs/server/deviations.md`](docs/server/deviations.md): every place where the server knowingly differs from the original, by kind, with its setting.
 - [`docs/server/deploy.md`](docs/server/deploy.md): running on a VPS.

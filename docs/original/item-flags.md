@@ -222,3 +222,4 @@ Small choices made in the build:
   flag is still on at rebirth (`ExpDrop`'s own check).
 - **The full party's bonus** is the raised gain (the original adds the gain after the multiplier).
 - **The player's own effects** raise its gold: each member's share is raised by that member's flags.
+- **Skill abilities of extensions** (an addition, `docs/server/effects.md`): beside the three ability pairs of the skill row, a skill level may carry server-only abilities from an extension's rows or the `kill_boost_skills` shorthand; the `kill_boost` ability multiplies a counted player kill while the skill is applied. They are not in `defs` and not in the client's rows.

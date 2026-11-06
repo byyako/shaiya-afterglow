@@ -71,6 +71,25 @@
 - Four bundled extensions, none installed by default: `kill-streak`, `welcome`, `boss-rewards`, `monster-madness`.
 - Migration 0033 (`content.ext_scripts`, `ext_options`, `script_values`, `script_globals`) runs at the next start. No step for an operator.
 
+**Item effects and skill abilities** (extensions chunk 3; `docs/plans/ext-3-effects.md`, `docs/server/effects.md`)
+- A `[[item]]` entry of an extension's `rows.toml` may have an `effect`, a `[[skill]]` entry `abilities`: named behaviours written in the
+  server that the rows give a parameter set. Item effects: `level_up` (a stone that raises the level by some or to a level), `enchant` (a
+  Lapisia's own success rate, jump table and `safe`), `recreate` (a Recreation Rune that redraws chosen crafted numbers, or sets them to
+  the maximum). Skill ability: `kill_boost` (a counted player kill counts several times while the skill is applied). They are server-only
+  data (`content.ext_item_effects`, `ext_skill_abilities`), never in the client's rows, so patch 109 regenerates unchanged. `ext check`
+  prints them and warns for an item that would do something else while its extension is disabled.
+- An item's use goes: the core's checks, the rules, the reuse group, the script that took the item over (`game.on_item`), the extension's
+  effect, the core's effect. `item.effect` in the Lua `item` table names the effect in force.
+- The rules have a ninth point, `item_use`: `type = "deny"`, `point = "item_use"`, optional `items = ["100/215-217", "95"]`.
+- Three reference extensions, none installed by default: `level-stones` (100/215 to 217), `perfect-lapisia` (95/3, 95/8) and `stat-runes`
+  (100/221 to 226); all grade 999 (no monster drops them). Their client text comes with the next client data patch.
+- **The Kill Boost Stones move to version 1.1.0**: the multipliers are `kill_boost` abilities on the skill rows instead of the setting
+  `kill_boost_skills`. What the players see and what the kills count does not change. For a server with 1.0.0 installed,
+  `data-editor ext upgrade extensions/kill-boost` and a restart is optional: nothing breaks without it, because `kill_boost_skills`
+  remains a shorthand that gives the same abilities at start.
+- Custom GM status levels moved to a later wave (they touch the login server and the client's privilege byte, not items).
+- Migration 0034 (`content.ext_item_effects`, `content.ext_skill_abilities`) runs at the next start. No step for an operator.
+
 **Upgrading from 0.2.0** (breaking changes; nothing is converted automatically):
 1. **Settings**: the game settings are no longer environment variables. Stop the game server, start the new one once: it refuses to start
    and prints the `config/game.toml` lines for every `GAME_…` setting it found (in `.env` too). Put them in `config/game.toml` (on a VPS:

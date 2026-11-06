@@ -90,13 +90,18 @@ folders (`docs/original`, `docs/server`, `docs/plans`); there is no alpha; the d
   files; patch 109 (`docs/plans/done/client-patches.md`) is generated and waits for the client-side session to pack it.
 - **Rules** (built, chunk 2, `docs/plans/ext-2-rules.md`, `docs/server/rules.md`): `rules/` in the game server (scope, six rule types, four
   layers, a compiled `RuleSet` in `Zones`), eight points in the core (attack, trade, personal shop, trade chat, experience, player kills,
-  player deaths, enchant), `reload`, `game-server rules`, the console's `rules`, the editor's `rule` target and the manifest's `[rules]`;
+  player deaths, enchant; chunk 3 added a ninth, item use), `reload`, `game-server rules`, the console's `rules`, the editor's `rule` target and the manifest's `[rules]`;
   `cross_faction_trade_maps`, `market_maps` and `trade_chat_min_level` make a rule each.
 - **Scripts** (built, chunk 5, `docs/plans/ext-5-lua.md`, `docs/server/scripts.md`): `script/` in the game server (a sandboxed Lua state
   per extension, the `game` API version 1, events on one script thread, points asked after the rules, stored values, options in layers);
   the manifest's `api`, `scripts` and `[options]`; `data-editor ext scripts`; `reload` and the console's `scripts`; four reference
   extensions in `extensions/`. The original's monster Lua (`mob_lua.rs`, `zone/lua.rs`) is separate and unchanged.
-- **Hooks**: the rules' eight points are the first, and the scripts ask seven of them (and two of their own) after the rules; no Rust
+- **Item effects and skill abilities** (built, chunk 3, `docs/plans/ext-3-effects.md`, `docs/server/effects.md`): `effects.rs` is the
+  registry (`level_up`, `enchant`, `recreate` for items, `kill_boost` for skills) with the one parser the data editor and the server share;
+  `effect` and `abilities` in `rows.toml`, stored server-only in `content.ext_item_effects` and `ext_skill_abilities`; the use chain of an
+  item (core checks, the rules, the reuse group, the script, the extension's effect, the core's); the Kill Boost Stones moved onto abilities
+  (`extensions/kill-boost` 1.1.0); three reference extensions, `level-stones`, `perfect-lapisia` and `stat-runes`.
+- **Hooks**: the rules' nine points (the eighth was the enchant, the ninth, in chunk 3, the use of an item) are the first, and the scripts ask seven of them (and two of their own) after the rules; no Rust
   trait. The server is one crate of about 70,000 lines; behaviour sits where the original's code did.
 
 ## 4. The catalogue (the maintainer's list of changes other servers sell)
@@ -124,11 +129,12 @@ or a DLL change. The wave names are section 6's chunk 7.
 
 | Item | Wave | Client? |
 |---|---|---|
-| Enchant jumps (not only +0 to +1); remove enchant and link costs; auto-max orange stat; Reroll Doubler (doubles the orange stats); Perfect Lapisia (100%, optionally +1 to +3) | R3 | item rows |
+| Enchant jumps (not only +0 to +1); remove enchant and link costs; auto-max orange stat; Reroll Doubler (doubles the orange stats); Perfect Lapisia (100%, optionally +1 to +3) | R3 (enchant jumps: the `enchant` rule, chunk 2; Perfect Lapisia and the `"max"` stat rune: chunk 3, built) | item rows |
 | 100% crit for a scope; stat formula changes (evasion so the dex glitch ends, HP per Rec, ...); changed Bless effects; a custom stat and skill point system | R3 | maybe |
-| Custom GM status levels (no more 16/32/48/64); custom ability types for skills | R3 / chunk 3 | tooltip text |
+| Custom GM status levels (no more 16/32/48/64) | R3 (moved out of chunk 3, 2026-11-05: it touches the login server, the account status and the client's privilege byte, not items) | tooltip text |
+| Custom ability types for skills | chunk 3, built (`kill_boost`; the registry of `docs/server/effects.md`) | tooltip text |
 
-**C. Items and skills (rows plus effect handlers):** level-up stone (+1, or to 15, 30, 70); stat-specific Rec rune (random or max); a
+**C. Items and skills (rows plus effect handlers):** level-up stone (+1, or to 15, 30, 70; built in chunk 3: +1, 15 and 30, any other is a row); stat-specific Rec rune (random or max; built in chunk 3); a
 rune that raises the kill counter; map-pass consumables; Tag and Level stone; Union buffs; VIP buffs. Chunk 3; client rows (`Item.SData`,
 `Skill.SData`) come from the database.
 
@@ -162,7 +168,7 @@ Examples to base the plugin shape on: TrinityCore's script hooks, Eluna (Lua on 
 XML and Lua, Bukkit/Spigot (events plus a manifest). Eluna and The Forgotten Server are the closest.
 
 The reference set the first specs must prove (decision 8): rules: *no exp or kills in a map* and *level-gap protection*; modifier:
-*enchant jumps*; item effect: *level-up stone* (the Kill Boost Stone moves onto the same registry); events/Lua: *kill streak*;
+*enchant jumps*; item effect: *level-up stone* (the Kill Boost Stone moves onto the same registry; both built, chunk 3); events/Lua: *kill streak*;
 extension: *pets*.
 
 ## 6. The chunks
@@ -187,7 +193,7 @@ chunk 9 per-player loot (its own spec; any time after chunk 2)
 |---|---|---|---|
 | 1 | **Foundation**: the database as the source of truth (import once, `origin`, client tables, patch generation from the database alone), extension folders and manifest, the id-range registry, install/remove/enable, the Kill Boost Stone moved in as the first content pack, config layering | `additions.sql` and `client_rows.sql` are gone; patch 109 regenerates byte for byte from the database; an extension folder installs and removes cleanly | entry 11 (a), (d) |
 | 2 | **Rules and hooks**: the scope model, the rules table, files and editor layering, `reload`, the veto and modifier points in the core, the reference rules and the enchant modifier, the one-off settings folded in as rules | the two reference rules work from a file and from the editor, undo and reload included; the old flags still work as before | entry 12 (informs the veto messages) |
-| 3 | **Item effects and skill abilities**: a registry for item-use effects and skill ability types, the level-up stone, the Kill Boost Stone ported, custom GM status levels | a new effect is added by a row and a handler, with its client rows generated | entry 11 (a) |
+| 3 | **Item effects and skill abilities** (built 2026-11-05): a registry for item effects and skill ability types, the level-up stone, the Kill Boost Stone ported, Perfect Lapisia, stat Recreation Runes, the rules' item-use point (custom GM status levels moved to wave R3) | a new effect is added by a row and a handler, with its client rows generated | entry 11 (a) |
 | 4 | **Pets**: the extension: capture, egg, summon, follow, auto-loot, the (possible) menu, the small size by whatever entry 9 finds | catch, summon, follow, loot, dismiss, relog and trade of the egg work with one real client | entries 9, 10 |
 | 5 | **Lua**: the event hooks to Lua, the API, the sandbox, hot reload, per-character storage, the kill streak script | a script dropped in a folder runs and reloads without a restart; a failing script cannot hurt the server | entry 11 (c), 12 (g) |
 | 6 | **Cross-faction and client-bound rules**: trade, whisper, inspect, party, chat combining, GMs seeing both sides, FFA, with the `fixes.dll` feature(s) the research says are needed | the listed actions work between factions in the maps the rules allow | entry 12 |
@@ -242,7 +248,10 @@ the whole test suite passes and the old settings keys work as before.
 
 **Specified** 2026-11-05 (`docs/plans/ext-3-effects.md`, the maintainer's decisions in its section 1: custom GM status levels move to wave
 R3; the level-up stone, the Kill Boost Stone ported, Perfect Lapisia and stat Recreation Runes are built; the rules gain an item-use
-point; `kill_boost_skills` stays as a shorthand). Not built.
+point; `kill_boost_skills` stays as a shorthand). **Built** 2026-11-05 (steps 1 to 9; `docs/server/effects.md`): `effects.rs` (the registry
+and its one parser), `effect` and `abilities` in `rows.toml` (migration 0034), the use chain with `Effect::Ext`, `level_up`, `enchant` and
+`recreate`, the `kill_boost` ability and the Kill Boost Stones 1.1.0, the rules' `item_use` point, and the reference extensions
+`level-stones`, `perfect-lapisia` and `stat-runes`.
 
 **Needs**: chunks 1 and 2 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`,
 `docs/original/item-use.md`, `item_use.rs`, `docs/original/skills.md`, `docs/original/skills-buffs.md`, `buffs.rs`,
@@ -250,9 +259,9 @@ point; `kill_boost_skills` stays as a shorthand). Not built.
 
 **The spec settles**: a registry of item-use effects and of skill ability types that an extension adds a row and a handler to (what the
 row holds, how an item in `defs.items` names its effect and parameters, how a skill's ability type is looked up, validation at load);
-the level-up stone (+1, or to a level) as the reference; the Kill Boost Stone ported onto it without changing behaviour; custom GM
-status levels (replacing the fixed 16/32/48/64 thresholds; what the client checks is in `docs/client/gm-and-commands.md`); the client
-rows each new item and skill needs, generated from the database.
+the level-up stone (+1, or to a level) as the reference; the Kill Boost Stone ported onto it without changing behaviour; the client
+rows each new item and skill needs, generated from the database. (Custom GM status levels, replacing the fixed 16/32/48/64 thresholds,
+moved to wave R3 on 2026-11-05; what the client checks is in `docs/client/gm-and-commands.md`.)
 
 **Output**: `docs/plans/ext-3-effects.md`. **Done when** (the build): the Kill Boost Stone behaves as before and patch 109's data still
 regenerates unchanged.

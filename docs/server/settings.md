@@ -67,7 +67,7 @@ The layers, lowest first; a later one beats an earlier one:
 
 1. **The built-in defaults**, the tables below.
 2. **The extensions' defaults**: the `[settings]` of every *enabled* extension (`data-editor ext list`); disabling one stops its
-   defaults counting. The Kill Boost Stone's `kill_boost_skills` comes this way. Two enabled extensions never set the same setting.
+   defaults counting. (Kill Boost Stones 1.0.0 set `kill_boost_skills` this way; from 1.1.0 they use abilities, `docs/server/effects.md`.) Two enabled extensions never set the same setting.
 3. **The config file.**
 4. **The data editor's overrides**: the target `setting` (`data-editor draft add set setting <name> value <value>`, then `apply-draft`; a
    removed override falls back to the layers below; History and Undo work as for any edit).
@@ -124,7 +124,7 @@ At start the server logs one line per setting that is not at its default, with i
 | `ranking_update_delay_secs` | `1800` | how long after the ranking battle closes the ranking is updated (as in the original) |
 | `exp_rate` | `1` | the monster experience event's factor at start, 0 or more (`docs/original/operator-console.md`); the console's `exp` changes it until the next start |
 | `kill_rate` | `1` | what each counted player kill adds to the killer's kills, 1 to 100 (in place of the original's `[NEW_SERVER]`); the console's `killrate` changes it |
-| `kill_boost_skills` | empty | skills that multiply a counted kill while applied, comma-separated, each `id[/level][:times]` (`id` alone is any level, `times` 1 to 100, 2 when left out; the highest matching entry counts); empty for none, as the original (an addition: `docs/server/deviations.md` section 1). The three Kill Boost Stones' buffs are `200/1:2,200/2:5,200/3:10` (items 100/212 to 214, 2×, 5× and 10×; their rows come from the extension `extensions/kill-boost`; the client's copy comes with client data patch 109, `docs/plans/done/client-patches.md`) |
+| `kill_boost_skills` | empty | a shorthand for the kill boost: at start each entry, `id[/level][:times]` (`id` alone is any level, `times` 1 to 100, 2 when left out), gives those skills a `kill_boost` ability, which multiplies a counted player kill while the skill is applied; the highest ability among the applied skills counts. An extension's rows can give the same ability (`docs/server/effects.md`), and the Kill Boost Stones 1.1.0 do (`extensions/kill-boost`: items 100/212 to 214, 2×, 5× and 10×; the client's copy comes with client data patch 109, `docs/plans/done/client-patches.md`); the setting is for a skill an extension does not own. Empty for none, as the original (an addition: `docs/server/deviations.md` section 1) |
 | `mini_game` | `true` | the gambling house (`docs/original/mini-game.md`): `true` places the six type-5 NPCs (maps 1, 2, 19, 20, 28, 29) and handles the `0x31xx` slot machine and card double-up with the original's odds (the two rows below); `false` hides the NPCs as the original does (an addition, on by default: `docs/server/deviations.md` section 1) |
 | `slot_payout_percent` | `100` | each winning slot line pays multiplier × the table's bet × this / 100 (1 to 1000); 100, the original's table, gives back about 41 % of the bets, 220 about 90 % (used only with `mini_game`) |
 | `card_win_chances` | `400,200,100,50,10` | the double-up's chance (per mille, rounds 1 to 5) that the card falls on the guessed side; the default is the original's (fairer odds, for example `420,200,130,100,80`, are an operator's choice; used only with `mini_game`) |

@@ -352,3 +352,4 @@ Confirmed.
   100133 alone and answers nothing.
 - As in the original, a dead member's yes to a summon moves the body; it stays dead on the new map (the zone takes a player entering with
   no HP as dead).
+- **An extension's effect** (an addition, `docs/server/effects.md`): an item the extensions' rows gave a `use` effect is carried out between the script (`game.on_item`) and the core's own effect, after the rules' `item_use` point and the reuse group; the core's refusal of a bare special-0 item no longer applies to it. A level stone is the reference. With no such extension nothing here changes.

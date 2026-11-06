@@ -34,6 +34,18 @@ it in the server spec it names.
     No item line shows a block; messages 402 and 403 ("Succeeded in blocking", "Failed to block") are the friends block list's (used
     next to the block-memo handler `0x555980`). What it changes: nothing on the server; `docs/plans/enchant-table.md` relies on the
     client using the file's values. Suggested home: `docs/client/research-balance.md`, "The character window".
+25. **A usable item with `special` 0, no skill link and no HP, SP or MP** (asked 2026-11-05 by `docs/plans/ext-3-effects.md` section 8, entry
+    24 there; numbered 25 here because 24 was taken meanwhile). The level stone's record (100/215 to 217, copies of 100/108's use and
+    trade columns without its skill): does the client send `0x050A` for it, or refuse it locally with the message 227? And does a level
+    jump of more than one (`0x051E` from level 20 to 30) show the level, the points and the bars right? What it changes: the level
+    stone's row (a `special` the client sends for), or nothing. A live test answers it first (`docs/testing/live-test-checklist.md`
+    section 61, item 2).
+26. **A Lapisia in an empty record of group 95** (asked by `docs/plans/ext-3-effects.md` section 8, entry 25 there). 95/3 and 95/8, copies of
+    95/1 and 95/6: does the enchant window take an item by its type alone, or does it read another field of the record, so that a copy
+    behaves as the original? What it changes: the columns the Perfect Lapisia rows copy. Live test: section 61, item 3.
+27. **A Recreation Rune in an empty record of group 100** (asked by `docs/plans/ext-3-effects.md` section 8, entry 26 there). 100/221 to 226,
+    copies of 100/171 with special 62: does the client open the recreation window from the special (so any special-62 item does), and does
+    it show the new craft name when only one number changes? What it changes: the stat runes' rows. Live test: section 61, item 4.
 
 ## Answered
 

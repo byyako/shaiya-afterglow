@@ -35,6 +35,11 @@ A setting written as `NAME` (`value`) gives its release default. `docs/server/se
 | `kill_boost_skills` | `200/1:2,200/2:5,200/3:10` | empty | no kill-boost item (`docs/original/operator-console.md`) | addition |
 | the Kill Boost Stone rows (items 100/212-214 and skill 200/1-3) | loaded by `additions.sh --with-additions` (0.2.0) | the extension `extensions/kill-boost`, installed with `data-editor ext install extensions/kill-boost` (or `tools/setup.sh --extension extensions/kill-boost`); not installed by default; its multipliers are the setting above (the extension carries `200/1:2,200/2:5,200/3:10` as its default, which the game server reads once settings come in layers) | items 100/212-214 and skill 200/1-3 are empty `???` rows | addition |
 
+**Item effects and skill abilities** (`docs/server/effects.md`) are an addition: an extension's rows may give an item an effect (a level
+stone, a Lapisia with its own rate and jumps, a rune that redraws chosen numbers) or a skill an ability (the kill boost). None is installed
+by default; a server without such an extension behaves as the original, and the rules' `item_use` point refuses nothing until a rule is
+written. The Kill Boost Stones moved onto abilities in version 1.1.0 of their extension without changing what they do.
+
 **Scripts** (`docs/server/scripts.md`) are an addition: an extension may carry Lua scripts that react to events, answer `!commands`, and
 refuse or change a number at the places the rules are asked. None is installed by default (the four bundled ones are installed by the
 operator), `scripts = false` loads none, and the original's monster Lua is a separate thing that is unchanged.

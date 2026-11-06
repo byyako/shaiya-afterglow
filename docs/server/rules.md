@@ -55,6 +55,14 @@ maps = [2]
 days = [1, 2, 3, 4, 5]
 hours = "18-22"
 message = "No fighting here in the evening."
+
+# Level stones do not work on the PvP maps.
+[rules.no-level-stones-in-pvp]
+type = "deny"
+point = "item_use"
+items = ["100/215-217"]
+maps = [2, 3, 4]
+message = "Level stones do not work here."
 ```
 
 Every rule has a `type`, optionally the scope keys of section 3, `enabled` (default `true`) and, for a refusal, a `message`. Any other key
@@ -87,12 +95,22 @@ a one-player point. `kills` is also a key of `pvp_gain` (below), where it is the
 
 | `type` | point | own keys | what it does |
 |---|---|---|---|
-| `deny` | `point = "attack"`, `"trade"`, `"personal_shop"` or `"trade_chat"` (required) | | refuses the action in scope |
+| `deny` | `point = "attack"`, `"trade"`, `"personal_shop"`, `"trade_chat"` or `"item_use"` (required) | `items`, at `item_use` only | refuses the action in scope |
 | `level_gap` | attack | `gap` (1 to 255, required) | refuses an attack between two players whose levels differ by more than `gap`, both ways |
 | `cross_faction_trade` | trade | | players of both factions may trade in scope (the original allows it nowhere); `who` defaults to `"both"` |
 | `pvp_gain` | experience of a player kill, kills, deaths | `exp` (0 to 100, default 1), `kills` (a whole number 0 to 100, default 1), `deaths` (`true`/`false`, default `true`); at least one | what a player kill gives in scope: the killer's experience × `exp`; the counted kill × `kills` (0: not counted at all, the player-kill quest and the faction's count too); `deaths = false`: the victim's death is not counted |
 | `exp` | experience | `factor` (0 to 100, required), `sources` (`"mob"`, `"party"`, `"quest"`; default `["mob", "party"]`) | experience from those sources × `factor` in scope; a player kill's experience is `pvp_gain`'s, not this one's |
 | `enchant` | enchant | `jumps` (a list of `[steps, weight]`, steps 1 to 19, weight 1 to 1,000,000, at most 19), `items` (`"weapons"`, `"armour"`, `"both"`) | on a successful enchant the step rises by a weighted draw of `steps` instead of 1, at most to step 20 |
+
+### `deny` at `item_use`
+
+`items` is a list of `"type/type_id"` (`"100/215"`), `"type/low-high"` (a range of type ids, `"100/215-217"`) and `"type"` (every item of a
+type, `"95"`); types and type ids are 1 to 255. A rule without `items` refuses every item in its scope; `items = []` is an error. The
+scope is the user's (`level`, `kills`, `faction`) and the map it stands on. The point is asked when a player uses an item
+(`0x050A`, `0x0557`, `0x0559`), after the core's own checks (level, race, mode) and **before** the reuse group and the scripts, so a refusal
+leaves the item's reuse time alone and no script is asked. It does not cover quest items (they have no use to refuse), a Lapisia in an
+enchant, a rune in a recreation (their own requests; the `enchant` point is the Lapisia's) and the items of the death window.
+`items` on any other `deny` is an error that says so; on an `enchant` rule it is that rule's own key.
 
 Refusals are checked **after** the core's own checks: a rule never lets through what the core refuses. The one permission,
 `cross_faction_trade`, takes the place of the faction test only, and a `deny trade` rule beats it. Duels and guild wars are agreed to and
@@ -119,6 +137,7 @@ skipped silently. A message is printable ASCII, at most 100 bytes.
 | `deny` trade | `Trading is not allowed here.` |
 | `deny` personal_shop | `A personal shop cannot be opened here.` |
 | `deny` trade_chat | `Trade chat is not allowed here.` |
+| `deny` item_use | `You cannot use that here.` |
 
 The log, with `RUST_LOG=debug`, has a line for each refusal (`refused by a rule`) and each number a rule changed (`changed by rules`).
 
@@ -189,12 +208,13 @@ them live), as do `kill_count`, `kill_boost_skills`, `trade_chat_cooldown_secs` 
 
 ## 9. Not yet
 
-The points are the eight above. Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, item use
-by effect, damage and the stat formulas, item loss on death) are for later waves.
+The points are the nine above. Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, damage and
+the stat formulas, item loss on death) are for later waves.
 
 ## 10. After the rules, scripts
 
 An extension's Lua scripts (`docs/server/scripts.md`) are asked at seven of these points, **after** the rules: a rule's refusal is final
 (no script is asked), a script may refuse what the rules let through, and the numbers the rules changed (experience, the counted kill,
 the enchant jump) are the ones a script is given and may change again. The attack point is not asked of scripts (it is asked for every
-blow); rules own attacks. Scripts also have two points of their own, chat and item use.
+blow); rules own attacks. Scripts also have two points of their own, chat and item use. A `deny item_use` rule refuses first; then the reuse group; then the script
+that took the item over; then the item's effect, if an extension gave it one (`docs/server/effects.md`).
