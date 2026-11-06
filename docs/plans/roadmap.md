@@ -41,6 +41,13 @@ work items are kept under "Not scheduled" in case a part of them is wanted later
 | A first run on a fresh machine; a real client against a fresh install | **open** (the maintainer postponed the first) |
 | Windows hosts (WSL2), a published Docker image | not planned |
 
+## The player guide (`docs/plans/player-guide.md`): specified
+
+A new "Player guide" tab on the docs site, decided with the maintainer on 2026-11-05. It starts with three pages on the player stat
+system: a character's numbers, hitting and being hit, and elements, resistances and defences, with every formula and worked examples. It
+describes the original; the gaps no note covers yet (G1 to G8: shield blocks, enchant attack, players resisting debuffs, ...) are settled
+by reversing `ps_game.exe` or `game.exe`. **Next:** the build (one session, the plan's Build section).
+
 ## Testing
 
 The automated tests cover the rules and the packets; what the real client shows is walked by hand (`docs/testing/README.md`).
@@ -221,7 +228,14 @@ Raised by the maintainer (2026-10-22): people already running the original serve
 
 ## Open work items
 
-- **A changelog for the docs site.** The site (`site/`, published at tylerd.me/shaiya/) has no record of what changed on it: a deploy
+- **The docs site's Server tab, once the extension system is complete** (noted 2026-11-05; the maintainer wants the site's extension
+  pages written when the system is finished, not while it changes). Three things: the tab's landing page (`site/content/server.md`)
+  names neither the extensions nor the Rules and Scripts pages in its reading path and Sections table; no page covers extensions as a
+  whole (the folder with `extension.toml` and `rows.toml`, `data-editor ext ...`, `content rebuild`, the bundled `extensions/`; today only
+  `CHANGELOG.md` and the plans describe them); and `site/content/server/run.md`, a short copy of the README's setup, needs checking
+  against the README (`config/game.toml`, `tools/setup.sh --extension` and `--reset`). Until then, Rules and Scripts say they are not in
+  a release yet. **Done when**: the three are done and the "not released yet" lines come off at the release that carries them.
+- **A changelog for the docs site** (deferred by the maintainer on 2026-11-05; kept here). The site (`site/`, published at tylerd.me/shaiya/) has no record of what changed on it: a deploy
   rewrites every page and nothing says which pages changed in substance (the 2026-11-04 deploy renamed the settings on 28 pages and
   rewrote the Settings page, and only the repository's `CHANGELOG.md` mentions the settings change). **Inputs**: `site/README.md`,
   `site/deploy.sh`, `site/build.py`. **To settle**: where it lives (a `site/CHANGELOG.md` kept by hand, or a "What's new" page in the nav
