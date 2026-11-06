@@ -81,7 +81,17 @@ async fn main() -> Result<()> {
     let exp = pg::load_exp(&pool).await.context("loading the experience table")?;
     let items = pg::load_item_defs(&pool).await.context("loading the item definitions")?;
     let status = pg::load_status_table(&pool).await.context("loading the status table")?;
-    let skills = pg::load_skill_defs(&pool).await.context("loading the skill definitions")?;
+    let mut skills = pg::load_skill_defs(&pool).await.context("loading the skill definitions")?;
+    // The extensions' item effects and skill abilities (`docs/plans/ext-3-effects.md` section 3.4), then the `kill_boost_skills`
+    // shorthand as abilities too (section 5.4).
+    let effects = pg::load_item_effects(&pool, &items).await.context("loading the item effects of the extensions")?;
+    let abilities = pg::load_skill_abilities(&pool, &skills).await.context("loading the skill abilities of the extensions")?;
+    let ability_levels = skills.attach_abilities(abilities).map_err(|(id, level)| anyhow::anyhow!("skill {id}/{level} is not loaded"))?;
+    for (id, level) in skills.attach_kill_boosts(&config.kill_boost_skills) {
+        tracing::warn!(skill = id, level, "kill_boost_skills: this skill level has four abilities already and takes no more");
+    }
+    let by_type: Vec<String> = effects.counts().iter().map(|(ty, n)| format!("{ty} {n}")).collect();
+    tracing::info!(effects = effects.len(), types = %by_type.join(", "), ability_levels, "item effects loaded");
     let (live, mob_skills) = pg::load_live(&pool, &items, &skills).await?;
     let mobs = &live.mobs;
     let mut world = pg::load_world(&pool, config.mini_game).await.context("loading the maps")?;
@@ -138,7 +148,7 @@ async fn main() -> Result<()> {
     }
     tracing::info!(products = products.len(), item_mall = config.item_mall, "item mall loaded");
     let backend = PgBackend::new(pool.clone(), config.delete_delay);
-    let data = GameData { creation, exp, world, items, status, live: live.shared(), skills, quests, kill_grades, products };
+    let data = GameData { creation, exp, world, items, status, live: live.shared(), skills, effects, quests, kill_grades, products };
     // The names of the definitions: the game log writes them into its records, the scripts' `item_name` and `mob_name` read them.
     let names = pg::load_game_log_names(&pool).await.context("loading the names of the game log")?;
     let game_log = if config.game_log {

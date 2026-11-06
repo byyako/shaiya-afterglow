@@ -1018,6 +1018,7 @@ pub async fn load_skill_defs(pool: &PgPool) -> Result<SkillDefs> {
                 keep_on_death: r.fixrange == 1,
                 change_type: u16::try_from(r.changetype)?,
                 change_level: u16::try_from(r.changelevel)?,
+                ext: Default::default(),
             })
         })
         .collect::<Result<Vec<_>>>()?;

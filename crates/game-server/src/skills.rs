@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::combat::Numbers;
+use crate::effects::Abilities;
 /// A quick slot, stored as the client sends it (`stQuick`).
 pub use shaiya_proto::skill::QuickSlot;
 
@@ -147,6 +148,10 @@ pub struct SkillDef {
     /// fighting numbers it brings (`wChangeLevel`).
     pub change_type: u16,
     pub change_level: u16,
+    /// The abilities of this level that an extension's rows or the `kill_boost_skills` shorthand gave it, server-only
+    /// (`docs/plans/ext-3-effects.md` section 3.2). Empty unless `SkillDefs::attach_abilities` or `attach_kill_boosts` filled it, so
+    /// an applied skill carries them and nothing is looked up when a kill is counted.
+    pub ext: Abilities,
 }
 
 impl SkillDef {
@@ -222,6 +227,35 @@ impl SkillDefs {
 
     pub fn get(&self, id: u16, level: u8) -> Option<&SkillDef> {
         self.0.get(&(id, level))
+    }
+
+    /// Gives skill levels the abilities of the enabled extensions' rows (`docs/plans/ext-3-effects.md` section 3.4); each replaces what
+    /// the level had. The first skill level that is not loaded is the error. Returns how many levels were given abilities.
+    pub fn attach_abilities(&mut self, abilities: impl IntoIterator<Item = (u16, u8, Abilities)>) -> Result<usize, (u16, u8)> {
+        let mut given = 0;
+        for (id, level, list) in abilities {
+            let def = self.0.get_mut(&(id, level)).ok_or((id, level))?;
+            def.ext = list;
+            given += 1;
+        }
+        Ok(given)
+    }
+
+    /// The `kill_boost_skills` shorthand (section 5.4): a `kill_boost` ability on every loaded definition an entry matches, keeping the
+    /// highest `times` when a level has one already. Returns the skill levels that had four abilities already and so took none.
+    pub fn attach_kill_boosts(&mut self, boosts: &[KillBoost]) -> Vec<(u16, u8)> {
+        let mut skipped = Vec::new();
+        for def in self.0.values_mut() {
+            let matching: Vec<u32> = boosts.iter().filter(|b| b.skill.matches(def)).map(|b| b.times).collect();
+            for times in matching {
+                if !def.ext.merge_kill_boost(times) {
+                    skipped.push((def.id, def.level));
+                }
+            }
+        }
+        skipped.sort_unstable();
+        skipped.dedup();
+        skipped
     }
 
     /// These and more rows, loaded as `new` loads them.
@@ -638,6 +672,29 @@ mod tests {
         assert!(defs().get(5, 100).is_some());
         assert!(SkillDefs::new([def(6, 4), def(7, 0), def(0, 1)]).is_empty());
         assert_eq!(defs().len(), 12);
+    }
+
+    #[test]
+    fn abilities_attach_to_loaded_levels_and_the_shorthand_adds_to_them() {
+        use crate::effects::{Abilities, Ability};
+        let boost = |times| {
+            let mut list = Abilities::default();
+            list.push(Ability::KillBoost { times });
+            list
+        };
+        let mut defs = defs();
+        assert!(defs.get(2, 1).unwrap().ext.is_empty(), "none by default");
+        assert_eq!(defs.attach_abilities([(2, 1, boost(5)), (2, 3, boost(7))]), Ok(2));
+        assert_eq!((defs.get(2, 1).unwrap().ext.kill_boost(), defs.get(2, 2).unwrap().ext.kill_boost(), defs.get(2, 3).unwrap().ext.kill_boost()), (Some(5), None, Some(7)));
+        // A level that is not loaded stops the attach, naming it.
+        assert_eq!(defs.attach_abilities([(2, 2, boost(1)), (99, 1, boost(1))]), Err((99, 1)));
+        // The shorthand: by id (any level, level 100 included) or id and level; the highest wins; nothing else is touched.
+        let any = |id, times| KillBoost { skill: SkillMatch { id, level: None }, times };
+        let at = |id, level, times| KillBoost { skill: SkillMatch { id, level: Some(level) }, times };
+        assert!(defs.attach_kill_boosts(&[any(2, 3), at(2, 1, 9), any(5, 4), at(2, 3, 2)]).is_empty());
+        let times = |id, level| defs.get(id, level).unwrap().ext.kill_boost();
+        assert_eq!((times(2, 1), times(2, 2), times(2, 3)), (Some(9), Some(3), Some(7)), "the highest of the row's and the entries'");
+        assert_eq!((times(5, 100), times(1, 1)), (Some(4), None), "level 100 by id; another skill untouched");
     }
 
     #[test]

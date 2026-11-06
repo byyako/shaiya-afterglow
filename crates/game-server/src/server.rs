@@ -113,6 +113,9 @@ pub struct GameData {
     /// The monsters and the drop tables, which the console's `reload` swaps while the server runs: read them through `live()`.
     pub live: std::sync::RwLock<Arc<Live>>,
     pub skills: SkillDefs,
+    /// The item effects of the enabled extensions, by item id (`docs/plans/ext-3-effects.md` section 3.4); empty without any. The
+    /// skill abilities are on `skills`.
+    pub effects: crate::effects::ItemEffects,
     pub quests: QuestDefs,
     /// The factions' kill-count grades (`world.kill_status`, `docs/original/pvp-2.md` section 8).
     pub kill_grades: crate::kc::Grades,

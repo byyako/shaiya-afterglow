@@ -9,8 +9,8 @@ use crate::sync::Relock;
 const GOLD_LOSS_CHANCE: u32 = 30;
 
 /// A kill counted (`CUser::KillPCTo`, section 7): the player-kill quest, then below the cap kills + 1, saved, `0x020E` and
-/// `0x0522` to the view. The console's kill rate adds more than 1, times the kill boost's multiplier while the killer has one of the
-/// kill-boost skills applied (`docs/original/operator-console.md` section 6 step 2); the faction's count and the quest stay 1. The
+/// `0x0522` to the view. The console's kill rate adds more than 1, times the kill boost's multiplier while the killer has a skill with a
+/// `kill_boost` ability applied (`docs/original/operator-console.md` section 6 step 2); the faction's count and the quest stay 1. The
 /// rules' `pvp_gain.kills` first (`docs/plans/ext-2-rules.md` point 6): 0 counts nothing at all, not even the quest; otherwise it
 /// multiplies the kills added.
 pub(super) async fn kill_counted<S: Backend>(
@@ -35,7 +35,7 @@ pub(super) async fn kill_counted<S: Backend>(
     let by = ctx
         .switches
         .kill_rate()
-        .saturating_mul(ctx.zones.kill_boost(state.map, character.id, &ctx.config.kill_boost_skills))
+        .saturating_mul(ctx.zones.kill_boost(state.map, character.id))
         .saturating_mul(times);
     let Some(kills) = pvp::counted(character.kills[0], by) else { return Ok(()) };
     character.kills[0] = kills;

@@ -1,5 +1,6 @@
 use super::*;
-use crate::skills::SkillMatch;
+use crate::effects::{Abilities, Ability};
+use crate::skills::{KillBoost, SkillDefs, SkillMatch};
 use shaiya_proto::frame::{opcode, payload};
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
@@ -2866,46 +2867,78 @@ fn a_gambling_table_is_refused_while_busy() {
     assert!(!zones.may_gamble(1, 2) && !zones.may_gamble(1, 3), "in a duel");
 }
 
-/// The kill boost looks for an applied skill by id, or by id and level, and gives its multiplier (`docs/original/operator-console.md`
-/// section 4, `docs/plans/done/client-patches.md` decision 1).
+/// The kill boost reads the `kill_boost` abilities of the applied skills (`docs/original/operator-console.md` section 4,
+/// `docs/plans/ext-3-effects.md` section 5.4). The `kill_boost_skills` shorthand is attached to the definitions as at start, and finds a
+/// skill by id, or by id and level, as it always did.
 #[test]
 fn the_kill_boost_finds_an_applied_skill_by_id_and_level() {
     let (zones, mut inboxes, _) = duel_ground();
     duel_fight(&zones, &mut inboxes);
     let any = |id, times| KillBoost { skill: SkillMatch { id, level: None }, times };
     let at = |id, level, times| KillBoost { skill: SkillMatch { id, level: Some(level) }, times };
-    let level =
-        |level| SkillDef { id: 310, level, type_effect: skills::BUFF, kind: buffs::ABILITIES, keep_time: 600, ..Default::default() };
-    let stones = [at(310, 1, 2), at(310, 2, 5), at(310, 3, 10)];
-    assert_eq!(zones.kill_boost(1, 3, &stones), 1, "none applied");
-    assert_eq!(zones.kill_boost(1, 3, &[any(310, 4), any(311, 2)]), 1);
-    for (applied, times) in [(1, 2), (2, 5), (3, 10)] {
-        edit(&zones, 3, |p| {
-            p.occupant.buffs.apply(&level(applied), 3, Instant::now(), &mut || 1);
+    let skill = |id, level, keep_time| SkillDef { id, level, type_effect: skills::BUFF, kind: buffs::ABILITIES, keep_time, ..Default::default() };
+    // The multiplier the zone finds for `player` after `skill` is applied to it as the definitions `boosts` attach to give it.
+    let boost = |player: u32, def: SkillDef, boosts: &[KillBoost]| {
+        let mut defs = SkillDefs::new([def]);
+        assert!(defs.attach_kill_boosts(boosts).is_empty());
+        let applied = *defs.get(def.id, def.level).unwrap();
+        edit(&zones, player, |p| {
+            p.occupant.buffs.list.clear();
+            p.occupant.buffs.apply(&applied, 3, Instant::now(), &mut || u32::from(applied.level));
         });
-        assert_eq!(zones.kill_boost(1, 3, &stones), times, "level {applied}");
+        zones.kill_boost(1, player)
+    };
+    let stones = [at(310, 1, 2), at(310, 2, 5), at(310, 3, 10)];
+    assert_eq!(zones.kill_boost(1, 3), 1, "none applied");
+    for (applied, times) in [(1, 2), (2, 5), (3, 10)] {
+        assert_eq!(boost(3, skill(310, applied, 600), &stones), times, "level {applied}");
     }
     // Entries by id only, and two matching entries give the higher.
-    assert_eq!(zones.kill_boost(1, 3, &[any(310, 3)]), 3);
-    assert_eq!(zones.kill_boost(1, 3, &[any(310, 3), at(310, 3, 7), at(310, 1, 50)]), 7);
-    assert_eq!(zones.kill_boost(1, 3, &[any(311, 4)]), 1, "another skill");
-    assert_eq!(zones.kill_boost(1, 3, &[]), 1, "none listed");
-    assert_eq!(zones.kill_boost(1, 2, &stones), 1, "another player");
-    assert_eq!(zones.kill_boost(2, 3, &stones), 1, "another map");
+    assert_eq!(boost(3, skill(310, 3, 600), &[any(310, 3)]), 3);
+    assert_eq!(boost(3, skill(310, 3, 600), &[any(310, 3), at(310, 3, 7), at(310, 1, 50)]), 7);
+    assert_eq!(boost(3, skill(310, 3, 600), &[any(311, 4)]), 1, "another skill");
+    assert_eq!(boost(3, skill(310, 3, 600), &[]), 1, "none listed");
+    boost(3, skill(310, 3, 600), &stones);
+    assert_eq!(zones.kill_boost(1, 2), 1, "another player");
+    assert_eq!(zones.kill_boost(2, 3), 1, "another map");
     // A monster's skill of the same id (level 100) on the player does not count for `320/1`.
-    let curse = SkillDef {
-        id: 320,
-        level: skills::MOB_LEVEL,
-        type_effect: skills::BUFF,
-        kind: buffs::ABILITIES,
-        keep_time: 60,
-        ..Default::default()
+    assert_eq!(boost(2, skill(320, skills::MOB_LEVEL, 60), &[any(320, 4)]), 4);
+    assert_eq!(boost(2, skill(320, skills::MOB_LEVEL, 60), &[at(320, 1, 4)]), 1, "the item's level only");
+}
+
+/// Abilities from an extension's rows count as the setting's entries do, and a level with both has the higher
+/// (`docs/plans/ext-3-effects.md` sections 3.2 and 5.4); the highest among several applied skills counts.
+#[test]
+fn the_kill_boost_counts_abilities_from_rows_and_from_the_setting() {
+    let (zones, mut inboxes, _) = duel_ground();
+    duel_fight(&zones, &mut inboxes);
+    let skill = |id, level| SkillDef { id, level, type_effect: skills::BUFF, kind: buffs::ABILITIES, keep_time: 600, ..Default::default() };
+    let kill_boost = |times| {
+        let mut list = Abilities::default();
+        assert!(list.push(Ability::KillBoost { times }));
+        list
     };
-    edit(&zones, 2, |p| {
-        p.occupant.buffs.apply(&curse, 3, Instant::now(), &mut || 2);
-    });
-    assert_eq!(zones.kill_boost(1, 2, &[any(320, 4)]), 4);
-    assert_eq!(zones.kill_boost(1, 2, &[at(320, 1, 4)]), 1, "the item's level only");
+    let mut defs = SkillDefs::new([skill(330, 1), skill(330, 2), skill(331, 1)]);
+    assert_eq!(defs.attach_abilities([(330, 1, kill_boost(5)), (331, 1, kill_boost(2))]), Ok(2));
+    let shorthand = KillBoost { skill: SkillMatch { id: 330, level: Some(1) }, times: 3 };
+    assert!(defs.attach_kill_boosts(&[shorthand]).is_empty());
+    let apply = |ids: &[(u16, u8)]| {
+        let applied: Vec<SkillDef> = ids.iter().map(|&(id, level)| *defs.get(id, level).unwrap()).collect();
+        edit(&zones, 3, |p| {
+            p.occupant.buffs.list.clear();
+            for (n, def) in applied.iter().enumerate() {
+                p.occupant.buffs.apply(def, 3, Instant::now(), &mut || n as u32 + 1);
+            }
+        });
+        zones.kill_boost(1, 3)
+    };
+    assert_eq!(apply(&[(330, 1)]), 5, "the row's 5 beats the setting's 3");
+    assert_eq!(apply(&[(330, 2)]), 1, "a level without an ability counts once");
+    assert_eq!(apply(&[(331, 1)]), 2);
+    assert_eq!(apply(&[(331, 1), (330, 1)]), 5, "the highest of the applied skills");
+    let mut defs2 = SkillDefs::new([skill(332, 1)]);
+    assert!(defs2.attach_kill_boosts(&[KillBoost { skill: SkillMatch { id: 332, level: None }, times: 8 }]).is_empty());
+    assert_eq!(defs2.get(332, 1).unwrap().ext.kill_boost(), Some(8), "the setting alone");
 }
 
 /// `docs/original/skills-buffs.md` section 16: a death that costs no experience keeps the skills above id 200 (an elixir),

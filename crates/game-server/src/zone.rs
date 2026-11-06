@@ -27,7 +27,7 @@ use crate::inventory::{ItemDefs, real_type};
 use crate::lapis::OptionSkills;
 use crate::mobs::{self, Mob, MobDef, MobDefs, MobMap, MobState, Moving, Origin};
 use crate::pacing;
-use crate::skills::{self, KillBoost, SkillDef};
+use crate::skills::{self, SkillDef};
 use crate::sync::{Relock, RelockRw};
 use crate::world::{MapTerrain, World};
 
@@ -2960,12 +2960,13 @@ impl Zones {
     }
 
     /// What a counted player kill is multiplied by for this player (the kill boost, `docs/original/operator-console.md` section 4 and
-    /// `docs/plans/done/client-patches.md` decision 1): the highest `times` of the entries matching an applied skill, 1 when none does.
-    pub fn kill_boost(&self, map: u16, id: u32, boosts: &[KillBoost]) -> u32 {
+    /// `docs/plans/ext-3-effects.md` section 5.4): the highest `times` among the `kill_boost` abilities of the skills applied to it,
+    /// 1 when none. The abilities are on the definitions (`SkillDef::ext`), from an extension's rows or the `kill_boost_skills`
+    /// shorthand.
+    pub fn kill_boost(&self, map: u16, id: u32) -> u32 {
         let maps = self.maps.guard();
         let Some(player) = maps.get(&map).and_then(|players| players.get(&id)) else { return 1 };
-        let applied = &player.occupant.buffs.list;
-        boosts.iter().filter(|b| applied.iter().any(|a| b.skill.matches(&a.def))).map(|b| b.times).max().unwrap_or(1)
+        player.occupant.buffs.list.iter().filter_map(|applied| applied.def.ext.kill_boost()).max().unwrap_or(1)
     }
 
     /// A packet for one player.

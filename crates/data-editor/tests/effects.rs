@@ -196,3 +196,54 @@ async fn a_changed_effect_is_a_changed_row_for_ext_scripts() {
     assert_eq!(stored, json!({ "type": "level_up", "levels": 1 }));
     db.drop().await;
 }
+
+/// What the game server loads at start (`docs/plans/ext-3-effects.md` section 3.4): the effects and abilities of enabled extensions
+/// only, parsed by the server's own parser, and a bad row stops the load naming the extension and the item.
+#[tokio::test]
+async fn the_server_loads_the_effects_of_enabled_extensions_only() {
+    use game_server::inventory::{ItemDef, ItemDefs};
+    use game_server::skills::{SkillDef, SkillDefs};
+    let Some(db) = seeded(false).await else { return };
+    let f = Folder::new("1.0.0", STONE);
+    db.editor.ext_install(f.path(), false).await.unwrap();
+    let content = db.s.content.as_str();
+    let items = ItemDefs::new([ItemDef { item_id: 100212, item_type: 100, type_id: 212, ..Default::default() }]);
+    let skills = SkillDefs::new([SkillDef { id: 200, level: 1, ..Default::default() }]);
+    let load = || async {
+        (game_server::pg::load_item_effects_in(&db.pool, &items, content).await, game_server::pg::load_skill_abilities_in(&db.pool, &skills, content).await)
+    };
+
+    let (effects, abilities) = load().await;
+    let effects = effects.unwrap();
+    assert_eq!(effects.counts(), [("level_up", 1), ("enchant", 0), ("recreate", 0)]);
+    assert_eq!(effects.get(100212).unwrap().describe(), "level_up levels = 1");
+    let abilities = abilities.unwrap();
+    assert_eq!((abilities.len(), abilities[0].0, abilities[0].1, abilities[0].2.kill_boost()), (1, 200, 1, Some(2)));
+
+    // disabled: neither is loaded; enabled again: both are
+    db.editor.ext_set_enabled("fx", false).await.unwrap();
+    let (effects, abilities) = load().await;
+    assert!(effects.unwrap().is_empty() && abilities.unwrap().is_empty(), "a disabled extension's effects are not loaded");
+    db.editor.ext_set_enabled("fx", true).await.unwrap();
+    let (effects, abilities) = load().await;
+    assert_eq!((effects.unwrap().len(), abilities.unwrap().len()), (1, 1));
+
+    // an effect of a type this server does not know (a newer data editor wrote it), and one whose item is gone, stop the load
+    let table = format!("{content}.ext_item_effects");
+    run(&db.pool, format!("UPDATE {table} SET effect = '{{\"type\": \"teleport\", \"map\": 1}}'")).await;
+    let message = format!("{:#}", load().await.0.unwrap_err());
+    assert!(message.contains("extension fx: item 100/212: effect") && message.contains("unknown type \"teleport\""), "{message}");
+    run(&db.pool, format!("UPDATE {table} SET effect = '{{\"type\": \"level_up\", \"levels\": 1}}'")).await;
+    let none = ItemDefs::new([]);
+    let message = format!("{:#}", game_server::pg::load_item_effects_in(&db.pool, &none, content).await.unwrap_err());
+    assert!(message.contains("extension fx: item 100/212") && message.contains("not in defs.items"), "{message}");
+    // an effect that no longer suits its row is skipped (an edit changed the item's type)
+    let lapisia = ItemDefs::new([ItemDef { item_id: 100212, item_type: 95, type_id: 212, ..Default::default() }]);
+    run(&db.pool, format!("UPDATE {table} SET item_id = 95212")).await;
+    assert!(game_server::pg::load_item_effects_in(&db.pool, &lapisia, content).await.unwrap().is_empty());
+    // a skill row that is not loaded stops the abilities
+    let empty = SkillDefs::new([]);
+    let message = format!("{:#}", game_server::pg::load_skill_abilities_in(&db.pool, &empty, content).await.unwrap_err());
+    assert!(message.contains("extension fx: skill 200/1") && message.contains("not in defs.skills"), "{message}");
+    db.drop().await;
+}

@@ -294,6 +294,7 @@ pub fn data_with(gambling: bool) -> GameData {
         status,
         live: Live { mobs, drops }.shared(),
         skills,
+        effects: Default::default(),
         quests,
         kill_grades: Default::default(),
         products: products(),
