@@ -31,8 +31,10 @@ it in the server spec it names.
     The enchant formula `0x4c4920` (factor 1/3 at `0x6ac568`) gives 0, 7, 14, 21, 31 ... 311 for steps 0 to 20, the original patch's
     `ItemEnchant.ini` attack row; it is called by the character window (`0x4f48f4`) and by the weapon tooltip (`0x4a0cb0`), for
     enchant values 1 to 50. The armour tooltip computes `5 × (value − 50)` at `0x4a2830` and prints it with message 485 "Absorption".
-    No item line shows a block; messages 402 and 403 ("Succeeded in blocking", "Failed to block") are the friends block list's (used
-    next to the block-memo handler `0x555980`). What it changes: nothing on the server; `docs/plans/enchant-table.md` relies on the
+    No item line shows a block; messages 402 and 403 ("Succeeded in blocking", "Failed to block") are the friends block list's: the
+    only code that prints them is `0x5559b0`, the handler after the block memo's (`0x555980`) in the `22xx` table at `0x6a6074`, the
+    `0x220E` answer of `docs/client/client-actions.md` (rechecked 2026-11-05, with the formula reproduced at every step and message 485
+    read from `sysmsg-uni.txt`; the other pushes of 0x192 are window coordinates). What it changes: nothing on the server; `docs/plans/enchant-table.md` relies on the
     client using the file's values. Suggested home: `docs/client/research-balance.md`, "The character window".
 25. **A usable item with `special` 0, no skill link and no HP, SP or MP** (asked 2026-11-05 by `docs/plans/ext-3-effects.md` section 8, entry
     24 there; numbered 25 here because 24 was taken meanwhile). The level stone's record (100/215 to 217, copies of 100/108's use and

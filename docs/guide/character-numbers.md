@@ -337,7 +337,8 @@ So the window is right for a fresh, unworn set without mastery skills or the fac
 for a worn item). Source: [Character window](../client/research-balance.md), "The character window" (US `game.exe`). The enchant lines
 were checked again in `game.exe` for this guide: the formula at 0x4c4920 (its factor 1/3 at 0x6ac568) gives 0, 7, 14, 21, 31 ... 311 for
 steps 0 to 20; the window calls it at 0x4f48f4 and the weapon tooltip at 0x4a0cb0 for enchant values 1 to 50; the armour tooltip
-computes 5 × (value − 50) at 0x4a2830 and prints it with message 485, "Absorption".
+computes 5 × (value − 50) at 0x4a2830 and prints it with message 485, "Absorption". The only "block" messages, 402 and 403, are printed
+by the friends block list's answer (0x5559b0).
 
 ## 13. Worked example A: a level-60 ultimate fighter
 
