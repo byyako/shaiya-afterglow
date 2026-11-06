@@ -103,6 +103,7 @@ pub enum Point {
     PvpKills,
     PvpDeaths,
     Enchant,
+    ItemUse,
 }
 
 impl Point {
@@ -116,6 +117,7 @@ impl Point {
             Point::PvpKills => "pvp_kills",
             Point::PvpDeaths => "pvp_deaths",
             Point::Enchant => "enchant",
+            Point::ItemUse => "item_use",
         }
     }
 }
@@ -232,6 +234,8 @@ pub struct RuleSet {
     exp: Vec<Entry<ExpRule>>,
     gain: Vec<Entry<Gain>>,
     enchant: Vec<Entry<EnchantRule>>,
+    /// The `deny item_use` rules: the items each covers, `None` for every item (section 6).
+    item_use: Vec<Entry<Option<Vec<(u8, u8, u8)>>>>,
 }
 
 impl std::fmt::Debug for RuleSet {
@@ -274,6 +278,7 @@ impl RuleSet {
                 Kind::CrossFactionTrade => set.trade_grant.push(Entry { meta: m, scope, v: () }),
                 Kind::Deny(Point::PersonalShop) => set.shop.push(Entry { meta: m, scope, v: () }),
                 Kind::Deny(Point::TradeChat) => set.trade_chat.push(Entry { meta: m, scope, v: () }),
+                Kind::DenyItemUse(items) => set.item_use.push(Entry { meta: m, scope, v: items }),
                 Kind::Deny(other) => unreachable!("{other:?} is not a point a deny rule can name"),
                 Kind::PvpGain { exp, kills, deaths } => set.gain.push(Entry { meta: m, scope, v: Gain { exp, kills, deaths } }),
                 Kind::Exp { factor, sources } => set.exp.push(Entry { meta: m, scope, v: ExpRule { factor, sources } }),
@@ -357,6 +362,21 @@ impl RuleSet {
             other => unreachable!("{other:?} is not a one-player refusal"),
         };
         let e = list.iter().find(|e| e.scope.one(map, who))?;
+        e.meta.hit();
+        Some(e.meta.refusal())
+    }
+
+    /// Point 9 (`docs/plans/ext-3-effects.md` section 6): the first `deny item_use` rule in scope for the user that covers the item
+    /// (`item_type`, `type_id`); a rule without `items` covers every item. Quest items, a Lapisia in an enchant and a rune in a
+    /// recreation are not asked.
+    pub fn item_use(&self, map: u16, who: &Who, item_type: u8, type_id: u8) -> Option<Refusal> {
+        if self.item_use.is_empty() {
+            return None;
+        }
+        let covers = |items: &Option<Vec<(u8, u8, u8)>>| {
+            items.as_ref().is_none_or(|list| list.iter().any(|&(kind, low, high)| kind == item_type && (low..=high).contains(&type_id)))
+        };
+        let e = self.item_use.iter().find(|e| covers(&e.v) && e.scope.one(map, who))?;
         e.meta.hit();
         Some(e.meta.refusal())
     }

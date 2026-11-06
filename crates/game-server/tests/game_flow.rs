@@ -5277,7 +5277,12 @@ async fn with_stones(
 
 /// Uses the item at bag 1 slot 2 and returns what the server sent before it answered a motion.
 async fn use_stone(client: &mut Client, id: u32) -> Vec<Vec<u8>> {
-    client.write(shaiya_proto::encode(it::OP_USE, &[1, 2])).await;
+    use_slot(client, id, [1, 2]).await
+}
+
+/// Uses the item at (bag, slot) and returns what the server sent before it answered a motion.
+async fn use_slot(client: &mut Client, id: u32, place: [u8; 2]) -> Vec<Vec<u8>> {
+    client.write(shaiya_proto::encode(it::OP_USE, &place)).await;
     client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
     let mut seen = Vec::new();
     loop {
@@ -5361,6 +5366,30 @@ async fn a_stone_whose_extension_is_disabled_is_refused_and_kept() {
     let seen = use_stone(&mut client, id).await;
     assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen).is_empty(), "{seen:x?}");
     assert_eq!((stones_left(&backend, id), backend.play(id).unwrap().level), (Some(1), 10));
+}
+
+/// `docs/plans/ext-3-effects.md` section 6: a `deny item_use` rule refuses after the core's checks and before the reuse group.
+#[tokio::test]
+async fn a_rule_refuses_an_item_use_before_the_reuse_time_is_taken() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    let mut client = Client::connect(addr).await;
+    let id = enter_world(&mut client, 7, [5; 16], true).await;
+    // On the player's map: refused, with the rule's text, and the stack is whole.
+    put_rules(&ctx, &[("no-potions", serde_json::json!({ "type": "deny", "point": "item_use", "items": ["25/1"], "maps": [1], "message": "No potions here." }))]);
+    let seen = use_slot(&mut client, id, [1, 0]).await;
+    assert!(seen.contains(&it::use_failed(id)) && !seen.contains(&it::used(id, 1, 0, 25, 1, 9)), "{seen:x?}");
+    assert_eq!(whisper_texts(&seen), ["No potions here."]);
+    assert_eq!(backend.stored(id).unwrap().1.iter().find(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| i.count), Some(10));
+    // The same potion in a rule for another map, or another item in this map's rule: used. A refusal took no reuse time, or the second
+    // use within the group's 15 seconds would fail here.
+    put_rules(&ctx, &[("elsewhere", serde_json::json!({ "type": "deny", "point": "item_use", "items": ["25/1"], "maps": [2] }))]);
+    let seen = use_slot(&mut client, id, [1, 0]).await;
+    assert!(seen.contains(&it::used(id, 1, 0, 25, 1, 9)) && whisper_texts(&seen).is_empty(), "{seen:x?}");
+    put_rules(&ctx, &[("other-item", serde_json::json!({ "type": "deny", "point": "item_use", "items": ["100"], "maps": [1] }))]);
+    let seen = use_slot(&mut client, id, [1, 0]).await;
+    assert!(seen.contains(&it::use_failed(id)), "the group's 15 seconds run from the use that worked: {seen:x?}");
+    assert!(whisper_texts(&seen).is_empty(), "the rule does not refuse a potion");
 }
 
 #[tokio::test]

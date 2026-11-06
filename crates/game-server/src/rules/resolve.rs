@@ -257,6 +257,14 @@ pub const EXAMPLE: &str = r#"# The rules (docs/server/rules.md): named, scoped a
 # days = [1, 2, 3, 4, 5]
 # hours = "18-22"
 # message = "No fighting here in the evening."
+#
+# Level stones do not work on the PvP maps.
+# [rules.no-level-stones-in-pvp]
+# type = "deny"
+# point = "item_use"
+# items = ["100/215-217"]
+# maps = [2, 3, 4]
+# message = "Level stones do not work here."
 "#;
 
 /// A JSON value as inline TOML.

@@ -44,6 +44,7 @@ fn an_empty_set_answers_allow_and_one_at_every_point() {
     assert_eq!(none.pvp_kills(1, &a).value, 1);
     assert!(none.pvp_deaths(1, &a));
     assert_eq!(none.enchant_jump(1, &a, false, 999_999).value, 1);
+    assert!(none.item_use(1, &a, 100, 215).is_none());
     assert!(none.is_empty() && none.list().is_empty());
 }
 
@@ -115,6 +116,28 @@ fn the_one_player_refusals() {
     let silent = s.denied(Point::TradeChat, 1, &a).unwrap();
     assert!(silent.text.is_none() && &*silent.name == "chat", "message \"\" is silent");
     assert!(s.denied(Point::TradeChat, 1, &p(10, 0)).is_none());
+}
+
+#[test]
+fn deny_item_use_covers_the_items_it_names_in_its_scope() {
+    let s = set(&[
+        ("stones", json!({ "type": "deny", "point": "item_use", "items": ["100/215-217", "25/3", "95"], "maps": [2, 3], "message": "Level stones do not work here." })),
+        ("novices", json!({ "type": "deny", "point": "item_use", "level": "1-9", "maps": [5] })),
+    ]);
+    let a = p(30, 0);
+    let refusal = s.item_use(2, &a, 100, 216).expect("a range of type ids");
+    assert_eq!((&*refusal.name, refusal.text.as_deref()), ("stones", Some("Level stones do not work here.")));
+    assert!(s.item_use(2, &a, 100, 215).is_some() && s.item_use(2, &a, 100, 217).is_some(), "both ends");
+    assert!(s.item_use(2, &a, 100, 214).is_none() && s.item_use(2, &a, 100, 218).is_none(), "just outside");
+    assert!(s.item_use(3, &a, 25, 3).is_some() && s.item_use(3, &a, 25, 4).is_none(), "one item");
+    assert!(s.item_use(3, &a, 95, 1).is_some() && s.item_use(3, &a, 95, 255).is_some() && s.item_use(3, &a, 96, 1).is_none(), "a whole type");
+    assert!(s.item_use(1, &a, 100, 216).is_none(), "another map");
+    // Without `items` every item is covered, within the scope.
+    assert!(s.item_use(5, &p(5, 0), 25, 1).is_some() && s.item_use(5, &p(5, 0), 100, 48).is_some());
+    assert!(s.item_use(5, &p(30, 0), 25, 1).is_none() && s.item_use(6, &p(5, 0), 25, 1).is_none());
+    assert_eq!(s.item_use(5, &p(5, 0), 25, 1).unwrap().text.as_deref(), Some("You cannot use that here."), "the point's default text");
+    let hits: Vec<u64> = s.list().iter().map(|l| l.hits).collect();
+    assert_eq!(hits.iter().sum::<u64>(), 9, "a hit for every refusal and none for a pass: {hits:?}");
 }
 
 #[test]

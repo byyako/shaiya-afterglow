@@ -1213,12 +1213,12 @@ message = \"Too far apart.\"
     fn the_examples_rules_are_valid_when_uncommented() {
         let rules_part = &example()[example().find("# [rules]\n").unwrap()..];
         let uncommented: String =
-            rules_part.lines().skip(1).filter(|l| l.starts_with("# [rules.") || l.starts_with("# type") || l.starts_with("# maps") || l.starts_with("# exp") || l.starts_with("# kills") || l.starts_with("# deaths") || l.starts_with("# gap") || l.starts_with("# jumps") || l.starts_with("# point") || l.starts_with("# days") || l.starts_with("# hours") || l.starts_with("# message")).map(|l| format!("{}\n", &l[2..])).collect();
+            rules_part.lines().skip(1).filter(|l| l.starts_with("# [rules.") || l.starts_with("# type") || l.starts_with("# maps") || l.starts_with("# exp") || l.starts_with("# kills") || l.starts_with("# deaths") || l.starts_with("# gap") || l.starts_with("# jumps") || l.starts_with("# items") || l.starts_with("# point") || l.starts_with("# days") || l.starts_with("# hours") || l.starts_with("# message")).map(|l| format!("{}\n", &l[2..])).collect();
         let layer = read_file("example", &uncommented).unwrap();
-        assert_eq!(layer.rules.len(), 4);
+        assert_eq!(layer.rules.len(), 5);
         let (config, _) = resolved(&Sources::default()).unwrap();
         let sources = RuleSources { file: Some(crate::rules::RuleFile { path: "example".into(), rules: layer.rules }), ..RuleSources::default() };
-        assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 5, "the four and the trade-chat level's");
+        assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 6, "the five and the trade-chat level's");
     }
 
     #[test]

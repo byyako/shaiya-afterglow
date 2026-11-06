@@ -33,6 +33,8 @@ impl Items {
 #[derive(Clone, Debug)]
 pub(super) enum Kind {
     Deny(Point),
+    /// `deny` at `item_use` with its `items`: `(type, first type id, last type id)`, sorted; `None` for every item.
+    DenyItemUse(Option<Vec<(u8, u8, u8)>>),
     LevelGap(u16),
     CrossFactionTrade,
     PvpGain { exp: f64, kills: u32, deaths: bool },
@@ -43,7 +45,7 @@ pub(super) enum Kind {
 impl Kind {
     pub fn type_name(&self) -> &'static str {
         match self {
-            Kind::Deny(_) => "deny",
+            Kind::Deny(_) | Kind::DenyItemUse(_) => "deny",
             Kind::LevelGap(_) => "level_gap",
             Kind::CrossFactionTrade => "cross_faction_trade",
             Kind::PvpGain { .. } => "pvp_gain",
@@ -72,7 +74,7 @@ pub(super) enum Parsed {
 /// The keys that belong to one type or another, to say "not a key of this type" instead of only "unknown".
 const OWN_KEYS: &[&str] = &["point", "gap", "exp", "kills", "deaths", "factor", "sources", "jumps", "items", "message"];
 
-const DENY_POINTS: &str = "\"attack\", \"trade\", \"personal_shop\" or \"trade_chat\"";
+const DENY_POINTS: &str = "\"attack\", \"trade\", \"personal_shop\", \"trade_chat\" or \"item_use\"";
 
 fn default_text(kind: &Kind) -> Option<&'static str> {
     Some(match kind {
@@ -81,6 +83,7 @@ fn default_text(kind: &Kind) -> Option<&'static str> {
         Kind::Deny(Point::Trade) => "Trading is not allowed here.",
         Kind::Deny(Point::PersonalShop) => "A personal shop cannot be opened here.",
         Kind::Deny(Point::TradeChat) => "Trade chat is not allowed here.",
+        Kind::DenyItemUse(_) => "You cannot use that here.",
         _ => return None,
     })
 }
@@ -131,6 +134,7 @@ fn point_of(name: &str) -> Option<Point> {
         "trade" => Point::Trade,
         "personal_shop" => Point::PersonalShop,
         "trade_chat" => Point::TradeChat,
+        "item_use" => Point::ItemUse,
         _ => return None,
     })
 }
@@ -178,6 +182,38 @@ fn take_jumps(obj: &mut Map<String, Value>) -> Result<Vec<(u8, u32)>, RuleError>
     parse_jumps(&value).map_err(|msg| key_err("jumps", msg))
 }
 
+/// The `items` of a `deny item_use` rule (`docs/plans/ext-3-effects.md` section 6): a list of `"type/type_id"`, `"type/low-high"` (a
+/// range of type ids) and `"type"` (every item of the type), types and type ids 1 to 255. `None` when the key is not there (every item).
+fn take_item_list(obj: &mut Map<String, Value>) -> Result<Option<Vec<(u8, u8, u8)>>, RuleError> {
+    let Some(value) = obj.remove("items") else { return Ok(None) };
+    let wanted = "\"type\", \"type/type_id\" or \"type/low-high\"";
+    let Value::Array(list) = value else { return Err(key_err("items", format!("{value} is not a list of {wanted}"))) };
+    if list.is_empty() {
+        return Err(key_err("items", "an empty list matches nothing"));
+    }
+    let mut out = Vec::new();
+    for entry in &list {
+        let text = entry.as_str().ok_or_else(|| key_err("items", format!("{entry} is not {wanted}")))?;
+        let number = |part: &str| -> Result<u8, RuleError> {
+            part.trim().parse::<u8>().ok().filter(|n| *n >= 1).ok_or_else(|| key_err("items", format!("{text:?}: {part:?} is not 1 to 255")))
+        };
+        let (kind, ids) = match text.split_once('/') {
+            None => (number(text)?, (1, 255)),
+            Some((kind, ids)) => match ids.split_once('-') {
+                None => (number(kind)?, (number(ids)?, number(ids)?)),
+                Some((low, high)) => (number(kind)?, (number(low)?, number(high)?)),
+            },
+        };
+        if ids.0 > ids.1 {
+            return Err(key_err("items", format!("{text:?}: {} is above {}", ids.0, ids.1)));
+        }
+        out.push((kind, ids.0, ids.1));
+    }
+    out.sort_unstable();
+    out.dedup();
+    Ok(Some(out))
+}
+
 /// Parses a rule (section 4.1). `Parsed::TurnOff` for `{ enabled = false }` alone.
 pub(super) fn parse(value: &Value) -> Result<Parsed, RuleError> {
     let Value::Object(map) = value else { return Err(RuleError::rule("a rule is a table")) };
@@ -197,7 +233,8 @@ pub(super) fn parse(value: &Value) -> Result<Parsed, RuleError> {
                 Some(other) => return Err(key_err("point", format!("{other} is not {DENY_POINTS}"))),
             };
             let who = matches!(point, Point::Attack | Point::Trade).then_some(WhoMode::Either);
-            (scope::parse(&mut obj, who, true)?, Kind::Deny(point), take_message(&mut obj)?)
+            let kind = if point == Point::ItemUse { Kind::DenyItemUse(take_item_list(&mut obj)?) } else { Kind::Deny(point) };
+            (scope::parse(&mut obj, who, true)?, kind, take_message(&mut obj)?)
         }
         "level_gap" => {
             let Some(gap) = take_whole(&mut obj, "gap", 1, 255)? else { return Err(RuleError::rule("a level_gap rule needs a gap, 1 to 255")) };
@@ -233,7 +270,13 @@ pub(super) fn parse(value: &Value) -> Result<Parsed, RuleError> {
         other => return Err(key_err("type", format!("unknown type {other:?}; the types are {}", TYPES.join(", ")))),
     };
     if let Some(key) = obj.keys().next() {
-        let note = if OWN_KEYS.contains(&key.as_str()) { format!(" (not a key of a {ty} rule)") } else { String::new() };
+        let note = if key == "items" && ty == "deny" {
+            " (only a deny rule with point = \"item_use\" takes items)".to_owned()
+        } else if OWN_KEYS.contains(&key.as_str()) {
+            format!(" (not a key of a {ty} rule)")
+        } else {
+            String::new()
+        };
         return Err(RuleError { msg: format!("unknown key {key:?}{note}"), ..RuleError::unknown(key) });
     }
     let kind_text = default_text(&kind);
@@ -285,6 +328,32 @@ mod tests {
         assert_eq!((jumps, items), (vec![(1, 70), (2, 20), (3, 10)], Items::Both));
         let Kind::Enchant { items, .. } = draft(json!({ "type": "enchant", "jumps": [[2, 1]], "items": "armour" })).kind else { panic!() };
         assert_eq!(items, Items::Armour);
+    }
+
+    #[test]
+    fn deny_item_use_takes_items_and_nothing_else_does() {
+        let Kind::DenyItemUse(items) = draft(json!({ "type": "deny", "point": "item_use" })).kind else { panic!() };
+        assert_eq!(items, None, "every item");
+        let d = draft(json!({ "type": "deny", "point": "item_use", "items": ["100/217", "100/215-216", "25", "100/215-216", " 7 / 3 "], "maps": [2] }));
+        let Kind::DenyItemUse(items) = d.kind else { panic!() };
+        assert_eq!(items, Some(vec![(7, 3, 3), (25, 1, 255), (100, 215, 216), (100, 217, 217)]), "sorted, a repeat once, a type is all its ids");
+        assert_eq!(d.text.as_deref(), Some("You cannot use that here."));
+        assert!(error(json!({ "type": "deny", "point": "item_use", "items": [] })).starts_with("items: an empty list"));
+        assert!(error(json!({ "type": "deny", "point": "item_use", "items": "100/215" })).starts_with("items: \"100/215\" is not a list"));
+        assert!(error(json!({ "type": "deny", "point": "item_use", "items": [215] })).starts_with("items: 215 is not \"type\""));
+        for bad in ["0", "256", "x", "100/0", "100/256", "100/216-215", "100/a-b", "100/1-2-3", "/5", "100/"] {
+            assert!(error(json!({ "type": "deny", "point": "item_use", "items": [bad] })).starts_with("items: "), "{bad:?}");
+        }
+        assert!(error(json!({ "type": "deny", "point": "item_use", "items": ["100/216-215"] })).contains("216 is above 215"));
+        // `items` belongs to deny item_use and the enchant rule (with its own meaning), and to no other deny.
+        let e = parse(&json!({ "type": "deny", "point": "attack", "items": ["100"] })).unwrap_err();
+        assert!(e.msg.starts_with("unknown key \"items\"") && e.msg.contains("only a deny rule with point = \"item_use\""), "{}", e.msg);
+        assert!(error(json!({ "type": "level_gap", "gap": 3, "items": ["100"] })).contains("not a key of a level_gap rule"));
+        assert!(error(json!({ "type": "enchant", "jumps": [[2, 1]], "items": ["100"] })).starts_with("items: "), "the enchant rule's own key");
+        // A scope and a silent message work as at the other points.
+        assert!(draft(json!({ "type": "deny", "point": "item_use", "message": "" })).text.is_none());
+        assert!(error(json!({ "type": "deny", "point": "item_use", "who": "both" })).contains("unknown key \"who\""));
+        assert!(error(json!({ "type": "deny", "point": "chat" })).contains("\"item_use\""), "the point list names it");
     }
 
     #[test]

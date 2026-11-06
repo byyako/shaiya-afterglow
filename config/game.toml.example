@@ -165,6 +165,14 @@
 # days = [1, 2, 3, 4, 5]
 # hours = "18-22"
 # message = "No fighting here in the evening."
+#
+# Level stones do not work on the PvP maps.
+# [rules.no-level-stones-in-pvp]
+# type = "deny"
+# point = "item_use"
+# items = ["100/215-217"]
+# maps = [2, 3, 4]
+# message = "Level stones do not work here."
 
 # An enabled extension's options (its README lists them; `game-server config` shows each with where its value comes from):
 # [ext.kill-streak]

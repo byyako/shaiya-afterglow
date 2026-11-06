@@ -109,11 +109,18 @@ pub(super) async fn use_item<S: Backend>(
         tracing::debug!(id, item = def.item_id, "move by item refused: right after a skill");
         return conn.send(it::use_failed(id)).await;
     }
+    // The rules' `item_use` point (`docs/plans/ext-3-effects.md` section 6) after the core's checks and before the reuse group, so a
+    // refusal leaves the reuse time alone; a rule's refusal is final.
+    let country = player.faction.map_or(0, |f| f.country);
+    if let Some(refusal) = ctx.zones.rules().item_use(state.map, &rules_who(character, country), def.item_type, def.type_id) {
+        tracing::debug!(id, map = state.map, point = "item_use", rule = &*refusal.name, item = def.item_id, "refused by a rule");
+        super::refused::tell_refused(conn, state, &refusal).await?;
+        return conn.send(it::use_failed(id)).await;
+    }
     let Some(armed) = state.reuse.start(def.reuse_group, now) else {
         tracing::debug!(id, item = def.item_id, group = def.reuse_group, "item use refused: reuse time");
         return conn.send(it::use_failed(id)).await;
     };
-    let country = player.faction.map_or(0, |f| f.country);
     // The script that took the item over answers: "use" (one used up), "keep" (done, nothing used up), false (refused) or nothing
     // (the core's own use). The connection's own task, no lock held (section 4.3).
     let scripted = if scripted_item {
