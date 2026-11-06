@@ -72,11 +72,21 @@ def decide(part, files, live_schema, reset=False, adopt=False):
         return "import"
     if record:
         differing = sorted(name for name in set(files) | set(record["files"]) if files.get(name) != record["files"].get(name))
+        # A file the import never read (one a later version reads, such as ItemEnchant.ini, or one put there since) changes nothing
+        # until a re-import: the copy stays as recorded, and the run says how to take the file in.
+        new = [name for name in differing if name not in record["files"]]
+        if new and len(new) == len(differing):
+            print(f"{part}: {', '.join(new)} not read at the import of {record['imported_at']} (read since a later version, or added "
+                  f"since): the imported copy is kept as it is; tools/setup.sh --reset (or this importer with --reset) takes it in")
+            differing = []
+            same = "with the files it read"
+        else:
+            same = "from the same files"
         if differing:
             shown = ", ".join(differing[:8]) + (f" and {len(differing) - 8} more" if len(differing) > 8 else "")
             sys.exit(f"{part} was imported on {record['imported_at']} from {record['source']}; these files differ: {shown}. "
                      f"tools/setup.sh --reset (or this importer with --reset) re-imports and rebuilds (docs/plans/ext-1-foundation.md 3.2)")
-        print(f"{part}: already imported on {record['imported_at']} from the same files; nothing to do")
+        print(f"{part}: already imported on {record['imported_at']} {same}; nothing to do")
         if live_schema and record["due"]:
             print(f"{part}: the rebuild after the import did not finish: running it")
             rebuild(part)

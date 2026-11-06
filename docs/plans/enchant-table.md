@@ -1,6 +1,6 @@
 # The enchant tables from `ItemEnchant.ini`: spec and build plan
 
-**Decided by the maintainer, 2026-11-05: the server follows the original.** The enchant success rates and the attack and absorption each
+**Built 2026-11-06** (the section "Built" at the end says how). **Decided by the maintainer, 2026-11-05: the server follows the original.** The enchant success rates and the attack and absorption each
 step adds come from the operator's `Data/ItemEnchant.ini`, as the original loads them, not from the tables built into `ps_game.exe`.
 Found while writing the player guide (`docs/plans/player-guide.md`, gap G2).
 
@@ -70,3 +70,26 @@ Not in scope: an operator setting to choose the built-in tables (the operator ed
 
 **Done when**: a fresh setup imports the patch file's 21 rows, the server enchants with its rates and add values, a server without the
 file behaves as today, the tests and the model agree, and the live test is listed.
+
+## Built (2026-11-06)
+
+- **Import**: `tools/world/import.py` `read_item_enchant` (with `read_profile_ints`: names in any case, the first section and key of a
+  name, `atol` of the value) into `world.item_enchant` (`db/world/schema.sql`, steps 0 to 20, the values at least 0); the summary line
+  says which tables the server will use. A world imported before the table existed: migration 0035 adds it, empty, to the live `world`
+  only (one added to `original_world` would be a table the import did not record), and `content_import.decide` reports a file the
+  record never read instead of refusing the run, so `tools/setup.sh` re-runs as before; `--reset` takes the file in.
+- **Load and use**: `pg::load_item_enchant` (no rows: `None`, the built-in tables; other counts, a repeated or out-of-range step, a
+  negative value: a start error naming the table) → `lapis::EnchantTable`, carried by `ItemDefs` (`with_enchant`, `enchant()`), so
+  `enchant_with` and `combat::gear` (via `enchant_bonus(name, table)`) read it with no new argument; a Lapisia's `enchant` effect keeps
+  its own rate. The start log names the tables in force.
+- **Model**: `formulas.EnchantTable`, `ItemDefs(..., enchant)`, `data.enchant()` from `world.item_enchant`, `content.enchant_rows` from
+  the table; `1-formulas.md` section 1 point 7 and section 4.9 marked as the built-in tables.
+- **Tests**: `lapis.rs` `enchant_tables_from_the_file` and `the_enchant_roll_uses_the_table_in_force` (totals, not 7 × the step; step 0;
+  rate 0 never succeeds; 600 succeeds below 599; the effect's rate first; 0, 20 and repeated rows); `tests/postgres.rs`
+  `enchant_tables_load` (the rows to a table, and the dev table's 0 or 21 rows); `tools/world/test_import.py` (the patch layout with
+  CP949 comments and tabs, case, a second section, the leading integer, no file, refused values; `decide` with a never-read file, a
+  changed one, a missing one); `tools/balance/test_formulas.py` `test_enchant_tables_from_the_file`.
+- **Dev box**: the world re-imported with `--reset` from the patch's `PS_Game/Data` (21 rows; `content check` clean before and after).
+- **Docs**: `docs/original/lapis.md` section 11, `docs/server/deviations.md` lapis 6 (now only the values the original would wrap), the
+  guide's Shaiya Afterglow note, the CHANGELOG, the README's re-run line, live-test section 62.
+

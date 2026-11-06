@@ -1066,6 +1066,28 @@ async fn quests_are_started_counted_ended_and_timed() {
 }
 
 #[tokio::test]
+async fn enchant_tables_load() {
+    // The rows as the loader turns them into a table (docs/plans/enchant-table.md): none, 21, anything else refused.
+    assert_eq!(pg::enchant_table(&[]).unwrap(), None, "no rows: the caller keeps the built-in tables");
+    let rows: Vec<(i16, i32, i32, i16, i16)> = (0..21).map(|s| (s, 900_000 - i32::from(s), 990_000, 7 * s, 5 * s)).collect();
+    let table = pg::enchant_table(&rows).unwrap().expect("21 rows");
+    assert_eq!((table.rate(0, false), table.add(20, false), table.add(20, true)), (900_000, 140, 100));
+    assert!(pg::enchant_table(&rows[..20]).is_err(), "20 rows");
+    let mut negative = rows.clone();
+    negative[3].4 = -1;
+    assert!(pg::enchant_table(&negative).is_err(), "a negative value");
+    let Some(db) = TestDb::create().await else { return };
+    // `world` is imported separately (tools/world/import.py); migration 0035 adds the table to a `world` built before it.
+    let present: bool = sqlx::query_scalar("SELECT to_regclass('world.item_enchant') IS NOT NULL").fetch_one(&db.pool).await.unwrap();
+    if present {
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM world.item_enchant").fetch_one(&db.pool).await.unwrap();
+        let loaded = pg::load_item_enchant(&db.pool).await.unwrap();
+        assert_eq!(loaded.is_some(), count == 21, "{count} rows");
+    }
+    db.drop().await;
+}
+
+#[tokio::test]
 async fn world_and_item_definitions_load() {
     let Some(db) = TestDb::create().await else { return };
     // `world` and `defs` are imported separately (tools/world, tools/defs); skip if this database does not have them.

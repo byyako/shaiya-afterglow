@@ -47,8 +47,8 @@ A "Player guide" tab on the docs site, decided with the maintainer on 2026-11-05
 three pages on the player stat system (a character's numbers, hitting and being hit, elements, resistances and defences) with every
 formula, its source note and five worked examples checked with `tools/balance/`. Gaps G1 to G8 are settled (the plan's Built section).
 **Next from it:** Shaiya Afterglow's enchant values are the built-in tables, while the original loads `Data/ItemEnchant.ini` (rates and
-attack per step). Decided 2026-11-05: follow the original; the spec is `docs/plans/enchant-table.md` (import, load, use, the model,
-tests, docs), not built yet.
+attack per step). Decided 2026-11-05: follow the original; `docs/plans/enchant-table.md` (import, load, use, the model, tests, docs)
+built 2026-11-06; its live test is section 62 of the checklist.
 
 ## Testing
 

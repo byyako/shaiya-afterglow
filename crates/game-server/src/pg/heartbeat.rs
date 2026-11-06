@@ -1095,6 +1095,39 @@ struct SkillDefRow {
     changelevel: i16,
 }
 
+/// The enchant tables of `world.item_enchant`, the imported `Data/ItemEnchant.ini` (`docs/plans/enchant-table.md`): `None` without rows
+/// (the caller keeps the built-in tables, as the original without the file); any other count than 21, or a step outside 0 to 20, is an
+/// error naming the table.
+pub async fn load_item_enchant(pool: &PgPool) -> Result<Option<crate::lapis::EnchantTable>> {
+    let rows: Vec<(i16, i32, i32, i16, i16)> =
+        sqlx::query_as("SELECT step, weapon_rate, armour_rate, weapon_add, armour_add FROM world.item_enchant ORDER BY step")
+            .fetch_all(pool)
+            .await?;
+    enchant_table(&rows)
+}
+
+/// [`load_item_enchant`]'s rows as a table (`None` for no rows).
+pub fn enchant_table(rows: &[(i16, i32, i32, i16, i16)]) -> Result<Option<crate::lapis::EnchantTable>> {
+    use anyhow::Context as _;
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let rows = rows
+        .iter()
+        .map(|&(step, weapon_rate, armour_rate, weapon_add, armour_add)| {
+            Ok(crate::lapis::EnchantRow {
+                step: u8::try_from(step)?,
+                weapon_rate: u32::try_from(weapon_rate)?,
+                armour_rate: u32::try_from(armour_rate)?,
+                weapon_add: u16::try_from(weapon_add)?,
+                armour_add: u16::try_from(armour_add)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()
+        .context("world.item_enchant: a negative value")?;
+    crate::lapis::EnchantTable::from_rows(&rows).map(Some).map_err(|e| anyhow::anyhow!("world.item_enchant: {e}"))
+}
+
 /// The item definitions shops and equipping need (`defs.items`; ps_game.exe copies these columns as they are).
 pub async fn load_item_defs(pool: &PgPool) -> Result<ItemDefs> {
     let rows: Vec<ItemDefRow> = sqlx::query_as(

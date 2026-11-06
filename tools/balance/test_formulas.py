@@ -309,6 +309,22 @@ class Others(unittest.TestCase):
         self.assertEqual(fm.enchant_bonus(b"00000000000000000055"), (0, 25))
         self.assertEqual(fm.enchant_bonus(b"00000000000000000030"), (0, 0))
 
+    def test_enchant_tables_from_the_file(self):
+        """lapis.rs `enchant_tables_from_the_file`: a step's value is the table's total, the rates are the table's."""
+        attack = [0, 7, 14, 21, 31, 41, 51, 64, 77, 90, 106, 122, 138, 157, 176, 195, 217, 239, 261, 286, 311]
+        rates = [900000, 800000, 700000, 600000, 400000, 200000, 100000, 80000, 60000, 10000, 6000, 2000, 1000, 600] + [200] * 6 + [0]
+        table = fm.EnchantTable.from_rows([(s, rates[s], 0, attack[s], 5 * s) for s in range(21)])
+        self.assertEqual(fm.enchant_bonus(b"00000000000000000004", table), (31, 0))
+        self.assertEqual(fm.enchant_bonus(b"00000000000000000063", table), (0, 65))
+        self.assertEqual((table.rate(0, False), table.rate(14, False)), (900000, 200))
+        self.assertEqual(fm.EnchantTable.from_rows([]).rates, fm.BUILT_IN.rates, "no rows: the built-in tables")
+        with self.assertRaises(ValueError):
+            fm.EnchantTable.from_rows([(s, 0, 0, 0, 0) for s in range(20)])
+        sword = ItemDef(5, 1, quality=100, effects=(50, 0, 0, 0), craftable=True)
+        worn = [ItemUnit(5, 1, 5, quality=100, craft_name=b"00000000000000000004")]
+        self.assertEqual(fm.gear(worn, fm.ItemDefs([sword], table), fm.Passives()).attack, 50 + 31)
+        self.assertEqual(fm.gear(worn, fm.ItemDefs([sword]), fm.Passives()).attack, 50 + 28, "built in: 7 a step")
+
     def test_percent(self):
         self.assertEqual(fm.percent(1000, 6), 59)
         self.assertEqual(fm.percent(1234, 5), 61)

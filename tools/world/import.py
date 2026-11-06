@@ -9,7 +9,8 @@ docs/original/item-origins.md section 5.1), KillStatus.SData (the factions' kill
 section 8), Obelisk.ini (the obelisks and their guards, and the boss groups, docs/original/obelisks.md sections 1 and 11.1), mob_ai.ini with the AI files it names
 and kr_string.DB (the scripted monsters, docs/original/scripted-mobs.md section 2), Lua/*.lua (the Lua monsters,
 docs/original/instances.md section 9), GuildHouse.ini (the guild houses, docs/original/guild-house.md section 2), the item -> quest links of NpcQuest.SData and
-SequenceItemCreate.ini (docs/original/quest-drops.md sections 1.3 and 4.1). Runs psql as tools/dbconn.py says (the PostgreSQL
+SequenceItemCreate.ini (docs/original/quest-drops.md sections 1.3 and 4.1), and ItemEnchant.ini when it is there (the enchant tables,
+docs/original/lapis.md sections 2 and 5; without it the server keeps the built-in ones). Runs psql as tools/dbconn.py says (the PostgreSQL
 container by default), like tools/defs/load_into_postgres.py. Everything is imported as it is; the game server applies the original's
 rules (which NPCs are created) when it loads the tables, so edited rows follow the same rules.
 
@@ -192,6 +193,54 @@ def read_profile(path):
             key, value = line.split("=", 1)
             current.setdefault(key.strip(), value.strip())
     return sections
+
+
+# CGameData::InitItemEnchant (0x4c7ab0): the two sections and their keys, steps 00 to 20 (docs/original/lapis.md sections 2 and 5).
+ENCHANT_SECTIONS = ("LapisianEnchantPercentRate", "LapisianEnchantAddValue")
+ENCHANT_STEPS = range(21)
+ENCHANT_ADD_MAX = 32767  # world.item_enchant's smallint; the original stores a u16
+
+
+def read_profile_ints(path):
+    """An ini file as GetPrivateProfileIntA looks keys up in it: {section: {key: text}} with section and key names in lower case (the
+    lookup ignores case), the first section and the first key of a name winning, lines starting with ; skipped, the text after the
+    first = stripped."""
+    sections, current = {}, None
+    for line in path.read_bytes().decode(ENCODING).splitlines():
+        line = line.strip()
+        if not line or line.startswith(";"):
+            continue
+        if line.startswith("[") and "]" in line:
+            name = line[1:line.index("]")].strip().lower()
+            current = sections.setdefault(name, {}) if name not in sections else None
+        elif "=" in line and current is not None:
+            key, value = line.split("=", 1)
+            current.setdefault(key.strip().lower(), value.strip())
+    return sections
+
+
+def read_item_enchant(path):
+    """Data/ItemEnchant.ini as the 21 rows of world.item_enchant (step, weapon rate, armour rate, weapon add, armour add), each value
+    the leading integer of its key and a missing key 0, as GetPrivateProfileIntA gives them; [] when the file is missing (the server
+    keeps the built-in tables, as the original does). A negative value, or an add value above 32,767, stops the import: the original
+    would wrap them (u32 rates, u16 add values)."""
+    if not path.exists():
+        return []
+    ini = read_profile_ints(path)
+    rows = []
+    for step in ENCHANT_STEPS:
+        row = [step]
+        for section in ENCHANT_SECTIONS:
+            for side in ("Weapon", "Defense"):
+                key = f"{side}Step{step:02d}"
+                text = ini.get(section.lower(), {}).get(key.lower())
+                value = atol(text) if text is not None else 0
+                limit = ENCHANT_ADD_MAX if section == "LapisianEnchantAddValue" else 2**31 - 1
+                if not 0 <= value <= limit:
+                    sys.exit(f"{path}: [{section}] {key} = {value}: must be 0 to {limit} (the original would wrap it)")
+                row.append(value)
+        rows.append(row)
+    return rows
 
 
 def read_guild_house(path):
@@ -531,6 +580,7 @@ def main():
     string_rows = read_ai_strings(data_dir / "kr_string.DB")
     lua_rows = read_mob_lua(data_dir)
     house_row, house_npc_rows, house_level_rows = read_guild_house(data_dir / "GuildHouse.ini")
+    enchant_rows = read_item_enchant(data_dir / "ItemEnchant.ini")
 
     print(f"{len(maps)} maps, {len(map_npcs)} map NPCs ({len(npc_positions)} positions), {len(areas)} monster areas "
           f"({len(area_mobs)} entries), {len(portals)} portals, {len(binds)} bind areas, {len(npc_rows)} NPCs, {len(shop_rows)} shop items, "
@@ -539,7 +589,9 @@ def main():
           f"{len(sequence_rows)} sequence groups, {len(kill_rows)} kill-count grades, "
           f"{len(obelisk_rows)} obelisks ({len(guard_rows)} guard groups), {len(boss_rows)} boss groups ({len(follower_rows)} follower "
           f"lines), {len(ai_rows)} monster AIs, {len(string_rows)} AI lines, "
-          f"{len(lua_rows)} Lua scripts, {len(house_npc_rows)} guild house NPC keys")
+          f"{len(lua_rows)} Lua scripts, {len(house_npc_rows)} guild house NPC keys, "
+          + (f"the enchant tables of ItemEnchant.ini ({len(enchant_rows)} steps)" if enchant_rows
+             else "no ItemEnchant.ini: the server will use the built-in enchant tables"))
     if dry_run:
         return
 
@@ -580,6 +632,7 @@ def main():
     copy("guild_house", ["id", "buy_money", "keep_etin", *GUILD_HOUSE_RATES], [house_row])
     copy("guild_house_npcs", ["npc_key", "keep_etin", "upgrade_etin"], house_npc_rows)
     copy("guild_house_levels", ["country", "kind", "level", "npc_type_id"], house_level_rows)
+    copy("item_enchant", ["step", "weapon_rate", "armour_rate", "weapon_add", "armour_add"], enchant_rows)
     script = ["BEGIN;", f"DROP SCHEMA IF EXISTS {FROZEN} CASCADE;",
               SCHEMA.read_text().replace("CREATE SCHEMA world;", f"CREATE SCHEMA {FROZEN};").replace("world.", f"{FROZEN}.")]
     script += [text for _, text in COPIES]

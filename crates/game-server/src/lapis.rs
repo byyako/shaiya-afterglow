@@ -57,8 +57,9 @@ pub fn weighted_jump(jumps: &[(u8, u32)], total: u64, draw: u32) -> u8 {
     1
 }
 
-/// `g_LapisianEnchantPercentRate` by step: weapon, armour, in millionths.
-const ENCHANT_RATES: [[u32; 2]; MAX_STEP as usize] = [
+/// `g_LapisianEnchantPercentRate` as built into `ps_game.exe` (0x542058), by step 0 to 19: weapon, armour, in millionths. Step 20 is 0
+/// (refused before the roll anyway).
+const BUILT_IN_RATES: [[u32; 2]; MAX_STEP as usize] = [
     [700_000, 990_000],
     [500_000, 980_000],
     [300_000, 970_000],
@@ -80,8 +81,80 @@ const ENCHANT_RATES: [[u32; 2]; MAX_STEP as usize] = [
     [1, 1],
     [1, 1],
 ];
-/// `g_LapisianEnchantAddValue` per step: weapon attack, armour absorption.
-const ENCHANT_ADD: [u16; 2] = [7, 5];
+/// `g_LapisianEnchantAddValue` as built in (0x542100): step `s` gives weapon attack `7s`, armour absorption `5s`.
+const BUILT_IN_ADD: [u16; 2] = [7, 5];
+/// Steps 0 to 20: the rows of an enchant table.
+pub const ENCHANT_STEPS: usize = MAX_STEP as usize + 1;
+
+/// The enchant tables (`docs/original/lapis.md` sections 2 and 5, `docs/plans/enchant-table.md`): by step 0 to 20, the success rate of
+/// leaving the step (millionths) and the **total** attack and absorption at the step, weapon then armour. The original reads them from
+/// `Data/ItemEnchant.ini` at start (`CGameData::InitItemEnchant`); the import puts that file in `world.item_enchant`. Without it, the
+/// tables built into `ps_game.exe` (the default).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnchantTable {
+    rates: [[u32; 2]; ENCHANT_STEPS],
+    add: [[u16; 2]; ENCHANT_STEPS],
+}
+
+impl Default for EnchantTable {
+    fn default() -> Self {
+        Self::built_in()
+    }
+}
+
+/// One row of `world.item_enchant`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EnchantRow {
+    pub step: u8,
+    pub weapon_rate: u32,
+    pub armour_rate: u32,
+    pub weapon_add: u16,
+    pub armour_add: u16,
+}
+
+impl EnchantTable {
+    /// The tables of `ps_game.exe` itself, what the original keeps when `ItemEnchant.ini` cannot be opened.
+    pub fn built_in() -> Self {
+        let mut rates = [[0; 2]; ENCHANT_STEPS];
+        rates[..BUILT_IN_RATES.len()].copy_from_slice(&BUILT_IN_RATES);
+        let add = std::array::from_fn(|s| BUILT_IN_ADD.map(|a| a * s as u16));
+        Self { rates, add }
+    }
+
+    /// A table from the rows of `world.item_enchant`: none gives the built-in tables (no file was imported), otherwise exactly one row
+    /// for each step 0 to 20 (the import writes all 21, a missing key as 0).
+    pub fn from_rows(rows: &[EnchantRow]) -> Result<Self, String> {
+        if rows.is_empty() {
+            return Ok(Self::built_in());
+        }
+        if rows.len() != ENCHANT_STEPS {
+            return Err(format!("{} rows; the import writes one for each step 0 to 20 (21), or none", rows.len()));
+        }
+        let mut seen = [false; ENCHANT_STEPS];
+        let mut table = Self { rates: [[0; 2]; ENCHANT_STEPS], add: [[0; 2]; ENCHANT_STEPS] };
+        for r in rows {
+            let step = usize::from(r.step);
+            if step >= ENCHANT_STEPS || seen[step] {
+                return Err(format!("step {}: steps are 0 to 20, each once", r.step));
+            }
+            seen[step] = true;
+            table.rates[step] = [r.weapon_rate, r.armour_rate];
+            table.add[step] = [r.weapon_add, r.armour_add];
+        }
+        Ok(table)
+    }
+
+    /// The success rate of leaving `step` (below 20), in millionths.
+    pub fn rate(&self, step: u8, armour: bool) -> u32 {
+        self.rates[usize::from(step.min(MAX_STEP))][usize::from(armour)]
+    }
+
+    /// The total attack (weapon) or absorption (armour) at `step`.
+    pub fn add(&self, step: u8, armour: bool) -> u16 {
+        self.add[usize::from(step.min(MAX_STEP))][usize::from(armour)]
+    }
+}
+
 /// What `CItem::InitCraftExpansion` gives a craftable item.
 const ZEROS: &[u8; 20] = b"00000000000000000000";
 
@@ -151,11 +224,12 @@ pub fn enchant_value(craft_name: &[u8]) -> u8 {
     }
 }
 
-/// What an enchant level adds (`CItem::CopyCraftExpassion`): `(attack, absorption)`; 1 to 20 a weapon step, 51 to 70 an armour step.
-pub fn enchant_bonus(craft_name: &[u8]) -> (i32, i32) {
+/// What an enchant level adds (`CItem::CopyCraftExpassion`): `(attack, absorption)`, the table's value at the step (a total, not per
+/// step); 0 to 20 a weapon step (0 reads step 0, nothing in the shipped tables), 51 to 70 an armour step.
+pub fn enchant_bonus(craft_name: &[u8], table: &EnchantTable) -> (i32, i32) {
     match enchant_value(craft_name) {
-        v @ 1..=MAX_STEP => (i32::from(v) * i32::from(ENCHANT_ADD[0]), 0),
-        v @ 51..=70 => (0, i32::from(v - ARMOUR_STEP) * i32::from(ENCHANT_ADD[1])),
+        v @ 0..=MAX_STEP => (i32::from(table.add(v, false)), 0),
+        v @ 51..=70 => (0, i32::from(table.add(v - ARMOUR_STEP, true))),
         _ => (0, 0),
     }
 }
@@ -624,7 +698,7 @@ pub fn enchant_with(
     Some(Enchant {
         request,
         price,
-        rate: own.map_or(ENCHANT_RATES[usize::from(step)][usize::from(armour)], |own| own.rate),
+        rate: own.map_or(defs.enchant().rate(step, armour), |own| own.rate),
         material: material.map(|_| (material_at, count.min(MAX_MATERIAL))),
         armour,
         step,
@@ -1118,9 +1192,109 @@ mod tests {
         let blank = unit(1, 0, 1, 1, 1);
         assert_eq!(&e.new_name(&blank, defs.get(1, 1).unwrap()), b"00000000000000000001", "twenty zeros first");
         assert_eq!(e.jump, 1, "one step without a rule");
-        assert_eq!(enchant_bonus(b"00000000000000000020"), (140, 0));
-        assert_eq!(enchant_bonus(b"00000000000000000055"), (0, 25));
-        assert_eq!(enchant_bonus(b"00000000000000000030"), (0, 0));
+        let built_in = EnchantTable::built_in();
+        assert_eq!(enchant_bonus(b"00000000000000000020", &built_in), (140, 0));
+        assert_eq!(enchant_bonus(b"00000000000000000055", &built_in), (0, 25));
+        assert_eq!(enchant_bonus(b"00000000000000000030", &built_in), (0, 0));
+        assert_eq!(enchant_bonus(b"00000000000000000000", &built_in), (0, 0));
+    }
+
+    /// The original patch's `Data/ItemEnchant.ini` as `world.item_enchant` holds it.
+    fn patch_table() -> EnchantTable {
+        const RATES: [[u32; 2]; ENCHANT_STEPS] = [
+            [900_000, 990_000],
+            [800_000, 980_000],
+            [700_000, 970_000],
+            [600_000, 800_000],
+            [400_000, 600_000],
+            [200_000, 400_000],
+            [100_000, 200_000],
+            [80_000, 100_000],
+            [60_000, 80_000],
+            [10_000, 60_000],
+            [6_000, 10_000],
+            [2_000, 6_000],
+            [1_000, 2_000],
+            [600, 1_000],
+            [200, 600],
+            [200, 200],
+            [200, 200],
+            [200, 200],
+            [200, 200],
+            [200, 200],
+            [0, 0],
+        ];
+        const ATTACK: [u16; ENCHANT_STEPS] = [0, 7, 14, 21, 31, 41, 51, 64, 77, 90, 106, 122, 138, 157, 176, 195, 217, 239, 261, 286, 311];
+        let rows: Vec<EnchantRow> = (0..ENCHANT_STEPS)
+            .map(|s| EnchantRow {
+                step: s as u8,
+                weapon_rate: RATES[s][0],
+                armour_rate: RATES[s][1],
+                weapon_add: ATTACK[s],
+                armour_add: 5 * s as u16,
+            })
+            .collect();
+        EnchantTable::from_rows(&rows).unwrap()
+    }
+
+    #[test]
+    fn enchant_tables_from_the_file() {
+        let file = patch_table();
+        // A step's value is the table's total at that step, not 7 × the step.
+        assert_eq!(enchant_bonus(b"00000000000000000004", &file), (31, 0));
+        assert_eq!(enchant_bonus(b"00000000000000000020", &file), (311, 0));
+        assert_eq!(enchant_bonus(b"00000000000000000063", &file), (0, 65));
+        assert_eq!(enchant_bonus(b"00000000000000000021", &file), (0, 0), "21 to 50 is no step");
+        assert_eq!((file.rate(0, false), file.rate(0, true), file.rate(14, false), file.rate(14, true)), (900_000, 990_000, 200, 600));
+        // Step 0's weapon value counts for an item without a step, as the original reads it (0 in the shipped files).
+        let mut rows: Vec<EnchantRow> = (0..ENCHANT_STEPS as u8)
+            .map(|step| EnchantRow { step, weapon_rate: 0, armour_rate: 0, weapon_add: 0, armour_add: 0 })
+            .collect();
+        rows[0].weapon_add = 9;
+        assert_eq!(enchant_bonus(b"00000000000000000000", &EnchantTable::from_rows(&rows).unwrap()), (9, 0));
+        // No rows: the built-in tables; anything but 21 steps 0 to 20, once each, is refused.
+        assert_eq!(EnchantTable::from_rows(&[]).unwrap(), EnchantTable::built_in());
+        assert!(EnchantTable::from_rows(&rows[..20]).is_err(), "20 rows");
+        rows[20].step = 3;
+        assert!(EnchantTable::from_rows(&rows).is_err(), "step 3 twice");
+        rows[20].step = 21;
+        assert!(EnchantTable::from_rows(&rows).is_err(), "step 21");
+        // The built-in tables are the binary's: 7 and 5 a step, rates down to 1 and step 20 at 0.
+        let built_in = EnchantTable::built_in();
+        assert_eq!(
+            (built_in.add(12, false), built_in.add(20, true), built_in.rate(0, false), built_in.rate(12, false)),
+            (84, 100, 700_000, 1)
+        );
+        assert_eq!(built_in.rate(20, false), 0);
+    }
+
+    #[test]
+    fn the_enchant_roll_uses_the_table_in_force() {
+        let defs = defs();
+        let mut sword = unit(1, 0, 1, 1, 1);
+        sword.craft_name = b"00000000000000000013".to_vec();
+        let inv1 = inv(&[sword, unit(1, 1, 95, 1, 1), unit(1, 2, 25, 43, 5)]);
+        let req = EnchantRequest { lapisia: (1, 1), material: (1, 2), count: 1, item: (1, 0) };
+        // Built in, step 13 of a weapon is 1 in a million: with one piece of material it never succeeds.
+        let built_in = enchant(&inv1, &defs, 3_000_000, req).unwrap();
+        assert_eq!(built_in.rate, 1);
+        assert!(!built_in.succeeds(0));
+        // The file's 600 succeeds below 599 (the material counts against the draw).
+        let file = ItemDefs::new(defs.iter().cloned()).with_enchant(patch_table());
+        let e = enchant(&inv1, &file, 3_000_000, req).unwrap();
+        assert_eq!(e.rate, 600);
+        assert!(e.succeeds(598) && !e.succeeds(599));
+        // A rate of 0 never succeeds.
+        let mut zero = patch_table();
+        zero.rates[13] = [0, 0];
+        let none = ItemDefs::new(defs.iter().cloned()).with_enchant(zero);
+        assert!(!enchant(&inv1, &none, 3_000_000, req).unwrap().succeeds(0));
+        // A Lapisia's own `enchant` effect still replaces the table's rate.
+        let own = crate::effects::ItemEffects::new([(
+            95001,
+            crate::effects::check_effect(&serde_json::json!({ "type": "enchant", "rate": 5000 })).unwrap(),
+        )]);
+        assert_eq!(enchant_with(&inv1, &file, 3_000_000, req, &own).unwrap().rate, 5000);
     }
 
     #[test]
@@ -1199,8 +1373,8 @@ mod tests {
         assert_eq!(&named(18, 3, true)[18..], "70", "the cap is step 20, written 70");
         assert_eq!(&named(19, 2, true)[18..], "70");
         // The bonus the client and the server read back follows the name.
-        assert_eq!(enchant_bonus(named(18, 3, false).as_bytes()), (140, 0));
-        assert_eq!(enchant_bonus(named(18, 3, true).as_bytes()), (0, 100));
+        assert_eq!(enchant_bonus(named(18, 3, false).as_bytes(), &EnchantTable::built_in()), (140, 0));
+        assert_eq!(enchant_bonus(named(18, 3, true).as_bytes(), &EnchantTable::built_in()), (0, 100));
     }
 
     #[test]

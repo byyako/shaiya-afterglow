@@ -395,8 +395,8 @@ The server follows the original for everything on this page, with these differen
   and the magic defence bonus always to magic defence (the original's two quirks of section 11 are fixed).
 - Spending points that would take a base stat above 32,767 is refused (the database's limit; the original would wrap at 65,536, out of
   reach in play).
-- **Its enchant values are the built-in tables** (a flat 7 attack and 5 absorption a step, the low chances), not the original's file:
-  from +4 a weapon has less attack than the original gives and than the window shows, and weapons stop at +12, armour at +14. This
-  difference was found while writing this guide; the server is to load the original's file instead (planned, not built yet).
+- **Enchanting follows the original**: the server reads the operator's `Data/ItemEnchant.ini` with the world data (the values of
+  section 6 with the original patch's file), and the built-in tables only without one. A server whose operator changed the file's attack
+  row shows players other numbers than the character window, which works its row out itself.
 
 The full list: [Deviations](../server/deviations.md).

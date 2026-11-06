@@ -90,6 +90,19 @@
 - Custom GM status levels moved to a later wave (they touch the login server and the client's privilege byte, not items).
 - Migration 0034 (`content.ext_item_effects`, `content.ext_skill_abilities`) runs at the next start. No step for an operator.
 
+**Enchant tables from `ItemEnchant.ini`** (`docs/plans/enchant-table.md`, decided 2026-11-05)
+- The enchant success rates and the attack and absorption of each step come from the operator's `Data/ItemEnchant.ini`, as the original
+  loads them, instead of the tables built into `ps_game.exe`. With the original patch's file a weapon's first step works 90 % of the time
+  (70 % before), every step to +20 can succeed (weapons stopped at +12, armour at +14), and a weapon's attack follows the file's row (7,
+  14, 21, 31 ... 311, the row the client's character window shows) instead of 7 a step. Without the file the built-in tables stay, as in
+  the original.
+- `tools/world/import.py` reads the file into `world.item_enchant` (21 rows; a missing key 0; a value the original would wrap refused);
+  the game server loads it at start and says which tables it uses. Migration 0035 adds the empty table to a `world` built before it.
+- **For a world imported before this change** (an unreleased 0.3.0 box): the importer reports `ItemEnchant.ini` as a file it never read
+  and keeps the copy; `tools/setup.sh --reset` (or `tools/world/import.py <Data> --reset`) takes it in. A 0.2.0 server takes it in with
+  its first import (step 2 below).
+- The balance model (`tools/balance/`) reads the same table; its physical PvP averages no longer run 0.5 low.
+
 **Upgrading from 0.2.0** (breaking changes; nothing is converted automatically):
 1. **Settings**: the game settings are no longer environment variables. Stop the game server, start the new one once: it refuses to start
    and prints the `config/game.toml` lines for every `GAME_…` setting it found (in `.env` too). Put them in `config/game.toml` (on a VPS:

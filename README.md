@@ -90,6 +90,8 @@ container names `PG_CONTAINER` and `MSSQL_CONTAINER` (default `shaiya-afterglow-
 
 These are the steps `tools/setup.sh` ([Quick start](#quick-start)) runs, one at a time, for doing them by hand or finding which one failed.
 `tools/setup.sh` can be run again: it skips what is imported from the same files, refuses other files until `--reset`, and keeps `config/game.toml`.
+A file the first import did not read (`ItemEnchant.ini` for a world imported before the enchant tables were built) is only reported:
+the server keeps the built-in tables until `--reset` takes the file in.
 `--sqlserver` makes step 4 use SQL Server (see there).
 
 ### 1. Clone and configure

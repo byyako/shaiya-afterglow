@@ -158,12 +158,25 @@ fn one_handed(def: &ItemDef) -> bool {
     matches!(real_type(def.item_type), 1 | 3 | 7 | 9)
 }
 
+/// The item definitions, with the enchant tables that say what an item's step is worth (`lapis::EnchantTable`, the built-in ones unless
+/// `with_enchant` gives the imported `ItemEnchant.ini`).
 #[derive(Debug, Default)]
-pub struct ItemDefs(HashMap<(u8, u8), ItemDef>);
+pub struct ItemDefs(HashMap<(u8, u8), ItemDef>, crate::lapis::EnchantTable);
 
 impl ItemDefs {
     pub fn new(defs: impl IntoIterator<Item = ItemDef>) -> Self {
-        Self(defs.into_iter().map(|d| ((d.item_type, d.type_id), d)).collect())
+        Self(defs.into_iter().map(|d| ((d.item_type, d.type_id), d)).collect(), crate::lapis::EnchantTable::built_in())
+    }
+
+    /// The same definitions with these enchant tables.
+    pub fn with_enchant(mut self, table: crate::lapis::EnchantTable) -> Self {
+        self.1 = table;
+        self
+    }
+
+    /// The enchant rates and add values in force.
+    pub fn enchant(&self) -> &crate::lapis::EnchantTable {
+        &self.1
     }
 
     /// `CGameData::GetItemInfo`: type and type id start at 1.

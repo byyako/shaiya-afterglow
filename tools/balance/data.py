@@ -33,6 +33,7 @@ QUERIES = {
     "status": """SELECT job, level, hp, sp, mp FROM defs.status_defs ORDER BY job, level""",
     "exp": """SELECT level, grow, exp FROM defs.exp_defs ORDER BY grow, level""",
     "kill_status": """SELECT seq, faction, kills, bonus_types, bonus_values FROM world.kill_status ORDER BY seq""",
+    "item_enchant": """SELECT step, weapon_rate, armour_rate, weapon_add, armour_add FROM world.item_enchant ORDER BY step""",
     "client_items": """SELECT type, typeid, name FROM client.items""",
     "client_skills": """SELECT skill_id, level, name FROM client.skills""",
     "shop_items": """SELECT DISTINCT s.item_type, s.item_type_id, s.npc_type_id FROM world.npc_shop_items s
@@ -152,7 +153,13 @@ def items() -> fm.ItemDefs:
             craft_max=max(_i(r["reqwis"]), 0), room=max(0, min(_i(r["slot"]), 255)),
             server=_i(r["server"]), req_str=_i(r["reqstr"]), reqvg=_i(r["reqvg"]), reqig=_i(r["reqig"]),
         ))
-    return fm.ItemDefs(out)
+    return fm.ItemDefs(out, enchant())
+
+
+def enchant() -> fm.EnchantTable:
+    """As `pg::load_item_enchant`: `world.item_enchant` (the imported `Data/ItemEnchant.ini`), the built-in tables without rows."""
+    return fm.EnchantTable.from_rows([tuple(_i(r[c]) for c in ("step", "weapon_rate", "armour_rate", "weapon_add", "armour_add"))
+                                      for r in rows("item_enchant")])
 
 
 @lru_cache(maxsize=None)

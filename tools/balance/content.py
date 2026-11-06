@@ -442,12 +442,13 @@ def enchant_rows() -> list:
     - `dangerous`: the Lapisia a player can get (95/1, 95/6, `reqvg` 1): a failure destroys the item, so a step is reached only by
       succeeding at every step from 0 with one item; tries `T(n) = (T(n − 1) + 1) / p(n − 1)`, items `1 / (p(0) × … × p(n − 1))`."""
     out = []
+    table = data.enchant()  # the imported ItemEnchant.ini, or the built-in tables
     safe = {0: 0.0, 1: 0.0}
     chain = {0: (0.0, 1.0), 1: (0.0, 1.0)}  # expected tries, chance of the whole chain
     for step in range(20):
         row = {"from_step": step, "to_step": step + 1}
         for side, (name, price) in enumerate((("weapon", gem_price(96)), ("armour", gem_price(40)))):
-            rate = fm.ENCHANT_RATES[step][side]
+            rate = table.rate(step, bool(side))
             p = max(rate - 1, 0) / 1_000_000
             tries, whole = chain[side]
             if p > 0:
@@ -457,7 +458,7 @@ def enchant_rows() -> list:
                 safe[side], chain[side] = float("inf"), (float("inf"), 0.0)
             st, (dt, dp) = safe[side], chain[side]
             row.update({
-                f"{name}_bonus": (step + 1) * fm.ENCHANT_ADD[side], f"{name}_rate_millionths": rate, f"{name}_chance": f"{p:.4%}",
+                f"{name}_bonus": table.bonus(step + 1, bool(side)), f"{name}_rate_millionths": rate, f"{name}_chance": f"{p:.4%}",
                 f"{name}_safe_tries": big(st) if st != float("inf") else "never",
                 f"{name}_safe_money": big(st * price) if st != float("inf") else "never",
                 f"{name}_dangerous_tries": big(dt) if dp else "never",

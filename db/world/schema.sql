@@ -381,3 +381,14 @@ CREATE TABLE world.guild_house_levels (
     npc_type_id   integer  NOT NULL,
     PRIMARY KEY (country, kind, level)
 );
+
+-- Data/ItemEnchant.ini (CGameData::InitItemEnchant, docs/original/lapis.md sections 2 and 5): by step 0 to 20, the success rate of leaving
+-- the step in millionths and the total attack (weapon) and absorption (armour) at the step. 21 rows, a key missing from the file as 0;
+-- no file, no rows: the server keeps the tables built into ps_game.exe (docs/plans/enchant-table.md).
+CREATE TABLE world.item_enchant (
+    step          smallint PRIMARY KEY CHECK (step BETWEEN 0 AND 20),
+    weapon_rate   integer  NOT NULL CHECK (weapon_rate >= 0),
+    armour_rate   integer  NOT NULL CHECK (armour_rate >= 0),
+    weapon_add    smallint NOT NULL CHECK (weapon_add >= 0),
+    armour_add    smallint NOT NULL CHECK (armour_add >= 0)
+);

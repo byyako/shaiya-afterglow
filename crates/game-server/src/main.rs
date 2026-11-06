@@ -82,7 +82,14 @@ async fn main() -> Result<()> {
         base_items: place_base_items(pg::load_base_items(&pool).await.context("loading the starting items")?),
     };
     let exp = pg::load_exp(&pool).await.context("loading the experience table")?;
-    let items = pg::load_item_defs(&pool).await.context("loading the item definitions")?;
+    let enchant = pg::load_item_enchant(&pool)
+        .await
+        .context("loading the enchant tables (re-run tools/world/import.py if world.item_enchant is missing)")?;
+    match &enchant {
+        None => tracing::info!("enchant tables: the built-in ones (no Data/ItemEnchant.ini imported into world.item_enchant)"),
+        Some(_) => tracing::info!("enchant tables: Data/ItemEnchant.ini, from world.item_enchant"),
+    }
+    let items = pg::load_item_defs(&pool).await.context("loading the item definitions")?.with_enchant(enchant.unwrap_or_default());
     let status = pg::load_status_table(&pool).await.context("loading the status table")?;
     let mut skills = pg::load_skill_defs(&pool).await.context("loading the skill definitions")?;
     // The extensions' item effects and skill abilities (`docs/plans/ext-3-effects.md` section 3.4), then the `kill_boost_skills`

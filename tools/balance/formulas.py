@@ -166,8 +166,11 @@ class ItemUnit:
 
 
 class ItemDefs:
-    def __init__(self, defs=()):
+    """`inventory::ItemDefs`, with the enchant tables in force (`ItemDefs::enchant`)."""
+
+    def __init__(self, defs=(), enchant=None):
         self.by_key = {(d.item_type, d.type_id): d for d in defs}
+        self.enchant = enchant or BUILT_IN
 
     def get(self, item_type: int, type_id: int):
         return self.by_key.get((item_type, type_id))
@@ -403,9 +406,37 @@ def with_buffs(p: Passives, b: Bonuses) -> Passives:
 
 LAPIS_TYPE = 30
 CLOAK_SLOT = 7
-ENCHANT_ADD = (7, 5)
-ENCHANT_RATES = [(700_000, 990_000), (500_000, 980_000), (300_000, 970_000), (90_000, 300_000), (30_000, 100_000), (10_000, 30_000),
-                 (3_000, 10_000), (1_000, 3_000), (300, 1_000), (100, 300), (30, 100), (10, 30), (1, 10), (1, 3)] + [(1, 1)] * 6
+BUILT_IN_ADD = (7, 5)
+BUILT_IN_RATES = [(700_000, 990_000), (500_000, 980_000), (300_000, 970_000), (90_000, 300_000), (30_000, 100_000), (10_000, 30_000),
+                  (3_000, 10_000), (1_000, 3_000), (300, 1_000), (100, 300), (30, 100), (10, 30), (1, 10), (1, 3)] + [(1, 1)] * 6 + [(0, 0)]
+
+
+class EnchantTable:
+    """`lapis::EnchantTable`: by step 0 to 20, the rate of leaving the step (millionths) and the total attack and absorption at the step,
+    weapon then armour; `world.item_enchant` (the imported `Data/ItemEnchant.ini`), or the built-in tables without rows."""
+
+    def __init__(self, rates=None, add=None):
+        self.rates = list(rates) if rates is not None else list(BUILT_IN_RATES)
+        self.add = list(add) if add is not None else [(BUILT_IN_ADD[0] * s, BUILT_IN_ADD[1] * s) for s in range(21)]
+
+    @classmethod
+    def from_rows(cls, rows):
+        """`EnchantTable::from_rows`: rows of (step, weapon rate, armour rate, weapon add, armour add); none: the built-in tables."""
+        if not rows:
+            return cls()
+        if len(rows) != 21 or sorted(r[0] for r in rows) != list(range(21)):
+            raise ValueError(f"world.item_enchant: {len(rows)} rows; one for each step 0 to 20, or none")
+        rows = sorted(rows)
+        return cls([(r[1], r[2]) for r in rows], [(r[3], r[4]) for r in rows])
+
+    def rate(self, step: int, armour: bool) -> int:
+        return self.rates[min(step, 20)][int(armour)]
+
+    def bonus(self, step: int, armour: bool) -> int:
+        return self.add[min(step, 20)][int(armour)]
+
+
+BUILT_IN = EnchantTable()
 
 
 def enchant_value(craft_name: bytes) -> int:
@@ -415,13 +446,13 @@ def enchant_value(craft_name: bytes) -> int:
     return 0
 
 
-def enchant_bonus(craft_name: bytes) -> tuple[int, int]:
-    """`lapis::enchant_bonus`: (attack, absorption); 1 to 20 a weapon step, 51 to 70 an armour step."""
+def enchant_bonus(craft_name: bytes, table: EnchantTable = BUILT_IN) -> tuple[int, int]:
+    """`lapis::enchant_bonus`: (attack, absorption), the table's total at the step; 0 to 20 a weapon step, 51 to 70 an armour step."""
     v = enchant_value(craft_name)
-    if 1 <= v <= 20:
-        return v * ENCHANT_ADD[0], 0
+    if 0 <= v <= 20:
+        return table.bonus(v, False), 0
     if 51 <= v <= 70:
-        return 0, (v - 50) * ENCHANT_ADD[1]
+        return 0, table.bonus(v - 50, True)
     return 0, 0
 
 
@@ -706,7 +737,7 @@ def gear(items, defs: ItemDefs, p: Passives) -> Gear:
             if s is not None:
                 g.state_blocks |= 1 << s
         if d.craftable:
-            attack, absorption = enchant_bonus(item.craft_name)
+            attack, absorption = enchant_bonus(item.craft_name, defs.enchant)
             g.attack += attack
             g.absorption += absorption
         if item.slot == WEAPON_SLOT:

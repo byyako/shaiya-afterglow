@@ -343,9 +343,12 @@ place is emptied, and the player gets **`0x0206`** (7 bytes: `u8 bag, u8 slot, u
 - The decisions are pure functions (`lapis.rs`); the item changes are saved in one transaction with the money (`trade`), with two new
   changes: gems and craft name of a place.
 - Random numbers come from the server's generator (`rand() % n` where the original uses `rand`, a uniform draw below 1000000 for the
-  enchant). **The enchant rates and add values are the built-in tables of section 5 and 2** (`lapis::ENCHANT_RATES`, a flat 7 attack and 5
-  absorption a step); the server does not read an `ItemEnchant.ini`, so it differs from the original with its shipped file (rates from
-  step 0, attack from step 4). **Decided 2026-11-05: the server will load the file** (`docs/plans/enchant-table.md`, not built yet).
+  enchant). **The enchant rates and add values come from `Data/ItemEnchant.ini`, as the original** (built 2026-11-06,
+  `docs/plans/enchant-table.md`): `tools/world/import.py` reads the file as `GetPrivateProfileIntA` does into `world.item_enchant` (21
+  rows, a missing key 0; no file, no rows), the server loads it at start into `lapis::EnchantTable` (no rows: the built-in tables of
+  sections 2 and 5, as the original without the file) and `ItemDefs` carries it to the roll (`enchant_with`) and to the step's value
+  (`enchant_bonus`, a total per step; value 0 reads step 0). A Lapisia's `enchant` effect still uses its own rate. Not built: the
+  reload `/reitemenh` (with its bug, section 2). Deviation 6: a value the original would wrap is refused at the import.
 - The absorption of section 2 is applied to monster blows (and since to player blows, `docs/original/pvp.md` section 9, and the guards' kind 3,
   `docs/original/guards.md` section 6); `0x0525` tells the player. Lapis state blocks make monster skills of that
   state miss.

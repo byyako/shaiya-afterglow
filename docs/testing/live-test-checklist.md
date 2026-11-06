@@ -1710,3 +1710,17 @@ show as `???`). The Kill Boost Stones are upgraded to 1.1.0 on the live dev box.
 5. [ ] A `deny item_use` rule for the stones on one map (uncomment the example of `config/game.toml.example`, `console 1 reload`): the stone is
        refused there with the rule's message and works elsewhere; a Level Stone refused there can be used elsewhere at once.
 6. [ ] Disabled again (`ext disable level-stones`, restart): the stones are refused and kept.
+
+## 62. Enchant tables from `ItemEnchant.ini` (`docs/plans/enchant-table.md`)
+
+The dev box's world holds the original patch's `Data/ItemEnchant.ini` (`world.item_enchant`, 21 rows); the game server's log says
+`enchant tables: Data/ItemEnchant.ini, from world.item_enchant` at start. Give a Weapon Lapisia (95/1), an Armor Lapisia (95/6), the
+item's material and a craftable weapon and armour piece with `/make`; enchant at a blacksmith.
+
+1. [ ] A weapon at +3, taken to +4: the character window's attack rises by 10 (21 → 31, the file's row), and a blow on a training
+       monster rises by about the same. Before this build the server added 7, so the window and the blows disagreed from +4.
+2. [ ] The weapon's tooltip shows the same enchant attack as the window at +4 and at a higher step (+10: 106).
+3. [ ] An armour step: the tooltip shows "Absorption" 5 a step, and a monster's blow taken in it shows "<n> absorption damage" with the
+       step's value (+3: 15).
+4. [ ] The chances feel like the file's (+1 a weapon about 9 tries in 10, an armour piece almost always); past +12 a weapon can still
+       succeed (one in 5,000 at +14 and above: GM-made Lapisias only, this is a smoke check, not a count).

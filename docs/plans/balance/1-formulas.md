@@ -41,8 +41,10 @@ has one, and monster ids with their Chinese `defs` name otherwise (no translatio
    (section 4.2). DEX counts twice.
 6. **REC does not speed up HP recovery**; recovery is a flat 4 per 5 s standing, 5 % of the maximum + 28 sitting, and nothing while
    fighting (section 3.6). REC is HP (5 a point), defence (1 a point) and aggro.
-7. **Enchanting can never pass +12 on weapons or +14 on armour**: the material is required and its count is added to the draw, against a
-   rate of 1 in a million from those steps (section 4.9). The +20 values in the tables are unreachable.
+7. **With the built-in enchant tables, enchanting can never pass +12 on weapons or +14 on armour**: the material is required and its count
+   is added to the draw, against a rate of 1 in a million from those steps (section 4.9). Since 2026-11-06 the server loads the imported
+   `Data/ItemEnchant.ini` as the original does (`docs/plans/enchant-table.md`): with the original patch's file every step to +20 can
+   succeed and the attack grows faster than 7 a step; the built-in tables apply only without the file.
 8. **The two factions are not mirrored** in three places today: the race skills (one per race, very different in strength), the starting
    stats and HP/MP/SP bonuses by race, and the faction kill-count grades (Fury's give up to +9 % max HP and more defence; Light's
    none of that) (section 6). Everything else in the formulas is the same for both.
@@ -337,7 +339,11 @@ abilities for 30 s when HP falls below 8 to 25 %. Passives add weapon damage and
 
 ### 4.9 Lapis, enchanting and crafted stats: strength, chances, costs (verified, `lapis.rs`)
 
-- **Enchant step**: weapon **+7 attack**, armour **+5 absorption** a step (`lapis::enchant_bonus`).
+The enchant figures below describe the **built-in tables** (what the server used until 2026-11-06, and still uses without an imported
+`ItemEnchant.ini`). With the original patch's file the rates are 90 % (weapon +1) and 99 % (armour +1) down to 0.02 %, and the attack is
+7, 14, 21, 31 ... 311 (`docs/original/lapis.md` sections 2 and 5); `content.py`'s `enchant.csv` follows the table in the database.
+
+- **Enchant step**: weapon **+7 attack**, armour **+5 absorption** a step (`lapis::enchant_bonus` with the built-in tables).
 - **The enchant roll** (`lapis::enchant`, `Enchant::succeeds`): success when **material count + a draw below 1,000,000 < rate[step]**;
   the material (the item's `reqluc`) is **required** with a count of 1 to 100, so **more material lowers the chance**, and a rate of 1
   can never succeed. Each try uses one Lapisia and the material and costs the Lapisia's grade price: **2.5 million for a weapon

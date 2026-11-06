@@ -185,7 +185,7 @@ pub fn gear<'a>(items: impl IntoIterator<Item = &'a ItemUnit>, defs: &ItemDefs, 
             }
         }
         if def.craftable {
-            let (attack, absorption) = lapis::enchant_bonus(&item.craft_name);
+            let (attack, absorption) = lapis::enchant_bonus(&item.craft_name, defs.enchant());
             g.attack += attack;
             g.absorption += absorption;
         }
