@@ -41,12 +41,13 @@ work items are kept under "Not scheduled" in case a part of them is wanted later
 | A first run on a fresh machine; a real client against a fresh install | **open** (the maintainer postponed the first) |
 | Windows hosts (WSL2), a published Docker image | not planned |
 
-## The player guide (`docs/plans/player-guide.md`): specified
+## The player guide (`docs/plans/player-guide.md`): built
 
-A new "Player guide" tab on the docs site, decided with the maintainer on 2026-11-05. It starts with three pages on the player stat
-system: a character's numbers, hitting and being hit, and elements, resistances and defences, with every formula and worked examples. It
-describes the original; the gaps no note covers yet (G1 to G8: shield blocks, enchant attack, players resisting debuffs, ...) are settled
-by reversing `ps_game.exe` or `game.exe`. **Next:** the build (one session, the plan's Build section).
+A "Player guide" tab on the docs site, decided with the maintainer on 2026-11-05 and built the same day (live at `tylerd.me/shaiya/guide/`):
+three pages on the player stat system (a character's numbers, hitting and being hit, elements, resistances and defences) with every
+formula, its source note and five worked examples checked with `tools/balance/`. Gaps G1 to G8 are settled (the plan's Built section).
+**Open from it:** Shaiya Afterglow's enchant values are the built-in tables, while the original loads `Data/ItemEnchant.ini` (rates and
+attack per step): a decision for the maintainer, then a deviation row or a change.
 
 ## Testing
 

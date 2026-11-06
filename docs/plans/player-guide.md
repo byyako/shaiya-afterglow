@@ -153,3 +153,32 @@ One session. Steps:
 
 **Done when**: the three pages are live under the Player guide tab, every formula on them has its source, G1 to G8 are settled or
 marked open with what is missing, and the worked examples agree with the model.
+
+## Built (2026-11-05)
+
+The three pages, the landing page (`site/content/guide.md`), `docs/guide/README.md`, the nav tab, the home page line and the index rows are
+built and live at `tylerd.me/shaiya/guide/` (commits a1b5f23 for the notes, 3b8893b for the guide). What each gap settled:
+
+| | settled | where |
+|---|---|---|
+| G1 | **A shield has no block value.** Slot 6 adds the shield-mastery value `m_byShieldValue` (`+0x1334`, `CUser::AddSkillPassive` 0x489a80, `wType` 10) to defence, for any item in the slot (`CUser::ItemEquipmentAdd` 0x454c70); nothing reads a block value; blocks are buffs only (85, 86, 92) | `docs/original/stats.md` section 2, `combat.md` section 4 corrected |
+| G2 | **The original's enchant tables come from `Data/ItemEnchant.ini`**: `CGameData::InitItemEnchant` (0x4c7ab0, from `CGameData::LoadData` 0x4bf320) overwrites both `g_LapisianEnchantPercentRate` and `g_LapisianEnchantAddValue` at start (missing keys 0; no file: the built-in tables and a log line). The patch file's weapon attack is the client window's formula (7, 14, 21, 31 ... 311), armour 5 a step, rates 90 % for +1 down to 0.02 %, so +20 can be reached; the built-in tables (flat 7 / 5, weapons stop at +12, armour at +14) apply only without the file. A second copy in `PSM_Client/Bin/Data/` (99 % everywhere) is a private-server edit. The window shows the file's values. **Finding: Shaiya Afterglow uses the built-in tables** (`lapis::ENCHANT_RATES`, `ENCHANT_ADD`), so it differs from the original with its shipped file; the pages say so, `docs/original/lapis.md` section 11 marks it undecided, and it is not yet a row of `docs/server/deviations.md`. `1-formulas.md` sections 1 (point 7) and 4.9 describe the built-in tables | `docs/original/lapis.md` sections 2, 5, 11 |
+| G3 | **No resistance stat for debuffs.** A debuff on a player is stopped by a block, the one-off protections of states 7 and 8, a lapis state block (the Anti- lapis), or its own roll (flat, the hit chance, the magic resist roll); monsters by their 15 state columns and six skill columns. From the notes, no new reverse needed | `mob-skills.md` section 7, `pvp-2.md` section 5, `item-use.md` section 5 |
+| G4 | **Nothing on the character changes drops**: `CMob::ItemDrop` (0x4a5ea0) reads the killer's id, zone, map and party only | `docs/original/combat.md` section 7, one line added |
+| G5 | Ranged defence is add + REC + item defence (`CUser::SetAttack`); it is read by players' ranged blows and ranged skills on players and by monsters' **ranged skills** (`CMob::AttackDamage` 0x4a3070 takes the player's defence of the skill's kind, confirmed); monsters' normal blows are melee and never read it. So ability 27 and the grade's type 19 count only against those | the notes as they were |
+| G6 | The three resist rolls were already in full in the notes (`skills-use.md` 11, `mob-skills.md` 7, `pvp-2.md` 5); written out on the third page, section 4 | |
+| G7 | Recovery is `CUser::UpdateRecover` 0x48cfb0 with the amounts set in `CUser::InitEquipment` 0x454560 (`mob-fight.md` section 9); the grade's shares in `pvp-2.md` sections 8 and 10 | |
+| G8 | The monster's kinds 1 and 2 are in `CMob::SetAttack` 0x4902f0 (`combat.md` section 4); the monster critical on players (`mob-fight.md` section 6) and the skill critical without the `+ R2` term confirmed again in 0x4a3070 | |
+
+Other results:
+
+- **`game.exe` was not reversed**: the window facts come from `docs/client/research-balance.md`, so there is no new line in
+  `docs/testing/client-research-queue.md`.
+- **The worked examples** (A a level-60 ultimate fighter with Hallowed Spear +3 and the Daynorth set; B against monster 1811, level 62;
+  C against a defender; D Flame Choir Lv3 from a mage on a priest; E monster 1811's blow with and without an elemental upper armour and
+  absorption) were worked by hand and checked with `tools/balance/` (`formulas.py` with fixed rolls for the ranges, `expect.py` for the
+  averages): every range agrees exactly. `expect.py`'s averages of physical PvP blows run about 0.5 low (its 17-point grid truncates
+  fractional spread values in `_pvp_physical`), so the pages give "about" figures there; no formula disagrees.
+- **The full status table** (every level) is not published: the home page says no data tables are distributed, so the page gives
+  levels 1, 15, 30, 45 and 60 and names the source. To publish it, the maintainer decides.
+- `1-formulas.md` section 3.5 gives weapon speeds 2 to 7 as 3000 to 1500 ms; speed 2 is 2,750 ms (the guide has the right table).
