@@ -153,25 +153,29 @@ fn take_sources(obj: &mut Map<String, Value>) -> Result<u8, RuleError> {
     Ok(mask)
 }
 
-fn take_jumps(obj: &mut Map<String, Value>) -> Result<Vec<(u8, u32)>, RuleError> {
-    let Some(value) = obj.remove("jumps") else { return Err(RuleError::rule("an enchant rule needs jumps, e.g. [[1, 70], [2, 30]]")) };
-    let Value::Array(items) = value else { return Err(key_err("jumps", format!("{value} is not a list of [steps, weight]"))) };
+/// The `jumps` of an `enchant` rule or an `enchant` item effect: `[[steps, weight], …]`, 1 to 19 entries, steps 1 to 19, weights 1 to
+/// 1,000,000. The error is the text after the key's name.
+pub fn parse_jumps(value: &Value) -> Result<Vec<(u8, u32)>, String> {
+    let Value::Array(items) = value else { return Err(format!("{value} is not a list of [steps, weight]")) };
     if items.is_empty() || items.len() > 19 {
-        return Err(key_err("jumps", format!("{} entries is not 1 to 19", items.len())));
+        return Err(format!("{} entries is not 1 to 19", items.len()));
     }
     items
         .iter()
         .enumerate()
         .map(|(i, item)| {
-            let pair = item.as_array().filter(|p| p.len() == 2).ok_or_else(|| key_err("jumps", format!("entry {}: {item} is not [steps, weight]", i + 1)))?;
-            let part = |v: &Value, what: &str, low: u64, high: u64| -> Result<u64, RuleError> {
-                v.as_u64()
-                    .filter(|n| (low..=high).contains(n))
-                    .ok_or_else(|| key_err("jumps", format!("entry {}: {what} {v} is not {low} to {high}", i + 1)))
+            let pair = item.as_array().filter(|p| p.len() == 2).ok_or_else(|| format!("entry {}: {item} is not [steps, weight]", i + 1))?;
+            let part = |v: &Value, what: &str, low: u64, high: u64| -> Result<u64, String> {
+                v.as_u64().filter(|n| (low..=high).contains(n)).ok_or_else(|| format!("entry {}: {what} {v} is not {low} to {high}", i + 1))
             };
             Ok((part(&pair[0], "steps", 1, 19)? as u8, part(&pair[1], "weight", 1, 1_000_000)? as u32))
         })
         .collect()
+}
+
+fn take_jumps(obj: &mut Map<String, Value>) -> Result<Vec<(u8, u32)>, RuleError> {
+    let Some(value) = obj.remove("jumps") else { return Err(RuleError::rule("an enchant rule needs jumps, e.g. [[1, 70], [2, 30]]")) };
+    parse_jumps(&value).map_err(|msg| key_err("jumps", msg))
 }
 
 /// Parses a rule (section 4.1). `Parsed::TurnOff` for `{ enabled = false }` alone.

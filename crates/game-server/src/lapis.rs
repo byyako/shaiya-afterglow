@@ -42,6 +42,21 @@ pub const MAX_STEP: u8 = 20;
 const MAX_MATERIAL: u8 = 100;
 /// The enchant roll draws below one million.
 pub const ENCHANT_DRAW: u32 = 1_000_000;
+/// The jump a draw below `ENCHANT_DRAW` picks from a table of `(steps, weight)` whose weights add up to `total` (the weights are
+/// proportional: `draw * total / 1,000,000` falls in one entry's span). Shared by the `enchant` rules and the Lapisia effects
+/// (`docs/plans/ext-3-effects.md` section 5.2); 1 for an empty table.
+pub fn weighted_jump(jumps: &[(u8, u32)], total: u64, draw: u32) -> u8 {
+    let target = u64::from(draw.min(ENCHANT_DRAW - 1)) * total / u64::from(ENCHANT_DRAW);
+    let mut upto = 0u64;
+    for &(steps, weight) in jumps {
+        upto += u64::from(weight);
+        if target < upto {
+            return steps;
+        }
+    }
+    1
+}
+
 /// `g_LapisianEnchantPercentRate` by step: weapon, armour, in millionths.
 const ENCHANT_RATES: [[u32; 2]; MAX_STEP as usize] = [
     [700_000, 990_000],
@@ -702,6 +717,29 @@ pub fn craft_name(values: [u8; 9], enchant: u8) -> [u8; CRAFT_NAME_MAX] {
     name
 }
 
+/// The nine crafted numbers of an item after a Recreation Rune with a `recreate` effect (`docs/plans/ext-3-effects.md` section 5.3):
+/// only the named numbers the item already has (not 0) change, each to the item's `reqwis` (`max`) or the smaller of two draws up to
+/// it (`random`, as the core's rune); every other number stays. `None` when none of the named numbers is present. The enchant step
+/// is the caller's (`rerolled_name`).
+pub fn rerolled_values(item: &ItemUnit, def: &ItemDef, rune: &crate::effects::Recreate, rand: &mut impl FnMut() -> u32) -> Option<[u8; 9]> {
+    use crate::effects::RecreateValue;
+    let mut values = crafted(&item.craft_name);
+    let span = u32::from(def.craft_max) + 1;
+    let top = def.craft_max.min(99) as u8;
+    let mut changed = false;
+    for (value, &named) in values.iter_mut().zip(&rune.stats) {
+        if !named || *value == 0 {
+            continue;
+        }
+        changed = true;
+        *value = match rune.value {
+            RecreateValue::Max => top,
+            RecreateValue::Random => (0..2).map(|_| rand() % span).min().unwrap_or(0).min(99) as u8,
+        };
+    }
+    changed.then_some(values)
+}
+
 /// A new item's craft name from `CItem::CreateCraftExpansion` (`docs/original/item-origins.md` section 3): random numbers, the smallest
 /// of three draws each, and no enchant level for a craftable item; empty for any other.
 pub fn new_craft_name(def: &ItemDef, rand: &mut impl FnMut() -> u32) -> [u8; CRAFT_NAME_MAX] {
@@ -1139,6 +1177,55 @@ mod tests {
         assert_eq!(remake(&inv1, &defs, [(1, 0), (1, 2), (1, 3)], [0; 3]), Err(Refused::Result(1)), "not the same item");
         assert_eq!(remake(&inv1, &defs, [(1, 1), (1, 2), (1, 3)], [0, b'Q', 0]), Err(Refused::Result(2)));
         assert!(cloak_at(&inv(&[unit(1, 0, 24, 1, 1)]), &defs, (1, 0)));
+    }
+
+    #[test]
+    fn a_stat_rune_redraws_only_the_named_numbers_the_item_has() {
+        use crate::effects::{Recreate, RecreateValue};
+        let defs = defs();
+        let sword = defs.get(1, 1).unwrap();
+        // STR 3, DEX 0, REC 7, the rest 0, at enchant step 4.
+        let item = ItemUnit { craft_name: b"03000700000000000004".to_vec(), ..unit(1, 1, 1, 1, 1) };
+        let named = |names: &[usize], value| {
+            let mut stats = [false; 9];
+            for &n in names {
+                stats[n] = true;
+            }
+            Recreate { stats, value }
+        };
+        // "random": the smaller of two draws up to `craft_max` 10 (a span of 11): 9 % 11 and 4 % 11.
+        let mut draws = [9u32, 4].into_iter();
+        let mut rand = || draws.next().unwrap();
+        let values = rerolled_values(&item, sword, &named(&[0], RecreateValue::Random), &mut rand).unwrap();
+        assert_eq!(values, [4, 0, 7, 0, 0, 0, 0, 0, 0], "STR redrawn, REC stays");
+        assert!(draws.next().is_none(), "two draws for one number");
+        assert_eq!(rerolled_name(&item, values), craft_name([4, 0, 7, 0, 0, 0, 0, 0, 0], 4), "the enchant step is kept");
+        // "max": the item's `reqwis`.
+        let values = rerolled_values(&item, sword, &named(&[0, 2], RecreateValue::Max), &mut || unreachable!("no draw for max")).unwrap();
+        assert_eq!(values, [10, 0, 10, 0, 0, 0, 0, 0, 0]);
+        // A named number the item lacks (DEX is 0) does not appear; one that is present changes.
+        let values = rerolled_values(&item, sword, &named(&[1, 2], RecreateValue::Max), &mut || 0).unwrap();
+        assert_eq!(values, [3, 0, 10, 0, 0, 0, 0, 0, 0], "DEX stays 0, STR is not named");
+        // None of the named numbers present: nothing to do.
+        assert_eq!(rerolled_values(&item, sword, &named(&[1, 3, 8], RecreateValue::Max), &mut || 0), None);
+        // A name that is not 20 characters has none.
+        let bare = unit(1, 1, 1, 1, 1);
+        assert_eq!(rerolled_values(&bare, sword, &named(&[0], RecreateValue::Max), &mut || 0), None);
+        // A draw of 0 can bring a number to 0, as the core's rune can.
+        let values = rerolled_values(&item, sword, &named(&[0], RecreateValue::Random), &mut || 0).unwrap();
+        assert_eq!(values[0], 0);
+    }
+
+    #[test]
+    fn the_jump_draw_follows_the_weights() {
+        let jumps = [(1u8, 70u32), (2, 20), (3, 10)];
+        let draw = |d| weighted_jump(&jumps, 100, d);
+        assert_eq!((draw(0), draw(699_999), draw(700_000), draw(899_999), draw(900_000), draw(999_999)), (1, 1, 2, 2, 3, 3));
+        assert_eq!(draw(ENCHANT_DRAW + 5), 3, "above the range counts as the last draw");
+        assert_eq!(weighted_jump(&[], 0, 5), 1, "no table, one step");
+        // Weights up to 1,000,000 each: 19 entries do not overflow.
+        let big = [(1u8, 1_000_000u32), (19, 1_000_000)];
+        assert_eq!((weighted_jump(&big, 2_000_000, 499_999), weighted_jump(&big, 2_000_000, 500_000)), (1, 19));
     }
 
     #[test]

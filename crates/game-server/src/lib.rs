@@ -9,6 +9,7 @@ pub mod console;
 pub mod creation;
 pub mod drops;
 pub mod duel;
+pub mod effects;
 pub mod enter;
 pub mod fight;
 pub mod friends;

@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use anyhow::Result;
 use serde_json::Value;
 
-pub use parse::TYPES;
+pub use parse::{TYPES, parse_jumps};
 pub use resolve::{EXAMPLE, FileRule, ResolvedRule, RuleFile, RuleLayer, RuleSources, RuleState, check_file, from_settings, resolve, show};
 pub use scope::{Who, WhoMode, hour_of_week, refresh_hour_of_week, set_hour_of_week};
 
@@ -417,15 +417,7 @@ impl RuleSet {
     pub fn enchant_jump(&self, map: u16, who: &Who, armour: bool, draw: u32) -> Changed<u8> {
         let mut out = Changed { value: 1u8, rules: Vec::new() };
         let Some(e) = self.enchant.iter().find(|e| e.v.items.covers(armour) && e.scope.one(map, who)) else { return out };
-        let target = u64::from(draw.min(999_999)) * e.v.total / 1_000_000;
-        let mut upto = 0u64;
-        for &(steps, weight) in &e.v.jumps {
-            upto += u64::from(weight);
-            if target < upto {
-                out.value = steps;
-                break;
-            }
-        }
+        out.value = crate::lapis::weighted_jump(&e.v.jumps, e.v.total, draw);
         e.meta.hit();
         note(&mut out.rules, &e.meta);
         out
