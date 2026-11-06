@@ -30,6 +30,9 @@ const RECREATION_RUNE: u8 = 62;
 const LAST_LEVEL: u64 = 60;
 /// The enchant roll draws below one million, and a rate of that many always succeeds.
 const SURE: u32 = 1_000_000;
+/// The first id of the refusals the effects make (the whisper limit is per id): above the rules' ids, which count up from 1, and the
+/// scripts', which count up from 1,000,000,000 (`script/points.rs`).
+pub const REFUSAL_BASE: u32 = 2_000_000_000;
 /// The nine crafted numbers, in the order of a craft name.
 pub const STATS: [&str; 9] = ["str", "dex", "rec", "int", "wis", "luc", "hp", "mp", "sp"];
 
@@ -109,6 +112,11 @@ impl ItemEffect {
             ItemEffect::Enchant(_) => "enchant",
             ItemEffect::Recreate(_) => "recreate",
         }
+    }
+
+    /// The id of this type's refusals (section 3.3): one per effect type.
+    pub fn refusal_id(&self) -> u32 {
+        REFUSAL_BASE + EFFECT_TYPES.iter().position(|t| *t == self.type_name()).unwrap_or(0) as u32
     }
 
     pub fn request(&self) -> Request {
@@ -229,6 +237,11 @@ impl<'a> IntoIterator for &'a Abilities {
     }
 }
 
+/// The item id of an item type and type id (`defs.items.itemid`).
+pub fn item_id(item_type: u8, type_id: u8) -> u32 {
+    u32::from(item_type) * 1000 + u32::from(type_id)
+}
+
 /// The item effects in force: item id to effect (section 3.4). An empty table is a server without extensions.
 #[derive(Clone, Debug, Default)]
 pub struct ItemEffects(HashMap<u32, Arc<ItemEffect>>);
@@ -240,6 +253,11 @@ impl ItemEffects {
 
     pub fn get(&self, item_id: u32) -> Option<&Arc<ItemEffect>> {
         self.0.get(&item_id)
+    }
+
+    /// The effect of the `use` request an item has, if any: what its use does in place of the core's (section 3.3).
+    pub fn for_use(&self, item_id: u32) -> Option<&Arc<ItemEffect>> {
+        self.get(item_id).filter(|e| e.request() == Request::Use)
     }
 
     pub fn len(&self) -> usize {
@@ -500,6 +518,13 @@ mod tests {
         assert_eq!(effect(json!({ "type": "level_up", "levels": 1 })).request(), Request::Use);
         assert_eq!(effect(json!({ "type": "enchant", "safe": false })).request(), Request::Enchant);
         assert_eq!(effect(json!({ "type": "recreate", "stats": ["str"] })).request(), Request::Recreate);
+        // Each type refuses under an id of its own, above the rules' and the scripts'.
+        let ids: Vec<u32> = [json!({ "type": "level_up", "levels": 1 }), json!({ "type": "enchant", "safe": true }), json!({ "type": "recreate", "stats": ["str"] })]
+            .into_iter()
+            .map(|v| effect(v).refusal_id())
+            .collect();
+        assert_eq!(ids, [REFUSAL_BASE, REFUSAL_BASE + 1, REFUSAL_BASE + 2]);
+        assert_eq!(item_id(100, 215), 100215);
     }
 
     #[test]
@@ -603,6 +628,7 @@ mod tests {
         assert_eq!(table.len(), 3);
         assert_eq!(table.counts(), [("level_up", 2), ("enchant", 1), ("recreate", 0)]);
         assert!(table.get(100216).is_some() && table.get(100217).is_none());
+        assert!(table.for_use(100216).is_some() && table.for_use(95003).is_none(), "an enchant effect is not a use");
         assert!(ItemEffects::default().is_empty());
     }
 

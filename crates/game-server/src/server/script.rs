@@ -688,6 +688,7 @@ pub(super) fn item_use<S>(ctx: &Context<S>, character: &PlayCharacter, item: &cr
     let set = ctx.zones.ext_scripts();
     let Some(owner) = set.item_owner(item.item_type, item.type_id) else { return (ItemUse::Core, None) };
     let me = me(character);
+    let effect = ctx.data.effects.for_use(crate::effects::item_id(item.item_type, item.type_id)).map(|e| e.type_name());
     let answer = owner.item_use(item.item_type, item.type_id, &|lua| {
         let table = lua.create_table()?;
         table.raw_set("type", item.item_type)?;
@@ -695,6 +696,10 @@ pub(super) fn item_use<S>(ctx: &Context<S>, character: &PlayCharacter, item: &cr
         table.raw_set("bag", bag)?;
         table.raw_set("slot", slot)?;
         table.raw_set("count", item.count)?;
+        // The type of the item's extension effect in force, or nil (`docs/plans/ext-3-effects.md` section 7).
+        if let Some(effect) = effect {
+            table.raw_set("effect", effect)?;
+        }
         Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Table(table)]))
     });
     let refusal = match &answer {

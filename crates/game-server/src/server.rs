@@ -60,6 +60,7 @@ use crate::world::{Gate, World};
 mod admin;
 pub mod console;
 mod duel;
+mod effects;
 mod guild_bank;
 mod guild_house;
 mod items;

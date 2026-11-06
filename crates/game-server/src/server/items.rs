@@ -52,7 +52,7 @@ enum MoveKind {
 }
 
 /// What an effect came to.
-enum Done {
+pub(super) enum Done {
     /// The item is used up.
     UsedUp,
     /// The item is used up for this new one, saved together (a box, `docs/original/item-origins.md` section 5).
@@ -89,7 +89,7 @@ pub(super) async fn use_item<S: Backend>(
     let Some(item) = state.inventory.get(bag, slot).filter(|item| item.count > 0) else { return Ok(()) };
     let Some(def) = ctx.data.items.get(item.item_type, item.type_id).copied() else { return Ok(()) };
     let now = Instant::now();
-    let effect = item_use::effect(&def);
+    let effect = item_use::effect_in_force(&def, &ctx.data.effects);
     if let Effect::QuestItem { used_up } = effect {
         state.quest_item = Some((def.type_id, now + item_use::QUEST_ITEM_MEMORY));
         if used_up {
@@ -139,7 +139,9 @@ pub(super) async fn use_item<S: Backend>(
             item_skill_on(conn, ctx, character, state, country, (skill_id, level), target).await?
         }
         Effect::Skill { id: skill_id, level } => item_skill(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
-        Effect::ExpWheel { .. } if request.kind != it::KIND_SELF => Done::Failed,
+        Effect::ExpWheel { .. } | Effect::Ext if request.kind != it::KIND_SELF => Done::Failed,
+        // An extension's effect (`docs/plans/ext-3-effects.md` section 3.3), after the rules, the reuse time and the script.
+        Effect::Ext => super::effects::use_effect(conn, ctx, character, state, def.item_id, (bag, slot)).await?,
         Effect::ExpWheel { id: skill_id, level } => exp_wheel(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
         // Recover, Cure, the resurrection of another player and the Message To Server stay effect-then-use-up (audit R13): the effect
         // is transient and its worst case is a free potion on a database failure, which ends the connection anyway.
@@ -347,7 +349,7 @@ pub(super) async fn use_up_unsent<S: Backend>(
 /// One of the item at (`bag`, `slot`) used up and saved, `0x050A` not sent yet: `Done::Consumed`, or `Done::Failed` for an empty
 /// slot. An effect that saves something lasting (fame, a reset, a repair) runs after this, so a failed write never leaves both the
 /// effect and the item (the original saves the effect first).
-async fn consume<S: Backend>(ctx: &Context<S>, character: &PlayCharacter, state: &mut WorldState, bag: u8, slot: u8) -> Result<Done> {
+pub(super) async fn consume<S: Backend>(ctx: &Context<S>, character: &PlayCharacter, state: &mut WorldState, bag: u8, slot: u8) -> Result<Done> {
     let Some(item) = state.inventory.get(bag, slot).cloned() else { return Ok(Done::Failed) };
     let change = used_change(&item);
     let Some(rows) = ctx.store.trade(character.id, 0, std::slice::from_ref(&change)).await? else {

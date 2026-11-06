@@ -5226,6 +5226,160 @@ async fn a_point_handler_in_an_endless_loop_does_not_stop_the_players_action() {
     assert_eq!(ctx.zones.ext_scripts().extensions()[0].fault_count(), 1);
 }
 
+// ------------------------------------------------------------------------------------------------ item effects (chunk 3, step 5)
+
+/// Test data with the three level stones of `docs/plans/ext-3-effects.md` section 10.1 (100/215 +1, 100/216 to 15, 100/217 to 30), a
+/// stack of up to 5, and an experience table of 100 a level in normal mode; the effects of `effects` are in force (none: the extension
+/// is disabled).
+fn stone_data(effects: &[(u32, serde_json::Value)]) -> GameData {
+    use game_server::effects::{ItemEffects, check_effect};
+    let mut data = data();
+    data.exp = game_server::enter::ExpTable::from_rows((1..=60u16).map(|level| (level, 2, 100)));
+    let base = *data.items.get(100, 48).unwrap();
+    let stone = |type_id: u8| ItemDef { item_id: 100_000 + u32::from(type_id), type_id, special: 0, max_count: 5, reuse_group: 0, ..base };
+    data.items = ItemDefs::new(data.items.iter().cloned().chain([stone(215), stone(216), stone(217)]));
+    data.effects = ItemEffects::new(effects.iter().map(|(id, effect)| (*id, check_effect(effect).unwrap())));
+    data
+}
+
+/// The stones of the reference extension `level-stones`.
+fn level_stones() -> Vec<(u32, serde_json::Value)> {
+    vec![
+        (100215, serde_json::json!({ "type": "level_up", "levels": 1 })),
+        (100216, serde_json::json!({ "type": "level_up", "to": 15 })),
+        (100217, serde_json::json!({ "type": "level_up", "to": 30 })),
+    ]
+}
+
+/// A character of `level` (normal mode unless `grow` says another) in the world with `count` of stone 100/`type_id` in bag 1 slot 2.
+async fn with_stones(
+    data: GameData,
+    level: u16,
+    grow: u8,
+    type_id: u8,
+    count: u8,
+) -> (Arc<MemoryBackend>, Arc<Context<Arc<MemoryBackend>>>, Client, u32) {
+    use game_server::backend::ItemUnit;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start_with_data(backend.clone(), config(true), data).await;
+    let mut client = Client::connect(addr).await;
+    client.enter(7, [5; 16]).await;
+    client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
+    let request = CreateRequest { slot: 0, family: 0, grow, hair: 3, face: 4, size: 5, job: 0, sex: 1, name: b"Walker".to_vec(), sent_len: 0 };
+    client.write(g::char_create_request(&request)).await;
+    assert_eq!(client.read().await.unwrap(), g::char_create_response(0));
+    client.read_list().await;
+    backend.set_level(1, level);
+    backend.give_items(1, vec![ItemUnit { bag: 1, slot: 2, item_type: 100, type_id, count, quality: 0, gems: [0; 6], craft_name: Vec::new() }]);
+    let id = select_and_enter(&mut client).await;
+    (backend, ctx, client, id)
+}
+
+/// Uses the item at bag 1 slot 2 and returns what the server sent before it answered a motion.
+async fn use_stone(client: &mut Client, id: u32) -> Vec<Vec<u8>> {
+    client.write(shaiya_proto::encode(it::OP_USE, &[1, 2])).await;
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    let mut seen = Vec::new();
+    loop {
+        let packet = client.read().await.unwrap();
+        if packet == w::motion(id, 0) {
+            return seen;
+        }
+        seen.push(packet);
+    }
+}
+
+fn stones_left(backend: &MemoryBackend, id: u32) -> Option<u8> {
+    backend.stored(id).unwrap().1.iter().find(|i| (i.item_type, i.type_id) == (100, 215) || (i.item_type, i.type_id) == (100, 216) || (i.item_type, i.type_id) == (100, 217)).map(|i| i.count)
+}
+
+#[tokio::test]
+async fn a_level_stone_raises_the_level_with_the_points_of_a_level_up() {
+    use shaiya_proto::combat as cp;
+    let (backend, ctx, mut client, id) = with_stones(stone_data(&level_stones()), 10, 1, 215, 3).await;
+    let seen = use_stone(&mut client, id).await;
+    // 1,000 experience takes level 10 to the start of level 11; 5 stat and 3 skill points a level (5 skill points from creation).
+    assert!(seen.contains(&cp::exp_gain(1000, 0)), "{seen:x?}");
+    assert!(seen.contains(&cp::level_up(true, id, 11, 5, 8, (1000, 1100))), "by_other: not the player's own kill: {seen:x?}");
+    assert!(seen.iter().any(|p| frame::opcode(p) == cp::OP_MAX_ALL), "the maxima: {seen:x?}");
+    let used = seen.iter().position(|p| *p == it::used(id, 1, 2, 100, 215, 2)).expect("0x050A with two left");
+    let level = seen.iter().position(|p| frame::opcode(p) == cp::OP_LEVEL_UP).expect("the level-up packet");
+    assert!(level < used, "the item's 0x050A comes last: {seen:x?}");
+    let saved = backend.play(id).unwrap();
+    assert_eq!((saved.level, saved.exp, saved.stat_point, saved.skill_point), (11, 1000, 5, 8));
+    assert_eq!(stones_left(&backend, id), Some(2), "one stone used up and saved");
+    let levels = logged(&ctx, 146);
+    assert_eq!((levels.len(), levels[0].header.level), (1, 11), "one 0x0308 record for the level");
+    // Again, and a stack of one is used up whole.
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&cp::level_up(true, id, 12, 10, 11, (1100, 1200))), "{seen:x?}");
+    assert_eq!(logged(&ctx, 146).len(), 2);
+}
+
+#[tokio::test]
+async fn a_stone_to_a_level_gives_every_level_between_and_is_refused_at_or_above_it() {
+    use shaiya_proto::combat as cp;
+    let (backend, ctx, mut client, id) = with_stones(stone_data(&level_stones()), 1, 1, 216, 2).await;
+    let seen = use_stone(&mut client, id).await;
+    // Level 1 to 15: fourteen levels of points.
+    assert!(seen.contains(&cp::level_up(true, id, 15, 70, 47, (1400, 1500))), "{seen:x?}");
+    let saved = backend.play(id).unwrap();
+    assert_eq!((saved.level, saved.exp, saved.stat_point, saved.skill_point, saved.stats[0]), (15, 1400, 70, 47, 14 + 14), "a fighter gains STR a level too");
+    assert_eq!(logged(&ctx, 146).len(), 14, "a record per level");
+    assert_eq!(stones_left(&backend, id), Some(1));
+    // At 15 the stone to 15 is refused with its whisper, the stone kept; the same again says nothing within ten seconds.
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&it::use_failed(id)), "{seen:x?}");
+    assert_eq!(whisper_texts(&seen), ["This item cannot raise your level any further."]);
+    assert_eq!(stones_left(&backend, id), Some(1), "kept");
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen).is_empty(), "the whisper limit: {seen:x?}");
+    assert_eq!(backend.play(id).unwrap().level, 15);
+}
+
+#[tokio::test]
+async fn the_modes_cap_and_the_stones_max_stop_a_level_stone() {
+    // Easy mode ends at 30: a +1 stone at 30 is refused; at 29 it gives 30.
+    let (backend, _, mut client, id) = with_stones(stone_data(&level_stones()), 30, 0, 215, 1).await;
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&it::use_failed(id)), "{seen:x?}");
+    assert_eq!((stones_left(&backend, id), backend.play(id).unwrap().level), (Some(1), 30));
+    // `max`: a +10 stone with max 20 takes 15 to 20 and no further.
+    let capped = [(100215, serde_json::json!({ "type": "level_up", "levels": 10, "max": 20 }))];
+    let (backend, _, mut client, id) = with_stones(stone_data(&capped), 15, 1, 215, 2).await;
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&shaiya_proto::combat::level_up(true, id, 20, 25, 20, (1900, 2000))), "{seen:x?}");
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&it::use_failed(id)), "at max: {seen:x?}");
+    assert_eq!((stones_left(&backend, id), backend.play(id).unwrap().level), (Some(1), 20));
+}
+
+#[tokio::test]
+async fn a_stone_whose_extension_is_disabled_is_refused_and_kept() {
+    // No effect in force: the item is special 0 with no HP, SP or MP, which the core refuses.
+    let (backend, _, mut client, id) = with_stones(stone_data(&[]), 10, 1, 215, 1).await;
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen).is_empty(), "{seen:x?}");
+    assert_eq!((stones_left(&backend, id), backend.play(id).unwrap().level), (Some(1), 10));
+}
+
+#[tokio::test]
+async fn a_script_sees_the_effect_and_may_let_it_run_or_keep_the_stone() {
+    for (mode, level, left) in [("core", 11, Some(2)), ("keep", 10, Some(3)), ("use", 10, Some(2))] {
+        let (backend, ctx, mut client, id) = with_stones(stone_data(&level_stones()), 10, 1, 215, 3).await;
+        put_scripts(
+            &ctx,
+            &[("stones", &format!("game.on_item({{'100/215'}}, function(p, item) game.set('effect', item.effect) local mode = '{mode}' if mode == 'use' or mode == 'keep' then return mode end end)"))],
+        );
+        let seen = use_stone(&mut client, id).await;
+        assert_eq!(ctx.zones.script_store().get_global("stones", "effect"), Some(serde_json::json!("level_up")), "{mode}: the script sees the effect");
+        assert_eq!((backend.play(id).unwrap().level, stones_left(&backend, id)), (level, left), "{mode}: {seen:x?}");
+        if mode == "keep" {
+            assert!(!seen.contains(&it::use_failed(id)), "kept without an error: {seen:x?}");
+        }
+    }
+}
+
 // ------------------------------------------------------------------------------------------------ the bundled extensions (step 9)
 
 use game_server::script::event::{Job, Killer, MobInfo, Payload, PlayerRef};

@@ -79,6 +79,9 @@ pub enum Effect {
     MessageToServer,
     /// The Name Change Stone (special 51): one more rename at the character screen (`docs/original/small-items.md` section 9).
     NameChange,
+    /// An extension's effect of the `use` request (`docs/plans/ext-3-effects.md` section 3.3), found by the item's id in
+    /// `GameData.effects` where it is carried out.
+    Ext,
 }
 
 /// What a cure removes and the protections it sets (`CUser::ItemUseRemState`, section 5).
@@ -114,6 +117,7 @@ impl Effect {
             Effect::Blessing => "a goddess blessing",
             Effect::MessageToServer => "a message to the server",
             Effect::NameChange => "a name change stone",
+            Effect::Ext => return None,
         })
     }
 
@@ -185,6 +189,13 @@ pub fn effect(def: &ItemDef) -> Effect {
         59 => Effect::NotBuilt,
         _ => Effect::Refused,
     }
+}
+
+/// What using an item does with the extensions' effects in force (`docs/plans/ext-3-effects.md` section 3.3): `Effect::Ext` for an item
+/// with an effect of the `use` request, else [`effect`] of its own columns. A Lapisia's or a rune's effect acts in its own request, so
+/// the item keeps the core's answer here (refused).
+pub fn effect_in_force(def: &ItemDef, effects: &crate::effects::ItemEffects) -> Effect {
+    if effects.for_use(def.item_id).is_some() { Effect::Ext } else { effect(def) }
 }
 
 /// Whether the user's level, race and mode allow the item (section 2 step 4; classes and sex are not checked).
@@ -353,6 +364,22 @@ mod tests {
         assert_eq!(effect(&item(100, 33)).label(), Some("a skill reset"));
         assert_eq!(effect(&item(100, 59)).label(), None, "not built is an error answer too");
         assert_eq!(effect(&item(27, 0)).label(), None);
+    }
+
+    #[test]
+    fn an_extensions_effect_replaces_the_cores_answer_for_a_use_only() {
+        use crate::effects::{ItemEffect, ItemEffects, LevelBy, LevelUp, check_effect};
+        let stone = ItemDef { item_id: 100215, ..item(100, 0) };
+        let effects = ItemEffects::new([
+            (100215, ItemEffect::LevelUp(LevelUp { by: LevelBy::Levels(1), max: None })),
+            (95003, check_effect(&serde_json::json!({ "type": "enchant", "safe": true })).unwrap()),
+        ]);
+        assert_eq!(effect(&stone), Effect::Refused, "the core refuses a bare stone");
+        assert_eq!(effect_in_force(&stone, &effects), Effect::Ext);
+        assert_eq!(effect_in_force(&stone, &ItemEffects::default()), Effect::Refused, "no extension: the core's answer");
+        let lapisia = ItemDef { item_id: 95003, ..item(95, 0) };
+        assert_eq!(effect_in_force(&lapisia, &effects), Effect::Refused, "a Lapisia acts in its own request");
+        assert!(!Effect::Ext.casts());
     }
 
     #[test]
