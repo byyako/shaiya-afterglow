@@ -1,0 +1,13 @@
+# Perfect Lapisia: the reference for a Lapisia's `enchant` effect (docs/plans/ext-3-effects.md section 10.2). Not installed by
+# tools/setup.sh.
+
+format = 1
+name = "perfect-lapisia"
+version = "1.0.0"
+title = "Perfect Lapisia"
+description = "A weapon and an armour Lapisia whose enchant always succeeds and may rise up to three steps."
+authors = ["Shaiya Afterglow"]
+license = "MIT"
+
+[ids]
+items = ["95/3", "95/8"]

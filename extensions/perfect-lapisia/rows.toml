@@ -1,0 +1,20 @@
+# Items 95/3 and 95/8 (the empty "???252" of both copies of Item.SData): copies of the Weapon Lapisia 95/1 and the Armor Lapisia 95/6
+# in every column, grade 999 (the placeholders are 624 and 625; no drop table names 999, so no monster drops them). Their effect is the
+# same: an enchant always succeeds, rises one step in six, two in three and three in ten attempts of the ten, and never destroys the
+# item. Disabled, each is an ordinary Weapon or Armor Lapisia (the core's rate by step, and its VG that may destroy a failed item).
+
+[[item]]
+id = "95/3"
+copy = { from = "95/1" }
+set = { itemname = "Perfect Weapon Lapisia", grade = 999 }
+effect = { type = "enchant", rate = 1000000, jumps = [[1, 60], [2, 30], [3, 10]], safe = true }
+client = { name = "Perfect Weapon Lapisia", look = "95/1", description = "An enchant with it always succeeds and may rise up to three steps." }
+note = "perfect-lapisia: weapon"
+
+[[item]]
+id = "95/8"
+copy = { from = "95/6" }
+set = { itemname = "Perfect Armor Lapisia", grade = 999 }
+effect = { type = "enchant", rate = 1000000, jumps = [[1, 60], [2, 30], [3, 10]], safe = true }
+client = { name = "Perfect Armor Lapisia", look = "95/6", description = "An enchant with it always succeeds and may rise up to three steps." }
+note = "perfect-lapisia: armour"

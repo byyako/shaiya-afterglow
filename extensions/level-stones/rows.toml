@@ -1,0 +1,30 @@
+# Items 100/215 to 217 (the empty "???177" of both copies of Item.SData, grade 999 already: no monster drops them): the Mini Sun EXP
+# Stone 100/108's use and trade columns (eleven of them; `grade` stays 999, and `range`, `attacktime` and `reqig` stay the placeholders'
+# 0, so the core's own use of these rows is a refusal). What they do is the `level_up` effect, an addition of the server that the
+# client's rows do not carry: the client text below is the player's only word of it.
+#
+# Disabled, each is special 0 with no HP, SP or MP: the core refuses it and the stone stays in the bag.
+
+[[item]]
+id = "100/215"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "drop", "server", "count"] }
+set = { itemname = "Level Stone", grade = 999 }
+effect = { type = "level_up", levels = 1 }
+client = { name = "Level Stone", look = "100/108", description = "Raises your level by one." }
+note = "level-stones: +1 level"
+
+[[item]]
+id = "100/216"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "drop", "server", "count"] }
+set = { itemname = "Level Stone (15)", grade = 999 }
+effect = { type = "level_up", to = 15 }
+client = { name = "Level Stone (15)", look = "100/108", description = "Raises your level to 15." }
+note = "level-stones: up to level 15"
+
+[[item]]
+id = "100/217"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "drop", "server", "count"] }
+set = { itemname = "Level Stone (30)", grade = 999 }
+effect = { type = "level_up", to = 30 }
+client = { name = "Level Stone (30)", look = "100/108", description = "Raises your level to 30." }
+note = "level-stones: up to level 30"

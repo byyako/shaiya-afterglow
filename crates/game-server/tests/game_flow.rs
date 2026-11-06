@@ -5545,6 +5545,73 @@ async fn a_stat_rune_changes_only_the_stats_it_names_and_is_kept_when_none_is_th
     assert!(numbers[4] <= 10 && numbers[5] <= 10, "WIS and LUC redrawn: {numbers:?}");
 }
 
+// ------------------------------------------------------------------------------------------------ the reference extensions (step 8)
+
+/// The effects of the items in `extensions/<folder>/rows.toml`, as `ext install` stores them (item id, the effect as written).
+fn folder_effects(folder: &str) -> Vec<(u32, serde_json::Value)> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions").join(folder).join("rows.toml");
+    let rows: toml::Table = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    rows["item"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|row| {
+            let (kind, id) = row["id"].as_str()?.split_once('/')?;
+            Some((kind.parse::<u32>().unwrap() * 1000 + id.parse::<u32>().unwrap(), serde_json::to_value(row.get("effect")?).unwrap()))
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn the_level_stones_folder_raises_a_level_one_character_and_a_level_twenty_one() {
+    let effects = folder_effects("level-stones");
+    assert_eq!(effects.len(), 3);
+    let (backend, _ctx, mut client, id) = with_stones(stone_data(&effects), 1, 1, 215, 1).await;
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&shaiya_proto::combat::level_up(true, id, 2, 5, 8, (100, 200))), "{seen:x?}");
+    assert_eq!((backend.play(id).unwrap().level, stones_left(&backend, id)), (2, None), "a stack of one is used up");
+    let (backend, _ctx, mut client, id) = with_stones(stone_data(&effects), 20, 1, 217, 1).await;
+    let seen = use_stone(&mut client, id).await;
+    assert!(seen.contains(&shaiya_proto::combat::level_up(true, id, 30, 50, 35, (2900, 3000))), "level 30 at once: {seen:x?}");
+    assert_eq!(backend.play(id).unwrap().level, 30);
+}
+
+#[tokio::test]
+async fn the_perfect_lapisia_folder_enchants_a_weapon_every_time() {
+    use shaiya_proto::gem;
+    let effects = folder_effects("perfect-lapisia");
+    assert_eq!(effects.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [95003, 95008]);
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), Some(3), None, b"").await;
+    let mut step = 0;
+    for _ in 0..3 {
+        client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+        assert_eq!(read_op(&mut client, gem::OP_ENCHANT).await[4], 1, "always a success");
+        let name = item_at(&backend, id, 1, 6).unwrap().craft_name;
+        let now: u8 = std::str::from_utf8(&name[18..]).unwrap().parse().unwrap();
+        assert!((step + 1..=step + 3).contains(&now), "one to three steps: {step} -> {now}");
+        step = now;
+    }
+    assert!(item_at(&backend, id, 1, 5).is_none(), "the stack of three is used up");
+}
+
+#[tokio::test]
+async fn the_stat_runes_folder_redraws_one_number_and_refuses_an_item_without_it() {
+    use shaiya_proto::gem;
+    let effects = folder_effects("stat-runes");
+    assert_eq!(effects.len(), 6);
+    // The STR rune (100/221) on an item with STR 5, DEX 3 and step 2.
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(221), b"05030000000000000002").await;
+    client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
+    assert_eq!(read_op(&mut client, gem::OP_COMPOSE).await[4], 0);
+    let name = item_at(&backend, id, 1, 6).unwrap().craft_name;
+    assert_eq!((&name[2..], std::str::from_utf8(&name[..2]).unwrap().parse::<u8>().unwrap() <= 10), (&b"030000000000000002"[..], true), "only STR moved: {name:?}");
+    // The same rune on an item without STR: refused, kept.
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(221), b"00030000000000000002").await;
+    client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
+    assert_eq!(read_op(&mut client, gem::OP_COMPOSE).await, gem::rerolled(gem::OP_COMPOSE, None));
+    assert_eq!((item_at(&backend, id, 1, 7).unwrap().count, item_at(&backend, id, 1, 6).unwrap().craft_name), (3, b"00030000000000000002".to_vec()));
+}
+
 #[tokio::test]
 async fn a_script_sees_the_effect_and_may_let_it_run_or_keep_the_stone() {
     for (mode, level, left) in [("core", 11, Some(2)), ("keep", 10, Some(3)), ("use", 10, Some(2))] {

@@ -1,0 +1,13 @@
+# Stat Recreation Runes: the reference for a rune's `recreate` effect (docs/plans/ext-3-effects.md section 10.3). Not installed by
+# tools/setup.sh.
+
+format = 1
+name = "stat-runes"
+version = "1.0.0"
+title = "Stat Recreation Runes"
+description = "Six Recreation Runes, one for each of STR, DEX, REC, INT, WIS and LUC: each redraws that one number of an item."
+authors = ["Shaiya Afterglow"]
+license = "MIT"
+
+[ids]
+items = ["100/221-226"]

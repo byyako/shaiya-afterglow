@@ -1,0 +1,52 @@
+# Items 100/221 to 226 (the empty "???177" of both copies of Item.SData, grade 999 already): copies of the Recreation Rune 100/171 in
+# every column (special 62, a stack of 255), grade 999 (no monster drops them). Each redraws one of the item's crafted numbers, the
+# smaller of two draws up to the item's top, as the core's rune does for all nine; the item's other numbers and its enchant step stay.
+# Disabled, each is an ordinary Recreation Rune.
+
+[[item]]
+id = "100/221"
+copy = { from = "100/171" }
+set = { itemname = "STR Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["str"], value = "random" }
+client = { name = "STR Recreation Rune", look = "100/171", description = "Draws a new value for the item's STR (only), as a Recreation Rune does." }
+note = "stat-runes: str"
+
+[[item]]
+id = "100/222"
+copy = { from = "100/171" }
+set = { itemname = "DEX Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["dex"], value = "random" }
+client = { name = "DEX Recreation Rune", look = "100/171", description = "Draws a new value for the item's DEX (only), as a Recreation Rune does." }
+note = "stat-runes: dex"
+
+[[item]]
+id = "100/223"
+copy = { from = "100/171" }
+set = { itemname = "REC Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["rec"], value = "random" }
+client = { name = "REC Recreation Rune", look = "100/171", description = "Draws a new value for the item's REC (only), as a Recreation Rune does." }
+note = "stat-runes: rec"
+
+[[item]]
+id = "100/224"
+copy = { from = "100/171" }
+set = { itemname = "INT Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["int"], value = "random" }
+client = { name = "INT Recreation Rune", look = "100/171", description = "Draws a new value for the item's INT (only), as a Recreation Rune does." }
+note = "stat-runes: int"
+
+[[item]]
+id = "100/225"
+copy = { from = "100/171" }
+set = { itemname = "WIS Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["wis"], value = "random" }
+client = { name = "WIS Recreation Rune", look = "100/171", description = "Draws a new value for the item's WIS (only), as a Recreation Rune does." }
+note = "stat-runes: wis"
+
+[[item]]
+id = "100/226"
+copy = { from = "100/171" }
+set = { itemname = "LUC Recreation Rune", grade = 999 }
+effect = { type = "recreate", stats = ["luc"], value = "random" }
+client = { name = "LUC Recreation Rune", look = "100/171", description = "Draws a new value for the item's LUC (only), as a Recreation Rune does." }
+note = "stat-runes: luc"

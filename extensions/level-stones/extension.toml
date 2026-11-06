@@ -1,0 +1,13 @@
+# Level Stones: the reference for an item effect (docs/plans/ext-3-effects.md section 10.1). Three stones whose use raises the user's
+# level by the `level_up` effect of their rows. Not installed by tools/setup.sh.
+
+format = 1
+name = "level-stones"
+version = "1.0.0"
+title = "Level Stones"
+description = "Three stones that raise the user's level: by one, up to level 15, up to level 30."
+authors = ["Shaiya Afterglow"]
+license = "MIT"
+
+[ids]
+items = ["100/215-217"]
