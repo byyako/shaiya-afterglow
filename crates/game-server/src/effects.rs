@@ -612,8 +612,7 @@ mod tests {
         assert_eq!((a.len(), a.kill_boost()), (1, Some(5)), "one ability, the highest");
         assert!(Abilities::default().kill_boost().is_none());
         // The places of a full list: a fifth cannot be added, but a kill_boost already there takes the higher value.
-        let mut full = Abilities::default();
-        full.0 = [Ability::KillBoost { times: 2 }; MAX_ABILITIES];
+        let mut full = Abilities([Ability::KillBoost { times: 2 }; MAX_ABILITIES]);
         assert!(!full.push(Ability::KillBoost { times: 1 }));
         assert!(full.merge_kill_boost(7) && full.kill_boost() == Some(7));
     }

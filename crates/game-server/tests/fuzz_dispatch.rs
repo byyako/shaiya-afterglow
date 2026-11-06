@@ -329,7 +329,9 @@ fn opcode(staff: bool, exchange: bool) -> BoxedStrategy<u16> {
     };
     // The unused numbers of those families: a known opcode with another low byte.
     let unused = (select(known), any::<u8>()).prop_map(|(op, low)| (op & 0xFF00) | u16::from(low));
-    prop_oneof![7 => listed, 1 => unused, 2 => any::<u16>()].boxed()
+    // `F706` and `F707` open and close the server to new connections, which the probe after each case could not get through; the table
+    // leaves them out and so do the generated numbers.
+    prop_oneof![7 => listed, 1 => unused, 2 => any::<u16>()].prop_filter("the server's switch", |op| !matches!(op, 0xF706 | 0xF707)).boxed()
 }
 
 fn raw(staff: bool, exchange: bool) -> impl Strategy<Value = Raw> {

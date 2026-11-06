@@ -29,12 +29,15 @@ impl Items {
     }
 }
 
+/// The items of a `deny item_use` rule: `(type, first type id, last type id)`, sorted.
+pub(super) type ItemRanges = Vec<(u8, u8, u8)>;
+
 /// What a rule does: the type and its own keys, parsed.
 #[derive(Clone, Debug)]
 pub(super) enum Kind {
     Deny(Point),
     /// `deny` at `item_use` with its `items`: `(type, first type id, last type id)`, sorted; `None` for every item.
-    DenyItemUse(Option<Vec<(u8, u8, u8)>>),
+    DenyItemUse(Option<ItemRanges>),
     LevelGap(u16),
     CrossFactionTrade,
     PvpGain { exp: f64, kills: u32, deaths: bool },
@@ -184,7 +187,7 @@ fn take_jumps(obj: &mut Map<String, Value>) -> Result<Vec<(u8, u32)>, RuleError>
 
 /// The `items` of a `deny item_use` rule (`docs/plans/ext-3-effects.md` section 6): a list of `"type/type_id"`, `"type/low-high"` (a
 /// range of type ids) and `"type"` (every item of the type), types and type ids 1 to 255. `None` when the key is not there (every item).
-fn take_item_list(obj: &mut Map<String, Value>) -> Result<Option<Vec<(u8, u8, u8)>>, RuleError> {
+fn take_item_list(obj: &mut Map<String, Value>) -> Result<Option<ItemRanges>, RuleError> {
     let Some(value) = obj.remove("items") else { return Ok(None) };
     let wanted = "\"type\", \"type/type_id\" or \"type/low-high\"";
     let Value::Array(list) = value else { return Err(key_err("items", format!("{value} is not a list of {wanted}"))) };

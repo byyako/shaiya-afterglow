@@ -17,7 +17,7 @@ pub use parse::{TYPES, parse_jumps};
 pub use resolve::{EXAMPLE, FileRule, ResolvedRule, RuleFile, RuleLayer, RuleSources, RuleState, check_file, from_settings, resolve, show};
 pub use scope::{Who, WhoMode, hour_of_week, refresh_hour_of_week, set_hour_of_week};
 
-use parse::{Draft, Items, Kind};
+use parse::{Draft, ItemRanges, Items, Kind};
 use scope::Scope;
 
 /// A rule's error in its table: the message and the key it is about. `line_key` is the key whose line the error is reported at
@@ -235,7 +235,7 @@ pub struct RuleSet {
     gain: Vec<Entry<Gain>>,
     enchant: Vec<Entry<EnchantRule>>,
     /// The `deny item_use` rules: the items each covers, `None` for every item (section 6).
-    item_use: Vec<Entry<Option<Vec<(u8, u8, u8)>>>>,
+    item_use: Vec<Entry<Option<ItemRanges>>>,
 }
 
 impl std::fmt::Debug for RuleSet {
@@ -373,7 +373,7 @@ impl RuleSet {
         if self.item_use.is_empty() {
             return None;
         }
-        let covers = |items: &Option<Vec<(u8, u8, u8)>>| {
+        let covers = |items: &Option<ItemRanges>| {
             items.as_ref().is_none_or(|list| list.iter().any(|&(kind, low, high)| kind == item_type && (low..=high).contains(&type_id)))
         };
         let e = self.item_use.iter().find(|e| covers(&e.v) && e.scope.one(map, who))?;

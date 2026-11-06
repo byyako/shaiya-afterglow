@@ -1045,6 +1045,9 @@ fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Op
     None
 }
 
+/// One line of `ext list`: name, version, enabled and the counts of rows, client rows, effects, settings, rules and scripts.
+type ListRow = (String, String, bool, i64, i64, i64, i64, i64, i64);
+
 impl Editor {
     fn read_plan(dir: &Path) -> Result<Plan> {
         read_folder(dir).or_else(refuse)
@@ -1309,7 +1312,7 @@ impl Editor {
     /// `ext list`.
     pub async fn ext_list(&self) -> Result<Vec<String>> {
         let c = &self.s.content;
-        let rows: Vec<(String, String, bool, i64, i64, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
+        let rows: Vec<ListRow> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled, (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
                     (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_item_effects f WHERE f.extension = e.name) + (SELECT count(*) FROM {c}.ext_skill_abilities a WHERE a.extension = e.name),

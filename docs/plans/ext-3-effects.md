@@ -1,12 +1,47 @@
 # Extensions chunk 3, item effects and skill abilities (spec and build plan)
 
-**Specified 2026-11-05; not built.** Chunk 3 of `docs/plans/extensions.md` (section 6, work item 7.3). Chunks 1, 2 and 5 are built
+**Specified 2026-11-05; built 2026-11-05** (steps 1 to 9, one commit each, rehearsed on the drill, then on the live dev box). Chunk 3 of `docs/plans/extensions.md` (section 6, work item 7.3). Chunks 1, 2 and 5 are built
 (`docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`, `docs/plans/ext-5-lua.md`; the operator's pages `docs/server/rules.md` and
 `docs/server/scripts.md`): extensions with their manifest and rows, settings in four layers, rules at eight points, scripts with the `game`
 API. This chunk adds a **registry of item effects and skill abilities**: named, parameterised behaviours written in Rust that an
 extension's rows name in `rows.toml`, so a new item or skill row can do something the original's `special` and ability numbers do not. It
 ships the **level-up stone** (the plan's reference), moves the **Kill Boost Stone** onto the registry without changing what it does, adds
 **Perfect Lapisia** and **stat Recreation Runes**, and gives the rules an **item-use point**. With no extension installed nothing changes.
+The operator's page is `docs/server/effects.md`.
+
+**What the build settled where the text left a choice** (none changes a decision of section 1, and none changes the original's
+behaviour or the Kill Boost Stone's numbers):
+- **The default `rate` of an `enchant` effect is 1,000,000, as the table of 3.1 says**, so `enchant_rate` takes no step rate (step 1's
+  signature had one): an effect with only `jumps` or only `safe` also always succeeds, and the docs say so. To keep the core's rate by
+  step and change only the jump, an `enchant` rule is the tool. `Enchant` (the roll) gained `always` and `own_jumps`; `lapis::enchant`
+  stays and `lapis::enchant_with(…, &ItemEffects)` is the one that reads a Lapisia's effect.
+- **`fits_row` takes the item type and the special** (as the spec's signature) and its messages say `this item is type 95`, not the id
+  (the entry's label already names the id). `Effect::Ext` is a unit variant, the effect found by `ItemEffects::for_use(item_id)`.
+- **The loaders take the definitions they check against and the schema**: `pg::load_item_effects(&pool, &items)` and
+  `load_skill_abilities(&pool, &skills)`, each with an `_in` variant that names the `content` schema (the data editor's tests keep
+  theirs apart). An effect that no longer suits its row (an edit changed the item's type or special after the install) is **skipped with a
+  warning** at start, not a stop: the item then does what its columns say; an unparsable effect or ability, an unknown type and an
+  item or skill not in the definitions stop the start, as 3.4 says.
+- **Refusal ids** of the effects are 2,000,000,000 plus the type's place in `EFFECT_TYPES` (above the rules', which count up from 1, and
+  the scripts', which count up from 1,000,000,000); the whisper limit is per type and player.
+- **`level_up` saves the progress before** the `0x0308` records, `0x0207` and the level-up packets, in the order of 5.1; the gain is the
+  difference to the start of the target level, at least 1.
+- **`ext list` has an `effects` column** (items with an effect plus skill levels with abilities) before `settings`; `ext show` prints
+  `effect 100/215: …` and `abilities 200/1: …`; an `abilities` list names the place in its errors (`ability 2: times: 0 is not 1 to 100`).
+- **The rules' `items` key** is parsed as `Kind::DenyItemUse(Option<sorted ranges>)` with the other `deny` kinds; on a `deny` of another
+  point the error says that only `item_use` takes `items`.
+- **The `kill_boost_skills` shorthand never meets a fifth ability today** (`kill_boost` is the only type and merges into an existing one),
+  so `attach_kill_boosts`' list of skipped levels is empty; the path and its start-up warning are there for the next type.
+- **The placeholders 95/3 and 95/8 are grade 624 and 625**, not 999 as the spec's sentence says of the free records; the rows set
+  `grade = 999` and no other source (`defs.mob_items`, `world.item_create`, `world.sequence_groups`, the quest links) names 999, checked on
+  the drill. The 100/215-217 and 100/221-226 placeholders are 999 already.
+- **The client research entries are 25 to 27** in `docs/testing/client-research-queue.md` (24 was taken meanwhile by the player guide's
+  entry); the live-test items name them.
+- **Tests**: the zone test of the kill boost finds its skill by id and level through the shorthand attached to the definitions; the
+  data editor's `tests/effects.rs` has the PostgreSQL tests (install, upgrade, remove, show, list, the refusals, the warning, `ext
+  scripts`, the server's loaders, and the Kill Boost 1.0.0 to 1.1.0 upgrade with the same `defs` hashes and client rows); `game_flow`
+  has the use chain, the stones, the Lapisia, the runes, the rule and the reference folders' own rows.
+- **The drill's game server listens on 31810** (`GAME_BIND=0.0.0.0:31810 tools/game-server.sh restart`); the live dev box owns 30810.
 
 Background read for this spec: `docs/plans/extensions.md` sections 2, 2a, 4, 5, 6, 7.3; `docs/plans/ext-1-foundation.md` sections 4, 5
 and 6; `docs/plans/ext-2-rules.md`; `docs/server/rules.md`; `docs/plans/ext-5-lua.md` (its top line) and `docs/server/scripts.md`;
