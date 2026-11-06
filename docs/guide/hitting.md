@@ -58,7 +58,8 @@ the blow lands when a roll of 0 to 99 is below the rate
 
 - **Your evasion raises your own hit chance.** The middle term is the monster's hit against your evasion: the higher your evasion, the
   smaller that term, the higher your rate. DEX adds to both your hit and your evasion, so it counts twice.
-- At equal levels and equal numbers the rate is 80 %. Five levels of gap move it only 4 points (the first term); the numbers matter more.
+- At equal levels and equal numbers the rate is 80 %. Five levels of gap move it only about 3 points at level 60 (6 to 7 at level 30,
+  more below; the first term); the numbers matter more.
 - Before the roll, a **block** of the defender turns the blow into a miss ([Blocks](elements-defences.md#7-blocks-reflection-and-giving-up-sp-or-mp)).
 
 What DEX does at level 60 against a level-60 monster (monster LUC 150; the player's hit and evasion from DEX and level only):
@@ -70,7 +71,8 @@ What DEX does at level 60 against a level-60 monster (monster LUC 150; the playe
 | 200 | 99 % | 71 % | 52 % |
 | 400 | 99 % | 95 % | 76 % |
 
-The placed monsters of levels 58 to 62 have DEX 52 to 456 (270 in the middle), so a melee build with little DEX misses them often.
+The field monsters of levels 58 to 62 (those placed in areas, not bosses, their followers or obelisk guards) have DEX 52 to 456 (270
+in the middle), so a melee build with little DEX misses them often.
 The other way round, the same monster with DEX 270 lands 95 % of its blows on you at DEX 12 or 100, 88 % at 200 and 64 % at 400.
 
 Source: `CUser::AttackSuccess` ([Fighting monsters](../original/combat.md) section 3), `CMob::AttackSuccess`
@@ -208,7 +210,8 @@ So magic meets magic defence as a **percentage of your own INT and weapon**: it 
 70 % of the caster's INT + item attack does nothing more against that caster. More INT makes every target's magic defence worth less.
 
 **What cuts through everything**: skills of damage types 0, 3, 4 and 5 skip defence, elements, the level gap and criticals; only the hit
-roll stops them (most have a flat 70 %). The level-60 ultimate skills of four classes take **87 to 92 % of the target's maximum HP**
+roll stops them: a flat chance for some (the four below 70 %, Eraser 65 %, Trap 100 %), the ordinary hit chance of section 3 for the
+others. The level-60 ultimate skills of four classes take **87 to 92 % of the target's maximum HP**
 this way (Regina Power, Syeeric Touch, Pantera Vision, Kamain Breath, with cooldowns of 8 to 20 minutes). Two weapon lapis do **90 % and
 100 % of the target's maximum HP** on any hit, stopped only by the magic resist roll, a magic block or the matching protection
 ([Lapis option skills](elements-defences.md#8-lapis-option-skills)).

@@ -52,8 +52,11 @@ What one point does, everywhere it counts (base and item points alike):
 
 - **Aggro**: every blow you land adds your REC × 10 to that monster's grudge list, and a monster may switch to whoever has the most every
   5 seconds; a taunt adds its own amount plus REC × 10 ([Monsters fighting back](../original/mob-fight.md), section 2).
-- **Drops**: the monster's drop chances read nothing of the killer but who it is: no stat, level, buff or faction bonus changes them
-  ([Fighting monsters](../original/combat.md), section 7).
+- **Drops**: no number of yours changes what drops or how often: no stat, level, buff, faction bonus, premium item or event rate;
+  the chances are the monster's own. Two things on your side do count: a quest item drops only while you (or someone in your party) have
+  one of its quests in progress, and the gold charms and gold items raise **how much gold** you get from a kill (+20 % and +50 % for the
+  stronger charms), never whether gold drops ([Fighting monsters](../original/combat.md) section 7, [Item flags](../original/item-flags.md)
+  section 4).
 - **Magic hit and magic evasion have no stat behind them at all**: only buffs, passive skills and the faction bonus add to them.
 
 Source: `CUser::SetAttack` and `CUser::ItemEquipmentAdd` in [Fighting monsters](../original/combat.md) section 4 and

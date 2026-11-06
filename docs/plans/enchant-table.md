@@ -20,33 +20,38 @@ Confirmed (`docs/original/lapis.md` sections 2 and 5):
   | `LapisianEnchantAddValue` | `DefenseStepNN` | `[NN].armour` (0x542102, `u16`), the total absorption at step NN |
 
 - The add values are **totals per step, not per-step amounts**: step `s` adds `table[s]` (the built-in table happens to be `7s` / `5s`).
+  Enchant value 0 (no step) reads `table[0].weapon` (0 in both shipped files), and the weapon value counts for every equipped craftable
+  item in any slot (`CUser::ItemEquipmentAttackAdd` 0x456546). Rechecked 2026-11-05 (`docs/original/lapis.md` section 2).
+- The values are not checked: add values are stored as `u16`, rates as `u32` compared unsigned, so a negative number would wrap.
 - The roll is unchanged: success when material count + a draw below 1,000,000 < `rate[step]`; step 20 is refused before the roll.
 - The file of the original server patch (`PSM_Server/ShaiyaServerPatch/Server/GameMain/PS_Game/Data/ItemEnchant.ini`, the folder
   `tools/setup.sh` asks for) gives the table of `lapis.md` sections 2 and 5: weapon attack 7, 14, 21, 31 ... 311 (the client window's
   formula), armour 5 a step, rates from 90 % (weapon +1) and 99 % (armour +1) down to 0.02 %, step 20 at 0. So +20 can be reached.
-- `/reitemenh` (`CGameData::ReItemEnchant` 0x4c7bc0) reloads the file; *inferred* original bug: when a step's defence value differs from
-  the weapon value it writes the weapon value into the defence slot (`docs/client/research-balance.md`, "Findings outside the questions").
+- `/reitemenh` (`CGameData::ReItemEnchant` 0x4c7bc0) reloads the file; original bug, **confirmed** 2026-11-05 (0x4c7c7c to 0x4c7cd5):
+  when a step's defence value differs from the weapon value it writes the weapon value into the defence slot, for rates and add values.
   Not to be copied: the reloads are not built (`docs/original/operator-console.md` section 9, point 4).
 
 ## 2. What the server does today
 
 `crates/game-server/src/lapis.rs`: `ENCHANT_RATES` (the built-in rates) and `ENCHANT_ADD` (`[7, 5]`, multiplied by the step in
-`enchant_bonus`). Nothing reads `ItemEnchant.ini`. So from +4 a weapon has less attack than the original and the client's window show,
+`enchant_bonus`, whose one caller is `combat::gear`). A Lapisia with an extension's `enchant` effect (chunk 3, `docs/server/effects.md`)
+uses the effect's rate instead of the step's. Nothing reads `ItemEnchant.ini`. So from +4 a weapon has less attack than the original and the client's window show,
 the rates are far lower, and weapons stop at +12, armour at +14. The guide says this on its first page ("Shaiya Afterglow").
 
 ## 3. The build
 
 1. **Import** (`tools/world/import.py`, which already reads the PS_Game `Data` folder's `.ini` files with `read_profile`): read
    `ItemEnchant.ini` as `GetPrivateProfileIntA` does (the section and key names case-insensitive, `;` comments, the leading integer of the
-   value, trailing tabs and spaces ignored, a missing key 0) into a new table **`world.item_enchant (step smallint primary key 0..20,
+   value, trailing tabs and spaces ignored, a missing key 0; a negative value, or an add value above 32,767, refused with the key
+   named, where the original would wrap) into a new table **`world.item_enchant (step smallint primary key 0..20,
    weapon_rate integer, armour_rate integer, weapon_add smallint, armour_add smallint)`** in `db/world/schema.sql`, 21 rows. **No file:
    no rows**, and a line saying the built-in tables will be used (the original's behaviour). Re-running the import replaces the rows.
 2. **Load** (`pg.rs`, with the other world data at start): 21 rows → an `EnchantTable`; no rows → the built-in tables (today's
    constants, kept as the fallback). Anything but 0 or 21 rows, or steps outside 0 to 20: a start error naming the table.
-3. **Use** (`lapis.rs`): `Enchant::rate` from the table; `enchant_bonus(craft_name)` returns `(table[s].weapon_add, 0)` for a weapon
-   step `s` and `(0, table[s].armour_add)` for an armour step (a lookup, no multiplication). `stats::compute`, `combat::gear` and
-   `server::gear` take the table where they call `enchant_bonus`. The `enchant` rule's jumps (`docs/server/rules.md`) keep working: they
-   only choose the new step.
+3. **Use** (`lapis.rs`): `Enchant::rate` from the table unless the Lapisia's `enchant` effect gives its own; `enchant_bonus(craft_name)`
+   returns `(table[s].weapon_add, 0)` for a weapon value `s` of 0 to 20 and `(0, table[s].armour_add)` for an armour step (a lookup, no
+   multiplication). `combat::gear`, its only caller, takes the table. The `enchant` rule's jumps (`docs/server/rules.md`) and the
+   effect's jumps keep working: they only choose the new step.
 4. **The balance model** (`tools/balance/`): `formulas.enchant_bonus` and the rates read the same table (`data.py` from
    `world.item_enchant`, the built-in tables when it is empty); `test_formulas.py` gets a case for each; `content.py`'s enchant-cost table
    and `docs/plans/balance/1-formulas.md` section 4.9 (and section 1, point 7) are redone or marked as describing the built-in tables.
@@ -58,7 +63,8 @@ the rates are far lower, and weapons stop at +12, armour at +14. The guide says 
    CHANGELOG, `docs/server/run.md` or the README if the import's output mentions the file, and a live-test item in
    `docs/testing/live-test-checklist.md`: a weapon taken from +3 to +4 shows the same attack in the character window as the server uses
    (the window's formula is the file's, `docs/client/research-balance.md`), and an armour step shows "<n> absorption damage" with the
-   file's value.
+   file's value. The client computes its attack row itself (`docs/testing/client-research-queue.md` entry 24), so an operator who edits
+   the weapon add values makes the window disagree; the docs say so.
 
 Not in scope: an operator setting to choose the built-in tables (the operator edits the file instead), the reload command.
 
