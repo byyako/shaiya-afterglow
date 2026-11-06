@@ -94,6 +94,29 @@ pub struct Cure {
 }
 
 impl Effect {
+    /// What the core's own effect is, in words, for `ext check`'s warning that an item with an extension's effect does this while the
+    /// extension is disabled (`docs/plans/ext-3-effects.md` section 3.3); `None` for the effects that are a refusal of the item.
+    pub fn label(&self) -> Option<&'static str> {
+        Some(match self {
+            Effect::QuestItem { .. } | Effect::Refused | Effect::NotBuilt => return None,
+            Effect::Skill { .. } => "an item that gives a skill",
+            Effect::ExpWheel { .. } => "an experience wheel",
+            Effect::Recover(_) | Effect::RecoverPercent(_) => "a potion",
+            Effect::Cure(_) => "a cure",
+            Effect::SkillReset => "a skill reset",
+            Effect::StatReset => "a stat reset",
+            Effect::Recall(_) | Effect::GuildHouseStone | Effect::Teleport | Effect::MovementRune | Effect::PartySummon => "a move by item",
+            Effect::RepairAll => "a repair of everything equipped",
+            Effect::TargetResurrection => "a resurrection",
+            Effect::Fame(_) => "an honor item",
+            Effect::Firecracker => "a firecracker",
+            Effect::Box(_) => "a box",
+            Effect::Blessing => "a goddess blessing",
+            Effect::MessageToServer => "a message to the server",
+            Effect::NameChange => "a name change stone",
+        })
+    }
+
     /// The effects that start a move by item after a casting (section 9).
     pub fn casts(&self) -> bool {
         matches!(self, Effect::Recall(_) | Effect::Teleport | Effect::MovementRune | Effect::PartySummon)
@@ -321,6 +344,15 @@ mod tests {
         assert_eq!(effect(&item(100, 38)), Effect::MessageToServer);
         assert_eq!(effect(&item(100, 25)), Effect::Refused, "no item has special 25");
         assert_eq!(effect(&item(100, 30)), Effect::Blessing);
+    }
+
+    #[test]
+    fn effects_have_a_word_unless_they_refuse() {
+        assert_eq!(effect(&item(100, 0)).label(), None, "special 0 with no HP, SP or MP is a refusal");
+        assert_eq!(effect(&ItemDef { const_health: [30, 0, 0], ..item(25, 0) }).label(), Some("a potion"));
+        assert_eq!(effect(&item(100, 33)).label(), Some("a skill reset"));
+        assert_eq!(effect(&item(100, 59)).label(), None, "not built is an error answer too");
+        assert_eq!(effect(&item(27, 0)).label(), None);
     }
 
     #[test]

@@ -202,6 +202,28 @@ struct Computed {
     row: RowMap,
     /// The row differs from the original in a column other than `updatedate` (it needs a client row or a reason).
     differs: bool,
+    /// A warning for `ext check` and `install` (the disabled-fallback of `docs/plans/ext-3-effects.md` section 3.3).
+    warning: Option<String>,
+}
+
+/// What the core would do with a computed item row on its own, as words, when it is not a refusal: the effect an item with an extension's
+/// effect falls back to while the extension is disabled.
+fn core_effect_warning(e: &Entry, row: &RowMap) -> Option<String> {
+    let number = |column: &str| row.get(column).and_then(Value::as_i64).unwrap_or(0);
+    let health = |column: &str| number(column).clamp(0, i64::from(u16::MAX)) as u16;
+    let def = game_server::inventory::ItemDef {
+        item_type: number("type").clamp(0, 255) as u8,
+        type_id: number("typeid").clamp(0, 255) as u8,
+        special: number("special").clamp(0, 255) as u8,
+        range: number("range").clamp(0, i64::from(u16::MAX)) as u16,
+        attack_time: number("attacktime").clamp(0, 255) as u8,
+        const_health: [health("consthp"), health("constmp"), health("constsp")],
+        vg: number("reqvg").clamp(i64::from(i16::MIN), i64::from(i16::MAX)) as i16,
+        ..Default::default()
+    };
+    let effect = game_server::item_use::effect(&def);
+    let what = effect.label()?;
+    Some(format!("{}: when the extension is disabled, {} is {what}", e.label(), e.id))
 }
 
 async fn compute(
@@ -314,11 +336,22 @@ async fn compute(
         }
         row.insert(column.clone(), value);
     }
-    let differs = match &original {
+    let mut differs = match &original {
         None => true,
         Some(o) => row.iter().any(|(k, v)| k != "updatedate" && o.get(k) != Some(v)),
     };
-    Ok(Computed { action, row, differs })
+    // An effect or abilities on an original row change what it does, so the client's text would be wrong without a `client` or
+    // `server_only` (docs/plans/ext-3-effects.md section 4.1), even when no column changes.
+    differs |= action == "change" && (e.effect.is_some() || e.abilities.is_some());
+    let mut warning = None;
+    if let Some(effect) = &e.effect {
+        let parsed = game_server::effects::check_effect(effect).map_err(|err| fail(format!("effect: {err}")))?;
+        let number = |column: &str| row.get(column).and_then(Value::as_i64).unwrap_or(0);
+        let (item_type, special) = (number("type").clamp(0, 255) as u8, number("special").clamp(0, 255) as u8);
+        game_server::effects::fits_row(&parsed, item_type, special).map_err(fail)?;
+        warning = core_effect_warning(e, &row);
+    }
+    Ok(Computed { action, row, differs, warning })
 }
 
 // ------------------------------------------------------------------------------------------------------------------------ client rows
@@ -685,7 +718,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .bind(&manifest_json)
             .execute(&mut *conn)
             .await?;
-        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client", "ext_scripts", "ext_options"] {
+        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client", "ext_scripts", "ext_options", "ext_item_effects", "ext_skill_abilities"] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
         }
     } else {
@@ -759,7 +792,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
 
     // The rows.
     let client = client_ctx(conn, s).await?;
-    let (mut changed, mut added, mut client_rows) = (0, 0, 0);
+    let (mut changed, mut added, mut client_rows, mut effects) = (0, 0, 0, 0);
     let mut shown = Vec::new();
     // Client rows are rewritten wholesale; the old ones' since_patch is looked up first.
     for table in ["client_items", "client_skills"] {
@@ -799,6 +832,32 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             new_client_keys.push((label, before.map(|b| b.3 == written).unwrap_or(false)));
         }
         shown.push(describe(e, &computed, t));
+        warnings.extend(computed.warning.clone());
+        if let Some(effect) = &e.effect {
+            let parsed = game_server::effects::check_effect(effect)?;
+            sqlx::query(sql(format!("INSERT INTO {c}.ext_item_effects (extension, item_id, effect) VALUES ($1, $2, $3)")))
+                .bind(name)
+                .bind(e.key[0] as i32)
+                .bind(effect)
+                .execute(&mut *conn)
+                .await?;
+            shown.push(format!("    {} {}", e.id, parsed.describe()));
+            effects += 1;
+        }
+        if let Some(list) = &e.abilities {
+            let parsed = game_server::effects::check_abilities(list)?;
+            sqlx::query(sql(format!("INSERT INTO {c}.ext_skill_abilities (extension, skill_id, level, abilities) VALUES ($1, $2, $3, $4)")))
+                .bind(name)
+                .bind(e.key[0] as i16)
+                .bind(e.key[1] as i16)
+                .bind(list)
+                .execute(&mut *conn)
+                .await?;
+            for ability in &parsed {
+                shown.push(format!("    {} {}", e.id, ability.describe()));
+            }
+            effects += 1;
+        }
     }
     // since_patch survives for a client row whose content and server row did not change.
     if let Some(prior) = &prior {
@@ -833,6 +892,9 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     // On top: the edits.
     let problems = rewrite_edits(conn, s).await?;
     out.push(format!("{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings, {} rules", m.settings.len(), m.rules.len()));
+    if effects > 0 {
+        out.push(format!("{effects} item effects and skill abilities (server-only: restart the game servers)"));
+    }
     out.extend(shown);
     out.extend(warnings.into_iter().map(|w| format!("warning: {w}")));
     out.extend(problems);
@@ -951,6 +1013,8 @@ async fn ext_snapshot(conn: &mut PgConnection, s: &Schemas, name: &str) -> Resul
         ("item and skill ids", "ext_ranges", "", "to_jsonb(t)::text"),
         ("settings", "ext_settings", "", "to_jsonb(t)::text"),
         ("rules", "ext_rules", "", "to_jsonb(t)::text"),
+        ("item effects", "ext_item_effects", "", "to_jsonb(t)::text"),
+        ("skill abilities", "ext_skill_abilities", "", "to_jsonb(t)::text"),
         ("client features and art", "ext_client", "", "to_jsonb(t)::text"),
         ("migrations", "ext_migrations", " - 'applied_at'", "t.version"),
         ("client item rows", "client_items", "", "to_jsonb(t)::text"),
@@ -1245,9 +1309,10 @@ impl Editor {
     /// `ext list`.
     pub async fn ext_list(&self) -> Result<Vec<String>> {
         let c = &self.s.content;
-        let rows: Vec<(String, String, bool, i64, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
+        let rows: Vec<(String, String, bool, i64, i64, i64, i64, i64, i64)> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled, (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
                     (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
+                    (SELECT count(*) FROM {c}.ext_item_effects f WHERE f.extension = e.name) + (SELECT count(*) FROM {c}.ext_skill_abilities a WHERE a.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_scripts x WHERE x.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
@@ -1257,9 +1322,9 @@ impl Editor {
         if rows.is_empty() {
             return Ok(vec!["no extensions installed".to_owned()]);
         }
-        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>9} {:>6} {:>7}", "name", "version", "state", "rows", "client", "settings", "rules", "scripts")];
-        for (name, version, enabled, r, cl, se, ru, sc) in rows {
-            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {se:>9} {ru:>6} {sc:>7}", if enabled { "enabled" } else { "disabled" }));
+        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>7} {:>9} {:>6} {:>7}", "name", "version", "state", "rows", "client", "effects", "settings", "rules", "scripts")];
+        for (name, version, enabled, r, cl, ef, se, ru, sc) in rows {
+            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {ef:>7} {se:>9} {ru:>6} {sc:>7}", if enabled { "enabled" } else { "disabled" }));
         }
         Ok(out)
     }
@@ -1300,6 +1365,19 @@ impl Editor {
                 _ => Vec::new(),
             };
             out.push(format!("  row {action} {tbl} {key}{}", if diff.is_empty() { String::new() } else { format!(": {}", diff.join("; ")) }));
+        }
+        let effects: Vec<(i32, Value)> = sqlx::query_as(sql(format!("SELECT item_id, effect FROM {c}.ext_item_effects WHERE extension = $1 ORDER BY item_id"))).bind(name).fetch_all(&mut *conn).await?;
+        for (item_id, effect) in effects {
+            let text = game_server::effects::check_effect(&effect).map_or_else(|e| format!("INVALID: {e} ({effect})"), |e| e.describe());
+            out.push(format!("  effect {}/{}: {text}", item_id / 1000, item_id % 1000));
+        }
+        let abilities: Vec<(i16, i16, Value)> = sqlx::query_as(sql(format!("SELECT skill_id, level, abilities FROM {c}.ext_skill_abilities WHERE extension = $1 ORDER BY skill_id, level"))).bind(name).fetch_all(&mut *conn).await?;
+        for (skill_id, level, list) in abilities {
+            let text = match game_server::effects::check_abilities(&list) {
+                Ok(parsed) => parsed.iter().map(|a| a.describe()).collect::<Vec<_>>().join("; "),
+                Err(e) => format!("INVALID: {e} ({list})"),
+            };
+            out.push(format!("  abilities {skill_id}/{level}: {text}"));
         }
         let client: Vec<(String, String)> = sqlx::query_as(sql(format!(
             "SELECT 'item ' || type || '/' || typeid, coalesce(name, '(keep)') || ' since patch ' || coalesce(since_patch::text, '-') FROM {c}.client_items WHERE extension = $1

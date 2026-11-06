@@ -72,6 +72,10 @@ pub struct Entry {
     pub client: Option<ClientSpec>,
     pub server_only: Option<String>,
     pub note: Option<String>,
+    /// An item's effect (`docs/plans/ext-3-effects.md` section 4.1), as written and checked by the server's parser.
+    pub effect: Option<Value>,
+    /// A skill level's abilities, as written and checked by the server's parser.
+    pub abilities: Option<Value>,
 }
 
 impl Entry {
@@ -124,6 +128,15 @@ fn json(value: &toml::Value) -> Result<Value, String> {
     })
 }
 
+/// Any TOML value as JSON (an effect's tables and lists); a date is not a value an effect holds.
+fn toml_json(value: &toml::Value) -> Result<Value, String> {
+    Ok(match value {
+        toml::Value::Array(list) => Value::Array(list.iter().map(toml_json).collect::<Result<_, _>>()?),
+        toml::Value::Table(table) => Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_json(v)?))).collect::<Result<_, String>>()?),
+        other => json(other)?,
+    })
+}
+
 fn parse_entry(kind: Kind, n: usize, file: &str, table: &Table) -> Result<Entry, String> {
     let mut entry = Entry {
         kind,
@@ -136,11 +149,18 @@ fn parse_entry(kind: Kind, n: usize, file: &str, table: &Table) -> Result<Entry,
         client: None,
         server_only: None,
         note: None,
+        effect: None,
+        abilities: None,
     };
     let label = |e: &Entry| e.label();
     for key in table.keys() {
-        if !["id", "copy", "set", "client", "server_only", "note"].contains(&key.as_str()) {
-            return Err(format!("{}: unknown key `{key}`", format_args!("{file} [[{}]] #{n}", kind.word())));
+        let here = format!("{file} [[{}]] #{n}", kind.word());
+        match (key.as_str(), kind) {
+            ("effect", Kind::Skill) => return Err(format!("{here}: `effect` belongs to [[item]] (a [[skill]] has `abilities`)")),
+            ("abilities", Kind::Item) => return Err(format!("{here}: `abilities` belongs to [[skill]] (an [[item]] has `effect`)")),
+            ("effect", Kind::Item) | ("abilities", Kind::Skill) => {}
+            _ if ["id", "copy", "set", "client", "server_only", "note"].contains(&key.as_str()) => {}
+            _ => return Err(format!("{here}: unknown key `{key}`")),
         }
     }
     let id = table.get("id").and_then(toml::Value::as_str).ok_or_else(|| format!("{file} [[{}]] #{n}: the required key `id` is missing", kind.word()))?;
@@ -183,6 +203,16 @@ fn parse_entry(kind: Kind, n: usize, file: &str, table: &Table) -> Result<Entry,
     }
     if let Some(value) = table.get("server_only") {
         entry.server_only = Some(value.as_str().filter(|s| !s.trim().is_empty()).ok_or_else(|| format!("{}: server_only must be the reason, a text", label(&entry)))?.to_owned());
+    }
+    if let Some(value) = table.get("effect") {
+        let json = toml_json(value).map_err(|e| format!("{}: effect: {e}", label(&entry)))?;
+        game_server::effects::check_effect(&json).map_err(|e| format!("{}: effect: {e}", label(&entry)))?;
+        entry.effect = Some(json);
+    }
+    if let Some(value) = table.get("abilities") {
+        let json = toml_json(value).map_err(|e| format!("{}: abilities: {e}", label(&entry)))?;
+        game_server::effects::check_abilities(&json).map_err(|e| format!("{}: abilities: {e}", label(&entry)))?;
+        entry.abilities = Some(json);
     }
     if let Some(value) = table.get("note") {
         entry.note = Some(value.as_str().ok_or_else(|| format!("{}: note must be a text", label(&entry)))?.to_owned());
@@ -355,6 +385,38 @@ set = { grade = 3, droprate = 50 }
             (parse_rows("rows.toml", "[[monster]]\nid = \"1/1\"").unwrap_err(), "unknown key `monster`"),
             (parse_rows("rows.toml", "item = 1").unwrap_err(), "must be an array of tables"),
             (parse_rows("rows.toml", "[[item").unwrap_err(), "not valid TOML"),
+        ];
+        for (error, needle) in cases {
+            assert!(error.contains(needle), "wanted {needle:?}, got {error:?}");
+        }
+    }
+
+    #[test]
+    fn effects_and_abilities_parse_with_their_entry_in_every_error() {
+        let rows = parse_rows(
+            "rows.toml",
+            "[[item]]\nid = \"100/215\"\neffect = { type = \"level_up\", levels = 1 }\n[[skill]]\nid = \"200/1\"\nabilities = [{ type = \"kill_boost\", times = 2 }]\n",
+        )
+        .unwrap();
+        assert_eq!(rows[0].effect, Some(serde_json::json!({ "type": "level_up", "levels": 1 })));
+        assert_eq!(rows[1].abilities, Some(serde_json::json!([{ "type": "kill_boost", "times": 2 }])));
+        // Nested tables and lists come through as JSON.
+        let rows = parse_rows("rows.toml", "[[item]]\nid = \"95/3\"\neffect = { type = \"enchant\", jumps = [[1, 60], [2, 40]], safe = true }\n").unwrap();
+        assert_eq!(rows[0].effect.as_ref().unwrap()["jumps"], serde_json::json!([[1, 60], [2, 40]]));
+        let one = |kind: &str, body: &str| parse_rows("rows.toml", &format!("[[{kind}]]\n{body}")).unwrap_err();
+        let cases = [
+            (one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 0 }"), "rows.toml [[item]] #1 (100/215): effect: levels: 0 is not 1 to 59"),
+            (one("item", "id = \"100/215\"\neffect = { type = \"level_up\" }"), "(100/215): effect: a level_up effect needs one of"),
+            (one("item", "id = \"100/215\"\neffect = \"level_up\""), "effect: an effect is a table"),
+            (one("item", "id = \"100/215\"\neffect = { type = \"nothing\" }"), "effect: type: unknown type \"nothing\""),
+            (one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 1, rate = 3 }"), "effect: unknown key \"rate\" (not a key of the level_up effect)"),
+            (one("skill", "id = \"200/1\"\nabilities = [{ type = \"kill_boost\", times = 101 }]"), "rows.toml [[skill]] #1 (200/1): abilities: ability 1: times: 101 is not 1 to 100"),
+            (one("skill", "id = \"200/1\"\nabilities = []"), "abilities: 0 abilities is not 1 to 4"),
+            (one("skill", "id = \"200/1\"\neffect = { type = \"level_up\", levels = 1 }"), "`effect` belongs to [[item]]"),
+            (one("item", "id = \"100/215\"\nabilities = [{ type = \"kill_boost\", times = 2 }]"), "`abilities` belongs to [[skill]]"),
+            (one("drop", "id = \"2133/4\"\neffect = { type = \"level_up\", levels = 1 }"), "unknown key `effect`"),
+            (one("drop", "id = \"2133/4\"\nabilities = [{ type = \"kill_boost\", times = 2 }]"), "unknown key `abilities`"),
+            (one("item", "id = \"100/215\"\neffect = { type = \"recreate\", stats = [\"str\"], at = 2026-11-05 }"), "effect: a datetime cannot be a column value"),
         ];
         for (error, needle) in cases {
             assert!(error.contains(needle), "wanted {needle:?}, got {error:?}");

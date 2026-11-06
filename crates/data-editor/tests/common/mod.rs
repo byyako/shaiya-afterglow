@@ -15,6 +15,7 @@ const EDITS_MIGRATION: &str = include_str!("../../../../db/migrations/0030_data_
 const CONTENT_MIGRATION: &str = include_str!("../../../../db/migrations/0031_content.sql");
 const RULES_MIGRATION: &str = include_str!("../../../../db/migrations/0032_rules.sql");
 const SCRIPTS_MIGRATION: &str = include_str!("../../../../db/migrations/0033_scripts.sql");
+const EFFECTS_MIGRATION: &str = include_str!("../../../../db/migrations/0034_effects.sql");
 
 pub struct Db {
     pub pool: PgPool,
@@ -120,6 +121,7 @@ impl Db {
         // Without the game's own tables (`characters`) the stored values have nothing to point at.
         let scripts = if full { SCRIPTS_MIGRATION.to_owned() } else { SCRIPTS_MIGRATION.replace(" REFERENCES characters (id) ON DELETE CASCADE", "") };
         run(&pool, scripts.replace("content.", &format!("{}.", s.content))).await;
+        run(&pool, EFFECTS_MIGRATION.replace("content.", &format!("{}.", s.content))).await;
         let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s, pub_schema: full.then_some(pub_schema) };
         db.load(Files::default()).await;
         Some(db)
