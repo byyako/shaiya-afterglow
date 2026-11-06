@@ -685,7 +685,10 @@ mod tests {
         let mut defs = defs();
         assert!(defs.get(2, 1).unwrap().ext.is_empty(), "none by default");
         assert_eq!(defs.attach_abilities([(2, 1, boost(5)), (2, 3, boost(7))]), Ok(2));
-        assert_eq!((defs.get(2, 1).unwrap().ext.kill_boost(), defs.get(2, 2).unwrap().ext.kill_boost(), defs.get(2, 3).unwrap().ext.kill_boost()), (Some(5), None, Some(7)));
+        assert_eq!(
+            (defs.get(2, 1).unwrap().ext.kill_boost(), defs.get(2, 2).unwrap().ext.kill_boost(), defs.get(2, 3).unwrap().ext.kill_boost()),
+            (Some(5), None, Some(7))
+        );
         // A level that is not loaded stops the attach, naming it.
         assert_eq!(defs.attach_abilities([(2, 2, boost(1)), (99, 1, boost(1))]), Err((99, 1)));
         // The shorthand: by id (any level, level 100 included) or id and level; the highest wins; nothing else is touched.

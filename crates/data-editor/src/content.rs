@@ -57,7 +57,6 @@ pub async fn schema_exists(conn: &mut PgConnection, schema: &str) -> Result<bool
     Ok(sqlx::query_scalar("SELECT to_regnamespace($1::text) IS NOT NULL").bind(schema).fetch_one(&mut *conn).await?)
 }
 
-
 pub async fn columns_of(conn: &mut PgConnection, schema: &str, table: &str) -> Result<Vec<String>> {
     Ok(sqlx::query_scalar(
         "SELECT column_name::text FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position",
@@ -105,8 +104,12 @@ async fn insert_order(conn: &mut PgConnection, schema: &str, tables: &[String]) 
 
 fn ddl_for(side: Side, schema: &str) -> String {
     match side {
-        Side::Defs => DEFS_DDL.replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {schema};")).replace("defs.", &format!("{schema}.")),
-        Side::World => WORLD_DDL.replace("CREATE SCHEMA world;", &format!("CREATE SCHEMA {schema};")).replace("world.", &format!("{schema}.")),
+        Side::Defs => DEFS_DDL
+            .replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {schema};"))
+            .replace("defs.", &format!("{schema}.")),
+        Side::World => {
+            WORLD_DDL.replace("CREATE SCHEMA world;", &format!("CREATE SCHEMA {schema};")).replace("world.", &format!("{schema}."))
+        }
         Side::Content => unreachable!("content is never rebuilt from a frozen copy"),
     }
 }
@@ -128,13 +131,12 @@ pub async fn write_ext_row(conn: &mut PgConnection, s: &Schemas, t: &ExtTable, a
         "change" => {
             let set = cols.iter().map(|c| format!("{c} = r.{c}")).collect::<Vec<_>>().join(", ");
             let on = t.key_cols.iter().map(|c| format!("t.{c} = r.{c}")).collect::<Vec<_>>().join(" AND ");
-            let done = sqlx::query(sql(format!(
-                "UPDATE {live} t SET {set} FROM jsonb_populate_record(NULL::{live}, $1::jsonb) r WHERE {on}"
-            )))
-            .bind(row)
-            .execute(&mut *conn)
-            .await?
-            .rows_affected();
+            let done =
+                sqlx::query(sql(format!("UPDATE {live} t SET {set} FROM jsonb_populate_record(NULL::{live}, $1::jsonb) r WHERE {on}")))
+                    .bind(row)
+                    .execute(&mut *conn)
+                    .await?
+                    .rows_affected();
             if done != 1 {
                 bail!("{} {}: the row an extension changes is not there ({done} rows updated)", t.tbl, row_key(t, row));
             }
@@ -173,11 +175,16 @@ pub async fn rebuild_part(conn: &mut PgConnection, s: &Schemas, side: Side, like
             Some(model) if schema_exists(conn, model).await? => {
                 sqlx::query(sql(format!("CREATE SCHEMA {live}"))).execute(&mut *conn).await?;
                 for table in tables_of(conn, model).await? {
-                    sqlx::query(sql(format!("CREATE TABLE {live}.{table} (LIKE {model}.{table} INCLUDING ALL)"))).execute(&mut *conn).await?;
+                    sqlx::query(sql(format!("CREATE TABLE {live}.{table} (LIKE {model}.{table} INCLUDING ALL)")))
+                        .execute(&mut *conn)
+                        .await?;
                 }
             }
             _ => {
-                sqlx::raw_sql(sql(ddl_for(side, &live))).execute(&mut *conn).await.with_context(|| format!("creating {live} from its DDL"))?;
+                sqlx::raw_sql(sql(ddl_for(side, &live)))
+                    .execute(&mut *conn)
+                    .await
+                    .with_context(|| format!("creating {live} from its DDL"))?;
             }
         }
         result.created = true;
@@ -197,7 +204,9 @@ pub async fn rebuild_part(conn: &mut PgConnection, s: &Schemas, side: Side, like
     for table in insert_order(conn, &live, &frozen_tables).await? {
         let cols = columns_of(conn, &frozen, &table).await?;
         let list = cols.join(", ");
-        let rows = sqlx::query(sql(format!("INSERT INTO {live}.{table} ({list}) SELECT {list} FROM {frozen}.{table}"))).execute(&mut *conn).await?;
+        let rows = sqlx::query(sql(format!("INSERT INTO {live}.{table} ({list}) SELECT {list} FROM {frozen}.{table}")))
+            .execute(&mut *conn)
+            .await?;
         result.tables.push((table.clone(), rows.rows_affected() as i64));
         let identities: Vec<String> = sqlx::query_scalar(
             "SELECT a.attname::text FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -270,11 +279,23 @@ async fn key_columns(conn: &mut PgConnection, schema: &str, table: &str, side: S
     if let Some(t) = tables::TABLES.iter().find(|t| t.side == side && t.table == table) {
         return Ok(t.key_cols.iter().map(|c| (*c).to_owned()).collect());
     }
-    Ok(registry::all().iter().find(|t| t.side == side && t.table == table).map(|t| t.key_cols.iter().map(|c| (*c).to_owned()).collect()).unwrap_or_default())
+    Ok(registry::all()
+        .iter()
+        .find(|t| t.side == side && t.table == table)
+        .map(|t| t.key_cols.iter().map(|c| (*c).to_owned()).collect())
+        .unwrap_or_default())
 }
 
 /// What differs between the live table and the table a rebuild gives (`EXCEPT ALL` both ways), worded as section 3.5 words it.
-async fn diff_table(conn: &mut PgConnection, label: &str, live: &str, expected: &str, table: &str, side: Side, out: &mut Vec<String>) -> Result<()> {
+async fn diff_table(
+    conn: &mut PgConnection,
+    label: &str,
+    live: &str,
+    expected: &str,
+    table: &str,
+    side: Side,
+    out: &mut Vec<String>,
+) -> Result<()> {
     let only_live: Vec<Value> = sqlx::query_scalar(sql(format!(
         "SELECT to_jsonb(l) FROM {live}.{table} l EXCEPT ALL SELECT to_jsonb(e) FROM {expected}.{table} e LIMIT 50"
     )))
@@ -289,7 +310,12 @@ async fn diff_table(conn: &mut PgConnection, label: &str, live: &str, expected: 
         return Ok(());
     }
     let keys = key_columns(conn, live, table, side).await?;
-    let key_of = |row: &Value| keys.iter().map(|k| row.get(k).map(|v| v.to_string().trim_matches('"').to_owned()).unwrap_or_default()).collect::<Vec<_>>().join("/");
+    let key_of = |row: &Value| {
+        keys.iter()
+            .map(|k| row.get(k).map(|v| v.to_string().trim_matches('"').to_owned()).unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join("/")
+    };
     let mut matched = vec![false; only_expected.len()];
     for row in &only_live {
         let key = if keys.is_empty() { short(row) } else { key_of(row) };
@@ -300,7 +326,11 @@ async fn diff_table(conn: &mut PgConnection, label: &str, live: &str, expected: 
                 let (a, b) = (row.as_object().cloned().unwrap_or_default(), only_expected[i].as_object().cloned().unwrap_or_default());
                 for (col, value) in &a {
                     if b.get(col) != Some(value) {
-                        out.push(format!("{label}.{table} {key}: hand edit? {col} live {}, expected {}", short(value), short(b.get(col).unwrap_or(&Value::Null))));
+                        out.push(format!(
+                            "{label}.{table} {key}: hand edit? {col} live {}, expected {}",
+                            short(value),
+                            short(b.get(col).unwrap_or(&Value::Null))
+                        ));
                     }
                 }
             }
@@ -430,7 +460,9 @@ impl Editor {
         }
         // 3. every owned key lies in its extension's ranges.
         let owned: Vec<(String, String, String)> =
-            sqlx::query_as(sql(format!("SELECT extension, tbl, key FROM {c}.ext_rows ORDER BY extension, tbl, key"))).fetch_all(&mut *tx).await?;
+            sqlx::query_as(sql(format!("SELECT extension, tbl, key FROM {c}.ext_rows ORDER BY extension, tbl, key")))
+                .fetch_all(&mut *tx)
+                .await?;
         for (extension, tbl, key) in owned {
             let Ok(parts) = tables::parse_key(&key) else {
                 findings.push(format!("{tbl} {key}: owned by {extension}, but not a key"));
@@ -563,11 +595,12 @@ impl Editor {
             None => "(no such row)".to_owned(),
         };
         out.push(format!("  original ({}): {}", s.original_of(side), show(&original)));
-        let owner: Option<(String, String, Value)> = sqlx::query_as(sql(format!("SELECT extension, action, row FROM {c}.ext_rows WHERE tbl = $1 AND key = $2")))
-            .bind(format!("{}.{bare}", part_name(side)))
-            .bind(key)
-            .fetch_optional(&mut *conn)
-            .await?;
+        let owner: Option<(String, String, Value)> =
+            sqlx::query_as(sql(format!("SELECT extension, action, row FROM {c}.ext_rows WHERE tbl = $1 AND key = $2")))
+                .bind(format!("{}.{bare}", part_name(side)))
+                .bind(key)
+                .fetch_optional(&mut *conn)
+                .await?;
         match &owner {
             Some((extension, action, row)) => {
                 let set: Vec<String> = row
@@ -579,7 +612,10 @@ impl Editor {
                             .collect()
                     })
                     .unwrap_or_default();
-                out.push(format!("  extension {extension} ({action}): {}", if set.is_empty() { "no column differs from the original".to_owned() } else { set.join(", ") }));
+                out.push(format!(
+                    "  extension {extension} ({action}): {}",
+                    if set.is_empty() { "no column differs from the original".to_owned() } else { set.join(", ") }
+                ));
             }
             None => out.push("  extension: none owns this row".to_owned()),
         }
@@ -595,13 +631,18 @@ impl Editor {
             .await?;
             for (field, value, original, change_set) in fields {
                 edits += 1;
-                out.push(format!("  edit {} {field} = {value} (original {}; change set #{change_set})", t.name, original.map(|o| o.to_string()).unwrap_or_else(|| "-".to_owned())));
+                out.push(format!(
+                    "  edit {} {field} = {value} (original {}; change set #{change_set})",
+                    t.name,
+                    original.map(|o| o.to_string()).unwrap_or_else(|| "-".to_owned())
+                ));
             }
-            let rows: Vec<(String, i32)> = sqlx::query_as(sql(format!("SELECT action, change_set FROM {}.rows WHERE target = $1 AND key = $2", s.edits)))
-                .bind(t.name)
-                .bind(key)
-                .fetch_all(&mut *conn)
-                .await?;
+            let rows: Vec<(String, i32)> =
+                sqlx::query_as(sql(format!("SELECT action, change_set FROM {}.rows WHERE target = $1 AND key = $2", s.edits)))
+                    .bind(t.name)
+                    .bind(key)
+                    .fetch_all(&mut *conn)
+                    .await?;
             for (action, change_set) in rows {
                 edits += 1;
                 out.push(format!("  edit {} row {action} (change set #{change_set})", t.name));
@@ -612,9 +653,17 @@ impl Editor {
         }
         out.push(format!("  live: {}", show(&live)));
         if let (Some(live), Some(original)) = (&live, &original) {
-            let (l, o): (Map<String, Value>, Map<String, Value>) = (live.as_object().cloned().unwrap_or_default(), original.as_object().cloned().unwrap_or_default());
-            let differing: Vec<String> = l.iter().filter(|(col, v)| o.get(*col) != Some(*v)).map(|(col, v)| format!("{col}: {} -> {}", short(o.get(col).unwrap_or(&Value::Null)), short(v))).collect();
-            out.push(format!("  live against the original: {}", if differing.is_empty() { "identical".to_owned() } else { differing.join("; ") }));
+            let (l, o): (Map<String, Value>, Map<String, Value>) =
+                (live.as_object().cloned().unwrap_or_default(), original.as_object().cloned().unwrap_or_default());
+            let differing: Vec<String> = l
+                .iter()
+                .filter(|(col, v)| o.get(*col) != Some(*v))
+                .map(|(col, v)| format!("{col}: {} -> {}", short(o.get(col).unwrap_or(&Value::Null)), short(v)))
+                .collect();
+            out.push(format!(
+                "  live against the original: {}",
+                if differing.is_empty() { "identical".to_owned() } else { differing.join("; ") }
+            ));
         }
         Ok(out)
     }

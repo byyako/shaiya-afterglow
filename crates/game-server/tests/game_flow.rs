@@ -2119,7 +2119,12 @@ async fn two_in_the_world_with(backend: &Arc<MemoryBackend>, addr: SocketAddr, b
 }
 
 /// `two_in_the_world_with`, Alice and Bob of the given factions (0 Light, 1 Fury).
-async fn two_in_the_world_of(backend: &Arc<MemoryBackend>, addr: SocketAddr, bob_small: bool, countries: [u8; 2]) -> (Client, u32, Client, u32) {
+async fn two_in_the_world_of(
+    backend: &Arc<MemoryBackend>,
+    addr: SocketAddr,
+    bob_small: bool,
+    countries: [u8; 2],
+) -> (Client, u32, Client, u32) {
     backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
     backend.add_session(8, session([6; 16], Some(SERVER_ID), LOCAL));
     let mut clients = Vec::new();
@@ -4697,7 +4702,8 @@ async fn reload_puts_new_rules_in_force_and_a_broken_one_changes_nothing() {
     assert_eq!(run("rules").await.len(), 3, "the three settings' rules");
 
     // A rule written to the file: before `reload` nothing changes, after it the attack is refused with the rule's message.
-    std::fs::write(&path, "guild_party_size = 3\n[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nmessage = \"Not in the file.\"\n").unwrap();
+    std::fs::write(&path, "guild_party_size = 3\n[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nmessage = \"Not in the file.\"\n")
+        .unwrap();
     *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 120)));
     // Not yet read: the same monsters, the same rules.
     assert_eq!(ctx.zones.rules().len(), 3);
@@ -4754,7 +4760,11 @@ fn script_sources(scripts: &[(&str, &str)]) -> ScriptSources {
     ScriptSources {
         extensions: scripts
             .iter()
-            .map(|(name, source)| ScriptExtension { name: (*name).to_owned(), scripts: vec![("main.lua".to_owned(), (*source).to_owned())], ..Default::default() })
+            .map(|(name, source)| ScriptExtension {
+                name: (*name).to_owned(),
+                scripts: vec![("main.lua".to_owned(), (*source).to_owned())],
+                ..Default::default()
+            })
             .collect(),
         installed: scripts.iter().map(|(name, _)| ((*name).to_owned(), true)).collect(),
         ..Default::default()
@@ -4790,7 +4800,10 @@ async fn console(ctx: &TestContext, line: &'static str) -> Vec<String> {
 async fn a_script_welcomes_a_player_at_login() {
     let backend = backend_with_session([5; 16]);
     let (addr, ctx) = start(backend.clone(), true).await;
-    put_scripts(&ctx, &[("welcome", "game.on('login', function(p) p:message('Welcome, ' .. p.name .. '!') p:notice('Hi ' .. p.name) end)")]);
+    put_scripts(
+        &ctx,
+        &[("welcome", "game.on('login', function(p) p:message('Welcome, ' .. p.name .. '!') p:notice('Hi ' .. p.name) end)")],
+    );
     let mut client = Client::connect(addr).await;
     enter_world(&mut client, 7, [5; 16], true).await;
     assert_eq!(next_server_whisper(&mut client).await, "Welcome, Walker!");
@@ -4864,7 +4877,7 @@ async fn reload_swaps_scripts_and_a_broken_one_changes_nothing() {
     backend.set_script_sources(script_sources(&[("a", "game.command('ver', function(p) p:message('two') end\n")]));
     *backend.next_live.guard() = Some(Ok(reloaded([(0, 0); 10], MobAttack::default(), 5000)));
     let answer = console(&ctx, "reload").await;
-    assert!(answer[0].starts_with("reload failed, nothing changed: extension a: a/main.lua:") , "{answer:?}");
+    assert!(answer[0].starts_with("reload failed, nothing changed: extension a: a/main.lua:"), "{answer:?}");
     assert_eq!(ctx.data.live().mobs.get(1).unwrap().hp, hp_before, "the monsters are as they were");
     assert_eq!(ctx.zones.rules().len(), 3);
     alice.write(say(chat::OP_NORMAL, b"!ver")).await;
@@ -4891,16 +4904,29 @@ async fn a_failing_script_is_disabled_and_the_server_carries_on() {
         if round < 5 {
             assert_eq!(next_server_whisper(&mut client).await, "hi", "login {round}");
             // The fault is counted after the handler ran: wait for it before the next login.
-            timeout(Duration::from_secs(5), async { while ctx.zones.ext_scripts().extensions()[0].fault_count() < round + 1 { tokio::time::sleep(Duration::from_millis(10)).await } })
-                .await
-                .expect("the fault");
+            timeout(Duration::from_secs(5), async {
+                while ctx.zones.ext_scripts().extensions()[0].fault_count() < round + 1 {
+                    tokio::time::sleep(Duration::from_millis(10)).await
+                }
+            })
+            .await
+            .expect("the fault");
         }
         // Out of the world before the next connection.
         drop(client);
-        timeout(Duration::from_secs(5), async { while ctx.zones.locate(1).is_some() { tokio::time::sleep(Duration::from_millis(20)).await } }).await.expect("left the world");
+        timeout(Duration::from_secs(5), async {
+            while ctx.zones.locate(1).is_some() {
+                tokio::time::sleep(Duration::from_millis(20)).await
+            }
+        })
+        .await
+        .expect("left the world");
     }
     let lines = console(&ctx, "scripts").await;
-    assert!(lines[0].starts_with("bad disabled (5 errors in 60 s: login: ") && lines[0].contains("boom") && lines[0].contains("faults 5"), "{lines:?}");
+    assert!(
+        lines[0].starts_with("bad disabled (5 errors in 60 s: login: ") && lines[0].contains("boom") && lines[0].contains("faults 5"),
+        "{lines:?}"
+    );
     // The sixth login (the last round above) got no whisper because the extension was disabled, and the world goes on: a seventh
     // connection enters and hears nothing.
     backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
@@ -4940,7 +4966,10 @@ async fn a_value_a_command_set_is_read_after_a_relog() {
     let (addr, ctx) = start(backend.clone(), true).await;
     put_scripts(
         &ctx,
-        &[("count", "game.command('count', function(p) local n = (p:get('n') or 0) + 1 p:set('n', n) game.set('total', (game.get('total') or 0) + 1) p:message('n=' .. n) end)")],
+        &[(
+            "count",
+            "game.command('count', function(p) local n = (p:get('n') or 0) + 1 p:set('n', n) game.set('total', (game.get('total') or 0) + 1) p:message('n=' .. n) end)",
+        )],
     );
     let mut client = Client::connect(addr).await;
     enter_world(&mut client, 7, [5; 16], true).await;
@@ -4954,9 +4983,13 @@ async fn a_value_a_command_set_is_read_after_a_relog() {
     assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 1, "n".to_owned())), Some(&serde_json::json!(1)));
     assert_eq!(backend.script_values.guard().get(&("count".to_owned(), 0, "total".to_owned())), Some(&serde_json::json!(1)));
     drop(client);
-    timeout(Duration::from_secs(5), async { while ctx.zones.locate(1).is_some() || ctx.zones.script_store().is_loaded(1) { tokio::time::sleep(Duration::from_millis(20)).await } })
-        .await
-        .expect("left the world, the values out of the cache");
+    timeout(Duration::from_secs(5), async {
+        while ctx.zones.locate(1).is_some() || ctx.zones.script_store().is_loaded(1) {
+            tokio::time::sleep(Duration::from_millis(20)).await
+        }
+    })
+    .await
+    .expect("left the world, the values out of the cache");
 
     // Logged in again, before anything was written the second time: the value is the stored one.
     backend.add_session(7, session([5; 16], Some(SERVER_ID), LOCAL));
@@ -4989,7 +5022,8 @@ async fn script_orders_give_and_take_items_gold_and_buffs_and_move_the_player() 
         abilities: [(35, 1), (0, 0), (0, 0)],
         ..Default::default()
     };
-    data.skills = std::mem::take(&mut data.skills).with([buff, SkillDef { id: 300, level: 1, country: 6, jobs: [true; 6], ..Default::default() }]);
+    data.skills =
+        std::mem::take(&mut data.skills).with([buff, SkillDef { id: 300, level: 1, country: 6, jobs: [true; 6], ..Default::default() }]);
     let backend = Arc::new(MemoryBackend::default());
     let (addr, ctx) = start_with_data(backend.clone(), config(true), data).await;
     put_scripts(
@@ -5013,7 +5047,9 @@ async fn script_orders_give_and_take_items_gold_and_buffs_and_move_the_player() 
         )],
     );
     let (mut alice, alice_id, mut bob, _) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
-    let potions = |backend: &MemoryBackend| backend.stored(alice_id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>();
+    let potions = |backend: &MemoryBackend| {
+        backend.stored(alice_id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>()
+    };
 
     // An item: into the bag (`0x0204` for the new slot), saved, and the callback hears how many.
     assert_eq!(potions(&backend), 10);
@@ -5066,10 +5102,22 @@ async fn script_orders_give_and_take_items_gold_and_buffs_and_move_the_player() 
     // A count out of range is a Lua error (a fault), not an order.
     bob.write(say(chat::OP_NORMAL, b"!bad")).await;
     let faults = || ctx.zones.ext_scripts().extensions()[0].fault_count();
-    timeout(Duration::from_secs(5), async { while faults() == 0 { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("the fault");
+    timeout(Duration::from_secs(5), async {
+        while faults() == 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await
+        }
+    })
+    .await
+    .expect("the fault");
     // A player who is not in a zone any more: false at once.
     drop(alice);
-    timeout(Duration::from_secs(5), async { while ctx.zones.locate(alice_id).is_some() { tokio::time::sleep(Duration::from_millis(20)).await } }).await.expect("left");
+    timeout(Duration::from_secs(5), async {
+        while ctx.zones.locate(alice_id).is_some() {
+            tokio::time::sleep(Duration::from_millis(20)).await
+        }
+    })
+    .await
+    .expect("left");
     bob.write(say(chat::OP_NORMAL, b"!ghost")).await;
     assert_eq!(next_server_whisper(&mut bob).await, "ghost 0");
 }
@@ -5079,7 +5127,13 @@ async fn killing_a_monster_runs_the_kill_script() {
     use shaiya_proto::combat as cp;
     let backend = backend_with_session([5; 16]);
     let (addr, ctx) = start(backend.clone(), true).await;
-    put_scripts(&ctx, &[("k", "game.on('kill', function(p, mob, near) game.set('kills', (game.get('kills') or 0) + 1) game.set('last', p.name .. ' ' .. mob.id .. ' ' .. mob.name) end)")]);
+    put_scripts(
+        &ctx,
+        &[(
+            "k",
+            "game.on('kill', function(p, mob, near) game.set('kills', (game.get('kills') or 0) + 1) game.set('last', p.name .. ' ' .. mob.id .. ' ' .. mob.name) end)",
+        )],
+    );
     let mut client = Client::connect(addr).await;
     let id = enter_world(&mut client, 7, [5; 16], true).await;
     ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
@@ -5087,7 +5141,13 @@ async fn killing_a_monster_runs_the_kill_script() {
     client.write(shaiya_proto::encode(cp::OP_ATTACK_MOB, &1u32.to_le_bytes())).await;
     timeout(Duration::from_secs(5), async { while client_has_no_death(&mut client).await {} }).await.expect("the monster dies");
     let store = ctx.zones.script_store();
-    timeout(Duration::from_secs(5), async { while store.get_global("k", "kills").is_none() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("the script ran");
+    timeout(Duration::from_secs(5), async {
+        while store.get_global("k", "kills").is_none() {
+            tokio::time::sleep(Duration::from_millis(10)).await
+        }
+    })
+    .await
+    .expect("the script ran");
     assert_eq!(store.get_global("k", "kills"), Some(serde_json::json!(1)));
     assert_eq!(store.get_global("k", "last"), Some(serde_json::json!("Walker 1 ")), "the test world has no names");
     let _ = id;
@@ -5105,7 +5165,11 @@ async fn an_exp_script_changes_the_experience_after_the_rules() {
     assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("2"))]).await, cp::exp_gain(288, 0), "a factor of 2 doubles the gain");
     assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("1"))]).await, cp::exp_gain(144, 0), "1 leaves the number as it was");
     assert_eq!(exp_for_the_first_monster_with(&[], &[("x", "game.on('exp', function() end)")]).await, cp::exp_gain(144, 0));
-    assert_eq!(exp_for_the_first_monster_with(&[], &[("x", &returns("200"))]).await, cp::exp_gain(144, 0), "a wrong answer changes nothing");
+    assert_eq!(
+        exp_for_the_first_monster_with(&[], &[("x", &returns("200"))]).await,
+        cp::exp_gain(144, 0),
+        "a wrong answer changes nothing"
+    );
     // The rules' factor first, the scripts' on top: 0.5 x 3 (a gain past 300 would level the character up).
     let double = [("double", serde_json::json!({ "type": "exp", "factor": 0.5 }))];
     assert_eq!(exp_for_the_first_monster_with(&double, &[("x", &returns("3"))]).await, cp::exp_gain(216, 0));
@@ -5113,7 +5177,13 @@ async fn an_exp_script_changes_the_experience_after_the_rules() {
     let sees = "game.on('exp', function(p, gain, source) game.set('saw', gain .. ' ' .. source) end)";
     let (_, ctx) = exp_run(&double, &[("x", sees)]).await;
     let store = ctx.zones.script_store();
-    timeout(Duration::from_secs(5), async { while store.get_global("x", "saw").is_none() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.expect("asked");
+    timeout(Duration::from_secs(5), async {
+        while store.get_global("x", "saw").is_none() {
+            tokio::time::sleep(Duration::from_millis(10)).await
+        }
+    })
+    .await
+    .expect("asked");
     assert_eq!(store.get_global("x", "saw"), Some(serde_json::json!("72 mob")), "the gain after the rules: 144 x 0.5");
 }
 
@@ -5188,7 +5258,15 @@ async fn an_item_a_script_took_over_is_used_kept_refused_or_left_to_the_core() {
     for (mode, expect) in [("use", "used"), ("keep", "kept"), ("no", "refused"), ("core", "core")] {
         let backend = backend_with_session([5; 16]);
         let (addr, ctx) = start(backend.clone(), true).await;
-        put_scripts(&ctx, &[("potion", &format!("game.on_item({{'25/1'}}, function(p, item) game.set('count', item.count) local mode = '{mode}' if mode == 'use' then return 'use' elseif mode == 'keep' then return 'keep' elseif mode == 'no' then return false, 'Not that' end end)"))]);
+        put_scripts(
+            &ctx,
+            &[(
+                "potion",
+                &format!(
+                    "game.on_item({{'25/1'}}, function(p, item) game.set('count', item.count) local mode = '{mode}' if mode == 'use' then return 'use' elseif mode == 'keep' then return 'keep' elseif mode == 'no' then return false, 'Not that' end end)"
+                ),
+            )],
+        );
         let mut client = Client::connect(addr).await;
         let id = enter_world(&mut client, 7, [5; 16], true).await;
         client.write(shaiya_proto::encode(it::OP_USE, &[1, 0])).await;
@@ -5205,8 +5283,14 @@ async fn an_item_a_script_took_over_is_used_kept_refused_or_left_to_the_core() {
         let potions = backend.stored(id).unwrap().1.iter().find(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| i.count);
         match expect {
             "used" => assert!(seen.contains(&it::used(id, 1, 0, 25, 1, 9)) && potions == Some(9), "{mode}: {seen:x?}"),
-            "kept" => assert!(!seen.iter().any(|p| frame::opcode(p) == it::OP_USE || *p == it::use_failed(id)) && potions == Some(10), "{mode}: {seen:x?}"),
-            "refused" => assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["Not that"] && potions == Some(10), "{mode}: {seen:x?}"),
+            "kept" => assert!(
+                !seen.iter().any(|p| frame::opcode(p) == it::OP_USE || *p == it::use_failed(id)) && potions == Some(10),
+                "{mode}: {seen:x?}"
+            ),
+            "refused" => assert!(
+                seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["Not that"] && potions == Some(10),
+                "{mode}: {seen:x?}"
+            ),
             _ => assert!(seen.contains(&it::used(id, 1, 0, 25, 1, 9)) && potions == Some(9), "the core's own use: {seen:x?}"),
         }
         assert_eq!(ctx.zones.script_store().get_global("potion", "count"), Some(serde_json::json!(10)), "the script saw the stack");
@@ -5265,12 +5349,16 @@ async fn with_stones(
     let mut client = Client::connect(addr).await;
     client.enter(7, [5; 16]).await;
     client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
-    let request = CreateRequest { slot: 0, family: 0, grow, hair: 3, face: 4, size: 5, job: 0, sex: 1, name: b"Walker".to_vec(), sent_len: 0 };
+    let request =
+        CreateRequest { slot: 0, family: 0, grow, hair: 3, face: 4, size: 5, job: 0, sex: 1, name: b"Walker".to_vec(), sent_len: 0 };
     client.write(g::char_create_request(&request)).await;
     assert_eq!(client.read().await.unwrap(), g::char_create_response(0));
     client.read_list().await;
     backend.set_level(1, level);
-    backend.give_items(1, vec![ItemUnit { bag: 1, slot: 2, item_type: 100, type_id, count, quality: 0, gems: [0; 6], craft_name: Vec::new() }]);
+    backend.give_items(
+        1,
+        vec![ItemUnit { bag: 1, slot: 2, item_type: 100, type_id, count, quality: 0, gems: [0; 6], craft_name: Vec::new() }],
+    );
     let id = select_and_enter(&mut client).await;
     (backend, ctx, client, id)
 }
@@ -5295,7 +5383,15 @@ async fn use_slot(client: &mut Client, id: u32, place: [u8; 2]) -> Vec<Vec<u8>> 
 }
 
 fn stones_left(backend: &MemoryBackend, id: u32) -> Option<u8> {
-    backend.stored(id).unwrap().1.iter().find(|i| (i.item_type, i.type_id) == (100, 215) || (i.item_type, i.type_id) == (100, 216) || (i.item_type, i.type_id) == (100, 217)).map(|i| i.count)
+    backend
+        .stored(id)
+        .unwrap()
+        .1
+        .iter()
+        .find(|i| {
+            (i.item_type, i.type_id) == (100, 215) || (i.item_type, i.type_id) == (100, 216) || (i.item_type, i.type_id) == (100, 217)
+        })
+        .map(|i| i.count)
 }
 
 #[tokio::test]
@@ -5329,7 +5425,11 @@ async fn a_stone_to_a_level_gives_every_level_between_and_is_refused_at_or_above
     // Level 1 to 15: fourteen levels of points.
     assert!(seen.contains(&cp::level_up(true, id, 15, 70, 47, (1400, 1500))), "{seen:x?}");
     let saved = backend.play(id).unwrap();
-    assert_eq!((saved.level, saved.exp, saved.stat_point, saved.skill_point, saved.stats[0]), (15, 1400, 70, 47, 14 + 14), "a fighter gains STR a level too");
+    assert_eq!(
+        (saved.level, saved.exp, saved.stat_point, saved.skill_point, saved.stats[0]),
+        (15, 1400, 70, 47, 14 + 14),
+        "a fighter gains STR a level too"
+    );
     assert_eq!(logged(&ctx, 146).len(), 14, "a record per level");
     assert_eq!(stones_left(&backend, id), Some(1));
     // At 15 the stone to 15 is refused with its whisper, the stone kept; the same again says nothing within ten seconds.
@@ -5376,7 +5476,13 @@ async fn a_rule_refuses_an_item_use_before_the_reuse_time_is_taken() {
     let mut client = Client::connect(addr).await;
     let id = enter_world(&mut client, 7, [5; 16], true).await;
     // On the player's map: refused, with the rule's text, and the stack is whole.
-    put_rules(&ctx, &[("no-potions", serde_json::json!({ "type": "deny", "point": "item_use", "items": ["25/1"], "maps": [1], "message": "No potions here." }))]);
+    put_rules(
+        &ctx,
+        &[(
+            "no-potions",
+            serde_json::json!({ "type": "deny", "point": "item_use", "items": ["25/1"], "maps": [1], "message": "No potions here." }),
+        )],
+    );
     let seen = use_slot(&mut client, id, [1, 0]).await;
     assert!(seen.contains(&it::use_failed(id)) && !seen.contains(&it::used(id, 1, 0, 25, 1, 9)), "{seen:x?}");
     assert_eq!(whisper_texts(&seen), ["No potions here."]);
@@ -5415,7 +5521,14 @@ fn lapis_data(effects: &[(u32, serde_json::Value)]) -> GameData {
         max_count: 5,
         ..Default::default()
     };
-    let rune = |type_id: u8| ItemDef { item_id: 100_000 + u32::from(type_id), item_type: 100, type_id, special: 62, max_count: 255, ..Default::default() };
+    let rune = |type_id: u8| ItemDef {
+        item_id: 100_000 + u32::from(type_id),
+        item_type: 100,
+        type_id,
+        special: 62,
+        max_count: 255,
+        ..Default::default()
+    };
     let others = data.items.iter().filter(|d| (d.item_type, d.type_id) != (5, 1)).cloned().collect::<Vec<_>>();
     data.items = ItemDefs::new(others.into_iter().chain([sword, material, lapisia(3), lapisia(4), rune(221), rune(222), rune(223)]));
     data.effects = ItemEffects::new(effects.iter().map(|(id, effect)| (*id, check_effect(effect).unwrap())));
@@ -5440,7 +5553,16 @@ async fn at_the_blacksmith(
     assert_eq!(client.read().await.unwrap(), g::char_create_response(0));
     client.read_list().await;
     backend.set_money(1, 1_000_000);
-    let unit = |slot, item_type, type_id, count, craft_name: &[u8]| ItemUnit { bag: 1, slot, item_type, type_id, count, quality: 1200, gems: [0; 6], craft_name: craft_name.to_vec() };
+    let unit = |slot, item_type, type_id, count, craft_name: &[u8]| ItemUnit {
+        bag: 1,
+        slot,
+        item_type,
+        type_id,
+        count,
+        quality: 1200,
+        gems: [0; 6],
+        craft_name: craft_name.to_vec(),
+    };
     let mut items = vec![unit(4, 25, 43, 20, b""), unit(6, 5, 1, 1, name)];
     items.extend(lapisia.map(|id| unit(5, 95, id, 3, b"")));
     items.extend(rune.map(|id| unit(7, 100, id, 3, b"")));
@@ -5465,7 +5587,11 @@ async fn a_perfect_lapisia_always_succeeds_and_jumps_by_its_own_table() {
     assert_eq!(answer[4], 1, "a success: {answer:x?}");
     let sword = item_at(&backend, id, 1, 6).unwrap();
     assert_eq!(sword.craft_name, b"00000000000000000003", "+3 from the Lapisia's own table");
-    assert_eq!((item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count), (2, 19), "the Lapisia and the material are used");
+    assert_eq!(
+        (item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count),
+        (2, 19),
+        "the Lapisia and the material are used"
+    );
     assert_eq!(backend.stored(id).unwrap().0, 1_000_000 - 4_095, "the price is the core's");
     // Again, five times over: every enchant succeeds.
     for _ in 0..2 {
@@ -5497,7 +5623,11 @@ async fn safe_keeps_an_item_a_failed_enchant_would_destroy() {
     assert_eq!(answer[4], 0, "a failure: {answer:x?}");
     let sword = item_at(&backend, id, 1, 6).expect("safe: the sword stays");
     assert_eq!(sword.craft_name, Vec::<u8>::new(), "and is as it was");
-    assert_eq!((item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count), (2, 19), "the Lapisia and the material are used either way");
+    assert_eq!(
+        (item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count),
+        (2, 19),
+        "the Lapisia and the material are used either way"
+    );
 }
 
 #[tokio::test]
@@ -5604,12 +5734,19 @@ async fn the_stat_runes_folder_redraws_one_number_and_refuses_an_item_without_it
     client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
     assert_eq!(read_op(&mut client, gem::OP_COMPOSE).await[4], 0);
     let name = item_at(&backend, id, 1, 6).unwrap().craft_name;
-    assert_eq!((&name[2..], std::str::from_utf8(&name[..2]).unwrap().parse::<u8>().unwrap() <= 10), (&b"030000000000000002"[..], true), "only STR moved: {name:?}");
+    assert_eq!(
+        (&name[2..], std::str::from_utf8(&name[..2]).unwrap().parse::<u8>().unwrap() <= 10),
+        (&b"030000000000000002"[..], true),
+        "only STR moved: {name:?}"
+    );
     // The same rune on an item without STR: refused, kept.
     let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(221), b"00030000000000000002").await;
     client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
     assert_eq!(read_op(&mut client, gem::OP_COMPOSE).await, gem::rerolled(gem::OP_COMPOSE, None));
-    assert_eq!((item_at(&backend, id, 1, 7).unwrap().count, item_at(&backend, id, 1, 6).unwrap().craft_name), (3, b"00030000000000000002".to_vec()));
+    assert_eq!(
+        (item_at(&backend, id, 1, 7).unwrap().count, item_at(&backend, id, 1, 6).unwrap().craft_name),
+        (3, b"00030000000000000002".to_vec())
+    );
 }
 
 #[tokio::test]
@@ -5618,10 +5755,19 @@ async fn a_script_sees_the_effect_and_may_let_it_run_or_keep_the_stone() {
         let (backend, ctx, mut client, id) = with_stones(stone_data(&level_stones()), 10, 1, 215, 3).await;
         put_scripts(
             &ctx,
-            &[("stones", &format!("game.on_item({{'100/215'}}, function(p, item) game.set('effect', item.effect) local mode = '{mode}' if mode == 'use' or mode == 'keep' then return mode end end)"))],
+            &[(
+                "stones",
+                &format!(
+                    "game.on_item({{'100/215'}}, function(p, item) game.set('effect', item.effect) local mode = '{mode}' if mode == 'use' or mode == 'keep' then return mode end end)"
+                ),
+            )],
         );
         let seen = use_stone(&mut client, id).await;
-        assert_eq!(ctx.zones.script_store().get_global("stones", "effect"), Some(serde_json::json!("level_up")), "{mode}: the script sees the effect");
+        assert_eq!(
+            ctx.zones.script_store().get_global("stones", "effect"),
+            Some(serde_json::json!("level_up")),
+            "{mode}: the script sees the effect"
+        );
         assert_eq!((backend.play(id).unwrap().level, stones_left(&backend, id)), (level, left), "{mode}: {seen:x?}");
         if mode == "keep" {
             assert!(!seen.contains(&it::use_failed(id)), "kept without an error: {seen:x?}");
@@ -5678,14 +5824,20 @@ fn pvp_kill(ctx: &TestContext, killer: (u32, &str), victim: (u32, &str)) {
 fn pvp_death(ctx: &TestContext, victim: (u32, &str), killer: (u32, &str)) {
     ctx.zones.script_job(Job::Event {
         event: game_server::script::Event::Death,
-        payload: Payload::Death { victim: player_ref(victim.0, victim.1), killer: Killer::Player(player_ref(killer.0, killer.1)), pvp: true },
+        payload: Payload::Death {
+            victim: player_ref(victim.0, victim.1),
+            killer: Killer::Player(player_ref(killer.0, killer.1)),
+            pvp: true,
+        },
     });
 }
 
 /// Reads until the world notice with this text (within five seconds); the notices before it are other announcements.
 async fn world_notice(client: &mut Client, text: &str) {
     let want = ap::world_notice(text).unwrap();
-    timeout(Duration::from_secs(5), async { while client.read().await.unwrap() != want {} }).await.unwrap_or_else(|_| panic!("the notice {text:?}"));
+    timeout(Duration::from_secs(5), async { while client.read().await.unwrap() != want {} })
+        .await
+        .unwrap_or_else(|_| panic!("the notice {text:?}"));
 }
 
 /// A staff member of `level` in the world, alone.
@@ -5707,7 +5859,13 @@ async fn staff_in_world(backend: &Arc<MemoryBackend>, addr: SocketAddr, level: u
 
 /// Waits until `check` holds (within five seconds).
 async fn until(what: &str, mut check: impl FnMut() -> bool) {
-    timeout(Duration::from_secs(5), async { while !check() { tokio::time::sleep(Duration::from_millis(10)).await } }).await.unwrap_or_else(|_| panic!("{what}"));
+    timeout(Duration::from_secs(5), async {
+        while !check() {
+            tokio::time::sleep(Duration::from_millis(10)).await
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("{what}"));
 }
 
 #[tokio::test]
@@ -5716,7 +5874,15 @@ async fn the_kill_streak_extension_announces_pays_bounties_and_takes_players_gol
     let (addr, ctx) = start(backend.clone(), true).await;
     put_extensions(
         &ctx,
-        &[("kill-streak", &[("bounty_from", serde_json::json!(2)), ("announce_at", serde_json::json!([2, 3])), ("repeat_secs", serde_json::json!(0)), ("player_bounty_min", serde_json::json!(100))])],
+        &[(
+            "kill-streak",
+            &[
+                ("bounty_from", serde_json::json!(2)),
+                ("announce_at", serde_json::json!([2, 3])),
+                ("repeat_secs", serde_json::json!(0)),
+                ("player_bounty_min", serde_json::json!(100)),
+            ],
+        )],
     );
     let (mut alice, alice_id, mut bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 1]).await;
     let (a, b) = ((alice_id, "Alice"), (bob_id, "Bob"));
@@ -5755,7 +5921,11 @@ async fn the_same_victim_within_repeat_secs_does_not_count() {
     pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));
     pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));
     alice.write(say(chat::OP_NORMAL, b"!streak")).await;
-    assert_eq!(next_server_whisper(&mut alice).await, "Streak 1, best 1, bounty on you 0 gold", "the second kill of Bob within 600 s did not count");
+    assert_eq!(
+        next_server_whisper(&mut alice).await,
+        "Streak 1, best 1, bounty on you 0 gold",
+        "the second kill of Bob within 600 s did not count"
+    );
 }
 
 #[tokio::test]
@@ -5772,7 +5942,10 @@ async fn the_welcome_extension_welcomes_and_answers_its_commands() {
     while !help.contains("!time - the server's local time") {
         help.push_str(&next_server_whisper(&mut client).await);
     }
-    assert!(help.starts_with("Commands: !bounties") && help.contains("!help - lists the commands you may use") && help.contains("!streak"), "{help}");
+    assert!(
+        help.starts_with("Commands: !bounties") && help.contains("!help - lists the commands you may use") && help.contains("!streak"),
+        "{help}"
+    );
     client.write(say(chat::OP_NORMAL, b"!online")).await;
     assert_eq!(next_server_whisper(&mut client).await, "1 players online");
     client.write(say(chat::OP_NORMAL, b"!time")).await;
@@ -5784,16 +5957,25 @@ async fn the_welcome_extensions_adverts_go_out_on_a_timer() {
     let backend = backend_with_session([5; 16]);
     let (addr, ctx) = start(backend.clone(), true).await;
     // The shortest period the option allows is a minute: the timer is set; the test looks at it and runs it.
-    put_extensions(&ctx, &[("welcome", &[("adverts", serde_json::json!(["Vote for us", "Join the guild"])), ("advert_minutes", serde_json::json!(1))])]);
+    put_extensions(
+        &ctx,
+        &[("welcome", &[("adverts", serde_json::json!(["Vote for us", "Join the guild"])), ("advert_minutes", serde_json::json!(1))])],
+    );
     let ext = ctx.zones.ext_scripts().extensions()[0].clone();
     assert_eq!(ext.timer_count(), 1);
     let mut client = Client::connect(addr).await;
     enter_world(&mut client, 7, [5; 16], true).await;
     let set = ctx.zones.ext_scripts();
     game_server::script::runner::timers(&set, std::time::Instant::now() + Duration::from_secs(61));
-    assert_eq!(timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(), ap::world_notice("Vote for us").unwrap());
+    assert_eq!(
+        timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(),
+        ap::world_notice("Vote for us").unwrap()
+    );
     game_server::script::runner::timers(&set, std::time::Instant::now() + Duration::from_secs(130));
-    assert_eq!(timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(), ap::world_notice("Join the guild").unwrap());
+    assert_eq!(
+        timeout(Duration::from_secs(5), read_op(&mut client, ap::OP_NOTICE_WORLD)).await.unwrap(),
+        ap::world_notice("Join the guild").unwrap()
+    );
 }
 
 #[tokio::test]
@@ -5802,17 +5984,30 @@ async fn the_boss_rewards_extension_gives_each_player_near_a_boss_kill_its_rewar
     let (addr, ctx) = start(backend.clone(), true).await;
     put_extensions(
         &ctx,
-        &[("boss-rewards", &[("item", serde_json::json!("25/1")), ("item_count", serde_json::json!(2)), ("gold", serde_json::json!(300)), ("pvp_gold", serde_json::json!(40))])],
+        &[(
+            "boss-rewards",
+            &[
+                ("item", serde_json::json!("25/1")),
+                ("item_count", serde_json::json!(2)),
+                ("gold", serde_json::json!(300)),
+                ("pvp_gold", serde_json::json!(40)),
+            ],
+        )],
     );
     let (mut alice, alice_id, _bob, bob_id) = two_in_the_world_of(&backend, addr, false, [0, 0]).await;
     let boss = MobInfo { id: 1, uid: 9, name: String::new(), level: 50, map: 1, x: 1.0, z: 2.0, boss: true, spawned: None };
     ctx.zones.script_job(Job::Event {
         event: game_server::script::Event::BossKill,
-        payload: Payload::Kill { p: player_ref(alice_id, "Alice"), mob: boss, near: vec![player_ref(alice_id, "Alice"), player_ref(bob_id, "Bob")] },
+        payload: Payload::Kill {
+            p: player_ref(alice_id, "Alice"),
+            mob: boss,
+            near: vec![player_ref(alice_id, "Alice"), player_ref(bob_id, "Bob")],
+        },
     });
     let notice = timeout(Duration::from_secs(5), read_op(&mut alice, ap::OP_NOTICE_WORLD)).await.expect("the announcement");
     assert_eq!(notice, ap::world_notice("Alice, Bob defeated boss 1!").unwrap());
-    let potions = |id| backend.stored(id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>();
+    let potions =
+        |id| backend.stored(id).unwrap().1.iter().filter(|i| (i.item_type, i.type_id) == (25, 1)).map(|i| u32::from(i.count)).sum::<u32>();
     until("the rewards", || backend.stored(alice_id).unwrap().0 == 1300 && potions(alice_id) == 12 && potions(bob_id) == 12).await;
     // A player kill shares its gold with the players it was shared with.
     pvp_kill(&ctx, (alice_id, "Alice"), (bob_id, "Bob"));

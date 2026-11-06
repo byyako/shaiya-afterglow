@@ -201,12 +201,22 @@ pub enum RefKind {
 pub const ITEM_REFERENCES: &[RefColumns] = &[
     RefColumns { side: "defs", table: "base_items_defs", key: "rowid", kind: RefKind::Ids(&["itemid"]) },
     RefColumns { side: "defs", table: "mobs", key: "mobid", kind: RefKind::Ids(&["questitemid"]) },
-    RefColumns { side: "world", table: "npc_shop_items", key: "npc_type_id || '/' || seq", kind: RefKind::Pair("item_type", "item_type_id") },
+    RefColumns {
+        side: "world",
+        table: "npc_shop_items",
+        key: "npc_type_id || '/' || seq",
+        kind: RefKind::Pair("item_type", "item_type_id"),
+    },
     RefColumns { side: "world", table: "quests", key: "id", kind: RefKind::Pair("start_item_type", "start_item_id") },
     RefColumns { side: "world", table: "quests", key: "id", kind: RefKind::Triples("start_items") },
     RefColumns { side: "world", table: "quests", key: "id", kind: RefKind::Triples("end_items") },
     RefColumns { side: "world", table: "quest_results", key: "quest_id || '/' || seq", kind: RefKind::Pair("item_type", "item_type_id") },
-    RefColumns { side: "world", table: "item_quest_links", key: "item_type || '/' || item_type_id", kind: RefKind::Pair("item_type", "item_type_id") },
+    RefColumns {
+        side: "world",
+        table: "item_quest_links",
+        key: "item_type || '/' || item_type_id",
+        kind: RefKind::Pair("item_type", "item_type_id"),
+    },
 ];
 
 /// The mall products' item columns (`itemid1` … `itemidN`), read from the live table.
@@ -235,11 +245,13 @@ pub async fn references(
     if !items.is_empty() {
         let schema = |side: &str| if side == "defs" { s.defs.clone() } else { s.world.clone() };
         for column in product_columns(conn, s).await? {
-            let rows: Vec<(String, i32)> =
-                sqlx::query_as(sql(format!("SELECT productcode::text, {column} FROM {}.product_list WHERE {column} = ANY($1) ORDER BY rowid", s.defs)))
-                    .bind(items)
-                    .fetch_all(&mut *conn)
-                    .await?;
+            let rows: Vec<(String, i32)> = sqlx::query_as(sql(format!(
+                "SELECT productcode::text, {column} FROM {}.product_list WHERE {column} = ANY($1) ORDER BY rowid",
+                s.defs
+            )))
+            .bind(items)
+            .fetch_all(&mut *conn)
+            .await?;
             for (code, id) in rows {
                 out.push(format!("defs.product_list {code} {column} = {id}"));
             }
@@ -250,10 +262,12 @@ pub async fn references(
             match &r.kind {
                 RefKind::Ids(columns) => {
                     for column in *columns {
-                        let rows: Vec<(String, i32)> = sqlx::query_as(sql(format!("SELECT ({key})::text, {column}::int FROM {table} WHERE {column} = ANY($1) ORDER BY 1")))
-                            .bind(items)
-                            .fetch_all(&mut *conn)
-                            .await?;
+                        let rows: Vec<(String, i32)> = sqlx::query_as(sql(format!(
+                            "SELECT ({key})::text, {column}::int FROM {table} WHERE {column} = ANY($1) ORDER BY 1"
+                        )))
+                        .bind(items)
+                        .fetch_all(&mut *conn)
+                        .await?;
                         out.extend(rows.into_iter().map(|(k, id)| format!("{}.{} {k} {column} = {id}", r.side, r.table)));
                     }
                 }

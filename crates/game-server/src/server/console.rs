@@ -207,7 +207,8 @@ async fn reload<S: Backend>(ctx: &Context<S>) -> String {
     let started = Instant::now();
     match read_everything(ctx).await {
         Ok(read) => {
-            let (monsters, grades, box_sets, rule_count) = (read.live.mobs.len(), read.live.drops.grade_count(), read.live.drops.box_count(), read.rules.len());
+            let (monsters, grades, box_sets, rule_count) =
+                (read.live.mobs.len(), read.live.drops.grade_count(), read.live.drops.box_count(), read.rules.len());
             ctx.data.set_live(read.live);
             ctx.zones.set_rules(read.rules);
             // The scripts are swapped with the rules: the old states finish the calls they are in and are dropped (section 9.2).
@@ -267,7 +268,8 @@ async fn read_everything<S: Backend>(ctx: &Context<S>) -> anyhow::Result<Reloade
     let (mut scripts, mut script_files, mut warnings) = (None, 0, Vec::new());
     if ctx.config.scripts {
         let mut script_sources = ctx.store.script_sources().await?;
-        script_sources.file = file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
+        script_sources.file =
+            file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
         let resolution = crate::script::sources::resolve_options(&script_sources)?;
         warnings = resolution.warnings.clone();
         let set = ctx.load_script_set(&script_sources, &resolution);

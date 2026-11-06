@@ -29,7 +29,11 @@ impl Folder {
     fn bare(name: &str, version: &str, extra: &str, rows: &str) -> Self {
         let to = std::env::temp_dir().join(format!("ext-test-{:08x}", rand::random::<u32>()));
         std::fs::create_dir_all(&to).unwrap();
-        std::fs::write(to.join("extension.toml"), format!("format = 1\nname = \"{name}\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{extra}\n")).unwrap();
+        std::fs::write(
+            to.join("extension.toml"),
+            format!("format = 1\nname = \"{name}\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{extra}\n"),
+        )
+        .unwrap();
         std::fs::write(to.join("rows.toml"), rows).unwrap();
         Self(to)
     }
@@ -95,7 +99,8 @@ async fn item(db: &Db, itemid: i64) -> Value {
 }
 
 async fn skill(db: &Db, id: i64, level: i64) -> Value {
-    db.scalar(format!("SELECT to_jsonb(t) AS v FROM {}.skills t WHERE skillid = {id} AND skilllevel = {level}", db.s.defs)).await["v"].clone()
+    db.scalar(format!("SELECT to_jsonb(t) AS v FROM {}.skills t WHERE skillid = {id} AND skilllevel = {level}", db.s.defs)).await["v"]
+        .clone()
 }
 
 fn has(lines: &[String], needle: &str) -> bool {
@@ -116,13 +121,30 @@ async fn install_writes_the_computed_rows_and_the_records_and_a_rebuild_agrees()
 
     // the rows as the entries compute them: the original row, the copied columns, then `set`
     let stone = item(&db, 100212).await;
-    assert_eq!((stone["itemname"].clone(), stone["range"].clone(), stone["attacktime"].clone()), (json!("Kill Boost Stone"), json!(200), json!(1)));
-    assert_eq!((stone["reqlevel"].clone(), stone["country"].clone(), stone["buy"].clone(), stone["grade"].clone()), (json!(1), json!(2), json!(100), json!(3)));
-    assert_eq!((stone["type"].clone(), stone["typeid"].clone(), stone["rowid"].clone()), (json!(100), json!(212), json!(11)), "the key and the row number stay");
+    assert_eq!(
+        (stone["itemname"].clone(), stone["range"].clone(), stone["attacktime"].clone()),
+        (json!("Kill Boost Stone"), json!(200), json!(1))
+    );
+    assert_eq!(
+        (stone["reqlevel"].clone(), stone["country"].clone(), stone["buy"].clone(), stone["grade"].clone()),
+        (json!(1), json!(2), json!(100), json!(3))
+    );
+    assert_eq!(
+        (stone["type"].clone(), stone["typeid"].clone(), stone["rowid"].clone()),
+        (json!(100), json!(212), json!(11)),
+        "the key and the row number stay"
+    );
     assert_eq!(item(&db, 100214).await["attacktime"], json!(3));
     let buff = skill(&db, 200, 1).await;
-    assert_eq!((buff["skillname"].clone(), buff["keeptime"].clone(), buff["fixrange"].clone(), buff["typedetail"].clone()), (json!("Kill Boost"), json!(1), json!(1), json!(82)));
-    assert_eq!((buff["abilitytype1"].clone(), buff["abilitytype2"].clone(), buff["abilityvalue2"].clone()), (json!(0), json!(0), json!(0)), "the ability is gone");
+    assert_eq!(
+        (buff["skillname"].clone(), buff["keeptime"].clone(), buff["fixrange"].clone(), buff["typedetail"].clone()),
+        (json!("Kill Boost"), json!(1), json!(1), json!(82))
+    );
+    assert_eq!(
+        (buff["abilitytype1"].clone(), buff["abilitytype2"].clone(), buff["abilityvalue2"].clone()),
+        (json!(0), json!(0), json!(0)),
+        "the ability is gone"
+    );
     assert_eq!(buff["updatedate"], json!("2001-01-01T00:00:01"), "the placeholder's date stays");
     assert_eq!(skill(&db, 200, 3).await["skillname"], json!("Kill Boost Lv3"));
 
@@ -131,10 +153,26 @@ async fn install_writes_the_computed_rows_and_the_records_and_a_rebuild_agrees()
     let owned = db.scalar(format!("SELECT row AS v FROM {}.ext_rows WHERE tbl = 'defs.items' AND key = '100212'", db.s.content)).await;
     assert_eq!(owned["v"], stone, "ext_rows holds the whole row as written");
     assert_eq!(count_in_content(&db, "ext_ranges").await, 2);
-    assert_eq!(db.count(format!("SELECT count(*) FROM {}.ext_settings WHERE name = 'kill_boost_skills' AND value = '200/1:2,200/2:5,200/3:10'", db.s.content)).await, 1);
-    let client = db.scalar(format!("SELECT to_jsonb(c) AS v FROM {}.client_items c WHERE type = 100 AND typeid = 212", db.s.content)).await["v"].clone();
-    assert_eq!((client["look_type"].clone(), client["look_typeid"].clone(), client["keep"].clone(), client["since_patch"].clone()), (json!(100), json!(108), json!(false), Value::Null));
-    assert_eq!((client["note"].clone(), client["model"].clone()), (json!("kb 100/212"), Value::Null), "the look-alike is kept as a reference, not resolved");
+    assert_eq!(
+        db.count(format!(
+            "SELECT count(*) FROM {}.ext_settings WHERE name = 'kill_boost_skills' AND value = '200/1:2,200/2:5,200/3:10'",
+            db.s.content
+        ))
+        .await,
+        1
+    );
+    let client = db.scalar(format!("SELECT to_jsonb(c) AS v FROM {}.client_items c WHERE type = 100 AND typeid = 212", db.s.content)).await
+        ["v"]
+        .clone();
+    assert_eq!(
+        (client["look_type"].clone(), client["look_typeid"].clone(), client["keep"].clone(), client["since_patch"].clone()),
+        (json!(100), json!(108), json!(false), Value::Null)
+    );
+    assert_eq!(
+        (client["note"].clone(), client["model"].clone()),
+        (json!("kb 100/212"), Value::Null),
+        "the look-alike is kept as a reference, not resolved"
+    );
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.client_skills WHERE note = 'kb buff level 1'", db.s.content)).await, 1);
     assert_eq!(count_in_content(&db, "client_skills").await, 3);
     assert_eq!(count_in_content(&db, "ext_log").await, 1);
@@ -166,7 +204,10 @@ async fn install_writes_the_computed_rows_and_the_records_and_a_rebuild_agrees()
 async fn an_install_without_imports_is_refused_with_the_setup_hint() {
     let Some(db) = Db::create().await else { return };
     let message = refusal(db.editor.ext_install(Folder::new().path(), false).await.unwrap_err());
-    assert!(message.contains("defs has no import record") && message.contains("tools/setup.sh") && message.contains("decision 11"), "{message}");
+    assert!(
+        message.contains("defs has no import record") && message.contains("tools/setup.sh") && message.contains("decision 11"),
+        "{message}"
+    );
     db.drop().await;
 }
 
@@ -181,12 +222,32 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
         ("options", Folder::new().edit("extension.toml", "[ids]", "options = 1\n[ids]"), "`options` must be a table of tables"),
         ("rules not a table", Folder::new().edit("extension.toml", "[ids]", "rules = 1\n[ids]"), "`rules` must be a table of tables"),
         ("a rule that is not a table", Folder::new().append("extension.toml", "[rules]\nx = 1"), "[rules.x] must be a table"),
-        ("a rule with a bad key", Folder::new().append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 0"), "extension.toml rules.gap.gap: 0 is not 1 to 255"),
-        ("a rule with an unknown key", Folder::new().append("extension.toml", "[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nhour = 3"), "rules.safe: unknown key \"hour\""),
+        (
+            "a rule with a bad key",
+            Folder::new().append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 0"),
+            "extension.toml rules.gap.gap: 0 is not 1 to 255",
+        ),
+        (
+            "a rule with an unknown key",
+            Folder::new().append("extension.toml", "[rules.safe]\ntype = \"deny\"\npoint = \"attack\"\nhour = 3"),
+            "rules.safe: unknown key \"hour\"",
+        ),
         ("a rule with no type", Folder::new().append("extension.toml", "[rules.safe]\nmaps = [1]"), "rules.safe: a rule needs a type"),
-        ("a rule that only turns off", Folder::new().append("extension.toml", "[rules.safe]\nenabled = false"), "rules.safe: a rule needs a type"),
-        ("a rule with a prefix", Folder::new().append("extension.toml", "[rules.\"kb/safe\"]\ntype = \"deny\"\npoint = \"attack\""), "without a prefix"),
-        ("a rule named for a setting", Folder::new().append("extension.toml", "[rules.\"setting.market_maps\"]\ntype = \"deny\"\npoint = \"attack\""), "belong to the settings"),
+        (
+            "a rule that only turns off",
+            Folder::new().append("extension.toml", "[rules.safe]\nenabled = false"),
+            "rules.safe: a rule needs a type",
+        ),
+        (
+            "a rule with a prefix",
+            Folder::new().append("extension.toml", "[rules.\"kb/safe\"]\ntype = \"deny\"\npoint = \"attack\""),
+            "without a prefix",
+        ),
+        (
+            "a rule named for a setting",
+            Folder::new().append("extension.toml", "[rules.\"setting.market_maps\"]\ntype = \"deny\"\npoint = \"attack\""),
+            "belong to the settings",
+        ),
         ("scripts", Folder::new().edit("extension.toml", "[ids]", "scripts = 1\n[ids]"), "`scripts` must be a list"),
         ("api", Folder::new().edit("extension.toml", "[ids]", "api = 1\n[ids]"), "`api` without `scripts`"),
         ("type 101", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"101/5\""), "item type 101"),
@@ -194,25 +255,77 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
         ("a group with no records", Folder::new().edit("extension.toml", "\"100/212-214\"", "\"26/1\""), "has no records"),
         ("skill 327", Folder::new().edit("extension.toml", "\"200/1-3\"", "\"327\""), "skills 1 to 326"),
         ("level 100", Folder::new().edit("extension.toml", "\"200/1-3\"", "\"200/100\""), "level 100 is the monsters'"),
-        ("an entry outside its ranges", Folder::new().edit("rows.toml", "id = \"100/214\"", "id = \"100/215\""), "lies outside the ids [ids] declares for items (100/212-214)"),
-        ("an unknown column", Folder::new().edit("rows.toml", "range = 200, attacktime = 1", "rnage = 200, attacktime = 1"), "column \"rnage\" is not a column of defs.items"),
-        ("rowid in set", Folder::new().edit("rows.toml", "itemname = \"Kill Boost Stone\",", "rowid = 5, itemname = \"Kill Boost Stone\","), "part of the key or the row's own number"),
-        ("a key column in set", Folder::new().edit("rows.toml", "itemname = \"Kill Boost Stone\",", "itemid = 5, itemname = \"Kill Boost Stone\","), "part of the key or the row's own number"),
-        ("range past the client's byte", Folder::new().edit("rows.toml", "range = 200, attacktime = 1", "range = 300, attacktime = 1"), "does not fit the client's byte"),
+        (
+            "an entry outside its ranges",
+            Folder::new().edit("rows.toml", "id = \"100/214\"", "id = \"100/215\""),
+            "lies outside the ids [ids] declares for items (100/212-214)",
+        ),
+        (
+            "an unknown column",
+            Folder::new().edit("rows.toml", "range = 200, attacktime = 1", "rnage = 200, attacktime = 1"),
+            "column \"rnage\" is not a column of defs.items",
+        ),
+        (
+            "rowid in set",
+            Folder::new().edit("rows.toml", "itemname = \"Kill Boost Stone\",", "rowid = 5, itemname = \"Kill Boost Stone\","),
+            "part of the key or the row's own number",
+        ),
+        (
+            "a key column in set",
+            Folder::new().edit("rows.toml", "itemname = \"Kill Boost Stone\",", "itemid = 5, itemname = \"Kill Boost Stone\","),
+            "part of the key or the row's own number",
+        ),
+        (
+            "range past the client's byte",
+            Folder::new().edit("rows.toml", "range = 200, attacktime = 1", "range = 300, attacktime = 1"),
+            "does not fit the client's byte",
+        ),
         (
             "a changed item without client or server_only",
-            Folder::new().edit("rows.toml", "client = { name = \"Kill Boost Stone\", look = \"100/108\", description = \"Player kills count double for 1 hour.\" }\n", ""),
+            Folder::new().edit(
+                "rows.toml",
+                "client = { name = \"Kill Boost Stone\", look = \"100/108\", description = \"Player kills count double for 1 hour.\" }\n",
+                "",
+            ),
             "needs `client = { … }` (or \"keep\")",
         ),
-        ("non-ASCII client text", Folder::new().edit("rows.toml", "count double for 1 hour.\" }\n\n[[item]]", "count d\u{e9}ble for 1 hour.\" }\n\n[[item]]"), "not printable ASCII"),
-        ("a copy from a row that is not an original", Folder::new().edit("rows.toml", "copy = { from = \"100/108\", columns = [\"reqlevel\"", "copy = { from = \"100/250\", columns = [\"reqlevel\""), "copy from 100/250 is not an original row"),
-        ("an unknown setting", Folder::new().edit("extension.toml", "kill_boost_skills = ", "nosuch = \"1\"\nkill_boost_skills = "), "\"nosuch\" is not a game setting"),
+        (
+            "non-ASCII client text",
+            Folder::new().edit("rows.toml", "count double for 1 hour.\" }\n\n[[item]]", "count d\u{e9}ble for 1 hour.\" }\n\n[[item]]"),
+            "not printable ASCII",
+        ),
+        (
+            "a copy from a row that is not an original",
+            Folder::new().edit(
+                "rows.toml",
+                "copy = { from = \"100/108\", columns = [\"reqlevel\"",
+                "copy = { from = \"100/250\", columns = [\"reqlevel\"",
+            ),
+            "copy from 100/250 is not an original row",
+        ),
+        (
+            "an unknown setting",
+            Folder::new().edit("extension.toml", "kill_boost_skills = ", "nosuch = \"1\"\nkill_boost_skills = "),
+            "\"nosuch\" is not a game setting",
+        ),
         ("a bad setting value", Folder::new().edit("extension.toml", "200/3:10", "200/3:1000"), "times 1000"),
         ("a drop column that is not grade or droprate", drop_entry("itemorder = 5"), "part of the key or the row's own number"),
         ("a drop column of another table", drop_entry("itemname = \"x\""), "is not a column of defs.mob_items"),
         ("a drop chance out of range", drop_entry("droprate = 101"), "droprate of entry 4 must be from 0 to 100"),
-        ("a drop entry that is not an original row", Folder::new().append("rows.toml", "[[drop]]\nid = \"9999/4\"\nset = { grade = 3 }"), "may only change grade and droprate of an original drop entry"),
-        ("a new row without a copy", Folder::new().append("rows.toml", "[[skill]]\nid = \"201/1\"\nserver_only = \"x\"").edit("extension.toml", "\"200/1-3\"", "\"200/1-3\", \"201\""), "a new row needs `copy"),
+        (
+            "a drop entry that is not an original row",
+            Folder::new().append("rows.toml", "[[drop]]\nid = \"9999/4\"\nset = { grade = 3 }"),
+            "may only change grade and droprate of an original drop entry",
+        ),
+        (
+            "a new row without a copy",
+            Folder::new().append("rows.toml", "[[skill]]\nid = \"201/1\"\nserver_only = \"x\"").edit(
+                "extension.toml",
+                "\"200/1-3\"",
+                "\"200/1-3\", \"201\"",
+            ),
+            "a new row needs `copy",
+        ),
     ];
     for (what, folder, needle) in cases {
         let error = db.editor.ext_install(folder.path(), false).await.unwrap_err();
@@ -222,10 +335,15 @@ async fn every_refusal_says_why_and_leaves_nothing_behind() {
         assert_eq!(before, hashes(&db).await, "{what}: a refusal writes nothing");
     }
     // a migration that writes into defs: rolled back, nothing left behind
-    let sneaky = Folder::new().write("migrations/0001_oops.sql", &format!("CREATE TABLE notes (id int); UPDATE {}.mobs SET hp = 1;", db.s.defs));
+    let sneaky =
+        Folder::new().write("migrations/0001_oops.sql", &format!("CREATE TABLE notes (id int); UPDATE {}.mobs SET hp = 1;", db.s.defs));
     let message = refusal(db.editor.ext_install(sneaky.path(), false).await.unwrap_err());
     assert!(message.contains("changed rows of defs, world or client"), "{message}");
-    assert_eq!(db.count(format!("SELECT count(*) FROM pg_namespace WHERE nspname = '{}kb'", db.s.ext_prefix)).await, 0, "the extension's schema went with the rollback");
+    assert_eq!(
+        db.count(format!("SELECT count(*) FROM pg_namespace WHERE nspname = '{}kb'", db.s.ext_prefix)).await,
+        0,
+        "the extension's schema went with the rollback"
+    );
     assert_eq!(count_in_content(&db, "ext_migrations").await, 0);
     assert_eq!(before, hashes(&db).await);
     let bad_name = Folder::new().write("migrations/0002_gap.sql", "SELECT 1;");
@@ -279,11 +397,22 @@ async fn with_a_client_schema_the_text_and_the_look_alike_are_checked_against_it
     )).await;
     let long = Folder::new().edit("rows.toml", "count double for 1 hour.\" }\n\n[[item]]", &format!("{}\" }}\n\n[[item]]", "x".repeat(61)));
     let message = refusal(db.editor.ext_install(long.path(), false).await.unwrap_err());
-    assert!(message.contains("client description of 74 bytes is longer than the longest item description in the original (60)"), "{message}");
-    let missing = Folder::new().edit("rows.toml", "look = \"100/108\", description = \"Player kills count double", "look = \"100/110\", description = \"Player kills count double");
+    assert!(
+        message.contains("client description of 74 bytes is longer than the longest item description in the original (60)"),
+        "{message}"
+    );
+    let missing = Folder::new().edit(
+        "rows.toml",
+        "look = \"100/108\", description = \"Player kills count double",
+        "look = \"100/110\", description = \"Player kills count double",
+    );
     let message = refusal(db.editor.ext_install(missing.path(), false).await.unwrap_err());
     assert!(message.contains("look 100/110 is not a record of the client's items"), "{message}");
-    let long_skill = Folder::new().edit("rows.toml", "description = \"Player kills count 5 times for 1 hour.\"", &format!("description = \"{}\"", "y".repeat(51)));
+    let long_skill = Folder::new().edit(
+        "rows.toml",
+        "description = \"Player kills count 5 times for 1 hour.\"",
+        &format!("description = \"{}\"", "y".repeat(51)),
+    );
     let message = refusal(db.editor.ext_install(long_skill.path(), false).await.unwrap_err());
     assert!(message.contains("client description of 51 bytes is longer than the longest skill description"), "{message}");
     assert_eq!(count_in_content(&db, "extensions").await, 0);
@@ -301,8 +430,12 @@ async fn an_edit_on_an_owned_row_survives_install_upgrade_and_a_rebuild() {
     assert_eq!(item(&db, 100212).await["grade"], json!(9));
     let lines = install(&db, &Folder::new()).await;
     assert_eq!(item(&db, 100212).await["grade"], json!(9), "the edit stays on top of the extension's row (which copies grade 3)");
-    assert!(has(&lines, "PROBLEM item_grade 100212 grade") && has(&lines, "the content under your edit changed grade 0 -> 3"), "{lines:#?}");
-    let original = db.scalar(format!("SELECT original AS v FROM {}.fields WHERE target = 'item_grade' AND key = '100212'", db.s.edits)).await;
+    assert!(
+        has(&lines, "PROBLEM item_grade 100212 grade") && has(&lines, "the content under your edit changed grade 0 -> 3"),
+        "{lines:#?}"
+    );
+    let original =
+        db.scalar(format!("SELECT original AS v FROM {}.fields WHERE target = 'item_grade' AND key = '100212'", db.s.edits)).await;
     assert_eq!(original["v"], json!(3), "its original is what the content below gives now");
     let before = hashes(&db).await;
     let rebuilt = db.editor.content_rebuild(&[Side::Defs]).await.unwrap();
@@ -314,7 +447,11 @@ async fn an_edit_on_an_owned_row_survives_install_upgrade_and_a_rebuild() {
     assert_eq!(item(&db, 100212).await["grade"], json!(9));
     // and it blocks the removal of the row until it is undone
     let message = refusal(db.editor.ext_remove("kb", false, |_| Ok(true)).await.unwrap_err());
-    assert!(message.contains(&format!("edit item_grade 100212 grade (change set #{})", applied.change_set)) && message.contains("--force does not clear references"), "{message}");
+    assert!(
+        message.contains(&format!("edit item_grade 100212 grade (change set #{})", applied.change_set))
+            && message.contains("--force does not clear references"),
+        "{message}"
+    );
     // (an Undo would set the value the field had before the edit, 0; the edit's original is 3 now, so the edit is taken off with `unset`)
     db.draft(unset("item_grade", "100212", "grade")).await;
     db.apply("take the edit off").await;
@@ -374,7 +511,10 @@ async fn remove_restores_every_table_and_takes_the_added_rows_out() {
     let lines = install(&db, &f).await;
     assert!(has(&lines, "6 rows changed, 1 rows added, 7 client rows"), "{lines:#?}");
     let added = item(&db, 100215).await;
-    assert_eq!((added["itemname"].clone(), added["type"].clone(), added["typeid"].clone(), added["rowid"].clone()), (json!("Extra Stone"), json!(100), json!(215), json!(14)));
+    assert_eq!(
+        (added["itemname"].clone(), added["type"].clone(), added["typeid"].clone(), added["rowid"].clone()),
+        (json!("Extra Stone"), json!(100), json!(215), json!(14))
+    );
     assert_eq!(added["buy"], json!(100), "an added row starts as a copy of the source row");
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.ext_rows WHERE action = 'add'", db.s.content)).await, 1);
     assert_eq!(db.editor.content_check().await.unwrap(), Vec::<String>::new());
@@ -394,8 +534,16 @@ async fn remove_restores_every_table_and_takes_the_added_rows_out() {
 }
 
 async fn make_holder(db: &Db) -> (i32, i32) {
-    let account: i32 = sqlx::query_scalar("INSERT INTO accounts (username, password_hash) VALUES ('holder', 'x') RETURNING id").fetch_one(&db.pool).await.unwrap();
-    let character: i32 = sqlx::query_scalar("INSERT INTO characters (user_id, server_id, slot, name) VALUES ($1, 1, 0, 'Hero') RETURNING id").bind(account).fetch_one(&db.pool).await.unwrap();
+    let account: i32 = sqlx::query_scalar("INSERT INTO accounts (username, password_hash) VALUES ('holder', 'x') RETURNING id")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let character: i32 =
+        sqlx::query_scalar("INSERT INTO characters (user_id, server_id, slot, name) VALUES ($1, 1, 0, 'Hero') RETURNING id")
+            .bind(account)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
     (account, character)
 }
 
@@ -404,11 +552,29 @@ async fn players_who_hold_the_items_stop_the_removal_and_force_deletes_them_afte
     let Some(db) = seeded(true).await else { return };
     install(&db, &Folder::new()).await;
     let (account, character) = make_holder(&db).await;
-    sqlx::query("INSERT INTO character_items (character_id, bag, slot, item_id, type, type_id, count) VALUES ($1, 1, 4, 100212, 100, 212, 3)").bind(character).execute(&db.pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO character_items (character_id, bag, slot, item_id, type, type_id, count) VALUES ($1, 1, 4, 100212, 100, 212, 3)",
+    )
+    .bind(character)
+    .execute(&db.pool)
+    .await
+    .unwrap();
     sqlx::query("INSERT INTO character_quick_slots (character_id, position, bar, slot, bag, number) VALUES ($1, 0, 0, 1, 1, 4), ($1, 1, 0, 2, 1, 9)").bind(character).execute(&db.pool).await.unwrap();
-    sqlx::query("INSERT INTO bank_items (user_id, server_id, slot, item_id, type, type_id, count) VALUES ($1, 1, 7, 100213, 100, 213, 1)").bind(account).execute(&db.pool).await.unwrap();
-    sqlx::query("INSERT INTO character_skills (character_id, number, skill_id, level) VALUES ($1, 0, 200, 2)").bind(character).execute(&db.pool).await.unwrap();
-    sqlx::query("INSERT INTO character_applied_skills (character_id, position, skill_id, level, seconds) VALUES ($1, 0, 200, 1, 3000)").bind(character).execute(&db.pool).await.unwrap();
+    sqlx::query("INSERT INTO bank_items (user_id, server_id, slot, item_id, type, type_id, count) VALUES ($1, 1, 7, 100213, 100, 213, 1)")
+        .bind(account)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO character_skills (character_id, number, skill_id, level) VALUES ($1, 0, 200, 2)")
+        .bind(character)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO character_applied_skills (character_id, position, skill_id, level, seconds) VALUES ($1, 0, 200, 1, 3000)")
+        .bind(character)
+        .execute(&db.pool)
+        .await
+        .unwrap();
     let message = refusal(db.editor.ext_remove("kb", false, |_| Ok(true)).await.unwrap_err());
     for needle in [
         "character Hero (",
@@ -424,12 +590,23 @@ async fn players_who_hold_the_items_stop_the_removal_and_force_deletes_them_afte
     assert_eq!(count_in_content(&db, "extensions").await, 1, "a refused removal writes nothing");
 
     // --force: refused while a game server reports players with a fresh heartbeat
-    sqlx::query("INSERT INTO game_servers (id, name, address, players, last_seen) VALUES (1, 'T', '10.0.0.1', 3, now())").execute(&db.pool).await.unwrap();
+    sqlx::query("INSERT INTO game_servers (id, name, address, players, last_seen) VALUES (1, 'T', '10.0.0.1', 3, now())")
+        .execute(&db.pool)
+        .await
+        .unwrap();
     let message = refusal(db.editor.ext_remove("kb", true, |_| Ok(true)).await.unwrap_err());
     assert!(message.contains("the game servers report 3 players online"), "{message}");
     sqlx::query("UPDATE game_servers SET last_seen = now() - interval '5 minutes'").execute(&db.pool).await.unwrap();
     // a confirmation that is not given deletes nothing
-    let message = refusal(db.editor.ext_remove("kb", true, |held| { assert!(held.len() >= 4); Ok(false) }).await.unwrap_err());
+    let message = refusal(
+        db.editor
+            .ext_remove("kb", true, |held| {
+                assert!(held.len() >= 4);
+                Ok(false)
+            })
+            .await
+            .unwrap_err(),
+    );
     assert!(message.contains("not confirmed"), "{message}");
     assert_eq!(db.count("SELECT count(*) FROM character_items".into()).await, 1);
     let lines = db.editor.ext_remove("kb", true, |_| Ok(true)).await.unwrap();
@@ -437,7 +614,8 @@ async fn players_who_hold_the_items_stop_the_removal_and_force_deletes_them_afte
     for table in ["character_items", "bank_items", "character_skills", "character_applied_skills"] {
         assert_eq!(db.count(format!("SELECT count(*) FROM {table}")).await, 0, "{table}");
     }
-    let quick: Vec<i32> = sqlx::query_scalar("SELECT number FROM character_quick_slots ORDER BY position").fetch_all(&db.pool).await.unwrap();
+    let quick: Vec<i32> =
+        sqlx::query_scalar("SELECT number FROM character_quick_slots ORDER BY position").fetch_all(&db.pool).await.unwrap();
     assert_eq!(quick, [9], "the quick slot that pointed at the deleted bag slot went with it");
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.ext_log WHERE action = 'force-delete'", db.s.content)).await, 4);
     assert_eq!(item(&db, 100212).await["itemname"], json!("???177"));
@@ -487,7 +665,11 @@ async fn an_upgrade_restores_dropped_keys_rewrites_changed_ones_claims_new_ones_
     let Some(db) = seeded(true).await else { return };
     let before = hashes(&db).await;
     install(&db, &Folder::new()).await;
-    run(&db.pool, format!("UPDATE {c}.client_items SET since_patch = 109; UPDATE {c}.client_skills SET since_patch = 109", c = db.s.content)).await;
+    run(
+        &db.pool,
+        format!("UPDATE {c}.client_items SET since_patch = 109; UPDATE {c}.client_skills SET since_patch = 109", c = db.s.content),
+    )
+    .await;
     let installed_hashes = hashes(&db).await;
 
     // the same or a lower version is refused
@@ -511,9 +693,18 @@ async fn an_upgrade_restores_dropped_keys_rewrites_changed_ones_claims_new_ones_
     };
     // 100/215 is a new place (an add), 100/214 goes back to the placeholder: a holder of 100/214 stops the upgrade
     let (_, character) = make_holder(&db).await;
-    sqlx::query("INSERT INTO character_items (character_id, bag, slot, item_id, type, type_id, count) VALUES ($1, 1, 1, 100214, 100, 214, 1)").bind(character).execute(&db.pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO character_items (character_id, bag, slot, item_id, type, type_id, count) VALUES ($1, 1, 1, 100214, 100, 214, 1)",
+    )
+    .bind(character)
+    .execute(&db.pool)
+    .await
+    .unwrap();
     let message = refusal(db.editor.ext_upgrade(v2().path()).await.unwrap_err());
-    assert!(message.contains("kb 1.1.0 no longer lists rows that players hold") && message.contains("1 × 100/214 in bag 1, slot 1"), "{message}");
+    assert!(
+        message.contains("kb 1.1.0 no longer lists rows that players hold") && message.contains("1 × 100/214 in bag 1, slot 1"),
+        "{message}"
+    );
     assert_eq!(installed_hashes, hashes(&db).await, "a refused upgrade writes nothing");
     sqlx::query("DELETE FROM character_items").execute(&db.pool).await.unwrap();
 
@@ -546,7 +737,10 @@ async fn disable_and_enable_flip_the_flag_and_leave_the_rows() {
     install(&db, &Folder::new()).await;
     let rows = hashes(&db).await;
     let lines = db.editor.ext_set_enabled("kb", false).await.unwrap();
-    assert!(has(&lines, "kb disabled: its settings defaults and rules stop counting; its rows stay") && has(&lines, "restart the game servers"), "{lines:#?}");
+    assert!(
+        has(&lines, "kb disabled: its settings defaults and rules stop counting; its rows stay") && has(&lines, "restart the game servers"),
+        "{lines:#?}"
+    );
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.extensions WHERE NOT enabled", db.s.content)).await, 1);
     assert_eq!(rows, hashes(&db).await);
     assert_eq!(db.editor.ext_set_enabled("kb", false).await.unwrap(), ["kb is disabled already"]);
@@ -565,7 +759,11 @@ async fn check_lists_what_an_install_would_change_and_writes_nothing() {
     let Some(db) = seeded(false).await else { return };
     let before = hashes(&db).await;
     let lines = db.editor.ext_check(Folder::new().path()).await.unwrap();
-    assert!(has(&lines, "checking the install of kb 1.0.0") && has(&lines, "rows.toml [[item]] #1 (100/212) changes defs.items 100212 (set: attacktime, itemname, range)"), "{lines:#?}");
+    assert!(
+        has(&lines, "checking the install of kb 1.0.0")
+            && has(&lines, "rows.toml [[item]] #1 (100/212) changes defs.items 100212 (set: attacktime, itemname, range)"),
+        "{lines:#?}"
+    );
     assert!(has(&lines, "nothing was written"), "{lines:#?}");
     assert_eq!(before, hashes(&db).await);
     assert_eq!(count_in_content(&db, "extensions").await, 0);
@@ -582,7 +780,8 @@ async fn the_builtin_group_counts_are_the_client_schemas_when_it_exists() {
         eprintln!("no client schema here: the built-in group counts are not compared");
         return;
     }
-    let counts: Vec<(i16, i64)> = sqlx::query_as("SELECT grp, count(*) FROM client.items GROUP BY grp ORDER BY grp").fetch_all(&pool).await.unwrap();
+    let counts: Vec<(i16, i64)> =
+        sqlx::query_as("SELECT grp, count(*) FROM client.items GROUP BY grp ORDER BY grp").fetch_all(&pool).await.unwrap();
     let mut want = [0i64; 100];
     for (group, n) in counts {
         want[group as usize - 1] = n;
@@ -596,7 +795,12 @@ async fn the_builtin_group_counts_are_the_client_schemas_when_it_exists() {
 const RULE_KB: &str = "[rules.no-gain]\ntype = \"pvp_gain\"\nmaps = [35, 36, 42]\nexp = 0\nkills = 0\ndeaths = false\n\n[rules.gap]\ntype = \"level_gap\"\ngap = 20\n";
 
 fn startup() -> game_server::config::Startup {
-    game_server::config::Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None }
+    game_server::config::Startup {
+        bind: "0.0.0.0:30810".parse().unwrap(),
+        database_url: "postgres://localhost/test".into(),
+        server_id: 1,
+        config: None,
+    }
 }
 
 /// What the game server reads of the rules from this database (the enabled extensions' and the editor's).
@@ -613,12 +817,19 @@ async fn an_extensions_rules_are_stored_resolved_and_follow_enable_upgrade_and_r
     assert!(has(&checked, "2 rules"), "{checked:#?}");
     assert_eq!(count_in_content(&db, "ext_rules").await, 0, "a check writes nothing");
     let lines = install(&db, &f).await;
-    assert!(has(&lines, "6 client rows, 1 settings, 2 rules") && has(&lines, "`console <server id> reload` puts its rules in force"), "{lines:#?}");
+    assert!(
+        has(&lines, "6 client rows, 1 settings, 2 rules") && has(&lines, "`console <server id> reload` puts its rules in force"),
+        "{lines:#?}"
+    );
     assert_eq!(count_in_content(&db, "ext_rules").await, 2);
     let stored = db.scalar(format!("SELECT rule AS v FROM {}.ext_rules WHERE extension = 'kb' AND name = 'gap'", db.s.content)).await;
     assert_eq!(stored["v"], json!({ "type": "level_gap", "gap": 20 }));
     let list = db.editor.ext_list().await.unwrap();
-    assert!(list[0].contains("rules") && list.iter().any(|l| l.starts_with("kb ") && l.split_whitespace().rev().take(2).collect::<Vec<_>>() == ["0", "2"]), "{list:#?}");
+    assert!(
+        list[0].contains("rules")
+            && list.iter().any(|l| l.starts_with("kb ") && l.split_whitespace().rev().take(2).collect::<Vec<_>>() == ["0", "2"]),
+        "{list:#?}"
+    );
     let shown = db.editor.ext_show("kb").await.unwrap();
     assert!(has(&shown, "rule kb/gap = ") && has(&shown, "rule kb/no-gain = "), "{shown:#?}");
 
@@ -634,14 +845,20 @@ async fn an_extensions_rules_are_stored_resolved_and_follow_enable_upgrade_and_r
 
     // Disabled, its rules do not count; enabled again they do.
     let lines = db.editor.ext_set_enabled("kb", false).await.unwrap();
-    assert!(has(&lines, "its settings defaults and rules stop counting") && has(&lines, "`console <server id> reload` takes out of force its rules"), "{lines:#?}");
+    assert!(
+        has(&lines, "its settings defaults and rules stop counting")
+            && has(&lines, "`console <server id> reload` takes out of force its rules"),
+        "{lines:#?}"
+    );
     assert!(rule_layers(&db).await.extensions.is_empty());
     assert_eq!(count_in_content(&db, "ext_rules").await, 2, "stored all the same");
     db.editor.ext_set_enabled("kb", true).await.unwrap();
     assert_eq!(rule_layers(&db).await.extensions.len(), 2);
 
     // An upgrade replaces them whole.
-    let up = Folder::new().edit("extension.toml", "version = \"1.0.0\"", "version = \"1.1.0\"").append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 30\n");
+    let up = Folder::new()
+        .edit("extension.toml", "version = \"1.0.0\"", "version = \"1.1.0\"")
+        .append("extension.toml", "[rules.gap]\ntype = \"level_gap\"\ngap = 30\n");
     db.editor.ext_upgrade(up.path()).await.unwrap();
     let sources = rule_layers(&db).await;
     assert_eq!(sources.extensions.len(), 1);

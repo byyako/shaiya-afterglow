@@ -161,7 +161,11 @@ pub(super) fn generate_around(
             break;
         }
         // A radius of 0 puts every monster on the spot itself.
-        let (dx, dz) = if radius == 0 { (0.0, 0.0) } else { ((rand() % (2 * radius)) as f32 - radius as f32, (rand() % (2 * radius)) as f32 - radius as f32) };
+        let (dx, dz) = if radius == 0 {
+            (0.0, 0.0)
+        } else {
+            ((rand() % (2 * radius)) as f32 - radius as f32, (rand() % (2 * radius)) as f32 - radius as f32)
+        };
         let mut at = [spot[0] + dx, spot[1], spot[2] + dz];
         if !free(at) {
             at = spot;

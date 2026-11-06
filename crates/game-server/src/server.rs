@@ -79,8 +79,8 @@ mod vehicles;
 use tasks::Save;
 pub use tasks::{
     MOB_UPDATE_INTERVAL, flush_saves, flush_writers, heartbeat, kill_count_changes, load_closed_quests, load_kill_counts, load_market,
-    load_mob_id, load_obelisk_owners, load_open_questions, market_pass, mob_updater, obelisk_events, ranking_clock, rules_clock, save_mob_id,
-    save_mob_ids, serve, shut_down, start_friends, start_guilds, start_saves,
+    load_mob_id, load_obelisk_owners, load_open_questions, market_pass, mob_updater, obelisk_events, ranking_clock, rules_clock,
+    save_mob_id, save_mob_ids, serve, shut_down, start_friends, start_guilds, start_saves,
 };
 
 use crate::zone::{
@@ -2085,7 +2085,9 @@ async fn world_loop<S: Backend>(
                     ctx.zones.war_answer(state.map, id, answer != gwp::ANSWER_REFUSE, Instant::now());
                 }
             }
-            opcode if opcode & 0xFF00 == 0x2300 && state.entered => my_shop::packet(conn, ctx, character, state, player.faction.map_or(0, |f| f.country), opcode, payload).await?,
+            opcode if opcode & 0xFF00 == 0x2300 && state.entered => {
+                my_shop::packet(conn, ctx, character, state, player.faction.map_or(0, |f| f.country), opcode, payload).await?
+            }
             // The auction house (`docs/original/auction.md`).
             opcode if opcode & 0xFF00 == 0x1C00 && state.entered => market::packet(conn, ctx, character, state, opcode, payload).await?,
             // The item mall and the billing storage (`docs/original/item-mall.md`).
@@ -2435,7 +2437,9 @@ async fn world_loop<S: Backend>(
                         chat::OP_PARTY_LEADER => "union",
                         _ => "all",
                     };
-                    if let Some(refusal) = script::chat_refusal(ctx, crate::script::Point::Chat, character, map, channel, target.as_deref(), text) {
+                    if let Some(refusal) =
+                        script::chat_refusal(ctx, crate::script::Point::Chat, character, map, channel, target.as_deref(), text)
+                    {
                         refused::tell_refused(conn, state, &refusal).await?;
                         continue;
                     }
@@ -2476,7 +2480,9 @@ async fn world_loop<S: Backend>(
                             refused::tell_refused(conn, state, &refusal).await?;
                         } else if state.next_trade.is_some_and(|next| Instant::now() < next) {
                             tracing::debug!(%peer, id, "trade chat refused: too soon");
-                        } else if let Some(refusal) = script::chat_refusal(ctx, crate::script::Point::TradeChat, character, map, "", None, text) {
+                        } else if let Some(refusal) =
+                            script::chat_refusal(ctx, crate::script::Point::TradeChat, character, map, "", None, text)
+                        {
                             // After the rules and the cooldown test; a line a script refused uses no cooldown. No lock is held here.
                             refused::tell_refused(conn, state, &refusal).await?;
                         } else {

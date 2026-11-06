@@ -99,7 +99,19 @@ impl<S: Backend> ScriptWorld for ContextWorld<S> {
         }
     }
 
-    fn spawn(&self, extension: &str, mob_id: u16, count: usize, map: u16, x: f32, z: f32, radius: u32, lifetime: u32, exp: bool, drops: bool) -> Vec<u32> {
+    fn spawn(
+        &self,
+        extension: &str,
+        mob_id: u16,
+        count: usize,
+        map: u16,
+        x: f32,
+        z: f32,
+        radius: u32,
+        lifetime: u32,
+        exp: bool,
+        drops: bool,
+    ) -> Vec<u32> {
         let Some(c) = self.ctx.upgrade() else { return Vec::new() };
         if !c.data.world.is_safe_pos(map, [x, 0.0, z]) {
             return Vec::new();
@@ -196,7 +208,8 @@ impl<S: Backend> Context<S> {
         for e in &sources.extensions {
             store.set_globals(&e.name, e.globals.clone());
         }
-        let base = LoadContext { item_exists: Some(exists), world: Some(self.script_world()), store: Some(store), ..LoadContext::default() };
+        let base =
+            LoadContext { item_exists: Some(exists), world: Some(self.script_world()), store: Some(store), ..LoadContext::default() };
         ScriptSet::load(&inputs, base, self.config.script_memory_mb)
     }
 
@@ -276,7 +289,12 @@ pub(super) fn command<S: Backend>(ctx: &Context<S>, character: &PlayCharacter, s
         return false;
     }
     tracing::debug!(id = character.id, extension = %ext.name, word, "script command");
-    ctx.zones.script_job(Job::Command { extension: ext.name.clone(), word, p: PlayerRef { id: character.id, name: character.name.clone() }, args });
+    ctx.zones.script_job(Job::Command {
+        extension: ext.name.clone(),
+        word,
+        p: PlayerRef { id: character.id, name: character.name.clone() },
+        args,
+    });
     true
 }
 
@@ -409,7 +427,14 @@ pub(super) fn answer<S>(ctx: &Context<S>) -> Vec<String> {
             Some(reason) => format!("disabled ({reason})"),
             None => "running".to_owned(),
         };
-        out.push(cut_line(format!("{} {state} {} handlers timers {} spawns {} faults {}", ext.name, s.handlers(), s.timers, ext.spawn_count(), ext.fault_count())));
+        out.push(cut_line(format!(
+            "{} {state} {} handlers timers {} spawns {} faults {}",
+            ext.name,
+            s.handlers(),
+            s.timers,
+            ext.spawn_count(),
+            ext.fault_count()
+        )));
     }
     for (name, why) in set.failed() {
         out.push(cut_line(format!("{name} not loaded ({why})")));
@@ -492,7 +517,11 @@ async fn one<S: Backend>(
                     break;
                 }
                 let take = left.min(have);
-                changes.push(if take == have { SlotChange::Remove { bag, slot } } else { SlotChange::SetCount { bag, slot, count: have - take } });
+                changes.push(if take == have {
+                    SlotChange::Remove { bag, slot }
+                } else {
+                    SlotChange::SetCount { bag, slot, count: have - take }
+                });
                 left -= take;
             }
             let Some(rows) = ctx.store.trade(id, 0, &changes).await? else { bail!("the database refused taking {changes:?}") };
@@ -594,7 +623,15 @@ pub(super) fn shop_refusal<S>(ctx: &Context<S>, character: &PlayCharacter, map: 
 }
 
 /// `trade_chat` and `chat`: the line, as the player typed it (`chat` has the channel and a whisper's target too).
-pub(super) fn chat_refusal<S>(ctx: &Context<S>, point: Point, character: &PlayCharacter, map: u16, channel: &str, to: Option<&[u8]>, line: &[u8]) -> Option<Refusal> {
+pub(super) fn chat_refusal<S>(
+    ctx: &Context<S>,
+    point: Point,
+    character: &PlayCharacter,
+    map: u16,
+    channel: &str,
+    to: Option<&[u8]>,
+    line: &[u8],
+) -> Option<Refusal> {
     let me = me(character);
     refuse(ctx, point, character.id, map, &|lua| {
         let mut args = vec![handle(lua, &me)?];
@@ -643,7 +680,14 @@ pub(super) fn kills_times<S>(ctx: &Context<S>, character: &PlayCharacter, map: u
     let me = me(character);
     let factor = set.times(times, &|lua, so_far| Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Integer(i64::from(so_far))])));
     if factor != 1 {
-        tracing::debug!(id = character.id, map, point = "pvp_kills", before = times, after = times.saturating_mul(factor), "changed by scripts");
+        tracing::debug!(
+            id = character.id,
+            map,
+            point = "pvp_kills",
+            before = times,
+            after = times.saturating_mul(factor),
+            "changed by scripts"
+        );
     }
     factor
 }
@@ -683,7 +727,13 @@ pub(super) fn enchant_jump<S>(ctx: &Context<S>, character: &PlayCharacter, map: 
 }
 
 /// `item_use`: the extension that took the item over answers (section 6.1). `Core` for an item no script registered.
-pub(super) fn item_use<S>(ctx: &Context<S>, character: &PlayCharacter, item: &crate::backend::ItemUnit, bag: u8, slot: u8) -> (crate::script::points::ItemUse, Option<Refusal>) {
+pub(super) fn item_use<S>(
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    item: &crate::backend::ItemUnit,
+    bag: u8,
+    slot: u8,
+) -> (crate::script::points::ItemUse, Option<Refusal>) {
     use crate::script::points::ItemUse;
     let set = ctx.zones.ext_scripts();
     let Some(owner) = set.item_owner(item.item_type, item.type_id) else { return (ItemUse::Core, None) };
@@ -703,7 +753,11 @@ pub(super) fn item_use<S>(ctx: &Context<S>, character: &PlayCharacter, item: &cr
         Ok(MultiValue::from_iter([handle(lua, &me)?, Value::Table(table)]))
     });
     let refusal = match &answer {
-        ItemUse::Refused(text) => Some(Refusal { rule: owner.item_refusal_id(), name: std::sync::Arc::from(format!("{}/item_use", owner.name)), text: text.clone() }),
+        ItemUse::Refused(text) => Some(Refusal {
+            rule: owner.item_refusal_id(),
+            name: std::sync::Arc::from(format!("{}/item_use", owner.name)),
+            text: text.clone(),
+        }),
         _ => None,
     };
     (answer, refusal)

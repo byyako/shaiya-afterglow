@@ -35,7 +35,9 @@ const CALLBACKS: &str = "script.callbacks";
 /// A command word `^[a-z][a-z0-9_]{0,15}$`.
 pub fn valid_command_word(word: &str) -> bool {
     let mut chars = word.chars();
-    word.len() <= 16 && chars.next().is_some_and(|c| c.is_ascii_lowercase()) && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    word.len() <= 16
+        && chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
 #[derive(Clone, Debug)]
@@ -106,7 +108,18 @@ impl Shared {
         let regs = Registrations { open: true, ..Registrations::default() };
         let world = ctx.world.clone().unwrap_or_else(act::null_world);
         let store = ctx.store.clone().unwrap_or_default();
-        Arc::new(Self { name: name.to_owned(), regs: Mutex::new(regs), world, store, rates: Mutex::default(), next_callback: std::sync::atomic::AtomicU64::new(1), ctx, log: Mutex::new(LogState::default()), dry, capture_log: AtomicBool::new(false) })
+        Arc::new(Self {
+            name: name.to_owned(),
+            regs: Mutex::new(regs),
+            world,
+            store,
+            rates: Mutex::default(),
+            next_callback: std::sync::atomic::AtomicU64::new(1),
+            ctx,
+            log: Mutex::new(LogState::default()),
+            dry,
+            capture_log: AtomicBool::new(false),
+        })
     }
 
     fn regs(&self) -> std::sync::MutexGuard<'_, Registrations> {
@@ -186,7 +199,10 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
     game.set("api", super::API_VERSION)?;
     game.set("extension", shared.name.as_str())?;
     game.set("options", options::lua_table(lua, options)?)?;
-    game.set("now", lua.create_function(|_, ()| Ok(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())))?)?;
+    game.set(
+        "now",
+        lua.create_function(|_, ()| Ok(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())))?,
+    )?;
 
     let s = shared.clone();
     let log = lua.create_function(move |lua, args: MultiValue| {
@@ -218,7 +234,9 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
             }
             let Value::String(name) = name else { return Err(script_error(lua, "game.on: the first argument is the event or point name")) };
             let name = name.to_string_lossy();
-            let Value::Function(func) = func else { return Err(script_error(lua, format!("game.on({name:?}): the second argument is a function"))) };
+            let Value::Function(func) = func else {
+                return Err(script_error(lua, format!("game.on({name:?}): the second argument is a function")));
+            };
             let Some(hook) = hook_name(&name) else {
                 let hint = match name.as_ref() {
                     "item_use" => " (register the items with game.on_item)".to_owned(),
@@ -249,7 +267,9 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
             if !valid_command_word(&word) {
                 return Err(script_error(lua, format!("game.command: {word:?} is not a command word (^[a-z][a-z0-9_]{{0,15}}$)")));
             }
-            let Value::Function(func) = func else { return Err(script_error(lua, format!("game.command({word:?}): the second argument is a function"))) };
+            let Value::Function(func) = func else {
+                return Err(script_error(lua, format!("game.command({word:?}): the second argument is a function")));
+            };
             let (mut staff, mut help) = (0u8, String::new());
             if let Some(opts) = opts {
                 for pair in opts.pairs::<Value, Value>() {
@@ -262,18 +282,29 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
                                 _ => unreachable!(),
                             };
                             if n.fract() != 0.0 || !(0.0..=10.0).contains(&n) {
-                                return Err(script_error(lua, format!("game.command({word:?}): staff is 0 (everyone) or a staff level 1 to 10")));
+                                return Err(script_error(
+                                    lua,
+                                    format!("game.command({word:?}): staff is 0 (everyone) or a staff level 1 to 10"),
+                                ));
                             }
                             staff = n as u8;
                         }
                         (Value::String(k), Value::String(v)) if k.as_bytes() == b"help" => {
                             let v = v.to_string_lossy().to_string();
                             if v.len() > 100 || !v.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
-                                return Err(script_error(lua, format!("game.command({word:?}): help is printable ASCII, at most 100 bytes")));
+                                return Err(script_error(
+                                    lua,
+                                    format!("game.command({word:?}): help is printable ASCII, at most 100 bytes"),
+                                ));
                             }
                             help = v;
                         }
-                        _ => return Err(script_error(lua, format!("game.command({word:?}): the options are staff (a number) and help (a string)"))),
+                        _ => {
+                            return Err(script_error(
+                                lua,
+                                format!("game.command({word:?}): the options are staff (a number) and help (a string)"),
+                            ));
+                        }
                     }
                 }
             }
@@ -298,13 +329,17 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
             if !s.regs().open {
                 return Err(script_error(lua, "game.on_item can only be called while the scripts load"));
             }
-            let Value::Table(ids) = ids else { return Err(script_error(lua, "game.on_item: the first argument is a list of \"type/type_id\"")) };
+            let Value::Table(ids) = ids else {
+                return Err(script_error(lua, "game.on_item: the first argument is a list of \"type/type_id\""));
+            };
             let Value::Function(func) = func else { return Err(script_error(lua, "game.on_item: the second argument is a function")) };
             let mut parsed = Vec::new();
             for v in ids.sequence_values::<Value>() {
                 let Value::String(text) = v? else { return Err(script_error(lua, "game.on_item: the ids are strings \"type/type_id\"")) };
                 let text = text.to_string_lossy().to_string();
-                let Some(id) = parse_item(&text) else { return Err(script_error(lua, format!("game.on_item: {text:?} is not \"type/type_id\" (two numbers 1 to 255)"))) };
+                let Some(id) = parse_item(&text) else {
+                    return Err(script_error(lua, format!("game.on_item: {text:?} is not \"type/type_id\" (two numbers 1 to 255)")));
+                };
                 if s.ctx.item_exists.as_ref().is_some_and(|exists| !exists(id.0, id.1)) {
                     return Err(script_error(lua, format!("game.on_item: item {text} does not exist")));
                 }
@@ -346,12 +381,22 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, options: &[ResolvedOption]) -> m
                 let secs = match secs {
                     Value::Integer(i) if i >= 1 => i as u64,
                     Value::Number(n) if n.fract() == 0.0 && n >= 1.0 => n as u64,
-                    _ => return Err(script_error(lua, format!("game.{name}: the seconds are a whole number, {} to {}", TIMER_SECS.start(), TIMER_SECS.end()))),
+                    _ => {
+                        return Err(script_error(
+                            lua,
+                            format!("game.{name}: the seconds are a whole number, {} to {}", TIMER_SECS.start(), TIMER_SECS.end()),
+                        ));
+                    }
                 };
                 if !TIMER_SECS.contains(&secs) {
-                    return Err(script_error(lua, format!("game.{name}: the seconds are a whole number, {} to {}", TIMER_SECS.start(), TIMER_SECS.end())));
+                    return Err(script_error(
+                        lua,
+                        format!("game.{name}: the seconds are a whole number, {} to {}", TIMER_SECS.start(), TIMER_SECS.end()),
+                    ));
                 }
-                let Value::Function(func) = func else { return Err(script_error(lua, format!("game.{name}: the second argument is a function"))) };
+                let Value::Function(func) = func else {
+                    return Err(script_error(lua, format!("game.{name}: the second argument is a function")));
+                };
                 let mut regs = s.regs();
                 if regs.timers.len() >= MAX_TIMERS {
                     return Err(script_error(lua, format!("game.{name}: at most {MAX_TIMERS} timers")));
@@ -393,7 +438,9 @@ fn hook_name(name: &str) -> Option<&'static str> {
 /// `"type/type_id"`.
 pub fn parse_item(text: &str) -> Option<(u8, u8)> {
     let (t, i) = text.split_once('/')?;
-    let num = |s: &str| (!s.is_empty() && s.len() <= 3 && s.bytes().all(|b| b.is_ascii_digit())).then(|| s.parse::<u8>().ok()).flatten().filter(|n| *n >= 1);
+    let num = |s: &str| {
+        (!s.is_empty() && s.len() <= 3 && s.bytes().all(|b| b.is_ascii_digit())).then(|| s.parse::<u8>().ok()).flatten().filter(|n| *n >= 1)
+    };
     Some((num(t)?, num(i)?))
 }
 

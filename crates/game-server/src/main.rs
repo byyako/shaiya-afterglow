@@ -9,8 +9,8 @@ use game_server::pg::{self, PgBackend};
 use game_server::server::console;
 use game_server::server::{
     Context, GameData, flush_saves, flush_writers, heartbeat, load_closed_quests, load_kill_counts, load_market, load_mob_id,
-    load_obelisk_owners, load_open_questions, market_pass, mob_updater, ranking_clock, rules_clock, save_mob_id, save_mob_ids, serve, shut_down,
-    start_friends, start_guilds, start_saves,
+    load_obelisk_owners, load_open_questions, market_pass, mob_updater, ranking_clock, rules_clock, save_mob_id, save_mob_ids, serve,
+    shut_down, start_friends, start_guilds, start_saves,
 };
 use game_server::supervise::supervise;
 use sqlx::PgPool;
@@ -47,7 +47,10 @@ async fn main() -> Result<()> {
                 print!("{}", game_server::rules::show(&game_server::rules::resolve(&config, &sources)?.1));
             }
             ("rules", Some("--check")) => {
-                let file = args.next().or_else(|| std::env::var("GAME_CONFIG").ok().filter(|c| !c.is_empty())).unwrap_or_else(|| game_server::config::DEFAULT_CONFIG.to_owned());
+                let file = args
+                    .next()
+                    .or_else(|| std::env::var("GAME_CONFIG").ok().filter(|c| !c.is_empty()))
+                    .unwrap_or_else(|| game_server::config::DEFAULT_CONFIG.to_owned());
                 match game_server::rules::check_file(&file) {
                     Ok(line) => println!("{line}"),
                     Err(error) => {

@@ -55,7 +55,12 @@ pub struct Copy {
 pub enum ClientSpec {
     /// `client = "keep"`: every client-only field, text included, from the record's own original.
     Keep,
-    Fields { name: String, description: String, look: Option<(i64, i64)>, fields: BTreeMap<String, i64> },
+    Fields {
+        name: String,
+        description: String,
+        look: Option<(i64, i64)>,
+        fields: BTreeMap<String, i64>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -132,7 +137,9 @@ fn json(value: &toml::Value) -> Result<Value, String> {
 fn toml_json(value: &toml::Value) -> Result<Value, String> {
     Ok(match value {
         toml::Value::Array(list) => Value::Array(list.iter().map(toml_json).collect::<Result<_, _>>()?),
-        toml::Value::Table(table) => Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_json(v)?))).collect::<Result<_, String>>()?),
+        toml::Value::Table(table) => {
+            Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_json(v)?))).collect::<Result<_, String>>()?)
+        }
         other => json(other)?,
     })
 }
@@ -163,7 +170,10 @@ fn parse_entry(kind: Kind, n: usize, file: &str, table: &Table) -> Result<Entry,
             _ => return Err(format!("{here}: unknown key `{key}`")),
         }
     }
-    let id = table.get("id").and_then(toml::Value::as_str).ok_or_else(|| format!("{file} [[{}]] #{n}: the required key `id` is missing", kind.word()))?;
+    let id = table
+        .get("id")
+        .and_then(toml::Value::as_str)
+        .ok_or_else(|| format!("{file} [[{}]] #{n}: the required key `id` is missing", kind.word()))?;
     entry.id = id.to_owned();
     entry.key = parse_id(kind, id).map_err(|e| format!("{}: {e}", label(&entry)))?;
     if let Some(value) = table.get("copy") {
@@ -194,15 +204,25 @@ fn parse_entry(kind: Kind, n: usize, file: &str, table: &Table) -> Result<Entry,
     }
     match (table.get("client"), table.get("server_only")) {
         (Some(_), Some(_)) => return Err(format!("{}: `client` and `server_only` exclude each other", label(&entry))),
-        (Some(_), None) if kind == Kind::Drop => return Err(format!("{}: a drop entry has no client row (the client does not show drops)", label(&entry))),
-        (None, Some(_)) if kind == Kind::Drop => return Err(format!("{}: a drop entry has no client row, so no server_only reason either", label(&entry))),
+        (Some(_), None) if kind == Kind::Drop => {
+            return Err(format!("{}: a drop entry has no client row (the client does not show drops)", label(&entry)));
+        }
+        (None, Some(_)) if kind == Kind::Drop => {
+            return Err(format!("{}: a drop entry has no client row, so no server_only reason either", label(&entry)));
+        }
         _ => {}
     }
     if let Some(value) = table.get("client") {
         entry.client = Some(parse_client(kind, value).map_err(|e| format!("{}: client: {e}", label(&entry)))?);
     }
     if let Some(value) = table.get("server_only") {
-        entry.server_only = Some(value.as_str().filter(|s| !s.trim().is_empty()).ok_or_else(|| format!("{}: server_only must be the reason, a text", label(&entry)))?.to_owned());
+        entry.server_only = Some(
+            value
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .ok_or_else(|| format!("{}: server_only must be the reason, a text", label(&entry)))?
+                .to_owned(),
+        );
     }
     if let Some(value) = table.get("effect") {
         let json = toml_json(value).map_err(|e| format!("{}: effect: {e}", label(&entry)))?;
@@ -231,7 +251,8 @@ fn parse_client(kind: Kind, value: &toml::Value) -> Result<ClientSpec, String> {
             return Err(format!("unknown key `{key}` (a {} may give: {})", kind.word(), allowed.join(", ")));
         }
     }
-    let text = |key: &str| table.get(key).and_then(toml::Value::as_str).map(str::to_owned).ok_or_else(|| format!("`{key}` is required (a text)"));
+    let text =
+        |key: &str| table.get(key).and_then(toml::Value::as_str).map(str::to_owned).ok_or_else(|| format!("`{key}` is required (a text)"));
     let look = match table.get("look") {
         None => None,
         Some(v) => {
@@ -378,7 +399,10 @@ set = { grade = 3, droprate = 50 }
             (one("drop", "id = \"2133/4\"\nclient = \"keep\""), "a drop entry has no client row"),
             (one("item", "id = \"100/212\"\nclient = { name = \"a\", description = \"b\", flavour = 1 }"), "client: unknown key `flavour`"),
             (one("item", "id = \"100/212\"\nclient = { name = \"a\" }"), "`description` is required"),
-            (one("skill", "id = \"200/1\"\nclient = { name = \"a\", description = \"b\", model = 1 }"), "unknown key `model` (a skill may give"),
+            (
+                one("skill", "id = \"200/1\"\nclient = { name = \"a\", description = \"b\", model = 1 }"),
+                "unknown key `model` (a skill may give",
+            ),
             (one("item", "id = \"100/212\"\ncopy = { from = \"100/108\", wat = 1 }"), "unknown key `wat` in copy"),
             (one("item", "id = \"100/212\"\ncopy = { columns = [\"a\"] }"), "copy needs `from`"),
             (one("item", "id = \"100/212\"\nset = { a = [1] }"), "set a: a array cannot be a column value"),
@@ -401,22 +425,36 @@ set = { grade = 3, droprate = 50 }
         assert_eq!(rows[0].effect, Some(serde_json::json!({ "type": "level_up", "levels": 1 })));
         assert_eq!(rows[1].abilities, Some(serde_json::json!([{ "type": "kill_boost", "times": 2 }])));
         // Nested tables and lists come through as JSON.
-        let rows = parse_rows("rows.toml", "[[item]]\nid = \"95/3\"\neffect = { type = \"enchant\", jumps = [[1, 60], [2, 40]], safe = true }\n").unwrap();
+        let rows =
+            parse_rows("rows.toml", "[[item]]\nid = \"95/3\"\neffect = { type = \"enchant\", jumps = [[1, 60], [2, 40]], safe = true }\n")
+                .unwrap();
         assert_eq!(rows[0].effect.as_ref().unwrap()["jumps"], serde_json::json!([[1, 60], [2, 40]]));
         let one = |kind: &str, body: &str| parse_rows("rows.toml", &format!("[[{kind}]]\n{body}")).unwrap_err();
         let cases = [
-            (one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 0 }"), "rows.toml [[item]] #1 (100/215): effect: levels: 0 is not 1 to 59"),
+            (
+                one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 0 }"),
+                "rows.toml [[item]] #1 (100/215): effect: levels: 0 is not 1 to 59",
+            ),
             (one("item", "id = \"100/215\"\neffect = { type = \"level_up\" }"), "(100/215): effect: a level_up effect needs one of"),
             (one("item", "id = \"100/215\"\neffect = \"level_up\""), "effect: an effect is a table"),
             (one("item", "id = \"100/215\"\neffect = { type = \"nothing\" }"), "effect: type: unknown type \"nothing\""),
-            (one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 1, rate = 3 }"), "effect: unknown key \"rate\" (not a key of the level_up effect)"),
-            (one("skill", "id = \"200/1\"\nabilities = [{ type = \"kill_boost\", times = 101 }]"), "rows.toml [[skill]] #1 (200/1): abilities: ability 1: times: 101 is not 1 to 100"),
+            (
+                one("item", "id = \"100/215\"\neffect = { type = \"level_up\", levels = 1, rate = 3 }"),
+                "effect: unknown key \"rate\" (not a key of the level_up effect)",
+            ),
+            (
+                one("skill", "id = \"200/1\"\nabilities = [{ type = \"kill_boost\", times = 101 }]"),
+                "rows.toml [[skill]] #1 (200/1): abilities: ability 1: times: 101 is not 1 to 100",
+            ),
             (one("skill", "id = \"200/1\"\nabilities = []"), "abilities: 0 abilities is not 1 to 4"),
             (one("skill", "id = \"200/1\"\neffect = { type = \"level_up\", levels = 1 }"), "`effect` belongs to [[item]]"),
             (one("item", "id = \"100/215\"\nabilities = [{ type = \"kill_boost\", times = 2 }]"), "`abilities` belongs to [[skill]]"),
             (one("drop", "id = \"2133/4\"\neffect = { type = \"level_up\", levels = 1 }"), "unknown key `effect`"),
             (one("drop", "id = \"2133/4\"\nabilities = [{ type = \"kill_boost\", times = 2 }]"), "unknown key `abilities`"),
-            (one("item", "id = \"100/215\"\neffect = { type = \"recreate\", stats = [\"str\"], at = 2026-11-05 }"), "effect: a datetime cannot be a column value"),
+            (
+                one("item", "id = \"100/215\"\neffect = { type = \"recreate\", stats = [\"str\"], at = 2026-11-05 }"),
+                "effect: a datetime cannot be a column value",
+            ),
         ];
         for (error, needle) in cases {
             assert!(error.contains(needle), "wanted {needle:?}, got {error:?}");

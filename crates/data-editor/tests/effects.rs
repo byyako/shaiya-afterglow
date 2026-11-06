@@ -34,7 +34,11 @@ impl Folder {
     fn new(version: &str, rows: &str) -> Self {
         let to = std::env::temp_dir().join(format!("effects-test-{:08x}", rand::random::<u32>()));
         std::fs::create_dir_all(&to).unwrap();
-        std::fs::write(to.join("extension.toml"), format!("format = 1\nname = \"fx\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{MANIFEST}")).unwrap();
+        std::fs::write(
+            to.join("extension.toml"),
+            format!("format = 1\nname = \"fx\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{MANIFEST}"),
+        )
+        .unwrap();
         std::fs::write(to.join("rows.toml"), rows).unwrap();
         Self(to)
     }
@@ -81,9 +85,15 @@ async fn an_effect_and_an_ability_install_check_upgrade_and_remove() {
 
     let lines = db.editor.ext_install(v1.path(), false).await.unwrap();
     assert!(has(&lines, "100/212 level_up levels = 1") && has(&lines, "200/1 kill_boost times = 2"), "{lines:#?}");
-    let stored = db.scalar(format!("SELECT effect AS v FROM {}.ext_item_effects WHERE extension = 'fx' AND item_id = 100212", db.s.content)).await;
+    let stored =
+        db.scalar(format!("SELECT effect AS v FROM {}.ext_item_effects WHERE extension = 'fx' AND item_id = 100212", db.s.content)).await;
     assert_eq!(stored["v"], json!({ "type": "level_up", "levels": 1 }));
-    let stored = db.scalar(format!("SELECT abilities AS v FROM {}.ext_skill_abilities WHERE extension = 'fx' AND skill_id = 200 AND level = 1", db.s.content)).await;
+    let stored = db
+        .scalar(format!(
+            "SELECT abilities AS v FROM {}.ext_skill_abilities WHERE extension = 'fx' AND skill_id = 200 AND level = 1",
+            db.s.content
+        ))
+        .await;
     assert_eq!(stored["v"], json!([{ "type": "kill_boost", "times": 2 }]));
     // The defs rows carry no trace of them (the client's data and `content hashes defs` are as without the effects).
     let stone = db.scalar(format!("SELECT to_jsonb(t) AS v FROM {}.items t WHERE itemid = 100212", db.s.defs)).await["v"].clone();
@@ -101,7 +111,10 @@ async fn an_effect_and_an_ability_install_check_upgrade_and_remove() {
     // an upgrade replaces both
     let v2 = Folder::new(
         "1.1.0",
-        &STONE.replace("levels = 1 }", "levels = 3, max = 50 }").replace("times = 2", "times = 5").replace("abilities = [", "abilities = [{ type = \"kill_boost\", times = 3 }, "),
+        &STONE
+            .replace("levels = 1 }", "levels = 3, max = 50 }")
+            .replace("times = 2", "times = 5")
+            .replace("abilities = [", "abilities = [{ type = \"kill_boost\", times = 3 }, "),
     );
     let lines = db.editor.ext_upgrade(v2.path()).await.unwrap();
     assert!(has(&lines, "100/212 level_up levels = 3, max = 50") && has(&lines, "200/1 kill_boost times = 5"), "{lines:#?}");
@@ -112,7 +125,12 @@ async fn an_effect_and_an_ability_install_check_upgrade_and_remove() {
     assert_eq!(stored["v"].as_array().map(Vec::len), Some(2));
 
     // an upgrade that no longer lists the effect takes it out
-    let v3 = Folder::new("1.2.0", &STONE.replace("effect = { type = \"level_up\", levels = 1 }\n", "").replace("abilities = [{ type = \"kill_boost\", times = 2 }]\n", ""));
+    let v3 = Folder::new(
+        "1.2.0",
+        &STONE
+            .replace("effect = { type = \"level_up\", levels = 1 }\n", "")
+            .replace("abilities = [{ type = \"kill_boost\", times = 2 }]\n", ""),
+    );
     db.editor.ext_upgrade(v3.path()).await.unwrap();
     assert_eq!((count(&db, "ext_item_effects").await, count(&db, "ext_skill_abilities").await), (0, 0));
 
@@ -129,25 +147,40 @@ async fn an_effect_and_an_ability_install_check_upgrade_and_remove() {
 #[tokio::test]
 async fn a_wrong_row_and_a_missing_client_part_are_refused_naming_the_entry() {
     let Some(db) = seeded(false).await else { return };
-    let head = "[[item]]\nid = \"100/212\"\ncopy = { from = \"100/108\" }\nclient = { name = \"A\", look = \"100/108\", description = \"b\" }\n";
+    let head =
+        "[[item]]\nid = \"100/212\"\ncopy = { from = \"100/108\" }\nclient = { name = \"A\", look = \"100/108\", description = \"b\" }\n";
     // a level_up effect on the Lapisia's row (95/3, an original of item type 95)
     let wrong = Folder::new(
         "1.0.0",
-        &format!("{head}\n[[item]]\nid = \"95/3\"\neffect = {{ type = \"level_up\", levels = 1 }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"),
+        &format!(
+            "{head}\n[[item]]\nid = \"95/3\"\neffect = {{ type = \"level_up\", levels = 1 }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"
+        ),
     );
     let message = refusal(db.editor.ext_install(wrong.path(), false).await.unwrap_err());
-    assert!(message.contains("rows.toml [[item]] #2 (95/3)") && message.contains("effect level_up needs an item the core uses (item type 25, 44 or 100); this item is type 95"), "{message}");
+    assert!(
+        message.contains("rows.toml [[item]] #2 (95/3)")
+            && message.contains("effect level_up needs an item the core uses (item type 25, 44 or 100); this item is type 95"),
+        "{message}"
+    );
     // an enchant effect on a stone: the computed row is item type 100
     let wrong = Folder::new(
         "1.0.0",
-        &format!("{head}\n[[item]]\nid = \"100/213\"\ncopy = {{ from = \"100/108\" }}\neffect = {{ type = \"enchant\", safe = true }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"),
+        &format!(
+            "{head}\n[[item]]\nid = \"100/213\"\ncopy = {{ from = \"100/108\" }}\neffect = {{ type = \"enchant\", safe = true }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"
+        ),
     );
     let message = refusal(db.editor.ext_install(wrong.path(), false).await.unwrap_err());
-    assert!(message.contains("rows.toml [[item]] #2 (100/213)") && message.contains("effect enchant needs a Lapisia (item type 95); this item is type 100"), "{message}");
+    assert!(
+        message.contains("rows.toml [[item]] #2 (100/213)")
+            && message.contains("effect enchant needs a Lapisia (item type 95); this item is type 100"),
+        "{message}"
+    );
     // a recreate effect on a row that is not special 62
     let wrong = Folder::new(
         "1.0.0",
-        &format!("{head}\n[[item]]\nid = \"100/213\"\ncopy = {{ from = \"100/108\" }}\neffect = {{ type = \"recreate\", stats = [\"str\"] }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"),
+        &format!(
+            "{head}\n[[item]]\nid = \"100/213\"\ncopy = {{ from = \"100/108\" }}\neffect = {{ type = \"recreate\", stats = [\"str\"] }}\nclient = {{ name = \"B\", look = \"100/108\", description = \"b\" }}\n"
+        ),
     );
     let message = refusal(db.editor.ext_install(wrong.path(), false).await.unwrap_err());
     assert!(message.contains("(100/213)") && message.contains("needs a Recreation Rune (special 62)"), "{message}");
@@ -159,7 +192,10 @@ async fn a_wrong_row_and_a_missing_client_part_are_refused_naming_the_entry() {
     let bare = Folder::new("1.0.0", "[[item]]\nid = \"100/108\"\neffect = { type = \"level_up\", levels = 1 }\n");
     let message = refusal(db.editor.ext_install(bare.path(), false).await.unwrap_err());
     assert!(message.contains("rows.toml [[item]] #1 (100/108)") && message.contains("needs `client = { … }`"), "{message}");
-    let reasoned = Folder::new("1.0.0", "[[item]]\nid = \"100/108\"\neffect = { type = \"level_up\", levels = 1 }\nserver_only = \"the client text is the stone's own\"\n");
+    let reasoned = Folder::new(
+        "1.0.0",
+        "[[item]]\nid = \"100/108\"\neffect = { type = \"level_up\", levels = 1 }\nserver_only = \"the client text is the stone's own\"\n",
+    );
     db.editor.ext_install(reasoned.path(), false).await.unwrap();
     assert_eq!(count(&db, "ext_item_effects").await, 1);
     db.drop().await;
@@ -210,7 +246,10 @@ async fn the_server_loads_the_effects_of_enabled_extensions_only() {
     let items = ItemDefs::new([ItemDef { item_id: 100212, item_type: 100, type_id: 212, ..Default::default() }]);
     let skills = SkillDefs::new([SkillDef { id: 200, level: 1, ..Default::default() }]);
     let load = || async {
-        (game_server::pg::load_item_effects_in(&db.pool, &items, content).await, game_server::pg::load_skill_abilities_in(&db.pool, &skills, content).await)
+        (
+            game_server::pg::load_item_effects_in(&db.pool, &items, content).await,
+            game_server::pg::load_skill_abilities_in(&db.pool, &skills, content).await,
+        )
     };
 
     let (effects, abilities) = load().await;
@@ -259,7 +298,14 @@ async fn kill_boost_moves_from_its_setting_to_abilities_without_touching_defs_or
     std::fs::create_dir_all(&old).unwrap();
     let manifest = std::fs::read_to_string(real.join("extension.toml")).unwrap();
     assert!(manifest.contains("version = \"1.1.0\"") && !manifest.contains("[settings]"), "the real folder is 1.1.0 without a setting");
-    std::fs::write(old.join("extension.toml"), format!("{}\n[settings]\nkill_boost_skills = \"200/1:2,200/2:5,200/3:10\"\n", manifest.replace("version = \"1.1.0\"", "version = \"1.0.0\""))).unwrap();
+    std::fs::write(
+        old.join("extension.toml"),
+        format!(
+            "{}\n[settings]\nkill_boost_skills = \"200/1:2,200/2:5,200/3:10\"\n",
+            manifest.replace("version = \"1.1.0\"", "version = \"1.0.0\"")
+        ),
+    )
+    .unwrap();
     let rows = std::fs::read_to_string(real.join("rows.toml")).unwrap();
     assert_eq!(rows.lines().filter(|l| l.starts_with("abilities = ")).count(), 3);
     std::fs::write(old.join("rows.toml"), rows.lines().filter(|l| !l.starts_with("abilities = ")).collect::<Vec<_>>().join("\n")).unwrap();
@@ -283,10 +329,20 @@ async fn kill_boost_moves_from_its_setting_to_abilities_without_touching_defs_or
     assert_eq!(before.1.as_array().map(Vec::len), Some(6), "three stones and three buffs");
 
     let lines = db.editor.ext_upgrade(&real).await.unwrap();
-    assert!(has(&lines, "upgrading kill-boost 1.0.0 -> 1.1.0") && has(&lines, "200/1 kill_boost times = 2") && has(&lines, "200/3 kill_boost times = 10"), "{lines:#?}");
+    assert!(
+        has(&lines, "upgrading kill-boost 1.0.0 -> 1.1.0")
+            && has(&lines, "200/1 kill_boost times = 2")
+            && has(&lines, "200/3 kill_boost times = 10"),
+        "{lines:#?}"
+    );
     assert_eq!(snapshot().await, before, "the defs rows and the client rows are the same bytes");
     assert_eq!(count(&db, "ext_settings").await, 0, "the setting's default is gone");
-    let times = db.scalar(format!("SELECT jsonb_agg(abilities -> 0 ->> 'times' ORDER BY level) AS v FROM {}.ext_skill_abilities WHERE skill_id = 200", db.s.content)).await;
+    let times = db
+        .scalar(format!(
+            "SELECT jsonb_agg(abilities -> 0 ->> 'times' ORDER BY level) AS v FROM {}.ext_skill_abilities WHERE skill_id = 200",
+            db.s.content
+        ))
+        .await;
     assert_eq!(times["v"], json!(["2", "5", "10"]));
     let _ = std::fs::remove_dir_all(&old);
     db.drop().await;

@@ -16,7 +16,8 @@ pub const MAX_TEXT: usize = 1000;
 
 /// A key: `^[a-z0-9_.:-]{1,64}$`.
 pub fn valid_key(key: &str) -> bool {
-    (1..=64).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'.' | b':' | b'-'))
+    (1..=64).contains(&key.len())
+        && key.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'.' | b':' | b'-'))
 }
 
 /// A value a script may store: a boolean, a finite number, or a string of at most [`MAX_TEXT`] bytes. Whole numbers are kept as
@@ -115,7 +116,9 @@ impl Store {
             check_value(v)?;
         }
         let mut inner = self.lock();
-        let Some(entry) = inner.chars.get_mut(&id) else { return Err("the player is not online here: its values are not loaded".to_owned()) };
+        let Some(entry) = inner.chars.get_mut(&id) else {
+            return Err("the player is not online here: its values are not loaded".to_owned());
+        };
         let slot = (extension.to_owned(), key.to_owned());
         match &value {
             Some(v) => {

@@ -52,7 +52,19 @@ pub trait ScriptWorld: Send + Sync {
     /// `game.spawn`: monsters of `mob_id` near the spot, removed after `lifetime` seconds; their object ids (fewer than asked, or
     /// none, when the map, the spot or the extension's room says so).
     #[allow(clippy::too_many_arguments)]
-    fn spawn(&self, extension: &str, mob_id: u16, count: usize, map: u16, x: f32, z: f32, radius: u32, lifetime: u32, exp: bool, drops: bool) -> Vec<u32>;
+    fn spawn(
+        &self,
+        extension: &str,
+        mob_id: u16,
+        count: usize,
+        map: u16,
+        x: f32,
+        z: f32,
+        radius: u32,
+        lifetime: u32,
+        exp: bool,
+        drops: bool,
+    ) -> Vec<u32>;
     /// The extension's monsters of `uids` taken away quietly / still alive; how many monsters it has alive.
     fn despawn(&self, extension: &str, uids: &[u32]) -> usize;
     fn alive(&self, extension: &str, uids: &[u32]) -> usize;

@@ -96,17 +96,30 @@ fn plain(name: &str, value: &Value) -> Check<String> {
 }
 
 /// The spec of an extension's option; the reason in `Err` when the extension or the option is not there.
-async fn option_spec(conn: &mut PgConnection, s: &Schemas, extension: &str, option: &str) -> Result<Check<game_server::script::OptionSpec>> {
-    let spec: Option<Value> = sqlx::query_scalar(sql(format!("SELECT spec FROM {}.ext_options WHERE extension = $1 AND name = $2", s.content)))
-        .bind(extension)
-        .bind(option)
-        .fetch_optional(&mut *conn)
-        .await?;
+async fn option_spec(
+    conn: &mut PgConnection,
+    s: &Schemas,
+    extension: &str,
+    option: &str,
+) -> Result<Check<game_server::script::OptionSpec>> {
+    let spec: Option<Value> =
+        sqlx::query_scalar(sql(format!("SELECT spec FROM {}.ext_options WHERE extension = $1 AND name = $2", s.content)))
+            .bind(extension)
+            .bind(option)
+            .fetch_optional(&mut *conn)
+            .await?;
     if let Some(spec) = spec {
         return Ok(Ok(game_server::script::OptionSpec::parse(&spec)?));
     }
-    let known: Vec<String> = sqlx::query_scalar(sql(format!("SELECT name FROM {}.ext_options WHERE extension = $1 ORDER BY name", s.content))).bind(extension).fetch_all(&mut *conn).await?;
-    let installed: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.extensions WHERE name = $1)", s.content))).bind(extension).fetch_one(&mut *conn).await?;
+    let known: Vec<String> =
+        sqlx::query_scalar(sql(format!("SELECT name FROM {}.ext_options WHERE extension = $1 ORDER BY name", s.content)))
+            .bind(extension)
+            .fetch_all(&mut *conn)
+            .await?;
+    let installed: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.extensions WHERE name = $1)", s.content)))
+        .bind(extension)
+        .fetch_one(&mut *conn)
+        .await?;
     Ok(Err(if !installed {
         format!("the extension {extension} is not installed")
     } else if known.is_empty() {
@@ -280,7 +293,11 @@ async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Resul
         edits: edits.into_iter().map(|(field, value, original)| FieldEdit { field, value, original }).collect(),
         children: Vec::new(),
     };
-    sqlx::query(sql(format!("DELETE FROM {}.fields WHERE target = $1 AND key = $2", s.edits))).bind(TARGET).bind(name).execute(&mut *conn).await?;
+    sqlx::query(sql(format!("DELETE FROM {}.fields WHERE target = $1 AND key = $2", s.edits)))
+        .bind(TARGET)
+        .bind(name)
+        .execute(&mut *conn)
+        .await?;
     sqlx::query(sql(format!("DELETE FROM {}.rows WHERE target = $1 AND key = $2 AND action = 'add'", s.edits)))
         .bind(TARGET)
         .bind(name)
@@ -288,13 +305,16 @@ async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Resul
         .await?;
     let json = serde_json::to_value(&snap)?;
     if !added {
-        sqlx::query(sql(format!("INSERT INTO {}.rows (target, key, action, original, change_set) VALUES ($1, $2, 'remove', $3, $4)", s.edits)))
-            .bind(TARGET)
-            .bind(name)
-            .bind(&json)
-            .bind(run.cs)
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query(sql(format!(
+            "INSERT INTO {}.rows (target, key, action, original, change_set) VALUES ($1, $2, 'remove', $3, $4)",
+            s.edits
+        )))
+        .bind(TARGET)
+        .bind(name)
+        .bind(&json)
+        .bind(run.cs)
+        .execute(&mut *conn)
+        .await?;
     }
     sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content))).bind(name).execute(&mut *conn).await?;
     log(conn, run, TARGET, name, None, "remove", Some(&json), None).await?;
@@ -345,7 +365,10 @@ async fn restore(conn: &mut PgConnection, run: &mut Run<'_>, snapshot: &Value) -
 /// `apply`: writes the overrides the edits hold into `content.setting_values` (always: the `content` schema has no marker). An
 /// override that the game server would not accept any more is reported and left alone.
 pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Report) -> Result<()> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.setting_values", s.content)).fetch_one(&mut *conn).await?;
+    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
+        .bind(format!("{}.setting_values", s.content))
+        .fetch_one(&mut *conn)
+        .await?;
     if !exists {
         report.missing.push(s.content.clone());
         return Ok(());
@@ -356,17 +379,16 @@ pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Repo
             .fetch_all(&mut *conn)
             .await?;
     for name in removed {
-        let gone = sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content))).bind(&name).execute(&mut *conn).await?;
+        let gone =
+            sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content))).bind(&name).execute(&mut *conn).await?;
         report.written += gone.rows_affected() as usize;
     }
-    let fields: Vec<(String, Value, i32)> = sqlx::query_as(sql(format!(
-        "SELECT key, value, change_set FROM {}.fields WHERE target = $1 AND field = $2 ORDER BY key",
-        s.edits
-    )))
-    .bind(TARGET)
-    .bind(FIELD)
-    .fetch_all(&mut *conn)
-    .await?;
+    let fields: Vec<(String, Value, i32)> =
+        sqlx::query_as(sql(format!("SELECT key, value, change_set FROM {}.fields WHERE target = $1 AND field = $2 ORDER BY key", s.edits)))
+            .bind(TARGET)
+            .bind(FIELD)
+            .fetch_all(&mut *conn)
+            .await?;
     for (name, value, cs) in fields {
         let checked = match key(&name) {
             // An extension's option is stored as JSON text; the stored text is read back as the value it was.
@@ -402,7 +424,10 @@ pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Repo
 /// `revert_all` for the overrides: every one the edits added goes, every one they changed gets its original value, every one they
 /// removed comes back.
 pub async fn revert(conn: &mut PgConnection, s: &Schemas) -> Result<()> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.setting_values", s.content)).fetch_one(&mut *conn).await?;
+    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
+        .bind(format!("{}.setting_values", s.content))
+        .fetch_one(&mut *conn)
+        .await?;
     if !exists {
         return Ok(());
     }
@@ -425,23 +450,31 @@ pub async fn revert(conn: &mut PgConnection, s: &Schemas) -> Result<()> {
                 .await?;
             }
             None => {
-                sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content))).bind(&name).execute(&mut *conn).await?;
+                sqlx::query(sql(format!("DELETE FROM {}.setting_values WHERE name = $1", s.content)))
+                    .bind(&name)
+                    .execute(&mut *conn)
+                    .await?;
             }
         }
     }
-    let removed: Vec<Value> =
-        sqlx::query_scalar(sql(format!("SELECT original FROM {}.rows WHERE target = $1 AND action = 'remove' AND original IS NOT NULL", s.edits)))
-            .bind(TARGET)
-            .fetch_all(&mut *conn)
-            .await?;
+    let removed: Vec<Value> = sqlx::query_scalar(sql(format!(
+        "SELECT original FROM {}.rows WHERE target = $1 AND action = 'remove' AND original IS NOT NULL",
+        s.edits
+    )))
+    .bind(TARGET)
+    .fetch_all(&mut *conn)
+    .await?;
     for original in removed {
         let snap: Snapshot = serde_json::from_value(original)?;
         if let Some(value) = snap.row.get(FIELD).and_then(Value::as_str) {
-            sqlx::query(sql(format!("INSERT INTO {}.setting_values (name, value) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING", s.content)))
-                .bind(&snap.key)
-                .bind(value)
-                .execute(&mut *conn)
-                .await?;
+            sqlx::query(sql(format!(
+                "INSERT INTO {}.setting_values (name, value) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
+                s.content
+            )))
+            .bind(&snap.key)
+            .bind(value)
+            .execute(&mut *conn)
+            .await?;
         }
     }
     Ok(())

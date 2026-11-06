@@ -181,31 +181,37 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     let methods = lua.create_table()?;
 
     let w = world.clone();
-    game.set("player", lua.create_function(move |lua, id: Value| match id {
-        Value::Integer(_) | Value::Number(_) => {
-            let id = match id {
-                Value::Integer(i) => i as f64,
-                Value::Number(n) => n,
-                _ => unreachable!(),
-            };
-            if id < 0.0 || id > f64::from(u32::MAX) || id.fract() != 0.0 {
-                return Ok(Value::Nil);
+    game.set(
+        "player",
+        lua.create_function(move |lua, id: Value| match id {
+            Value::Integer(_) | Value::Number(_) => {
+                let id = match id {
+                    Value::Integer(i) => i as f64,
+                    Value::Number(n) => n,
+                    _ => unreachable!(),
+                };
+                if id < 0.0 || id > f64::from(u32::MAX) || id.fract() != 0.0 {
+                    return Ok(Value::Nil);
+                }
+                match w.player(id as u32) {
+                    Some(v) => Ok(Value::Table(handle_of(lua, &v)?)),
+                    None => Ok(Value::Nil),
+                }
             }
-            match w.player(id as u32) {
+            _ => Err(script_error(lua, "game.player: the argument is a character id")),
+        })?,
+    )?;
+    let w = world.clone();
+    game.set(
+        "find",
+        lua.create_function(move |lua, name: Value| {
+            let Value::String(name) = name else { return Err(script_error(lua, "game.find: the argument is a name")) };
+            match w.find(&name.to_string_lossy()) {
                 Some(v) => Ok(Value::Table(handle_of(lua, &v)?)),
                 None => Ok(Value::Nil),
             }
-        }
-        _ => Err(script_error(lua, "game.player: the argument is a character id")),
-    })?)?;
-    let w = world.clone();
-    game.set("find", lua.create_function(move |lua, name: Value| {
-        let Value::String(name) = name else { return Err(script_error(lua, "game.find: the argument is a name")) };
-        match w.find(&name.to_string_lossy()) {
-            Some(v) => Ok(Value::Table(handle_of(lua, &v)?)),
-            None => Ok(Value::Nil),
-        }
-    })?)?;
+        })?,
+    )?;
     let w = world.clone();
     game.set("online", lua.create_function(move |lua, ()| handles(lua, &w.online(ONLINE_MAX)))?)?;
     let w = world.clone();
@@ -215,95 +221,115 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     let w = world.clone();
     game.set("mob_name", lua.create_function(move |_, id: u16| Ok(w.mob_name(id)))?)?;
     let w = world.clone();
-    game.set("commands", lua.create_function(move |lua, ()| {
-        let list = lua.create_table()?;
-        for (i, (word, help, staff)) in w.commands().into_iter().enumerate() {
-            let t = lua.create_table()?;
-            t.raw_set("word", word)?;
-            t.raw_set("help", help)?;
-            t.raw_set("staff", staff)?;
-            list.raw_set(i + 1, t)?;
-        }
-        Ok(list)
-    })?)?;
+    game.set(
+        "commands",
+        lua.create_function(move |lua, ()| {
+            let list = lua.create_table()?;
+            for (i, (word, help, staff)) in w.commands().into_iter().enumerate() {
+                let t = lua.create_table()?;
+                t.raw_set("word", word)?;
+                t.raw_set("help", help)?;
+                t.raw_set("staff", staff)?;
+                list.raw_set(i + 1, t)?;
+            }
+            Ok(list)
+        })?,
+    )?;
 
     // Notices to many and banners: twenty a minute for the extension.
     let (s, w) = (shared.clone(), world.clone());
-    game.set("notice_all", lua.create_function(move |lua, text: Value| {
-        let text = clean(lua, "game.notice_all", &text, NOTICE_ALL_MAX)?;
-        many_allowed(lua, &s, "game.notice_all")?;
-        w.notice_all(&text);
-        Ok(())
-    })?)?;
+    game.set(
+        "notice_all",
+        lua.create_function(move |lua, text: Value| {
+            let text = clean(lua, "game.notice_all", &text, NOTICE_ALL_MAX)?;
+            many_allowed(lua, &s, "game.notice_all")?;
+            w.notice_all(&text);
+            Ok(())
+        })?,
+    )?;
     let (s, w) = (shared.clone(), world.clone());
-    game.set("notice_faction", lua.create_function(move |lua, (faction, text): (Value, Value)| {
-        let country = match &faction {
-            Value::String(f) if f.as_bytes() == b"light" => 0u8,
-            Value::String(f) if f.as_bytes() == b"fury" => 1u8,
-            _ => return Err(script_error(lua, "game.notice_faction: the faction is \"light\" or \"fury\"")),
-        };
-        let text = clean(lua, "game.notice_faction", &text, NOTICE_ZONE_MAX)?;
-        many_allowed(lua, &s, "game.notice_faction")?;
-        w.notice_faction(country, &text);
-        Ok(())
-    })?)?;
+    game.set(
+        "notice_faction",
+        lua.create_function(move |lua, (faction, text): (Value, Value)| {
+            let country = match &faction {
+                Value::String(f) if f.as_bytes() == b"light" => 0u8,
+                Value::String(f) if f.as_bytes() == b"fury" => 1u8,
+                _ => return Err(script_error(lua, "game.notice_faction: the faction is \"light\" or \"fury\"")),
+            };
+            let text = clean(lua, "game.notice_faction", &text, NOTICE_ZONE_MAX)?;
+            many_allowed(lua, &s, "game.notice_faction")?;
+            w.notice_faction(country, &text);
+            Ok(())
+        })?,
+    )?;
     let (s, w) = (shared.clone(), world.clone());
-    game.set("notice_map", lua.create_function(move |lua, (map, text): (u16, Value)| {
-        let text = clean(lua, "game.notice_map", &text, NOTICE_ZONE_MAX)?;
-        many_allowed(lua, &s, "game.notice_map")?;
-        w.notice_map(map, &text);
-        Ok(())
-    })?)?;
+    game.set(
+        "notice_map",
+        lua.create_function(move |lua, (map, text): (u16, Value)| {
+            let text = clean(lua, "game.notice_map", &text, NOTICE_ZONE_MAX)?;
+            many_allowed(lua, &s, "game.notice_map")?;
+            w.notice_map(map, &text);
+            Ok(())
+        })?,
+    )?;
     let (s, w) = (shared.clone(), world.clone());
-    game.set("banner", lua.create_function(move |lua, (text, name): (Value, Option<Value>)| {
-        let text = clean(lua, "game.banner", &text, BANNER_MAX)?;
-        let name = match name {
-            Some(n) => clean(lua, "game.banner", &n, 20)?,
-            None => "Notice".to_owned(),
-        };
-        many_allowed(lua, &s, "game.banner")?;
-        w.banner(&name, &text);
-        Ok(())
-    })?)?;
+    game.set(
+        "banner",
+        lua.create_function(move |lua, (text, name): (Value, Option<Value>)| {
+            let text = clean(lua, "game.banner", &text, BANNER_MAX)?;
+            let name = match name {
+                Some(n) => clean(lua, "game.banner", &n, 20)?,
+                None => "Notice".to_owned(),
+            };
+            many_allowed(lua, &s, "game.banner")?;
+            w.banner(&name, &text);
+            Ok(())
+        })?,
+    )?;
 
     // Monsters (section 7.4): at most 50 a call and 300 alive per extension; they live `lifetime` seconds.
     let (s, w) = (shared.clone(), world.clone());
-    game.set("spawn", lua.create_function(move |lua, (mob, count, map, x, z, opts): (Value, Value, Value, Value, Value, Option<Table>)| {
-        let num = |what: &str, v: &Value, low: f64, high: f64| -> mlua::Result<f64> {
-            let n = match v {
-                Value::Integer(i) => *i as f64,
-                Value::Number(n) if n.is_finite() => *n,
-                _ => return Err(script_error(lua, format!("game.spawn {what}: a number is wanted"))),
+    game.set(
+        "spawn",
+        lua.create_function(move |lua, (mob, count, map, x, z, opts): (Value, Value, Value, Value, Value, Option<Table>)| {
+            let num = |what: &str, v: &Value, low: f64, high: f64| -> mlua::Result<f64> {
+                let n = match v {
+                    Value::Integer(i) => *i as f64,
+                    Value::Number(n) if n.is_finite() => *n,
+                    _ => return Err(script_error(lua, format!("game.spawn {what}: a number is wanted"))),
+                };
+                if n < low || n > high {
+                    return Err(script_error(lua, format!("game.spawn {what}: from {low} to {high} is wanted (got {n})")));
+                }
+                Ok(n)
             };
-            if n < low || n > high {
-                return Err(script_error(lua, format!("game.spawn {what}: from {low} to {high} is wanted (got {n})")));
+            let mob_id = num("mob id", &mob, 1.0, 65535.0)? as u16;
+            let count = num("count", &count, 1.0, crate::zone::SPAWNS_PER_CALL as f64)? as usize;
+            let map = num("map", &map, 0.0, 65535.0)? as u16;
+            let (x, z) = (num("x", &x, -1.0e6, 1.0e6)? as f32, num("z", &z, -1.0e6, 1.0e6)? as f32);
+            let Some(opts) = opts else {
+                return Err(script_error(lua, "game.spawn: the options table with lifetime (10 to 3600 seconds) is required"));
+            };
+            let (mut radius, mut lifetime, mut exp, mut drops) = (10u32, None, true, true);
+            for pair in opts.pairs::<Value, Value>() {
+                let (key, value) = pair?;
+                match (&key, &value) {
+                    (Value::String(k), v) if k.as_bytes() == b"radius" => radius = num("radius", v, 0.0, 50.0)? as u32,
+                    (Value::String(k), v) if k.as_bytes() == b"lifetime" => lifetime = Some(num("lifetime", v, 10.0, 3600.0)? as u32),
+                    (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"exp" => exp = *b,
+                    (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"drops" => drops = *b,
+                    _ => return Err(script_error(lua, "game.spawn: the options are radius, lifetime (required), exp and drops")),
+                }
             }
-            Ok(n)
-        };
-        let mob_id = num("mob id", &mob, 1.0, 65535.0)? as u16;
-        let count = num("count", &count, 1.0, crate::zone::SPAWNS_PER_CALL as f64)? as usize;
-        let map = num("map", &map, 0.0, 65535.0)? as u16;
-        let (x, z) = (num("x", &x, -1.0e6, 1.0e6)? as f32, num("z", &z, -1.0e6, 1.0e6)? as f32);
-        let Some(opts) = opts else { return Err(script_error(lua, "game.spawn: the options table with lifetime (10 to 3600 seconds) is required")) };
-        let (mut radius, mut lifetime, mut exp, mut drops) = (10u32, None, true, true);
-        for pair in opts.pairs::<Value, Value>() {
-            let (key, value) = pair?;
-            match (&key, &value) {
-                (Value::String(k), v) if k.as_bytes() == b"radius" => radius = num("radius", v, 0.0, 50.0)? as u32,
-                (Value::String(k), v) if k.as_bytes() == b"lifetime" => lifetime = Some(num("lifetime", v, 10.0, 3600.0)? as u32),
-                (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"exp" => exp = *b,
-                (Value::String(k), Value::Boolean(b)) if k.as_bytes() == b"drops" => drops = *b,
-                _ => return Err(script_error(lua, "game.spawn: the options are radius, lifetime (required), exp and drops")),
+            let Some(lifetime) = lifetime else { return Err(script_error(lua, "game.spawn: lifetime (10 to 3600 seconds) is required")) };
+            let ids = w.spawn(&s.name, mob_id, count, map, x, z, radius, lifetime, exp, drops);
+            let list = lua.create_table()?;
+            for (i, id) in ids.iter().enumerate() {
+                list.raw_set(i + 1, *id)?;
             }
-        }
-        let Some(lifetime) = lifetime else { return Err(script_error(lua, "game.spawn: lifetime (10 to 3600 seconds) is required")) };
-        let ids = w.spawn(&s.name, mob_id, count, map, x, z, radius, lifetime, exp, drops);
-        let list = lua.create_table()?;
-        for (i, id) in ids.iter().enumerate() {
-            list.raw_set(i + 1, *id)?;
-        }
-        Ok(list)
-    })?)?;
+            Ok(list)
+        })?,
+    )?;
     let uids = |lua: &Lua, what: &str, list: &Table| -> mlua::Result<Vec<u32>> {
         let mut out = Vec::new();
         for v in list.sequence_values::<Value>() {
@@ -323,13 +349,18 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     // The player handle.
     let reads = |name: &str, f: fn(&Lua, &PlayerView) -> mlua::Result<MultiValue>| -> mlua::Result<()> {
         let w = world.clone();
-        methods.set(name, lua.create_function(move |lua, this: Table| match w.player(id_of(&this)?) {
-            Some(view) => f(lua, &view),
-            None => Ok(MultiValue::from_iter([Value::Nil])),
-        })?)
+        methods.set(
+            name,
+            lua.create_function(move |lua, this: Table| match w.player(id_of(&this)?) {
+                Some(view) => f(lua, &view),
+                None => Ok(MultiValue::from_iter([Value::Nil])),
+            })?,
+        )
     };
     reads("level", |_, v| Ok(MultiValue::from_iter([Value::Integer(v.level.into())])))?;
-    reads("faction", |lua, v| Ok(MultiValue::from_iter([Value::String(lua.create_string(if v.country == 0 { "light" } else { "fury" })?)])))?;
+    reads("faction", |lua, v| {
+        Ok(MultiValue::from_iter([Value::String(lua.create_string(if v.country == 0 { "light" } else { "fury" })?)]))
+    })?;
     reads("map", |_, v| Ok(MultiValue::from_iter([Value::Integer(v.map.into())])))?;
     reads("position", |_, v| Ok(MultiValue::from_iter(v.position.map(|c| Value::Number(f64::from(c))))))?;
     reads("kills", |_, v| Ok(MultiValue::from_iter([Value::Integer(v.kills.into())])))?;
@@ -339,63 +370,82 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     let w = world.clone();
     methods.set("online", lua.create_function(move |_, this: Table| Ok(w.player(id_of(&this)?).is_some()))?)?;
     let w = world.clone();
-    methods.set("party", lua.create_function(move |lua, this: Table| {
-        let id = id_of(&this)?;
-        let members: Vec<PlayerView> = w.party(id).into_iter().filter_map(|m| w.player(m)).collect();
-        if members.is_empty() {
-            return handles(lua, &[]);
-        }
-        handles(lua, &members)
-    })?)?;
+    methods.set(
+        "party",
+        lua.create_function(move |lua, this: Table| {
+            let id = id_of(&this)?;
+            let members: Vec<PlayerView> = w.party(id).into_iter().filter_map(|m| w.player(m)).collect();
+            if members.is_empty() {
+                return handles(lua, &[]);
+            }
+            handles(lua, &members)
+        })?,
+    )?;
     // There is no client handshake yet (client research entry 23): no feature is known.
     methods.set("has_feature", lua.create_function(|_, (_this, _name): (Table, Value)| Ok(false))?)?;
 
     let (s, w) = (shared.clone(), world.clone());
-    methods.set("message", lua.create_function(move |lua, (this, text): (Table, Value)| {
-        let text = clean(lua, "p:message", &text, MESSAGE_MAX)?;
-        let id = id_of(&this)?;
-        player_allowed(lua, &s, id, "p:message")?;
-        if w.player(id).is_some() {
-            for piece in pieces(&text, MESSAGE_LINE) {
-                w.whisper(id, piece);
+    methods.set(
+        "message",
+        lua.create_function(move |lua, (this, text): (Table, Value)| {
+            let text = clean(lua, "p:message", &text, MESSAGE_MAX)?;
+            let id = id_of(&this)?;
+            player_allowed(lua, &s, id, "p:message")?;
+            if w.player(id).is_some() {
+                for piece in pieces(&text, MESSAGE_LINE) {
+                    w.whisper(id, piece);
+                }
             }
-        }
-        Ok(())
-    })?)?;
+            Ok(())
+        })?,
+    )?;
     let (s, w) = (shared.clone(), world.clone());
-    methods.set("notice", lua.create_function(move |lua, (this, text): (Table, Value)| {
-        let text = clean(lua, "p:notice", &text, NOTICE_TO_MAX)?;
-        let id = id_of(&this)?;
-        player_allowed(lua, &s, id, "p:notice")?;
-        if w.player(id).is_some() {
-            w.notice_to(id, &text);
-        }
-        Ok(())
-    })?)?;
+    methods.set(
+        "notice",
+        lua.create_function(move |lua, (this, text): (Table, Value)| {
+            let text = clean(lua, "p:notice", &text, NOTICE_TO_MAX)?;
+            let id = id_of(&this)?;
+            player_allowed(lua, &s, id, "p:notice")?;
+            if w.player(id).is_some() {
+                w.notice_to(id, &text);
+            }
+            Ok(())
+        })?,
+    )?;
 
     // Stored values (section 7.5): a character's own while it is loaded (from the login to the end of its `logout` handlers).
     let s = shared.clone();
-    methods.set("get", lua.create_function(move |lua, (this, key): (Table, String)| {
-        match s.store.get(&s.name, id_of(&this)?, &key) {
+    methods.set(
+        "get",
+        lua.create_function(move |lua, (this, key): (Table, String)| match s.store.get(&s.name, id_of(&this)?, &key) {
             Some(v) => super::store::to_lua(lua, &v),
             None => Ok(Value::Nil),
-        }
-    })?)?;
+        })?,
+    )?;
     let s = shared.clone();
-    methods.set("set", lua.create_function(move |lua, (this, key, value): (Table, String, Value)| {
-        let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))?;
-        s.store.set(&s.name, id_of(&this)?, &key, v).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))
-    })?)?;
+    methods.set(
+        "set",
+        lua.create_function(move |lua, (this, key, value): (Table, String, Value)| {
+            let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))?;
+            s.store.set(&s.name, id_of(&this)?, &key, v).map_err(|e| script_error(lua, format!("p:set({key:?}): {e}")))
+        })?,
+    )?;
     let s = shared.clone();
-    game.set("get", lua.create_function(move |lua, key: String| match s.store.get_global(&s.name, &key) {
-        Some(v) => super::store::to_lua(lua, &v),
-        None => Ok(Value::Nil),
-    })?)?;
+    game.set(
+        "get",
+        lua.create_function(move |lua, key: String| match s.store.get_global(&s.name, &key) {
+            Some(v) => super::store::to_lua(lua, &v),
+            None => Ok(Value::Nil),
+        })?,
+    )?;
     let s = shared.clone();
-    game.set("set", lua.create_function(move |lua, (key, value): (String, Value)| {
-        let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))?;
-        s.store.set_global(&s.name, &key, v).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))
-    })?)?;
+    game.set(
+        "set",
+        lua.create_function(move |lua, (key, value): (String, Value)| {
+            let v = super::store::from_lua(&value).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))?;
+            s.store.set_global(&s.name, &key, v).map_err(|e| script_error(lua, format!("game.set({key:?}): {e}")))
+        })?,
+    )?;
 
     // Orders (section 4.4): left for the player's own connection; the callback hears how it came out, later, on the script thread.
     use super::event::{Order, Outcome, Queued};
@@ -410,7 +460,14 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
         }
         Ok(n)
     };
-    let queue = |lua: &Lua, shared: &Shared, this: &Table, what: &str, order: Order, callback: Option<Value>, failed: Outcome| -> mlua::Result<()> {
+    let queue = |lua: &Lua,
+                 shared: &Shared,
+                 this: &Table,
+                 what: &str,
+                 order: Order,
+                 callback: Option<Value>,
+                 failed: Outcome|
+     -> mlua::Result<()> {
         let id = id_of(this)?;
         if !shared.rates.lock().unwrap_or_else(|e| e.into_inner()).order(id, Instant::now()) {
             return Err(script_error(lua, format!("{what}: rate limit, at most {ORDERS_PER_SECOND} orders a second for one player")));
@@ -435,62 +492,82 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, game: &Table) -> mlua::Result<()
     };
     let queue = Arc::new(queue);
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("give_item", lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
-        let order = Order::GiveItem {
-            item_type: whole(lua, "p:give_item type", &t, 1.0, 255.0)? as u8,
-            type_id: whole(lua, "p:give_item type_id", &i, 1.0, 255.0)? as u8,
-            count: whole(lua, "p:give_item count", &n, 1.0, 255.0)? as u8,
-        };
-        q(lua, &s, &this, "p:give_item", order, cb, Outcome::Count(0))
-    })?)?;
+    methods.set(
+        "give_item",
+        lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
+            let order = Order::GiveItem {
+                item_type: whole(lua, "p:give_item type", &t, 1.0, 255.0)? as u8,
+                type_id: whole(lua, "p:give_item type_id", &i, 1.0, 255.0)? as u8,
+                count: whole(lua, "p:give_item count", &n, 1.0, 255.0)? as u8,
+            };
+            q(lua, &s, &this, "p:give_item", order, cb, Outcome::Count(0))
+        })?,
+    )?;
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("take_item", lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
-        let order = Order::TakeItem {
-            item_type: whole(lua, "p:take_item type", &t, 1.0, 255.0)? as u8,
-            type_id: whole(lua, "p:take_item type_id", &i, 1.0, 255.0)? as u8,
-            count: whole(lua, "p:take_item count", &n, 1.0, 255.0)? as u8,
-        };
-        q(lua, &s, &this, "p:take_item", order, cb, Outcome::Done(false))
-    })?)?;
+    methods.set(
+        "take_item",
+        lua.create_function(move |lua, (this, t, i, n, cb): (Table, Value, Value, Value, Option<Value>)| {
+            let order = Order::TakeItem {
+                item_type: whole(lua, "p:take_item type", &t, 1.0, 255.0)? as u8,
+                type_id: whole(lua, "p:take_item type_id", &i, 1.0, 255.0)? as u8,
+                count: whole(lua, "p:take_item count", &n, 1.0, 255.0)? as u8,
+            };
+            q(lua, &s, &this, "p:take_item", order, cb, Outcome::Done(false))
+        })?,
+    )?;
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("give_gold", lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
-        let order = Order::GiveGold(whole(lua, "p:give_gold", &n, 1.0, 2_147_483_647.0)? as u32);
-        q(lua, &s, &this, "p:give_gold", order, cb, Outcome::Count(0))
-    })?)?;
+    methods.set(
+        "give_gold",
+        lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
+            let order = Order::GiveGold(whole(lua, "p:give_gold", &n, 1.0, 2_147_483_647.0)? as u32);
+            q(lua, &s, &this, "p:give_gold", order, cb, Outcome::Count(0))
+        })?,
+    )?;
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("take_gold", lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
-        let order = Order::TakeGold(whole(lua, "p:take_gold", &n, 1.0, 2_147_483_647.0)? as u32);
-        q(lua, &s, &this, "p:take_gold", order, cb, Outcome::Done(false))
-    })?)?;
+    methods.set(
+        "take_gold",
+        lua.create_function(move |lua, (this, n, cb): (Table, Value, Option<Value>)| {
+            let order = Order::TakeGold(whole(lua, "p:take_gold", &n, 1.0, 2_147_483_647.0)? as u32);
+            q(lua, &s, &this, "p:take_gold", order, cb, Outcome::Done(false))
+        })?,
+    )?;
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("add_buff", lua.create_function(move |lua, (this, skill, level, cb): (Table, Value, Value, Option<Value>)| {
-        let order = Order::AddBuff {
-            skill: whole(lua, "p:add_buff skill", &skill, 1.0, 65535.0)? as u16,
-            level: whole(lua, "p:add_buff level", &level, 1.0, 255.0)? as u8,
-        };
-        q(lua, &s, &this, "p:add_buff", order, cb, Outcome::Done(false))
-    })?)?;
+    methods.set(
+        "add_buff",
+        lua.create_function(move |lua, (this, skill, level, cb): (Table, Value, Value, Option<Value>)| {
+            let order = Order::AddBuff {
+                skill: whole(lua, "p:add_buff skill", &skill, 1.0, 65535.0)? as u16,
+                level: whole(lua, "p:add_buff level", &level, 1.0, 255.0)? as u8,
+            };
+            q(lua, &s, &this, "p:add_buff", order, cb, Outcome::Done(false))
+        })?,
+    )?;
     let (s, q) = (shared.clone(), queue.clone());
-    methods.set("teleport", lua.create_function(move |lua, (this, map, x, y, z, cb): (Table, Value, Value, Value, Value, Option<Value>)| {
-        let coord = |v: &Value, what: &str| -> mlua::Result<f32> {
-            match v {
-                Value::Integer(i) => Ok(*i as f32),
-                Value::Number(n) if n.is_finite() => Ok(*n as f32),
-                _ => Err(script_error(lua, format!("p:teleport {what}: a number is wanted"))),
-            }
-        };
-        let order = Order::Teleport {
-            map: whole(lua, "p:teleport map", &map, 0.0, 65535.0)? as u16,
-            position: [coord(&x, "x")?, coord(&y, "y")?, coord(&z, "z")?],
-        };
-        q(lua, &s, &this, "p:teleport", order, cb, Outcome::Done(false))
-    })?)?;
+    methods.set(
+        "teleport",
+        lua.create_function(move |lua, (this, map, x, y, z, cb): (Table, Value, Value, Value, Value, Option<Value>)| {
+            let coord = |v: &Value, what: &str| -> mlua::Result<f32> {
+                match v {
+                    Value::Integer(i) => Ok(*i as f32),
+                    Value::Number(n) if n.is_finite() => Ok(*n as f32),
+                    _ => Err(script_error(lua, format!("p:teleport {what}: a number is wanted"))),
+                }
+            };
+            let order = Order::Teleport {
+                map: whole(lua, "p:teleport map", &map, 0.0, 65535.0)? as u16,
+                position: [coord(&x, "x")?, coord(&y, "y")?, coord(&z, "z")?],
+            };
+            q(lua, &s, &this, "p:teleport", order, cb, Outcome::Done(false))
+        })?,
+    )?;
 
     let meta = lua.create_table()?;
     meta.raw_set("__index", methods)?;
     meta.raw_set(
         "__eq",
-        lua.create_function(|_, (a, b): (Table, Table)| Ok(matches!((a.raw_get::<u32>("id"), b.raw_get::<u32>("id")), (Ok(x), Ok(y)) if x == y)))?,
+        lua.create_function(|_, (a, b): (Table, Table)| {
+            Ok(matches!((a.raw_get::<u32>("id"), b.raw_get::<u32>("id")), (Ok(x), Ok(y)) if x == y))
+        })?,
     )?;
     meta.raw_set("__tostring", lua.create_function(|_, this: Table| Ok(this.raw_get::<String>("name").unwrap_or_default()))?)?;
     meta.raw_set("__metatable", false)?;

@@ -63,7 +63,11 @@ impl AdminStore for PgBackend {
                     .await?;
                 }
                 (None, None) => {
-                    sqlx::query("DELETE FROM content.script_globals WHERE extension = $1 AND key = $2").bind(&w.extension).bind(&w.key).execute(&mut *tx).await?;
+                    sqlx::query("DELETE FROM content.script_globals WHERE extension = $1 AND key = $2")
+                        .bind(&w.extension)
+                        .bind(&w.key)
+                        .execute(&mut *tx)
+                        .await?;
                 }
             }
         }

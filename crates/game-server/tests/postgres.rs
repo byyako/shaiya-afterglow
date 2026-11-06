@@ -1173,7 +1173,9 @@ async fn world_and_item_definitions_load() {
             );
             assert_eq!(boost.abilities, [(0, 0); 3]);
         } else {
-            eprintln!("the kill-boost extension is not installed (data-editor ext install extensions/kill-boost): skipping the kill-boost rows");
+            eprintln!(
+                "the kill-boost extension is not installed (data-editor ext install extensions/kill-boost): skipping the kill-boost rows"
+            );
         }
         assert_eq!(skills.get(200, 100).map(|curse| curse.kind), Some(62), "the monsters' Weakening Curse is left as it was");
     } else {
@@ -1881,13 +1883,26 @@ async fn script_values_are_written_coalesced_deleted_and_cascade() {
     let tag = format!("t{:08x}", rand::random::<u32>());
     let (ext_a, ext_b) = (format!("{tag}-a"), format!("{tag}-b"));
     for ext in [&ext_a, &ext_b] {
-        sqlx::query("INSERT INTO content.extensions (name, version, title, description, manifest) VALUES ($1, '1.0.0', 't', 'd', '{}')").bind(ext).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO content.extensions (name, version, title, description, manifest) VALUES ($1, '1.0.0', 't', 'd', '{}')")
+            .bind(ext)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
-    let user: i32 = sqlx::query_scalar("INSERT INTO accounts (username, password_hash) VALUES ($1, 'x') RETURNING id").bind(&tag).fetch_one(&pool).await.unwrap();
+    let user: i32 = sqlx::query_scalar("INSERT INTO accounts (username, password_hash) VALUES ($1, 'x') RETURNING id")
+        .bind(&tag)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let CreateOutcome::Created(character) = backend.create(&hero(user as u32, 0, &tag)).await.unwrap() else { panic!("not created") };
     let count = |ext: String, table: &'static str| {
         let pool = pool.clone();
-        async move { sqlx::query_scalar::<_, i64>(AssertSqlSafe(format!("SELECT count(*) FROM content.{table} WHERE extension = '{ext}'"))).fetch_one(&pool).await.unwrap() }
+        async move {
+            sqlx::query_scalar::<_, i64>(AssertSqlSafe(format!("SELECT count(*) FROM content.{table} WHERE extension = '{ext}'")))
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
     };
 
     // 100 sets of one key leave one write, and one row with the last value.
@@ -1920,10 +1935,16 @@ async fn script_values_are_written_coalesced_deleted_and_cascade() {
     store.set(&ext_a, character, "name", None).unwrap();
     store.set_global(&ext_a, "bounty.1", Some(serde_json::json!(7500))).unwrap();
     let mut batch = store.take_pending();
-    batch.push(game_server::script::store::ScriptWrite { extension: ext_a.clone(), character: Some(2_000_000_000), key: "x".into(), value: Some(serde_json::json!(1)) });
+    batch.push(game_server::script::store::ScriptWrite {
+        extension: ext_a.clone(),
+        character: Some(2_000_000_000),
+        key: "x".into(),
+        value: Some(serde_json::json!(1)),
+    });
     backend.write_script_values(&batch).await.unwrap();
     assert_eq!(count(ext_a.clone(), "script_values").await, 1);
-    let global: serde_json::Value = sqlx::query_scalar("SELECT value FROM content.script_globals WHERE extension = $1").bind(&ext_a).fetch_one(&pool).await.unwrap();
+    let global: serde_json::Value =
+        sqlx::query_scalar("SELECT value FROM content.script_globals WHERE extension = $1").bind(&ext_a).fetch_one(&pool).await.unwrap();
     assert_eq!(global, serde_json::json!(7500));
 
     // The extension's removal takes its values; a character's deletion takes the rest.

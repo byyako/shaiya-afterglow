@@ -253,7 +253,9 @@ async fn ext(editor: &Editor, mut args: Vec<String>) -> Result<()> {
         }
         "enable" => print(editor.ext_set_enabled(args.first().context("ext enable needs a name")?, true).await?),
         "disable" => print(editor.ext_set_enabled(args.first().context("ext disable needs a name")?, false).await?),
-        _ => bail!("usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | scripts <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"),
+        _ => bail!(
+            "usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | scripts <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"
+        ),
     }
     Ok(())
 }
@@ -314,7 +316,9 @@ async fn content(editor: &Editor, mut args: Vec<String>) -> Result<()> {
             }
             _ => bail!("usage: data-editor content origin <table> <key>"),
         },
-        _ => bail!("usage: data-editor content status | hashes [schema...] | rebuild [defs|world|all] [--into PREFIX] | check | origin <table> <key>"),
+        _ => bail!(
+            "usage: data-editor content status | hashes [schema...] | rebuild [defs|world|all] [--into PREFIX] | check | origin <table> <key>"
+        ),
     }
     Ok(())
 }

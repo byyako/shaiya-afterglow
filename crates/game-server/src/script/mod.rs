@@ -57,7 +57,8 @@ pub enum Event {
 }
 
 impl Event {
-    pub const ALL: [Event; 8] = [Event::Login, Event::Logout, Event::MapEnter, Event::MapLeave, Event::Kill, Event::BossKill, Event::PvpKill, Event::Death];
+    pub const ALL: [Event; 8] =
+        [Event::Login, Event::Logout, Event::MapEnter, Event::MapLeave, Event::Kill, Event::BossKill, Event::PvpKill, Event::Death];
     pub const NAMES: [&'static str; 8] = ["login", "logout", "map_enter", "map_leave", "kill", "boss_kill", "pvp_kill", "death"];
 
     pub fn name(self) -> &'static str {
@@ -83,7 +84,8 @@ pub enum Point {
 }
 
 impl Point {
-    pub const ALL: [Point; 8] = [Point::Trade, Point::PersonalShop, Point::TradeChat, Point::Chat, Point::Exp, Point::PvpKills, Point::PvpDeath, Point::Enchant];
+    pub const ALL: [Point; 8] =
+        [Point::Trade, Point::PersonalShop, Point::TradeChat, Point::Chat, Point::Exp, Point::PvpKills, Point::PvpDeath, Point::Enchant];
     pub const NAMES: [&'static str; 8] = ["trade", "personal_shop", "trade_chat", "chat", "exp", "pvp_kills", "pvp_death", "enchant"];
 
     pub fn name(self) -> &'static str {
@@ -124,7 +126,8 @@ impl std::fmt::Display for Summary {
         let list = |v: &[String]| if v.is_empty() { "none".to_owned() } else { v.join(", ") };
         writeln!(f, "events: {}", list(&self.events))?;
         writeln!(f, "points: {}", list(&self.points))?;
-        let commands: Vec<String> = self.commands.iter().map(|(w, s)| if *s == 0 { format!("!{w}") } else { format!("!{w} (staff {s})") }).collect();
+        let commands: Vec<String> =
+            self.commands.iter().map(|(w, s)| if *s == 0 { format!("!{w}") } else { format!("!{w} (staff {s})") }).collect();
         writeln!(f, "commands: {}", list(&commands))?;
         writeln!(f, "item takeovers: {}", list(&self.items))?;
         write!(f, "timers: {}", self.timers)
@@ -326,7 +329,12 @@ impl ExtScript {
     }
 
     /// As [`ExtScript::call`], with the arguments built inside the state (a table needs the state to be made in).
-    pub fn call_built<R: FromLuaMulti>(&self, hook: &str, limit: Limit, build: impl FnOnce(&Lua) -> mlua::Result<mlua::MultiValue>) -> Result<Option<R>, ScriptError> {
+    pub fn call_built<R: FromLuaMulti>(
+        &self,
+        hook: &str,
+        limit: Limit,
+        build: impl FnOnce(&Lua) -> mlua::Result<mlua::MultiValue>,
+    ) -> Result<Option<R>, ScriptError> {
         if self.is_disabled() || !self.handles(hook) {
             return Ok(None);
         }
@@ -361,7 +369,11 @@ impl ExtScript {
         let too_many = faults.recent.len() >= FAULTS_TO_DISABLE;
         drop(faults);
         if memory || too_many {
-            let reason = if memory { format!("a memory error: {detail}") } else { format!("{FAULTS_TO_DISABLE} errors in {} s: {detail}", FAULT_WINDOW.as_secs()) };
+            let reason = if memory {
+                format!("a memory error: {detail}")
+            } else {
+                format!("{FAULTS_TO_DISABLE} errors in {} s: {detail}", FAULT_WINDOW.as_secs())
+            };
             self.disable(reason);
         }
         ScriptError(msg)
@@ -429,7 +441,9 @@ impl ScriptSet {
                 Ok(ext) => {
                     // A disabled extension is told to the staff who may type console commands (section 8.3).
                     if let Some(world) = ctx.world.clone() {
-                        ext.set_on_disable(Box::new(move |name, reason| world.tell_staff(&format!("extension {name}: scripts disabled after {reason}"))));
+                        ext.set_on_disable(Box::new(move |name, reason| {
+                            world.tell_staff(&format!("extension {name}: scripts disabled after {reason}"))
+                        }));
                     }
                     let ext = Arc::new(ext);
                     for (word, meta) in ext.commands() {

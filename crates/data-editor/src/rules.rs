@@ -41,7 +41,11 @@ pub fn key(text: &str) -> Check<String> {
 
 /// The shape of a rule's value: a JSON object. Whether the game server accepts it is checked with the key in hand ([`validated`]).
 pub fn rule_object(value: &Value) -> Check<Value> {
-    if value.is_object() { Ok(value.clone()) } else { Err("a rule is an object of its keys, e.g. {\"type\": \"level_gap\", \"gap\": 20}".into()) }
+    if value.is_object() {
+        Ok(value.clone())
+    } else {
+        Err("a rule is an object of its keys, e.g. {\"type\": \"level_gap\", \"gap\": 20}".into())
+    }
 }
 
 /// `value` when the game server accepts it as the rule `name`.
@@ -183,7 +187,9 @@ async fn add(conn: &mut PgConnection, run: &mut Run<'_>, name: &str, fields: &Va
 
 async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Result<()> {
     let s = run.s;
-    let Some(present) = current(conn, s, name).await? else { return refuse("there is no rule of this name in the editor's layer to remove") };
+    let Some(present) = current(conn, s, name).await? else {
+        return refuse("there is no rule of this name in the editor's layer to remove");
+    };
     let added = row_action(conn, s, TARGET, name).await?.as_deref() == Some("add");
     let edits: Vec<(String, Value, Option<Value>)> =
         sqlx::query_as(sql(format!("SELECT field, value, original FROM {}.fields WHERE target = $1 AND key = $2 ORDER BY field", s.edits)))
@@ -199,7 +205,11 @@ async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Resul
         edits: edits.into_iter().map(|(field, value, original)| FieldEdit { field, value, original }).collect(),
         children: Vec::new(),
     };
-    sqlx::query(sql(format!("DELETE FROM {}.fields WHERE target = $1 AND key = $2", s.edits))).bind(TARGET).bind(name).execute(&mut *conn).await?;
+    sqlx::query(sql(format!("DELETE FROM {}.fields WHERE target = $1 AND key = $2", s.edits)))
+        .bind(TARGET)
+        .bind(name)
+        .execute(&mut *conn)
+        .await?;
     sqlx::query(sql(format!("DELETE FROM {}.rows WHERE target = $1 AND key = $2 AND action = 'add'", s.edits)))
         .bind(TARGET)
         .bind(name)
@@ -207,13 +217,16 @@ async fn remove(conn: &mut PgConnection, run: &mut Run<'_>, name: &str) -> Resul
         .await?;
     let json = serde_json::to_value(&snap)?;
     if !added {
-        sqlx::query(sql(format!("INSERT INTO {}.rows (target, key, action, original, change_set) VALUES ($1, $2, 'remove', $3, $4)", s.edits)))
-            .bind(TARGET)
-            .bind(name)
-            .bind(&json)
-            .bind(run.cs)
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query(sql(format!(
+            "INSERT INTO {}.rows (target, key, action, original, change_set) VALUES ($1, $2, 'remove', $3, $4)",
+            s.edits
+        )))
+        .bind(TARGET)
+        .bind(name)
+        .bind(&json)
+        .bind(run.cs)
+        .execute(&mut *conn)
+        .await?;
     }
     sqlx::query(sql(format!("DELETE FROM {}.rule_values WHERE name = $1", s.content))).bind(name).execute(&mut *conn).await?;
     log(conn, run, TARGET, name, None, "remove", Some(&json), None).await?;
@@ -264,7 +277,8 @@ async fn restore(conn: &mut PgConnection, run: &mut Run<'_>, snapshot: &Value) -
 /// `apply`: writes the rules the edits hold into `content.rule_values` (always: the `content` schema has no marker). A rule that
 /// the game server would not accept any more is reported and left alone.
 pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Report) -> Result<()> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.rule_values", s.content)).fetch_one(&mut *conn).await?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.rule_values", s.content)).fetch_one(&mut *conn).await?;
     if !exists {
         report.missing.push(s.content.clone());
         return Ok(());
@@ -275,17 +289,16 @@ pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Repo
             .fetch_all(&mut *conn)
             .await?;
     for name in removed {
-        let gone = sqlx::query(sql(format!("DELETE FROM {}.rule_values WHERE name = $1", s.content))).bind(&name).execute(&mut *conn).await?;
+        let gone =
+            sqlx::query(sql(format!("DELETE FROM {}.rule_values WHERE name = $1", s.content))).bind(&name).execute(&mut *conn).await?;
         report.written += gone.rows_affected() as usize;
     }
-    let fields: Vec<(String, Value, i32)> = sqlx::query_as(sql(format!(
-        "SELECT key, value, change_set FROM {}.fields WHERE target = $1 AND field = $2 ORDER BY key",
-        s.edits
-    )))
-    .bind(TARGET)
-    .bind(FIELD)
-    .fetch_all(&mut *conn)
-    .await?;
+    let fields: Vec<(String, Value, i32)> =
+        sqlx::query_as(sql(format!("SELECT key, value, change_set FROM {}.fields WHERE target = $1 AND field = $2 ORDER BY key", s.edits)))
+            .bind(TARGET)
+            .bind(FIELD)
+            .fetch_all(&mut *conn)
+            .await?;
     for (name, value, cs) in fields {
         let checked = key(&name).and_then(|n| validated(&n, &value));
         let rule = match checked {
@@ -313,7 +326,8 @@ pub async fn apply_edits(conn: &mut PgConnection, s: &Schemas, report: &mut Repo
 /// `revert_all` for the rules: every one the edits added goes, every one they changed gets its original rule, every one they
 /// removed comes back.
 pub async fn revert(conn: &mut PgConnection, s: &Schemas) -> Result<()> {
-    let exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.rule_values", s.content)).fetch_one(&mut *conn).await?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL").bind(format!("{}.rule_values", s.content)).fetch_one(&mut *conn).await?;
     if !exists {
         return Ok(());
     }
@@ -340,11 +354,13 @@ pub async fn revert(conn: &mut PgConnection, s: &Schemas) -> Result<()> {
             }
         }
     }
-    let removed: Vec<Value> =
-        sqlx::query_scalar(sql(format!("SELECT original FROM {}.rows WHERE target = $1 AND action = 'remove' AND original IS NOT NULL", s.edits)))
-            .bind(TARGET)
-            .fetch_all(&mut *conn)
-            .await?;
+    let removed: Vec<Value> = sqlx::query_scalar(sql(format!(
+        "SELECT original FROM {}.rows WHERE target = $1 AND action = 'remove' AND original IS NOT NULL",
+        s.edits
+    )))
+    .bind(TARGET)
+    .fetch_all(&mut *conn)
+    .await?;
     for original in removed {
         let snap: Snapshot = serde_json::from_value(original)?;
         if let Some(value) = snap.row.get(FIELD) {

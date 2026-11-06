@@ -51,7 +51,10 @@ impl Jobs {
             let now = Instant::now();
             if last.is_none_or(|t| now.saturating_duration_since(t) >= FULL_WARN) {
                 *last = Some(now);
-                tracing::warn!(dropped = self.dropped.load(std::sync::atomic::Ordering::Relaxed), "the script queue is full or stopped: an event was dropped");
+                tracing::warn!(
+                    dropped = self.dropped.load(std::sync::atomic::Ordering::Relaxed),
+                    "the script queue is full or stopped: an event was dropped"
+                );
             }
             return false;
         }
@@ -62,10 +65,7 @@ impl Jobs {
 /// Makes the queue and starts the thread over `cell`. The thread ends when the queue's sender is gone.
 pub fn start(cell: Arc<ScriptCell>) -> Jobs {
     let (tx, rx) = sync_channel(QUEUE);
-    std::thread::Builder::new()
-        .name("script runner".to_owned())
-        .spawn(move || supervised(&rx, &cell))
-        .expect("spawning the script thread");
+    std::thread::Builder::new().name("script runner".to_owned()).spawn(move || supervised(&rx, &cell)).expect("spawning the script thread");
     Jobs { tx, last_full: std::sync::Mutex::new(None), dropped: std::sync::atomic::AtomicU64::new(0) }
 }
 
@@ -75,7 +75,11 @@ fn supervised(rx: &Receiver<Job>, cell: &ScriptCell) {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(rx, cell))) {
             Ok(()) => return,
             Err(panic) => {
-                let text = panic.downcast_ref::<&str>().map(|s| (*s).to_owned()).or_else(|| panic.downcast_ref::<String>().cloned()).unwrap_or_default();
+                let text = panic
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_owned())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_default();
                 tracing::error!(panic = %text, "the script thread panicked; it starts again");
                 std::thread::sleep(Duration::from_millis(200));
             }

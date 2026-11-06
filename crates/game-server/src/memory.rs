@@ -1251,7 +1251,13 @@ impl AdminStore for MemoryBackend {
     }
 
     async fn script_values(&self, character_id: u32) -> Result<Vec<(String, String, serde_json::Value)>> {
-        Ok(self.script_values.guard().iter().filter(|((_, c, _), _)| *c == character_id).map(|((e, _, k), v)| (e.clone(), k.clone(), v.clone())).collect())
+        Ok(self
+            .script_values
+            .guard()
+            .iter()
+            .filter(|((_, c, _), _)| *c == character_id)
+            .map(|((e, _, k), v)| (e.clone(), k.clone(), v.clone()))
+            .collect())
     }
 
     async fn write_script_values(&self, batch: &[crate::script::store::ScriptWrite]) -> Result<()> {

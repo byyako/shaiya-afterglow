@@ -67,7 +67,11 @@ pub struct Plan {
 }
 
 /// The script input the game server's dry run takes: the files in order and the options at their defaults.
-pub fn script_input(name: &str, scripts: &[ScriptFile], options: &BTreeMap<String, game_server::script::OptionSpec>) -> game_server::script::ExtInput {
+pub fn script_input(
+    name: &str,
+    scripts: &[ScriptFile],
+    options: &BTreeMap<String, game_server::script::OptionSpec>,
+) -> game_server::script::ExtInput {
     let specs: Vec<(String, game_server::script::OptionSpec)> = options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     game_server::script::ExtInput {
         name: name.to_owned(),
@@ -91,7 +95,13 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
         if let Some((list, major, minor)) = ranges
             && !list.iter().any(|r| r.contains(major, minor))
         {
-            return Err(format!("{}: {} lies outside the ids [ids] declares for {}s ({})", e.label(), e.id, e.kind.word(), range_texts(list)));
+            return Err(format!(
+                "{}: {} lies outside the ids [ids] declares for {}s ({})",
+                e.label(),
+                e.id,
+                e.kind.word(),
+                range_texts(list)
+            ));
         }
     }
     let mut migrations = Vec::new();
@@ -107,9 +117,16 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
             let file = path.file_name().unwrap_or_default().to_string_lossy().to_string();
             let stem = file.strip_suffix(".sql").ok_or_else(|| format!("migrations/{file}: a migration is NNNN_<what>.sql"))?;
             let (number, what) = stem.split_once('_').ok_or_else(|| format!("migrations/{file}: a migration is NNNN_<what>.sql"))?;
-            let version: i32 = number.parse().ok().filter(|_| number.len() == 4).ok_or_else(|| format!("migrations/{file}: a migration is NNNN_<what>.sql"))?;
+            let version: i32 = number
+                .parse()
+                .ok()
+                .filter(|_| number.len() == 4)
+                .ok_or_else(|| format!("migrations/{file}: a migration is NNNN_<what>.sql"))?;
             if version != i as i32 + 1 {
-                return Err(format!("migrations/{file}: migrations are numbered 0001, 0002, … without gaps (this is number {version}, expected {})", i + 1));
+                return Err(format!(
+                    "migrations/{file}: migrations are numbered 0001, 0002, … without gaps (this is number {version}, expected {})",
+                    i + 1
+                ));
             }
             if what.is_empty() || !what.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') {
                 return Err(format!("migrations/{file}: the name after the number is lower case letters, digits and _"));
@@ -128,7 +145,11 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
     for path in &manifest.scripts {
         let bytes = std::fs::read(dir.join(path)).map_err(|e| format!("scripts: {path}: {e}"))?;
         if bytes.len() > super::manifest::MAX_SCRIPT_BYTES {
-            return Err(format!("scripts: {path} is {} bytes; a script is at most {} KiB", bytes.len(), super::manifest::MAX_SCRIPT_BYTES / 1024));
+            return Err(format!(
+                "scripts: {path} is {} bytes; a script is at most {} KiB",
+                bytes.len(),
+                super::manifest::MAX_SCRIPT_BYTES / 1024
+            ));
         }
         total += bytes.len();
         if total > super::manifest::MAX_SCRIPTS_TOTAL {
@@ -141,7 +162,10 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
     let summary = if scripts.is_empty() {
         None
     } else {
-        Some(game_server::script::check(&script_input(&manifest.name, &scripts, &manifest.options), None).map_err(|e| format!("scripts: {e:#}"))?)
+        Some(
+            game_server::script::check(&script_input(&manifest.name, &scripts, &manifest.options), None)
+                .map_err(|e| format!("scripts: {e:#}"))?,
+        )
     };
     Ok(Plan { dir: dir.to_owned(), manifest, entries, migrations, art, scripts, summary })
 }
@@ -164,7 +188,10 @@ async fn fetch_row(conn: &mut PgConnection, schema: &str, t: &ExtTable, key: &[i
 }
 
 async fn has_imports(conn: &mut PgConnection, s: &Schemas, part: &str) -> Result<bool> {
-    Ok(sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.imports WHERE part = $1)", s.content))).bind(part).fetch_one(&mut *conn).await?)
+    Ok(sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.imports WHERE part = $1)", s.content)))
+        .bind(part)
+        .fetch_one(&mut *conn)
+        .await?)
 }
 
 #[derive(Debug)]
@@ -174,9 +201,14 @@ struct Installed {
 }
 
 async fn installed(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<Option<Installed>> {
-    let row: Option<(String, bool)> =
-        sqlx::query_as(sql(format!("SELECT version, enabled FROM {}.extensions WHERE name = $1", s.content))).bind(name).fetch_optional(&mut *conn).await?;
-    row.map(|(v, enabled)| Ok(Installed { version: semver::Version::parse(&v).with_context(|| format!("installed version {v:?}"))?, enabled })).transpose()
+    let row: Option<(String, bool)> = sqlx::query_as(sql(format!("SELECT version, enabled FROM {}.extensions WHERE name = $1", s.content)))
+        .bind(name)
+        .fetch_optional(&mut *conn)
+        .await?;
+    row.map(|(v, enabled)| {
+        Ok(Installed { version: semver::Version::parse(&v).with_context(|| format!("installed version {v:?}"))?, enabled })
+    })
+    .transpose()
 }
 
 fn is_printable(text: &str) -> bool {
@@ -226,13 +258,7 @@ fn core_effect_warning(e: &Entry, row: &RowMap) -> Option<String> {
     Some(format!("{}: when the extension is disabled, {} is {what}", e.label(), e.id))
 }
 
-async fn compute(
-    conn: &mut PgConnection,
-    s: &Schemas,
-    t: &ExtTable,
-    e: &Entry,
-    prior_row: Option<&Value>,
-) -> Result<Computed> {
+async fn compute(conn: &mut PgConnection, s: &Schemas, t: &ExtTable, e: &Entry, prior_row: Option<&Value>) -> Result<Computed> {
     let fail = |text: String| anyhow::Error::from(crate::store::Refused(format!("{}: {text}", e.label())));
     let frozen = s.original_of(t.side);
     let original = fetch_row(conn, frozen, t, &e.key).await?;
@@ -242,7 +268,11 @@ async fn compute(
             if e.kind == Kind::Drop {
                 return Err(fail("a drop entry changes grade and droprate of an existing entry; it has nothing to copy".into()));
             }
-            Some(fetch_row(conn, frozen, t, &c.from_key).await?.ok_or_else(|| fail(format!("copy from {} is not an original row of {}", c.from, t.tbl)))?)
+            Some(
+                fetch_row(conn, frozen, t, &c.from_key)
+                    .await?
+                    .ok_or_else(|| fail(format!("copy from {} is not an original row of {}", c.from, t.tbl)))?,
+            )
         }
         None => None,
     };
@@ -266,7 +296,10 @@ async fn compute(
             ids::check_ceilings(&IdRange { major: e.key[0], low: e.key[1], high: e.key[1] }, true).map_err(fail)?;
         }
         if fetch_row(conn, s.of(t.side), t, &e.key).await?.is_some() {
-            return Err(fail(format!("{} exists in {} already (it is not an original row, so an edit or another extension made it)", e.id, t.tbl)));
+            return Err(fail(format!(
+                "{} exists in {} already (it is not an original row, so an edit or another extension made it)",
+                e.id, t.tbl
+            )));
         }
         match e.kind {
             Kind::Item => {
@@ -283,9 +316,10 @@ async fn compute(
         let rowid = match prior_row.and_then(|r| r.get("rowid")) {
             Some(r) => r.clone(),
             None => {
-                let next: i64 = sqlx::query_scalar(sql(format!("SELECT coalesce(max(rowid), 0)::bigint + 1 FROM {}.{}", s.of(t.side), t.table)))
-                    .fetch_one(&mut *conn)
-                    .await?;
+                let next: i64 =
+                    sqlx::query_scalar(sql(format!("SELECT coalesce(max(rowid), 0)::bigint + 1 FROM {}.{}", s.of(t.side), t.table)))
+                        .fetch_one(&mut *conn)
+                        .await?;
                 json!(next)
             }
         };
@@ -317,21 +351,30 @@ async fn compute(
         let mut value = value.clone();
         if e.kind == Kind::Drop {
             let target = editor_target.expect("the mob_drop target");
-            let field = target.field(column).map_err(|m| fail(format!("{m} (an extension may change grade and droprate of a drop entry)")))?;
+            let field =
+                target.field(column).map_err(|m| fail(format!("{m} (an extension may change grade and droprate of a drop entry)")))?;
             let facts = Facts::default();
             let current = row.clone();
-            value = field.check(&value, &Ctx { facts: &facts, map: None, current: &current, key: &e.key }).map_err(|m| fail(format!("set {column}: {m}")))?;
+            value = field
+                .check(&value, &Ctx { facts: &facts, map: None, current: &current, key: &e.key })
+                .map_err(|m| fail(format!("set {column}: {m}")))?;
         }
         if e.kind == Kind::Item && column == "range" {
             let v = value.as_i64().ok_or_else(|| fail("set range: a whole number".into()))?;
             if !(0..=ids::ITEM_RANGE_MAX).contains(&v) {
-                return Err(fail(format!("set range: {v} does not fit the client's byte for the skill an item gives (0 to {})", ids::ITEM_RANGE_MAX)));
+                return Err(fail(format!(
+                    "set range: {v} does not fit the client's byte for the skill an item gives (0 to {})",
+                    ids::ITEM_RANGE_MAX
+                )));
             }
         }
         if let Value::String(text) = &value {
-            let ok: Result<bool, sqlx::Error> = sqlx::query_scalar("SELECT convert_to($1::text, 'GBK') IS NOT NULL").bind(text).fetch_one(&mut *conn).await;
+            let ok: Result<bool, sqlx::Error> =
+                sqlx::query_scalar("SELECT convert_to($1::text, 'GBK') IS NOT NULL").bind(text).fetch_one(&mut *conn).await;
             if ok.is_err() {
-                return Err(fail(format!("set {column}: the text {text:?} cannot be written in GBK, the encoding of the original definitions")));
+                return Err(fail(format!(
+                    "set {column}: the text {text:?} cannot be written in GBK, the encoding of the original definitions"
+                )));
             }
         }
         row.insert(column.clone(), value);
@@ -365,10 +408,16 @@ async fn client_ctx(conn: &mut PgConnection, s: &Schemas) -> Result<ClientCtx> {
     let exists = schema_exists(conn, &s.client).await? && tables_of(conn, &s.client).await?.iter().any(|t| t == "items");
     let mut longest = BTreeMap::new();
     if exists {
-        for (key, table, column) in
-            [("item name", "items", "name"), ("item description", "items", "description"), ("skill name", "skills", "name"), ("skill description", "skills", "description")]
-        {
-            let n: i64 = sqlx::query_scalar(sql(format!("SELECT coalesce(max(octet_length({column})), 0)::bigint FROM {}.{table}", s.client))).fetch_one(&mut *conn).await?;
+        for (key, table, column) in [
+            ("item name", "items", "name"),
+            ("item description", "items", "description"),
+            ("skill name", "skills", "name"),
+            ("skill description", "skills", "description"),
+        ] {
+            let n: i64 =
+                sqlx::query_scalar(sql(format!("SELECT coalesce(max(octet_length({column})), 0)::bigint FROM {}.{table}", s.client)))
+                    .fetch_one(&mut *conn)
+                    .await?;
             longest.insert(key, n);
         }
     }
@@ -376,7 +425,15 @@ async fn client_ctx(conn: &mut PgConnection, s: &Schemas) -> Result<ClientCtx> {
 }
 
 /// Validates one entry's client part and writes it into `content.client_*` / `content.server_only` (since_patch NULL).
-async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, extension: &str, e: &Entry, differs: bool, warnings: &mut Vec<String>) -> Result<bool> {
+async fn write_client(
+    conn: &mut PgConnection,
+    s: &Schemas,
+    ctx: &ClientCtx,
+    extension: &str,
+    e: &Entry,
+    differs: bool,
+    warnings: &mut Vec<String>,
+) -> Result<bool> {
     let fail = |text: String| anyhow::Error::from(crate::store::Refused(format!("{}: {text}", e.label())));
     let c = &s.content;
     if e.kind == Kind::Drop {
@@ -387,12 +444,13 @@ async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, ext
     }
     if let Some(reason) = &e.server_only {
         let (kind, id, level) = if e.kind == Kind::Item { ("item", e.key[0], 0) } else { ("skill", e.key[0], e.key[1]) };
-        let owner: Option<String> = sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.server_only WHERE kind = $1 AND id = $2 AND level = $3")))
-            .bind(kind)
-            .bind(id as i32)
-            .bind(level as i16)
-            .fetch_optional(&mut *conn)
-            .await?;
+        let owner: Option<String> =
+            sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.server_only WHERE kind = $1 AND id = $2 AND level = $3")))
+                .bind(kind)
+                .bind(id as i32)
+                .bind(level as i16)
+                .fetch_optional(&mut *conn)
+                .await?;
         if let Some(owner) = owner {
             return Err(fail(format!("the server_only reason for this row belongs to the extension {owner}")));
         }
@@ -408,10 +466,13 @@ async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, ext
     }
     let Some(spec) = &e.client else { return Ok(false) };
     let item = e.kind == Kind::Item;
-    let (names, longest_name, longest_description) = if item { ("item", "item name", "item description") } else { ("skill", "skill name", "skill description") };
+    let (names, longest_name, longest_description) =
+        if item { ("item", "item name", "item description") } else { ("skill", "skill name", "skill description") };
     let (keep, name, description, look, fields) = match spec {
         ClientSpec::Keep => (true, None, None, None, BTreeMap::new()),
-        ClientSpec::Fields { name, description, look, fields } => (false, Some(name.clone()), Some(description.clone()), *look, fields.clone()),
+        ClientSpec::Fields { name, description, look, fields } => {
+            (false, Some(name.clone()), Some(description.clone()), *look, fields.clone())
+        }
     };
     for (what, text, key) in [("name", &name, longest_name), ("description", &description, longest_description)] {
         let Some(text) = text else { continue };
@@ -419,15 +480,27 @@ async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, ext
             return Err(fail(format!("client {what} {text:?} is not printable ASCII (0x20 to 0x7E)")));
         }
         if ctx.exists && text.len() as i64 > ctx.longest[key] {
-            return Err(fail(format!("client {what} of {} bytes is longer than the longest {names} {what} in the original ({})", text.len(), ctx.longest[key])));
+            return Err(fail(format!(
+                "client {what} of {} bytes is longer than the longest {names} {what} in the original ({})",
+                text.len(),
+                ctx.longest[key]
+            )));
         }
     }
     if let Some((a, b)) = look {
         if ctx.exists {
             let found: bool = if item {
-                sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.items WHERE grp = $1 AND idx = $2)", s.client))).bind(a as i16).bind(b as i16).fetch_one(&mut *conn).await?
+                sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.items WHERE grp = $1 AND idx = $2)", s.client)))
+                    .bind(a as i16)
+                    .bind(b as i16)
+                    .fetch_one(&mut *conn)
+                    .await?
             } else {
-                sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.skills WHERE skill_id = $1 AND slot = $2)", s.client))).bind(a as i16).bind(b as i16).fetch_one(&mut *conn).await?
+                sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.skills WHERE skill_id = $1 AND slot = $2)", s.client)))
+                    .bind(a as i16)
+                    .bind(b as i16)
+                    .fetch_one(&mut *conn)
+                    .await?
             };
             if !found {
                 return Err(fail(format!("look {a}/{b} is not a record of the client's {names}s")));
@@ -443,7 +516,12 @@ async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, ext
     let field = |n: &str| fields.get(n).copied();
     if item {
         let (ty, id) = ((e.key[0] / 1000) as i16, (e.key[0] % 1000) as i16);
-        let owner: Option<String> = sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.client_items WHERE type = $1 AND typeid = $2"))).bind(ty).bind(id).fetch_optional(&mut *conn).await?;
+        let owner: Option<String> =
+            sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.client_items WHERE type = $1 AND typeid = $2")))
+                .bind(ty)
+                .bind(id)
+                .fetch_optional(&mut *conn)
+                .await?;
         if let Some(owner) = owner {
             return Err(fail(format!("the client row of item {}/{} belongs to the extension {owner}", ty, id)));
         }
@@ -470,7 +548,11 @@ async fn write_client(conn: &mut PgConnection, s: &Schemas, ctx: &ClientCtx, ext
     } else {
         let (id, level) = (e.key[0] as i16, e.key[1] as i16);
         let owner: Option<String> =
-            sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.client_skills WHERE skill_id = $1 AND level = $2"))).bind(id).bind(level).fetch_optional(&mut *conn).await?;
+            sqlx::query_scalar(sql(format!("SELECT extension FROM {c}.client_skills WHERE skill_id = $1 AND level = $2")))
+                .bind(id)
+                .bind(level)
+                .fetch_optional(&mut *conn)
+                .await?;
         if let Some(owner) = owner {
             return Err(fail(format!("the client row of skill {id}/{level} belongs to the extension {owner}")));
         }
@@ -602,7 +684,10 @@ struct Prior {
 
 async fn read_prior(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<Prior> {
     let c = &s.content;
-    let rows = sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
+    let rows = sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq")))
+        .bind(name)
+        .fetch_all(&mut *conn)
+        .await?;
     let mut client = BTreeMap::new();
     let items: Vec<(i16, i16, Option<i32>, String)> = sqlx::query_as(sql(format!(
         "SELECT type, typeid, since_patch, concat_ws('|', keep, name, description, look_type, look_typeid, model, icon, type2, type3, note) FROM {c}.client_items WHERE extension = $1"
@@ -622,7 +707,11 @@ async fn read_prior(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<
     for (a, b, since, content) in skills {
         client.insert(format!("skill {a}/{b}"), (since, content));
     }
-    let migrations: Vec<(i32, String)> = sqlx::query_as(sql(format!("SELECT version, sha256 FROM {c}.ext_migrations WHERE extension = $1"))).bind(name).fetch_all(&mut *conn).await?;
+    let migrations: Vec<(i32, String)> =
+        sqlx::query_as(sql(format!("SELECT version, sha256 FROM {c}.ext_migrations WHERE extension = $1")))
+            .bind(name)
+            .fetch_all(&mut *conn)
+            .await?;
     Ok(Prior { rows, client, migrations: migrations.into_iter().collect() })
 }
 
@@ -636,7 +725,8 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
 
     // Settings: every one exists and passes the server's parser; no other enabled extension sets it.
     for (key, value) in &m.settings {
-        game_server::config::check_setting(key, value).map_err(|e| crate::store::Refused(format!("extension.toml [settings] {key}: {e:#}")))?;
+        game_server::config::check_setting(key, value)
+            .map_err(|e| crate::store::Refused(format!("extension.toml [settings] {key}: {e:#}")))?;
         let other: Option<String> = sqlx::query_scalar(sql(format!(
             "SELECT t.extension FROM {c}.ext_settings t JOIN {c}.extensions e ON e.name = t.extension WHERE t.name = $1 AND e.enabled AND t.extension <> $2"
         )))
@@ -645,13 +735,17 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         .fetch_optional(&mut *conn)
         .await?;
         if let Some(other) = other {
-            return refuse(format!("the setting {key} is set by the enabled extension {other} already; disable it or drop the setting from {name}"));
+            return refuse(format!(
+                "the setting {key} is set by the enabled extension {other} already; disable it or drop the setting from {name}"
+            ));
         }
     }
     // Rules: each passes the server's parser and stands alone (a name without the extension's prefix, a whole rule).
     for (rule_name, rule) in &m.rules {
         if rule_name.contains('/') {
-            return refuse(format!("extension.toml [rules.{rule_name:?}]: an extension names its rules without a prefix (the server adds \"{name}/\")"));
+            return refuse(format!(
+                "extension.toml [rules.{rule_name:?}]: an extension names its rules without a prefix (the server adds \"{name}/\")"
+            ));
         }
         game_server::rules::check_whole_rule(rule_name, rule).map_err(|e| crate::store::Refused(format!("extension.toml {e:#}")))?;
     }
@@ -675,7 +769,11 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         }
     }
     // Keys another extension owns.
-    let owners: Vec<(String, String, String)> = sqlx::query_as(sql(format!("SELECT tbl, key, extension FROM {c}.ext_rows WHERE extension <> $1"))).bind(name).fetch_all(&mut *conn).await?;
+    let owners: Vec<(String, String, String)> =
+        sqlx::query_as(sql(format!("SELECT tbl, key, extension FROM {c}.ext_rows WHERE extension <> $1")))
+            .bind(name)
+            .fetch_all(&mut *conn)
+            .await?;
     for e in &plan.entries {
         let (tbl, key) = (e.kind.table().tbl, e.key_text());
         if let Some((_, _, other)) = owners.iter().find(|(t, k, _)| t == tbl && *k == key) {
@@ -686,11 +784,20 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     // Upgrade: the keys no longer listed go back (checked as a remove is).
     let new_keys: BTreeSet<(String, String)> = plan.entries.iter().map(|e| (e.kind.table().tbl.to_owned(), e.key_text())).collect();
     if let Some(prior) = &prior {
-        if let Some(applied) = prior.migrations.iter().find(|(v, sha)| plan.migrations.iter().find(|m| m.version == **v).is_none_or(|m| m.sha256 != **sha)) {
-            return refuse(format!("migration {:04} was applied as it was before and the folder has it changed or gone; an applied migration is never rewritten", applied.0));
+        if let Some(applied) =
+            prior.migrations.iter().find(|(v, sha)| plan.migrations.iter().find(|m| m.version == **v).is_none_or(|m| m.sha256 != **sha))
+        {
+            return refuse(format!(
+                "migration {:04} was applied as it was before and the folder has it changed or gone; an applied migration is never rewritten",
+                applied.0
+            ));
         }
-        let dropped: Vec<(String, String, String)> =
-            prior.rows.iter().filter(|(t, k, _, _)| !new_keys.contains(&(t.clone(), k.clone()))).map(|(t, k, a, _)| (t.clone(), k.clone(), a.clone())).collect();
+        let dropped: Vec<(String, String, String)> = prior
+            .rows
+            .iter()
+            .filter(|(t, k, _, _)| !new_keys.contains(&(t.clone(), k.clone())))
+            .map(|(t, k, a, _)| (t.clone(), k.clone(), a.clone()))
+            .collect();
         let keys: Vec<(String, String)> = dropped.iter().map(|(t, k, _)| (t.clone(), k.clone())).collect();
         let (held, referenced) = blockers(conn, s, &keys).await?;
         if !held.is_empty() || !referenced.is_empty() {
@@ -710,15 +817,26 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     // The extension's own records: replaced.
     let manifest_json = m.json.clone();
     if prior.is_some() {
-        sqlx::query(sql(format!("UPDATE {c}.extensions SET version = $2, title = $3, description = $4, manifest = $5, upgraded_at = now() WHERE name = $1")))
-            .bind(name)
-            .bind(m.version.to_string())
-            .bind(&m.title)
-            .bind(&m.description)
-            .bind(&manifest_json)
-            .execute(&mut *conn)
-            .await?;
-        for table in ["ext_ranges", "ext_settings", "ext_rules", "ext_client", "ext_scripts", "ext_options", "ext_item_effects", "ext_skill_abilities"] {
+        sqlx::query(sql(format!(
+            "UPDATE {c}.extensions SET version = $2, title = $3, description = $4, manifest = $5, upgraded_at = now() WHERE name = $1"
+        )))
+        .bind(name)
+        .bind(m.version.to_string())
+        .bind(&m.title)
+        .bind(&m.description)
+        .bind(&manifest_json)
+        .execute(&mut *conn)
+        .await?;
+        for table in [
+            "ext_ranges",
+            "ext_settings",
+            "ext_rules",
+            "ext_client",
+            "ext_scripts",
+            "ext_options",
+            "ext_item_effects",
+            "ext_skill_abilities",
+        ] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
         }
     } else {
@@ -733,25 +851,41 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     }
     for (kind, list) in [("item", &m.items), ("skill", &m.skills)] {
         for r in list {
-            sqlx::query(sql(format!("INSERT INTO {c}.ext_ranges (extension, kind, major, minor_low, minor_high) VALUES ($1, $2, $3, $4, $5)")))
-                .bind(name)
-                .bind(kind)
-                .bind(r.major as i32)
-                .bind(r.low as i32)
-                .bind(r.high as i32)
-                .execute(&mut *conn)
-                .await?;
+            sqlx::query(sql(format!(
+                "INSERT INTO {c}.ext_ranges (extension, kind, major, minor_low, minor_high) VALUES ($1, $2, $3, $4, $5)"
+            )))
+            .bind(name)
+            .bind(kind)
+            .bind(r.major as i32)
+            .bind(r.low as i32)
+            .bind(r.high as i32)
+            .execute(&mut *conn)
+            .await?;
         }
     }
     for (key, value) in &m.settings {
-        sqlx::query(sql(format!("INSERT INTO {c}.ext_settings (extension, name, value) VALUES ($1, $2, $3)"))).bind(name).bind(key).bind(value).execute(&mut *conn).await?;
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_settings (extension, name, value) VALUES ($1, $2, $3)")))
+            .bind(name)
+            .bind(key)
+            .bind(value)
+            .execute(&mut *conn)
+            .await?;
     }
     for (rule_name, rule) in &m.rules {
-        sqlx::query(sql(format!("INSERT INTO {c}.ext_rules (extension, name, rule) VALUES ($1, $2, $3)"))).bind(name).bind(rule_name).bind(rule).execute(&mut *conn).await?;
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_rules (extension, name, rule) VALUES ($1, $2, $3)")))
+            .bind(name)
+            .bind(rule_name)
+            .bind(rule)
+            .execute(&mut *conn)
+            .await?;
     }
     write_scripts(conn, s, plan).await?;
     for f in &m.features {
-        sqlx::query(sql(format!("INSERT INTO {c}.ext_client (extension, kind, name) VALUES ($1, 'feature', $2)"))).bind(name).bind(f).execute(&mut *conn).await?;
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_client (extension, kind, name) VALUES ($1, 'feature', $2)")))
+            .bind(name)
+            .bind(f)
+            .execute(&mut *conn)
+            .await?;
     }
     for a in &plan.art {
         sqlx::query(sql(format!("INSERT INTO {c}.ext_client (extension, kind, name, file, sha256) VALUES ($1, 'art', $2, $3, $4)")))
@@ -811,10 +945,16 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         write_ext_row(conn, s, t, write_as, &row).await.map_err(|err| crate::store::Refused(format!("{}: {err:#}", e.label())))?;
         let written: Value = {
             let filter = t.key_cols.iter().zip(&e.key).map(|(c, n)| format!("{c} = {n}")).collect::<Vec<_>>().join(" AND ");
-            sqlx::query_scalar(sql(format!("SELECT to_jsonb(t) FROM {}.{} t WHERE {filter}", s.of(t.side), t.table))).fetch_one(&mut *conn).await?
+            sqlx::query_scalar(sql(format!("SELECT to_jsonb(t) FROM {}.{} t WHERE {filter}", s.of(t.side), t.table)))
+                .fetch_one(&mut *conn)
+                .await?
         };
         if before.is_some() {
-            sqlx::query(sql(format!("DELETE FROM {c}.ext_rows WHERE tbl = $1 AND key = $2"))).bind(t.tbl).bind(&key).execute(&mut *conn).await?;
+            sqlx::query(sql(format!("DELETE FROM {c}.ext_rows WHERE tbl = $1 AND key = $2")))
+                .bind(t.tbl)
+                .bind(&key)
+                .execute(&mut *conn)
+                .await?;
         }
         sqlx::query(sql(format!("INSERT INTO {c}.ext_rows (extension, tbl, key, action, row, seq) VALUES ($1, $2, $3, $4, $5, $6)")))
             .bind(name)
@@ -825,10 +965,18 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .bind(seq as i32)
             .execute(&mut *conn)
             .await?;
-        if computed.action == "add" { added += 1 } else { changed += 1 }
+        if computed.action == "add" {
+            added += 1
+        } else {
+            changed += 1
+        }
         if write_client(conn, s, &client, name, e, computed.differs, &mut warnings).await? {
             client_rows += 1;
-            let label = if e.kind == Kind::Item { format!("item {}/{}", e.key[0] / 1000, e.key[0] % 1000) } else { format!("skill {}/{}", e.key[0], e.key[1]) };
+            let label = if e.kind == Kind::Item {
+                format!("item {}/{}", e.key[0] / 1000, e.key[0] % 1000)
+            } else {
+                format!("skill {}/{}", e.key[0], e.key[1])
+            };
             new_client_keys.push((label, before.map(|b| b.3 == written).unwrap_or(false)));
         }
         shown.push(describe(e, &computed, t));
@@ -846,13 +994,15 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         }
         if let Some(list) = &e.abilities {
             let parsed = game_server::effects::check_abilities(list)?;
-            sqlx::query(sql(format!("INSERT INTO {c}.ext_skill_abilities (extension, skill_id, level, abilities) VALUES ($1, $2, $3, $4)")))
-                .bind(name)
-                .bind(e.key[0] as i16)
-                .bind(e.key[1] as i16)
-                .bind(list)
-                .execute(&mut *conn)
-                .await?;
+            sqlx::query(sql(format!(
+                "INSERT INTO {c}.ext_skill_abilities (extension, skill_id, level, abilities) VALUES ($1, $2, $3, $4)"
+            )))
+            .bind(name)
+            .bind(e.key[0] as i16)
+            .bind(e.key[1] as i16)
+            .bind(list)
+            .execute(&mut *conn)
+            .await?;
             for ability in &parsed {
                 shown.push(format!("    {} {}", e.id, ability.describe()));
             }
@@ -868,12 +1018,19 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             let (table, c1, c2) = if a == "item" { ("client_items", "type", "typeid") } else { ("client_skills", "skill_id", "level") };
             let now_content: String = sqlx::query_scalar(sql(format!(
                 "SELECT concat_ws('|', {}) FROM {c}.{table} WHERE {c1} = {x} AND {c2} = {y}",
-                if a == "item" { "keep, name, description, look_type, look_typeid, model, icon, type2, type3, note" } else { "keep, name, description, look_skill, look_level, icon, animation, toggle_type, sound, note" }
+                if a == "item" {
+                    "keep, name, description, look_type, look_typeid, model, icon, type2, type3, note"
+                } else {
+                    "keep, name, description, look_skill, look_level, icon, animation, toggle_type, sound, note"
+                }
             )))
             .fetch_one(&mut *conn)
             .await?;
             if *server_same && now_content == *old_content {
-                sqlx::query(sql(format!("UPDATE {c}.{table} SET since_patch = $1 WHERE {c1} = {x} AND {c2} = {y}"))).bind(*since).execute(&mut *conn).await?;
+                sqlx::query(sql(format!("UPDATE {c}.{table} SET since_patch = $1 WHERE {c1} = {x} AND {c2} = {y}")))
+                    .bind(*since)
+                    .execute(&mut *conn)
+                    .await?;
             }
         }
     }
@@ -881,8 +1038,13 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     // The items the scripts take over exist now (the extension's own rows are in the live table).
     if let Some(summary) = &plan.summary {
         for text in &summary.items {
-            let Some((t, id)) = text.split_once('/').and_then(|(t, i)| Some((t.parse::<i64>().ok()?, i.parse::<i64>().ok()?))) else { continue };
-            let found: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.items WHERE itemid = $1)", s.defs))).bind(t * 1000 + id).fetch_one(&mut *conn).await?;
+            let Some((t, id)) = text.split_once('/').and_then(|(t, i)| Some((t.parse::<i64>().ok()?, i.parse::<i64>().ok()?))) else {
+                continue;
+            };
+            let found: bool = sqlx::query_scalar(sql(format!("SELECT EXISTS (SELECT 1 FROM {}.items WHERE itemid = $1)", s.defs)))
+                .bind(t * 1000 + id)
+                .fetch_one(&mut *conn)
+                .await?;
             if !found {
                 return refuse(format!("scripts: game.on_item names item {text}, which does not exist"));
             }
@@ -891,7 +1053,11 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
 
     // On top: the edits.
     let problems = rewrite_edits(conn, s).await?;
-    out.push(format!("{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings, {} rules", m.settings.len(), m.rules.len()));
+    out.push(format!(
+        "{changed} rows changed, {added} rows added, {client_rows} client rows, {} settings, {} rules",
+        m.settings.len(),
+        m.rules.len()
+    ));
     if effects > 0 {
         out.push(format!("{effects} item effects and skill abilities (server-only: restart the game servers)"));
     }
@@ -916,7 +1082,12 @@ async fn write_scripts(conn: &mut PgConnection, s: &Schemas, plan: &Plan) -> Res
             .await?;
     }
     for (key, spec) in &plan.manifest.options {
-        sqlx::query(sql(format!("INSERT INTO {c}.ext_options (extension, name, spec) VALUES ($1, $2, $3)"))).bind(name).bind(key).bind(spec.to_json()).execute(&mut *conn).await?;
+        sqlx::query(sql(format!("INSERT INTO {c}.ext_options (extension, name, spec) VALUES ($1, $2, $3)")))
+            .bind(name)
+            .bind(key)
+            .bind(spec.to_json())
+            .execute(&mut *conn)
+            .await?;
     }
     Ok(())
 }
@@ -927,7 +1098,13 @@ fn describe(e: &Entry, c: &Computed, t: &ExtTable) -> String {
         _ => "changes",
     };
     let cols: Vec<&str> = e.set.iter().map(|(k, _)| k.as_str()).collect();
-    format!("  {} {what} {} {}{}", e.label(), t.tbl, e.key_text(), if cols.is_empty() { String::new() } else { format!(" (set: {})", cols.join(", ")) })
+    format!(
+        "  {} {what} {} {}{}",
+        e.label(),
+        t.tbl,
+        e.key_text(),
+        if cols.is_empty() { String::new() } else { format!(" (set: {})", cols.join(", ")) }
+    )
 }
 
 fn next_steps(plan: &Plan, wrote_items_or_skills: bool, wrote_drops: bool, client_rows: bool) -> Vec<String> {
@@ -956,7 +1133,12 @@ fn next_steps(plan: &Plan, wrote_items_or_skills: bool, wrote_drops: bool, clien
 /// The scripts of a plan as `ext check` and `install` print them: the files, the options, the dry run's summary.
 fn script_lines(plan: &Plan) -> Vec<String> {
     let Some(summary) = &plan.summary else { return Vec::new() };
-    let mut out = vec![format!("scripts (API {}): {} files, {} options; the dry run of the load registers:", plan.manifest.api.unwrap_or(0), plan.scripts.len(), plan.manifest.options.len())];
+    let mut out = vec![format!(
+        "scripts (API {}): {} files, {} options; the dry run of the load registers:",
+        plan.manifest.api.unwrap_or(0),
+        plan.scripts.len(),
+        plan.manifest.options.len()
+    )];
     out.extend(summary.to_string().lines().map(|l| format!("  {l}")));
     out
 }
@@ -964,8 +1146,16 @@ fn script_lines(plan: &Plan) -> Vec<String> {
 /// `ext show`'s lines for the scripts: the files, the options with their defaults and the editor's values, the dry run.
 async fn show_scripts(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<Vec<String>> {
     let c = &s.content;
-    let files: Vec<(String, String, String)> = sqlx::query_as(sql(format!("SELECT path, source, sha256 FROM {c}.ext_scripts WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
-    let specs: Vec<(String, Value)> = sqlx::query_as(sql(format!("SELECT name, spec FROM {c}.ext_options WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
+    let files: Vec<(String, String, String)> =
+        sqlx::query_as(sql(format!("SELECT path, source, sha256 FROM {c}.ext_scripts WHERE extension = $1 ORDER BY seq")))
+            .bind(name)
+            .fetch_all(&mut *conn)
+            .await?;
+    let specs: Vec<(String, Value)> =
+        sqlx::query_as(sql(format!("SELECT name, spec FROM {c}.ext_options WHERE extension = $1 ORDER BY name")))
+            .bind(name)
+            .fetch_all(&mut *conn)
+            .await?;
     if files.is_empty() && specs.is_empty() {
         return Ok(Vec::new());
     }
@@ -973,12 +1163,22 @@ async fn show_scripts(conn: &mut PgConnection, s: &Schemas, name: &str) -> Resul
     for (path, source, sha) in &files {
         out.push(format!("  script {path}: {} bytes, sha256 {sha}", source.len()));
     }
-    let values: Vec<(String, String)> = sqlx::query_as(sql(format!("SELECT name, value FROM {c}.setting_values WHERE name LIKE $1 ORDER BY name"))).bind(format!("ext.{name}.%")).fetch_all(&mut *conn).await?;
+    let values: Vec<(String, String)> =
+        sqlx::query_as(sql(format!("SELECT name, value FROM {c}.setting_values WHERE name LIKE $1 ORDER BY name")))
+            .bind(format!("ext.{name}.%"))
+            .fetch_all(&mut *conn)
+            .await?;
     let mut parsed = Vec::new();
     for (key, spec) in &specs {
         let spec = game_server::script::OptionSpec::parse(spec).with_context(|| format!("stored option {key}"))?;
         let set = values.iter().find(|(n, _)| *n == format!("ext.{name}.{key}")).map(|(_, v)| v.clone());
-        out.push(format!("  option {key} ({}) default {}{}: {}", spec.ty.name(), spec.default, set.map(|v| format!(", data editor {v}")).unwrap_or_default(), spec.doc));
+        out.push(format!(
+            "  option {key} ({}) default {}{}: {}",
+            spec.ty.name(),
+            spec.default,
+            set.map(|v| format!(", data editor {v}")).unwrap_or_default(),
+            spec.doc
+        ));
         parsed.push((key.clone(), spec));
     }
     let input = game_server::script::ExtInput {
@@ -1021,7 +1221,12 @@ async fn ext_snapshot(conn: &mut PgConnection, s: &Schemas, name: &str) -> Resul
         ("client skill rows", "client_skills", "", "to_jsonb(t)::text"),
         ("server-only rows", "server_only", "", "to_jsonb(t)::text"),
     ] {
-        let rows: Value = sqlx::query_scalar(sql(format!("SELECT coalesce(jsonb_agg(to_jsonb(t){drop} ORDER BY {order}), '[]'::jsonb) FROM {c}.{table} t WHERE t.extension = $1"))).bind(name).fetch_one(&mut *conn).await?;
+        let rows: Value = sqlx::query_scalar(sql(format!(
+            "SELECT coalesce(jsonb_agg(to_jsonb(t){drop} ORDER BY {order}), '[]'::jsonb) FROM {c}.{table} t WHERE t.extension = $1"
+        )))
+        .bind(name)
+        .fetch_one(&mut *conn)
+        .await?;
         out.push((label.to_owned(), rows));
     }
     Ok(out)
@@ -1038,7 +1243,14 @@ fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Op
         }
         if let (Some(x), Some(y)) = (a.as_array(), b.as_array()) {
             let n = x.iter().zip(y).position(|(p, q)| p != q).unwrap_or(x.len().min(y.len()));
-            return Some(format!("{label}: installed {} / folder {} (entry {}: installed {} / folder {})", x.len(), y.len(), n + 1, x.get(n).map(&short).unwrap_or("none".into()), y.get(n).map(&short).unwrap_or("none".into())));
+            return Some(format!(
+                "{label}: installed {} / folder {} (entry {}: installed {} / folder {})",
+                x.len(),
+                y.len(),
+                n + 1,
+                x.get(n).map(&short).unwrap_or("none".into()),
+                y.get(n).map(&short).unwrap_or("none".into())
+            ));
         }
         return Some(format!("{label}: installed {} / folder {}", short(a), short(b)));
     }
@@ -1089,7 +1301,8 @@ impl Editor {
         }
         let mut lines = vec![format!("installing {name} {}", plan.manifest.version)];
         lines.extend(apply_plan(&mut tx, &self.s, &plan, None).await?);
-        log_entry(&mut tx, &self.s, &name, "install", json!({"version": plan.manifest.version.to_string(), "rows": plan.entries.len()})).await?;
+        log_entry(&mut tx, &self.s, &name, "install", json!({"version": plan.manifest.version.to_string(), "rows": plan.entries.len()}))
+            .await?;
         tx.commit().await?;
         Ok(Self::report_lines(&plan, lines))
     }
@@ -1104,7 +1317,10 @@ impl Editor {
         let prior = match installed(&mut tx, &self.s, &name).await? {
             Some(have) if have.version >= plan.manifest.version => {
                 tx.rollback().await?;
-                return refuse(format!("{name} {} is installed; a check needs a higher version to compare (an upgrade) or an extension that is not installed", have.version));
+                return refuse(format!(
+                    "{name} {} is installed; a check needs a higher version to compare (an upgrade) or an extension that is not installed",
+                    have.version
+                ));
             }
             Some(have) => {
                 lines.push(format!("{name} {} is installed: checking the upgrade to {}", have.version, plan.manifest.version));
@@ -1132,12 +1348,16 @@ impl Editor {
             return refuse(format!("{name} is not installed; use `data-editor ext install {}`", dir.display()));
         };
         if plan.manifest.version <= have.version {
-            return refuse(format!("{name} {} is installed; an upgrade needs a higher version than that (the folder has {})", have.version, plan.manifest.version));
+            return refuse(format!(
+                "{name} {} is installed; an upgrade needs a higher version than that (the folder has {})",
+                have.version, plan.manifest.version
+            ));
         }
         let prior = read_prior(&mut tx, &self.s, &name).await?;
         let mut lines = vec![format!("upgrading {name} {} -> {}", have.version, plan.manifest.version)];
         lines.extend(apply_plan(&mut tx, &self.s, &plan, Some(prior)).await?);
-        log_entry(&mut tx, &self.s, &name, "upgrade", json!({"from": have.version.to_string(), "to": plan.manifest.version.to_string()})).await?;
+        log_entry(&mut tx, &self.s, &name, "upgrade", json!({"from": have.version.to_string(), "to": plan.manifest.version.to_string()}))
+            .await?;
         tx.commit().await?;
         Ok(Self::report_lines(&plan, lines))
     }
@@ -1180,8 +1400,19 @@ impl Editor {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(&name).execute(&mut *tx).await?;
         }
         write_scripts(&mut tx, &self.s, &plan).await?;
-        sqlx::query(sql(format!("UPDATE {c}.extensions SET manifest = $2 WHERE name = $1"))).bind(&name).bind(&plan.manifest.json).execute(&mut *tx).await?;
-        log_entry(&mut tx, &self.s, &name, "scripts", json!({"version": have.version.to_string(), "files": plan.scripts.len(), "options": plan.manifest.options.len()})).await?;
+        sqlx::query(sql(format!("UPDATE {c}.extensions SET manifest = $2 WHERE name = $1")))
+            .bind(&name)
+            .bind(&plan.manifest.json)
+            .execute(&mut *tx)
+            .await?;
+        log_entry(
+            &mut tx,
+            &self.s,
+            &name,
+            "scripts",
+            json!({"version": have.version.to_string(), "files": plan.scripts.len(), "options": plan.manifest.options.len()}),
+        )
+        .await?;
         tx.commit().await?;
         let mut lines = vec![format!("{name} {}: scripts replaced", have.version)];
         lines.extend(script_lines(&plan));
@@ -1200,11 +1431,18 @@ impl Editor {
         if installed(&mut tx, s, name).await?.is_none() {
             return refuse(format!("{name} is not installed"));
         }
-        let rows: Vec<(String, String, String)> = sqlx::query_as(sql(format!("SELECT tbl, key, action FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq DESC"))).bind(name).fetch_all(&mut *tx).await?;
+        let rows: Vec<(String, String, String)> =
+            sqlx::query_as(sql(format!("SELECT tbl, key, action FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq DESC")))
+                .bind(name)
+                .fetch_all(&mut *tx)
+                .await?;
         let keys: Vec<(String, String)> = rows.iter().map(|(t, k, _)| (t.clone(), k.clone())).collect();
         let (held, referenced) = blockers(&mut tx, s, &keys).await?;
         if !referenced.is_empty() {
-            let mut text = format!("other data points at the rows of {name}:\n{}\nchange those rows or undo the edits first; --force does not clear references", too_many(&referenced));
+            let mut text = format!(
+                "other data points at the rows of {name}:\n{}\nchange those rows or undo the edits first; --force does not clear references",
+                too_many(&referenced)
+            );
             if !held.is_empty() {
                 text.push_str(&format!("\n(players also hold:\n{}\n)", too_many(&held)));
             }
@@ -1213,11 +1451,16 @@ impl Editor {
         let mut lines = Vec::new();
         if !held.is_empty() {
             if !force {
-                return refuse(format!("players hold the items and skills of {name}:\n{}\nremove them from the players first, or use --force to delete them (logged)", too_many(&held)));
+                return refuse(format!(
+                    "players hold the items and skills of {name}:\n{}\nremove them from the players first, or use --force to delete them (logged)",
+                    too_many(&held)
+                ));
             }
             let online = refs::players_online(&mut tx).await?;
             if online > 0 {
-                return refuse(format!("the game servers report {online} players online; an online player's memory would write a deleted item back. Stop the game servers first"));
+                return refuse(format!(
+                    "the game servers report {online} players online; an online player's memory would write a deleted item back. Stop the game servers first"
+                ));
             }
             if !confirm(&held)? {
                 return refuse("not confirmed; nothing was deleted".to_owned());
@@ -1234,20 +1477,30 @@ impl Editor {
         .bind(name)
         .fetch_one(&mut *tx)
         .await?;
-        let version: String = sqlx::query_scalar(sql(format!("SELECT version FROM {c}.extensions WHERE name = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let version: String =
+            sqlx::query_scalar(sql(format!("SELECT version FROM {c}.extensions WHERE name = $1"))).bind(name).fetch_one(&mut *tx).await?;
         // Restore in reverse order of writing, then take the extension's records out.
         restore_rows(&mut tx, s, name, &rows).await?;
         for table in ["client_items", "client_skills", "server_only"] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *tx).await?;
         }
-        let migrations: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_migrations WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let migrations: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_migrations WHERE extension = $1")))
+            .bind(name)
+            .fetch_one(&mut *tx)
+            .await?;
         if migrations > 0 {
             let schema = format!("{}{}", s.ext_prefix, name.replace('-', "_"));
             sqlx::query(sql(format!("DROP SCHEMA IF EXISTS {schema} CASCADE"))).execute(&mut *tx).await?;
             lines.push(format!("dropped the schema {schema}"));
         }
-        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
-        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1")))
+            .bind(name)
+            .fetch_one(&mut *tx)
+            .await?;
+        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1")))
+            .bind(name)
+            .fetch_one(&mut *tx)
+            .await?;
         // The cascade takes the scripts, the options and the values the scripts stored (`script_values`, `script_globals`).
         sqlx::query(sql(format!("DELETE FROM {c}.extensions WHERE name = $1"))).bind(name).execute(&mut *tx).await?;
         let problems = rewrite_edits(&mut tx, s).await?;
@@ -1291,20 +1544,40 @@ impl Editor {
                 return refuse(format!("the setting {setting} is set by the enabled extension {other}; disable it first"));
             }
         }
-        sqlx::query(sql(format!("UPDATE {c}.extensions SET enabled = $2 WHERE name = $1"))).bind(name).bind(enabled).execute(&mut *tx).await?;
+        sqlx::query(sql(format!("UPDATE {c}.extensions SET enabled = $2 WHERE name = $1")))
+            .bind(name)
+            .bind(enabled)
+            .execute(&mut *tx)
+            .await?;
         log_entry(&mut tx, s, name, if enabled { "enable" } else { "disable" }, json!({})).await?;
-        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
-        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1"))).bind(name).fetch_one(&mut *tx).await?;
+        let rules: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_rules WHERE extension = $1")))
+            .bind(name)
+            .fetch_one(&mut *tx)
+            .await?;
+        let scripts: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_scripts WHERE extension = $1")))
+            .bind(name)
+            .fetch_one(&mut *tx)
+            .await?;
         tx.commit().await?;
         let mut out = vec![
-            format!("{name} {}: its settings defaults and rules {}; its rows stay", if enabled { "enabled" } else { "disabled" }, if enabled { "count again" } else { "stop counting" }),
+            format!(
+                "{name} {}: its settings defaults and rules {}; its rows stay",
+                if enabled { "enabled" } else { "disabled" },
+                if enabled { "count again" } else { "stop counting" }
+            ),
             "next: restart the game servers".to_owned(),
         ];
         if rules > 0 {
-            out.push(format!("next: `console <server id> reload` {} its rules", if enabled { "puts in force" } else { "takes out of force" }));
+            out.push(format!(
+                "next: `console <server id> reload` {} its rules",
+                if enabled { "puts in force" } else { "takes out of force" }
+            ));
         }
         if scripts > 0 {
-            out.push(format!("next: `console <server id> reload` {} its scripts", if enabled { "puts in force" } else { "takes out of force" }));
+            out.push(format!(
+                "next: `console <server id> reload` {} its scripts",
+                if enabled { "puts in force" } else { "takes out of force" }
+            ));
         }
         Ok(out)
     }
@@ -1325,9 +1598,15 @@ impl Editor {
         if rows.is_empty() {
             return Ok(vec!["no extensions installed".to_owned()]);
         }
-        let mut out = vec![format!("{:<24} {:<10} {:<9} {:>5} {:>7} {:>7} {:>9} {:>6} {:>7}", "name", "version", "state", "rows", "client", "effects", "settings", "rules", "scripts")];
+        let mut out = vec![format!(
+            "{:<24} {:<10} {:<9} {:>5} {:>7} {:>7} {:>9} {:>6} {:>7}",
+            "name", "version", "state", "rows", "client", "effects", "settings", "rules", "scripts"
+        )];
         for (name, version, enabled, r, cl, ef, se, ru, sc) in rows {
-            out.push(format!("{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {ef:>7} {se:>9} {ru:>6} {sc:>7}", if enabled { "enabled" } else { "disabled" }));
+            out.push(format!(
+                "{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {ef:>7} {se:>9} {ru:>6} {sc:>7}",
+                if enabled { "enabled" } else { "disabled" }
+            ));
         }
         Ok(out)
     }
@@ -1338,25 +1617,46 @@ impl Editor {
         let c = &s.content;
         let mut conn = self.pool.acquire().await?;
         let row: Option<(String, String, String, bool, Value)> =
-            sqlx::query_as(sql(format!("SELECT version, title, description, enabled, manifest FROM {c}.extensions WHERE name = $1"))).bind(name).fetch_optional(&mut *conn).await?;
+            sqlx::query_as(sql(format!("SELECT version, title, description, enabled, manifest FROM {c}.extensions WHERE name = $1")))
+                .bind(name)
+                .fetch_optional(&mut *conn)
+                .await?;
         let Some((version, title, description, enabled, manifest)) = row else {
             return refuse(format!("{name} is not installed"));
         };
-        let mut out = vec![format!("{name} {version}: {title} ({})", if enabled { "enabled" } else { "disabled" }), format!("  {description}")];
-        let ranges: Vec<(String, i32, i32, i32)> = sqlx::query_as(sql(format!("SELECT kind, major, minor_low, minor_high FROM {c}.ext_ranges WHERE extension = $1 ORDER BY kind, major, minor_low"))).bind(name).fetch_all(&mut *conn).await?;
+        let mut out =
+            vec![format!("{name} {version}: {title} ({})", if enabled { "enabled" } else { "disabled" }), format!("  {description}")];
+        let ranges: Vec<(String, i32, i32, i32)> = sqlx::query_as(sql(format!(
+            "SELECT kind, major, minor_low, minor_high FROM {c}.ext_ranges WHERE extension = $1 ORDER BY kind, major, minor_low"
+        )))
+        .bind(name)
+        .fetch_all(&mut *conn)
+        .await?;
         for (kind, major, low, high) in ranges {
             out.push(format!("  ids: {kind} {}", IdRange { major: major.into(), low: low.into(), high: high.into() }.text()));
         }
-        let settings: Vec<(String, String)> = sqlx::query_as(sql(format!("SELECT name, value FROM {c}.ext_settings WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
+        let settings: Vec<(String, String)> =
+            sqlx::query_as(sql(format!("SELECT name, value FROM {c}.ext_settings WHERE extension = $1 ORDER BY name")))
+                .bind(name)
+                .fetch_all(&mut *conn)
+                .await?;
         for (k, v) in settings {
             out.push(format!("  setting {k} = {v:?}"));
         }
-        let rules: Vec<(String, Value)> = sqlx::query_as(sql(format!("SELECT name, rule FROM {c}.ext_rules WHERE extension = $1 ORDER BY name"))).bind(name).fetch_all(&mut *conn).await?;
+        let rules: Vec<(String, Value)> =
+            sqlx::query_as(sql(format!("SELECT name, rule FROM {c}.ext_rules WHERE extension = $1 ORDER BY name")))
+                .bind(name)
+                .fetch_all(&mut *conn)
+                .await?;
         for (rule_name, rule) in rules {
             out.push(format!("  rule {name}/{rule_name} = {rule}"));
         }
         out.extend(show_scripts(&mut conn, s, name).await?);
-        let rows: Vec<(String, String, String, Value)> = sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq"))).bind(name).fetch_all(&mut *conn).await?;
+        let rows: Vec<(String, String, String, Value)> =
+            sqlx::query_as(sql(format!("SELECT tbl, key, action, row FROM {c}.ext_rows WHERE extension = $1 ORDER BY seq")))
+                .bind(name)
+                .fetch_all(&mut *conn)
+                .await?;
         for (tbl, key, action, row) in rows {
             let t = super::tables::find(&tbl);
             let original = match (&t, super::tables::parse_key(&key)) {
@@ -1364,17 +1664,33 @@ impl Editor {
                 _ => None,
             };
             let diff: Vec<String> = match (&original, row.as_object()) {
-                (Some(o), Some(r)) => r.iter().filter(|(k, v)| o.get(k.as_str()) != Some(*v)).map(|(k, v)| format!("{k}: {} -> {v}", o.get(k.as_str()).unwrap_or(&Value::Null))).collect(),
+                (Some(o), Some(r)) => r
+                    .iter()
+                    .filter(|(k, v)| o.get(k.as_str()) != Some(*v))
+                    .map(|(k, v)| format!("{k}: {} -> {v}", o.get(k.as_str()).unwrap_or(&Value::Null)))
+                    .collect(),
                 _ => Vec::new(),
             };
-            out.push(format!("  row {action} {tbl} {key}{}", if diff.is_empty() { String::new() } else { format!(": {}", diff.join("; ")) }));
+            out.push(format!(
+                "  row {action} {tbl} {key}{}",
+                if diff.is_empty() { String::new() } else { format!(": {}", diff.join("; ")) }
+            ));
         }
-        let effects: Vec<(i32, Value)> = sqlx::query_as(sql(format!("SELECT item_id, effect FROM {c}.ext_item_effects WHERE extension = $1 ORDER BY item_id"))).bind(name).fetch_all(&mut *conn).await?;
+        let effects: Vec<(i32, Value)> =
+            sqlx::query_as(sql(format!("SELECT item_id, effect FROM {c}.ext_item_effects WHERE extension = $1 ORDER BY item_id")))
+                .bind(name)
+                .fetch_all(&mut *conn)
+                .await?;
         for (item_id, effect) in effects {
             let text = game_server::effects::check_effect(&effect).map_or_else(|e| format!("INVALID: {e} ({effect})"), |e| e.describe());
             out.push(format!("  effect {}/{}: {text}", item_id / 1000, item_id % 1000));
         }
-        let abilities: Vec<(i16, i16, Value)> = sqlx::query_as(sql(format!("SELECT skill_id, level, abilities FROM {c}.ext_skill_abilities WHERE extension = $1 ORDER BY skill_id, level"))).bind(name).fetch_all(&mut *conn).await?;
+        let abilities: Vec<(i16, i16, Value)> = sqlx::query_as(sql(format!(
+            "SELECT skill_id, level, abilities FROM {c}.ext_skill_abilities WHERE extension = $1 ORDER BY skill_id, level"
+        )))
+        .bind(name)
+        .fetch_all(&mut *conn)
+        .await?;
         for (skill_id, level, list) in abilities {
             let text = match game_server::effects::check_abilities(&list) {
                 Ok(parsed) => parsed.iter().map(|a| a.describe()).collect::<Vec<_>>().join("; "),

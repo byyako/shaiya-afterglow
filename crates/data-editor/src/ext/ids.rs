@@ -13,10 +13,10 @@ pub const SKILL_LEVELS: i64 = 3;
 /// The records of each of the 100 groups of the US patch 108 `Item.SData` (the dense arrays of the file; 0 for the 26 groups without
 /// records, so nothing is placed there; 74 groups, 16,045 records). A test compares it with `client.items` when that schema exists.
 pub const ITEM_GROUP_RECORDS: [u16; 100] = [
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 30,
-    255, 255, 255, 255, 255, 255, 255, 0, 0, 255, 255, 0, 32, 4, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 0, 54, 54, 244, 54, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 54, 54, 244, 54, 54, 0, 0, 0, 0, 0, 0, 0, 6, 8, 0, 0, 0,
-    0, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255,
+    255, 30, 255, 255, 255, 255, 255, 255, 255, 0, 0, 255, 255, 0, 32, 4, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 54, 54, 244, 54, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 54, 54, 244, 54, 54, 0, 0, 0, 0, 0,
+    0, 0, 6, 8, 0, 0, 0, 0, 255,
 ];
 
 /// One declared range of ids: items `major` = type, `low..=high` type ids; skills `major` = skill id, levels.
@@ -43,7 +43,12 @@ impl IdRange {
 
 /// `"100/212-214"`, `"101/5"` (items), or `"200/1-3"`, `"201/2"`, `"201"` (every level; skills only).
 pub fn parse_range(text: &str, skill: bool) -> Result<IdRange, String> {
-    let bad = || format!("{text:?} is not an id range ({})", if skill { "skill id, \"id/level\" or \"id/low-high\"" } else { "\"type/typeid\" or \"type/low-high\"" });
+    let bad = || {
+        format!(
+            "{text:?} is not an id range ({})",
+            if skill { "skill id, \"id/level\" or \"id/low-high\"" } else { "\"type/typeid\" or \"type/low-high\"" }
+        )
+    };
     let number = |t: &str| t.trim().parse::<i64>().map_err(|_| bad());
     let (major, minor) = match text.split_once('/') {
         Some((major, minor)) => (number(major)?, Some(minor)),
@@ -70,21 +75,27 @@ pub fn check_ceilings(range: &IdRange, skill: bool) -> Result<(), String> {
     let IdRange { major, low, high } = *range;
     if skill {
         if !(1..=SKILLS).contains(&major) {
-            return Err(format!("skill {major}: Skill.SData holds skills 1 to {SKILLS} (growing it is refused, docs/plans/ext-1-foundation.md 5.6)"));
+            return Err(format!(
+                "skill {major}: Skill.SData holds skills 1 to {SKILLS} (growing it is refused, docs/plans/ext-1-foundation.md 5.6)"
+            ));
         }
         if low < 1 || high > SKILL_LEVELS {
             return Err(format!("skill {major}: levels {low}-{high}: player levels are 1 to {SKILL_LEVELS} (level 100 is the monsters')"));
         }
     } else {
         if !(1..=ITEM_TYPES).contains(&major) {
-            return Err(format!("item type {major}: Item.SData has types 1 to {ITEM_TYPES} (docs/plans/ext-1-foundation.md 5.6; client research entry 11 a)"));
+            return Err(format!(
+                "item type {major}: Item.SData has types 1 to {ITEM_TYPES} (docs/plans/ext-1-foundation.md 5.6; client research entry 11 a)"
+            ));
         }
         let records = i64::from(ITEM_GROUP_RECORDS[major as usize - 1]);
         if records == 0 {
             return Err(format!("item type {major} has no records in Item.SData: nothing is placed there"));
         }
         if low < 1 || high > records {
-            return Err(format!("item type {major}: type ids {low}-{high}, but its group of Item.SData holds 1 to {records} (growing a group is refused)"));
+            return Err(format!(
+                "item type {major}: type ids {low}-{high}, but its group of Item.SData holds 1 to {records} (growing a group is refused)"
+            ));
         }
     }
     Ok(())

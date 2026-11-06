@@ -9,7 +9,8 @@ use game_server::rules::{FileRule, RuleFile, RuleLayer, RuleSources, RuleState, 
 use serde_json::{Value, json};
 
 fn config() -> game_server::config::Config {
-    let startup = Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None };
+    let startup =
+        Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None };
     game_server::config::resolve(&startup, &Sources::default()).unwrap().0
 }
 
@@ -32,14 +33,29 @@ async fn a_rule_is_drafted_applied_and_taken_over_the_files_by_resolve() {
     assert_eq!(applied.effects.iter().map(|e| e.name()).collect::<Vec<_>>(), ["live"]);
     let stored = db.scalar(format!("SELECT rule AS v FROM {}.rule_values WHERE name = 'level-gap'", db.s.content)).await;
     assert_eq!(stored["v"], json!({"type": "level_gap", "gap": 15}));
-    let fields = db.scalar(format!("SELECT jsonb_agg(jsonb_build_object('k', key, 'f', field, 'v', value, 'o', original)) AS v FROM {}.fields", db.s.edits)).await;
-    assert_eq!(fields["v"][0], json!({"k": "level-gap", "f": "rule", "v": {"type": "level_gap", "gap": 15}, "o": null}), "an added rule has no original");
+    let fields = db
+        .scalar(format!(
+            "SELECT jsonb_agg(jsonb_build_object('k', key, 'f', field, 'v', value, 'o', original)) AS v FROM {}.fields",
+            db.s.edits
+        ))
+        .await;
+    assert_eq!(
+        fields["v"][0],
+        json!({"k": "level-gap", "f": "rule", "v": {"type": "level_gap", "gap": 15}, "o": null}),
+        "an added rule has no original"
+    );
     let log = db.editor.history_detail(applied.change_set).await.unwrap();
-    assert_eq!(log.iter().map(|l| (l.target.as_str(), l.key.as_str(), l.action.as_str())).collect::<Vec<_>>(), [("rule", "level-gap", "add")]);
+    assert_eq!(
+        log.iter().map(|l| (l.target.as_str(), l.key.as_str(), l.action.as_str())).collect::<Vec<_>>(),
+        [("rule", "level-gap", "add")]
+    );
 
     // The game server's own resolve over those rows: the editor's rule beats the file's of the same name.
     let sources = RuleSources {
-        file: Some(RuleFile { path: "config/game.toml".into(), rules: vec![file_rule("level-gap", json!({"type": "level_gap", "gap": 10}))] }),
+        file: Some(RuleFile {
+            path: "config/game.toml".into(),
+            rules: vec![file_rule("level-gap", json!({"type": "level_gap", "gap": 10}))],
+        }),
         editor: rules_of(&db).await,
         ..RuleSources::default()
     };
@@ -47,7 +63,10 @@ async fn a_rule_is_drafted_applied_and_taken_over_the_files_by_resolve() {
     let rule = all.iter().find(|r| r.name == "level-gap" && r.state == RuleState::InForce).unwrap();
     assert_eq!(rule.layer, RuleLayer::Editor(Some(applied.change_set)));
     assert_eq!(rule.value, json!({"type": "level_gap", "gap": 15}));
-    assert!(all.iter().any(|r| r.name == "level-gap" && r.state == RuleState::Replaced(RuleLayer::Editor(Some(applied.change_set)))), "the file's is replaced");
+    assert!(
+        all.iter().any(|r| r.name == "level-gap" && r.state == RuleState::Replaced(RuleLayer::Editor(Some(applied.change_set)))),
+        "the file's is replaced"
+    );
     assert_eq!(set.list()[0].layer, format!("data editor (change set {})", applied.change_set));
 
     // Setting the rule changes the row; undo goes back step by step and ends with no rule.
@@ -112,11 +131,18 @@ async fn enabled_false_turns_an_extensions_rule_off_and_an_unmatched_one_is_an_e
     };
     let (set, all) = resolve(&config(), &sources).unwrap();
     assert!(set.list().iter().all(|l| &*l.name != "pets/no-capture"));
-    assert!(all.iter().any(|r| r.name == "pets/no-capture" && r.state == RuleState::TurnedOff(RuleLayer::Editor(Some(applied.change_set)))), "{all:?}");
+    assert!(
+        all.iter().any(|r| r.name == "pets/no-capture" && r.state == RuleState::TurnedOff(RuleLayer::Editor(Some(applied.change_set)))),
+        "{all:?}"
+    );
     // Without that extension the editor cannot know: the server's start (and `game-server rules`) says so.
     let alone = RuleSources { editor: rules_of(&db).await, ..RuleSources::default() };
     let message = format!("{:#}", resolve(&config(), &alone).unwrap_err());
-    assert!(message.starts_with("data editor (change set") && message.contains("rules.pets/no-capture: no rule of that name in a lower layer to turn off"), "{message}");
+    assert!(
+        message.starts_with("data editor (change set")
+            && message.contains("rules.pets/no-capture: no rule of that name in a lower layer to turn off"),
+        "{message}"
+    );
     db.drop().await;
 }
 
@@ -124,11 +150,16 @@ async fn enabled_false_turns_an_extensions_rule_off_and_an_unmatched_one_is_an_e
 async fn removing_a_rule_falls_back_and_undo_brings_it_back() {
     let Some(db) = Db::create().await else { return };
     // A row written by hand is removed with a snapshot that Undo restores.
-    run(&db.pool, format!("INSERT INTO {}.rule_values (name, rule) VALUES ('hand', '{{\"type\": \"exp\", \"factor\": 2}}')", db.s.content)).await;
+    run(&db.pool, format!("INSERT INTO {}.rule_values (name, rule) VALUES ('hand', '{{\"type\": \"exp\", \"factor\": 2}}')", db.s.content))
+        .await;
     db.draft(set_rule("hand", json!({"type": "exp", "factor": 3}))).await;
     let changed = db.apply("three").await;
     let fields = db.scalar(format!("SELECT value, original FROM {}.fields WHERE target = 'rule'", db.s.edits)).await;
-    assert_eq!((fields["value"].clone(), fields["original"].clone()), (json!({"type": "exp", "factor": 3}), json!({"type": "exp", "factor": 2})), "a hand-made row's rule is the original");
+    assert_eq!(
+        (fields["value"].clone(), fields["original"].clone()),
+        (json!({"type": "exp", "factor": 3}), json!({"type": "exp", "factor": 2})),
+        "a hand-made row's rule is the original"
+    );
     db.draft(set_rule("hand", json!({"type": "exp", "factor": 2}))).await;
     let back = db.apply("back to the original").await;
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.fields", db.s.edits)).await, 0, "the original again: the edit is gone");
@@ -173,9 +204,17 @@ async fn export_and_import_carry_the_rules() {
 
     // A rule the game server would not accept is reported and left alone.
     run(&other.pool, format!("DELETE FROM {}.rule_values", other.s.content)).await;
-    run(&other.pool, format!("UPDATE {}.fields SET value = '{{\"type\": \"level_gap\", \"gap\": 0}}' WHERE key = 'level-gap'", other.s.edits)).await;
+    run(
+        &other.pool,
+        format!("UPDATE {}.fields SET value = '{{\"type\": \"level_gap\", \"gap\": 0}}' WHERE key = 'level-gap'", other.s.edits),
+    )
+    .await;
     let report = other.editor.apply_edits().await.unwrap();
-    assert!(report.problems.iter().any(|p| p.target == "rule" && p.key == "level-gap" && p.text.contains("left alone")), "{:?}", report.problems);
+    assert!(
+        report.problems.iter().any(|p| p.target == "rule" && p.key == "level-gap" && p.text.contains("left alone")),
+        "{:?}",
+        report.problems
+    );
     assert_eq!(rules_of(&other).await.len(), 1, "only the valid one was written");
     other.drop().await;
     db.drop().await;

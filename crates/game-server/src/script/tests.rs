@@ -53,7 +53,10 @@ fn removed_names_are_nil_and_the_safe_ones_work() {
     ] {
         assert!(eval::<bool>(&ext, &format!("return {name} == nil")), "{name} must not exist");
     }
-    assert!(eval::<bool>(&ext, "return os.time() > 1000000000 and type(os.date('%H')) == 'string' and os.difftime(5, 3) == 2 and os.clock() >= 0"));
+    assert!(eval::<bool>(
+        &ext,
+        "return os.time() > 1000000000 and type(os.date('%H')) == 'string' and os.difftime(5, 3) == 2 and os.clock() >= 0"
+    ));
     assert_eq!(eval::<String>(&ext, "return string.format('%05.1f', 3.14159) .. ('ab'):upper() .. #('x'):rep(3)"), "003.1AB3");
     assert_eq!(eval::<i64>(&ext, "local t = {3, 1, 2} table.sort(t) return t[1] * 100 + t[2] * 10 + t[3] + math.floor(2.7)"), 125);
     assert!(eval::<bool>(&ext, "return collectgarbage('count') > 0"));
@@ -113,7 +116,10 @@ fn the_budget_is_per_call() {
     for _ in 0..3 {
         assert!(ext.run("test", Limit::EVENT, |lua| lua.load("while true do end").exec()).is_err());
         // A handler within its limit runs again and again after a runaway.
-        assert_eq!(ext.run("test", Limit::EVENT, |lua| lua.load("local n = 0 for i = 1, 100000 do n = n + 1 end return n").eval::<i64>()), Ok(100000));
+        assert_eq!(
+            ext.run("test", Limit::EVENT, |lua| lua.load("local n = 0 for i = 1, 100000 do n = n + 1 end return n").eval::<i64>()),
+            Ok(100000)
+        );
     }
     assert!(!ext.is_disabled(), "three faults do not disable");
 }
@@ -220,7 +226,9 @@ fn command_words_and_item_ids_are_validated() {
         let err = load(code).err().unwrap_or_else(|| panic!("{code} should be refused")).to_string();
         assert!(err.contains(what), "{code}: {err}");
     }
-    let ok = load("game.command('good_1', function() end, { staff = 3, help = 'does a thing' }) game.on_item({'1/2', '3/4'}, function() end)").unwrap();
+    let ok =
+        load("game.command('good_1', function() end, { staff = 3, help = 'does a thing' }) game.on_item({'1/2', '3/4'}, function() end)")
+            .unwrap();
     assert_eq!(ok.commands()[0].1.staff, 3);
     assert_eq!(ok.commands()[0].1.help, "does a thing");
     assert_eq!(ok.items(), vec![(1, 2), (3, 4)]);
@@ -228,7 +236,8 @@ fn command_words_and_item_ids_are_validated() {
     // An item that is not in the definitions.
     let exists: Arc<dyn Fn(u8, u8) -> bool + Send + Sync> = Arc::new(|t, i| (t, i) == (1, 2));
     let ctx = LoadContext { item_exists: Some(exists), ..LoadContext::default() };
-    let err = ExtScript::load(&input("t", "game.on_item({'1/2', '9/9'}, function() end)"), &ctx, 16, false).err().expect("refused").to_string();
+    let err =
+        ExtScript::load(&input("t", "game.on_item({'1/2', '9/9'}, function() end)"), &ctx, 16, false).err().expect("refused").to_string();
     assert!(err.contains("item 9/9 does not exist"), "{err}");
     assert!(ExtScript::load(&input("t", "game.on_item({'1/2'}, function() end)"), &ctx, 16, false).is_ok());
 }
@@ -418,7 +427,10 @@ fn game_options_holds_the_values_with_maps_as_a_set_and_is_read_only() {
     inp.options = options::defaults(&specs);
     inp.options[1].value = json!(250);
     let ext = ExtScript::load(&inp, &LoadContext::default(), 16, false).unwrap();
-    assert!(eval::<bool>(&ext, "local o = game.options return o.maps[35] == true and o.maps[41] == true and o.maps[43] == nil and o.maps[36] == nil"));
+    assert!(eval::<bool>(
+        &ext,
+        "local o = game.options return o.maps[35] == true and o.maps[41] == true and o.maps[43] == nil and o.maps[36] == nil"
+    ));
     assert_eq!(eval::<i64>(&ext, "return game.options.gold"), 250);
     assert_eq!(eval::<f64>(&ext, "return game.options.rate"), 0.5);
     assert_eq!(eval::<String>(&ext, "return game.options.text"), "Hello {name}");
@@ -486,7 +498,12 @@ mod layers {
                 ),
                 ext("welcome", &[("text", json!({"type": "string", "default": "Welcome, {name}!", "doc": "d"}))]),
             ],
-            installed: vec![("kill-streak".to_owned(), true), ("welcome".to_owned(), true), ("off".to_owned(), false), ("plain".to_owned(), true)],
+            installed: vec![
+                ("kill-streak".to_owned(), true),
+                ("welcome".to_owned(), true),
+                ("off".to_owned(), false),
+                ("plain".to_owned(), true),
+            ],
             ..ScriptSources::default()
         };
         if let Some(text) = file {
@@ -504,13 +521,21 @@ mod layers {
 
     #[test]
     fn each_layer_lies_over_the_one_below() {
-        let mut s = sources(Some("guild_party_size = 2\n\n[ext.kill-streak]\nbounty_gold = 5000\nannounce_at = [3]\n\n[ext.welcome]\ntext = \"Hi {name}\"\n"));
+        let mut s = sources(Some(
+            "guild_party_size = 2\n\n[ext.kill-streak]\nbounty_gold = 5000\nannounce_at = [3]\n\n[ext.welcome]\ntext = \"Hi {name}\"\n",
+        ));
         let r = resolve_options(&s).unwrap();
-        assert_eq!((value(&r, "kill-streak", "bounty_gold"), value(&r, "kill-streak", "maps")), ((&json!(5000), &Layer::File), (&json!([]), &Layer::Default)));
+        assert_eq!(
+            (value(&r, "kill-streak", "bounty_gold"), value(&r, "kill-streak", "maps")),
+            ((&json!(5000), &Layer::File), (&json!([]), &Layer::Default))
+        );
         assert_eq!(value(&r, "kill-streak", "announce_at"), (&json!([3]), &Layer::File));
         assert_eq!(value(&r, "welcome", "text"), (&json!("Hi {name}"), &Layer::File));
         // The editor beats the file.
-        s.editor = vec![("ext.kill-streak.bounty_gold".to_owned(), "7".to_owned(), Some(14)), ("ext.kill-streak.maps".to_owned(), "[35,\"40-42\"]".to_owned(), None)];
+        s.editor = vec![
+            ("ext.kill-streak.bounty_gold".to_owned(), "7".to_owned(), Some(14)),
+            ("ext.kill-streak.maps".to_owned(), "[35,\"40-42\"]".to_owned(), None),
+        ];
         let r = resolve_options(&s).unwrap();
         assert_eq!(value(&r, "kill-streak", "bounty_gold"), (&json!(7), &Layer::Editor(Some(14))));
         assert_eq!(value(&r, "kill-streak", "maps"), (&json!([35, "40-42"]), &Layer::Editor(None)));
@@ -522,15 +547,24 @@ mod layers {
         assert_eq!(inputs[0].options.iter().find(|o| o.key == "bounty_gold").unwrap().value, json!(7));
         // `game-server config` lists them with their layers.
         let shown = r.show();
-        assert!(shown.contains("[ext.kill-streak]") && shown.contains("bounty_gold = 7") && shown.contains("# data editor (change set 14)"), "{shown}");
+        assert!(
+            shown.contains("[ext.kill-streak]") && shown.contains("bounty_gold = 7") && shown.contains("# data editor (change set 14)"),
+            "{shown}"
+        );
         assert!(shown.contains("announce_at = [3]") && shown.contains("# config file"), "{shown}");
         assert!(shown.contains("text = \"Hi {name}\"") && shown.contains("# config file"), "{shown}");
         assert!(shown.contains("maps = [35, \"40-42\"]") && shown.contains("# data editor\n"), "{shown}");
         let defaults = resolve_options(&sources(None)).unwrap().show();
-        assert!(defaults.contains("bounty_gold = 100000") && defaults.contains("# extension default") && !defaults.contains("config file"), "{defaults}");
+        assert!(
+            defaults.contains("bounty_gold = 100000") && defaults.contains("# extension default") && !defaults.contains("config file"),
+            "{defaults}"
+        );
         // The options as Lua sees them.
         let mut input = inputs.into_iter().next().unwrap();
-        input.scripts = vec![("main.lua".to_owned(), "game.on('login', function() return game.options.bounty_gold + #game.options.announce_at end)".to_owned())];
+        input.scripts = vec![(
+            "main.lua".to_owned(),
+            "game.on('login', function() return game.options.bounty_gold + #game.options.announce_at end)".to_owned(),
+        )];
         let loaded = ExtScript::load(&input, &LoadContext::default(), 16, false).unwrap();
         assert_eq!(loaded.call::<_, i64>("login", Limit::EVENT, ()).unwrap(), Some(8));
     }
@@ -539,12 +573,21 @@ mod layers {
     fn errors_name_the_place_and_the_key() {
         let cases = [
             ("[ext.kill-streak]\nbounty_gold = -5\n", "config/game.toml line 2: ext.kill-streak.bounty_gold: -5 is below 0"),
-            ("\n\n[ext.kill-streak]\nbounty_gold = 200000000\n", "config/game.toml line 4: ext.kill-streak.bounty_gold: 200000000 is above 100000000"),
-            ("[ext.kill-streak]\nbounty_gold = \"lots\"\n", "config/game.toml line 2: ext.kill-streak.bounty_gold: \"lots\" is not a whole number"),
+            (
+                "\n\n[ext.kill-streak]\nbounty_gold = 200000000\n",
+                "config/game.toml line 4: ext.kill-streak.bounty_gold: 200000000 is above 100000000",
+            ),
+            (
+                "[ext.kill-streak]\nbounty_gold = \"lots\"\n",
+                "config/game.toml line 2: ext.kill-streak.bounty_gold: \"lots\" is not a whole number",
+            ),
             ("[ext.kill-streak]\nbounty_gold = 1.5\n", "ext.kill-streak.bounty_gold: 1.5 is not a whole number"),
             ("[ext.kill-streak]\nannounce_at = [1, \"x\"]\n", "line 2: ext.kill-streak.announce_at: \"x\" is not a whole number"),
             ("[ext.kill-streak]\nmaps = [\"9-3\"]\n", "line 2: ext.kill-streak.maps: \"9-3\" is not a map range"),
-            ("[ext.kill-streak]\nnothing = 1\n", "config/game.toml line 2: ext.kill-streak.nothing: the extension kill-streak has no option \"nothing\" (its options: bounty_gold, announce_at, maps)"),
+            (
+                "[ext.kill-streak]\nnothing = 1\n",
+                "config/game.toml line 2: ext.kill-streak.nothing: the extension kill-streak has no option \"nothing\" (its options: bounty_gold, announce_at, maps)",
+            ),
             ("[ext.plain]\nx = 1\n", ""),
             ("[ext.welcome]\ntext = 5\n", "line 2: ext.welcome.text: 5 is not a string"),
             ("[ext.welcome]\ntext = \"caf\\u00e9\"\n", "ext.welcome.text: \"café\" holds a character that is not printable ASCII"),
@@ -563,7 +606,12 @@ mod layers {
         s.editor = vec![("ext.kill-streak.bounty_gold".to_owned(), "-1".to_owned(), Some(14))];
         assert_eq!(resolve_options(&s).unwrap_err().to_string(), "data editor (change set 14): ext.kill-streak.bounty_gold: -1 is below 0");
         s.editor = vec![("ext.welcome.text".to_owned(), "plain words".to_owned(), Some(3))];
-        assert!(resolve_options(&s).unwrap_err().to_string().starts_with("data editor (change set 3): ext.welcome.text: the value \"plain words\" is not JSON"));
+        assert!(
+            resolve_options(&s)
+                .unwrap_err()
+                .to_string()
+                .starts_with("data editor (change set 3): ext.welcome.text: the value \"plain words\" is not JSON")
+        );
         s.editor = vec![("ext.welcome".to_owned(), "1".to_owned(), None)];
         assert!(resolve_options(&s).unwrap_err().to_string().contains("not an extension option"));
     }
@@ -582,15 +630,23 @@ mod layers {
         assert!(w.contains("config/game.toml line 2: [ext.off] is ignored: the extension off is disabled"), "{w}");
         assert!(w.contains("line 4: [ext.gone] is ignored: the extension gone is not installed"), "{w}");
         assert!(w.contains("data editor (change set 2): ext.off.x is ignored: the extension off is disabled"), "{w}");
-        assert!(w.contains("ext.welcome.removed_option is ignored: the extension welcome has no option \"removed_option\" (its options: text)"), "{w}");
+        assert!(
+            w.contains("ext.welcome.removed_option is ignored: the extension welcome has no option \"removed_option\" (its options: text)"),
+            "{w}"
+        );
         assert_eq!(r.warnings.len(), 5);
     }
 
     #[test]
     fn the_file_reads_extension_tables_with_their_lines() {
-        let layer = read_file("g.toml", "guild_party_size = 2\n# c\n[ext.a-b]\nn = 3\ns = \"x\"\nl = [1, \"2-3\"]\nb = true\nf = 0.5\n\n[ext.cd]\nq = 1\n").unwrap();
+        let layer = read_file(
+            "g.toml",
+            "guild_party_size = 2\n# c\n[ext.a-b]\nn = 3\ns = \"x\"\nl = [1, \"2-3\"]\nb = true\nf = 0.5\n\n[ext.cd]\nq = 1\n",
+        )
+        .unwrap();
         assert_eq!(layer.values.len(), 1);
-        let got: Vec<(String, String, serde_json::Value, usize)> = layer.options.iter().map(|o| (o.extension.clone(), o.key.clone(), o.value.clone(), o.line)).collect();
+        let got: Vec<(String, String, serde_json::Value, usize)> =
+            layer.options.iter().map(|o| (o.extension.clone(), o.key.clone(), o.value.clone(), o.line)).collect();
         assert_eq!(
             got,
             [
@@ -622,7 +678,10 @@ mod layers {
             assert!(resolve(&startup, &file(&format!("script_memory_mb = {bad}\n"))).is_err(), "{bad}");
         }
         assert!(crate::config::check_setting("script_memory_mb", "many").is_err());
-        assert!(crate::config::check_setting("script_memory_mb", "256").is_ok() && crate::config::check_setting("script_memory_mb", "1").is_ok());
+        assert!(
+            crate::config::check_setting("script_memory_mb", "256").is_ok()
+                && crate::config::check_setting("script_memory_mb", "1").is_ok()
+        );
     }
 }
 
@@ -640,7 +699,18 @@ mod acting {
     }
 
     fn view(id: u32, name: &str) -> PlayerView {
-        PlayerView { id, name: name.to_owned(), level: 40 + id as u16, country: (id % 2) as u8, map: 1, position: [1.0, 2.5, 3.0], kills: 7, job: 2, staff: 0, guild: (id == 1).then_some(9) }
+        PlayerView {
+            id,
+            name: name.to_owned(),
+            level: 40 + id as u16,
+            country: (id % 2) as u8,
+            map: 1,
+            position: [1.0, 2.5, 3.0],
+            kills: 7,
+            job: 2,
+            staff: 0,
+            guild: (id == 1).then_some(9),
+        }
     }
 
     impl ScriptWorld for Fake {
@@ -720,18 +790,36 @@ mod acting {
     #[test]
     fn the_reads_give_what_the_world_says() {
         let (ext, _) = with_world("");
-        assert_eq!(eval::<String>(&ext, "local p = game.player(1) return p.name .. ' ' .. p.id .. ' ' .. p:level() .. ' ' .. p:faction() .. ' ' .. p:map() .. ' ' .. p:kills() .. ' ' .. p:job() .. ' ' .. p:staff()"), "Alice 1 41 fury 1 7 2 0");
+        assert_eq!(
+            eval::<String>(
+                &ext,
+                "local p = game.player(1) return p.name .. ' ' .. p.id .. ' ' .. p:level() .. ' ' .. p:faction() .. ' ' .. p:map() .. ' ' .. p:kills() .. ' ' .. p:job() .. ' ' .. p:staff()"
+            ),
+            "Alice 1 41 fury 1 7 2 0"
+        );
         assert_eq!(eval::<String>(&ext, "local x, y, z = game.player(2):position() return x .. ',' .. y .. ',' .. z"), "1,2.5,3");
         assert_eq!(eval::<String>(&ext, "return game.player(2):faction()"), "light");
         assert_eq!(eval::<i64>(&ext, "return game.player(1):guild()"), 9);
-        assert!(eval::<bool>(&ext, "return game.player(2):guild() == nil and game.player(99) == nil and game.player(-1) == nil and game.player(1.5) == nil"));
+        assert!(eval::<bool>(
+            &ext,
+            "return game.player(2):guild() == nil and game.player(99) == nil and game.player(-1) == nil and game.player(1.5) == nil"
+        ));
         assert!(eval::<bool>(&ext, "return game.find('bOB').id == 2 and game.find('nobody') == nil"));
         assert_eq!(eval::<i64>(&ext, "return #game.online() * 10 + game.online_count()"), 33);
-        assert!(eval::<bool>(&ext, "return game.player(1) == game.find('alice') and game.player(1) ~= game.player(2) and tostring(game.player(3)) == 'Carol'"), "handles compare by id");
+        assert!(
+            eval::<bool>(
+                &ext,
+                "return game.player(1) == game.find('alice') and game.player(1) ~= game.player(2) and tostring(game.player(3)) == 'Carol'"
+            ),
+            "handles compare by id"
+        );
         assert_eq!(eval::<i64>(&ext, "local m = game.player(2):party() return #m * 100 + m[1].id * 10 + m[2].id"), 212);
         assert_eq!(eval::<i64>(&ext, "return #game.player(3):party()"), 1);
         assert!(eval::<bool>(&ext, "return game.player(1):online() and game.player(1):has_feature('x') == false"));
-        assert!(eval::<bool>(&ext, "return game.item_name(25, 1) == 'Potion' and game.item_name(1, 1) == nil and game.mob_name(7) == 'Boar' and game.mob_name(8) == nil"));
+        assert!(eval::<bool>(
+            &ext,
+            "return game.item_name(25, 1) == 'Potion' and game.item_name(1, 1) == nil and game.mob_name(7) == 'Boar' and game.mob_name(8) == nil"
+        ));
         assert_eq!(eval::<String>(&ext, "local c = game.commands()[1] return c.word .. c.help .. c.staff"), "hisays hi0");
         // An offline player reads nil (the handle of a player that the world no longer has).
         let offline = "local p = game.player(1) p.id = 77 return p:level() == nil and p:map() == nil and p:online() == false";
@@ -766,7 +854,8 @@ mod acting {
         ] {
             // A fault each: a state of its own keeps them from adding up to a disabled extension.
             let (fresh, _) = with_world("");
-            let error = fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code} should fail")).to_string();
+            let error =
+                fresh.run("t", Limit::EVENT, |lua| lua.load(code).exec()).err().unwrap_or_else(|| panic!("{code} should fail")).to_string();
             assert!(error.contains(expect), "{code}: {error}");
         }
     }
@@ -831,7 +920,10 @@ mod acting {
         let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
         run("local ids = game.spawn(7, 3, 35, 100.5, 200, { lifetime = 60, radius = 0, drops = false }) assert(#ids == 3 and ids[3] == 3) assert(game.alive(ids) == 2) assert(game.despawn(ids) == 3)").unwrap();
         run("game.spawn(7, 1, 1, 0, 0, { lifetime = 10 })").unwrap();
-        assert_eq!(fake.sent.lock().unwrap().as_slice(), ["spawn t 7 x3 map 35 at 100.5,200 r0 60s exp true drops false", "spawn t 7 x1 map 1 at 0,0 r10 10s exp true drops true"]);
+        assert_eq!(
+            fake.sent.lock().unwrap().as_slice(),
+            ["spawn t 7 x3 map 35 at 100.5,200 r0 60s exp true drops false", "spawn t 7 x1 map 1 at 0,0 r10 10s exp true drops true"]
+        );
         assert_eq!(ext.spawn_count(), 7);
         for (code, expect) in [
             ("game.spawn(7, 51, 1, 0, 0, { lifetime = 60 })", "from 1 to 50"),
@@ -869,7 +961,8 @@ mod acting {
             ext
         };
         let fire = |event: Event, payload: Payload| {
-            let _ = set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &*set.shared().world, &payload));
+            let _ =
+                set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &*set.shared().world, &payload));
         };
         fire(Event::Kill, Payload::Kill { p: a.clone(), mob: mob.clone(), near: vec![a.clone(), b.clone()] });
         fire(Event::PvpKill, Payload::PvpKill { killer: a.clone(), victim: b.clone(), last_hit: None, near: vec![a.clone()] });
@@ -981,7 +1074,10 @@ mod stored {
         store.begin_char(2, vec![("t".into(), "streak".into(), json!(4))]);
         assert_eq!(eval::<f64>(&ext, "return game.player(2):get('streak')"), 4.0);
         assert!(eval::<bool>(&ext, "return game.player(2):get('nothing') == nil and game.player(3):get('streak') == nil"));
-        run_ok(&ext, "local p = game.player(2) p:set('streak', p:get('streak') + 1) p:set('name', 'Bob') p:set('ok', true) p:set('half', 0.5)");
+        run_ok(
+            &ext,
+            "local p = game.player(2) p:set('streak', p:get('streak') + 1) p:set('name', 'Bob') p:set('ok', true) p:set('half', 0.5)",
+        );
         assert_eq!(store.get("t", 2, "streak"), Some(json!(5)), "whole numbers are kept whole");
         assert_eq!(store.get("t", 2, "half"), Some(json!(0.5)));
         assert!(eval::<bool>(&ext, "local p = game.player(2) return p:get('name') == 'Bob' and p:get('ok') == true"));
@@ -1079,7 +1175,9 @@ mod points {
             ("b", "game.on('exp', function(p, gain, source) game.set('seen', gain .. source) return 3 end)"),
             ("c", "game.on('exp', function() end)"),
         ]);
-        let f = set.factor(Point::Exp, 100.0, &|lua, gain| Ok(MultiValue::from_iter([Value::Integer(1), Value::Number(gain), Value::String(lua.create_string("mob")?)])));
+        let f = set.factor(Point::Exp, 100.0, &|lua, gain| {
+            Ok(MultiValue::from_iter([Value::Integer(1), Value::Number(gain), Value::String(lua.create_string("mob")?)]))
+        });
         assert_eq!(f, 6.0);
         assert_eq!(set.extensions()[0].shared().store.get_global("a", "seen"), Some(json!("100mob")));
         assert_eq!(set.extensions()[1].shared().store.get_global("b", "seen"), Some(json!("200mob")), "b hears 100 x 2");
@@ -1088,7 +1186,8 @@ mod points {
         assert_eq!(none.factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 1.0);
         assert_eq!(ScriptSet::empty().factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 1.0);
         // Factors may be fractions and 0.
-        let half = super::points::set(&[("a", "game.on('exp', function() return 0.5 end)"), ("b", "game.on('exp', function() return 0 end)")]);
+        let half =
+            super::points::set(&[("a", "game.on('exp', function() return 0.5 end)"), ("b", "game.on('exp', function() return 0 end)")]);
         assert_eq!(half.factor(Point::Exp, 5.0, &|_, _| Ok(MultiValue::new())), 0.0);
     }
 
@@ -1114,8 +1213,14 @@ mod points {
     #[test]
     fn kills_deaths_and_jumps_combine_as_the_text_says() {
         let s = super::points::set(&[
-            ("a", "game.on('pvp_kills', function(p, times) game.set('t', times) return 2 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 3 end)"),
-            ("b", "game.on('pvp_kills', function(p, times) game.set('t', times) return 5 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 4 end)"),
+            (
+                "a",
+                "game.on('pvp_kills', function(p, times) game.set('t', times) return 2 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 3 end)",
+            ),
+            (
+                "b",
+                "game.on('pvp_kills', function(p, times) game.set('t', times) return 5 end) game.on('enchant', function(p, item, jump) game.set('j', jump) return 4 end)",
+            ),
         ]);
         let times = s.times(3, &|_, t| Ok(MultiValue::from_iter([Value::Integer(1), Value::Integer(i64::from(t))])));
         assert_eq!(times, 10, "2 x 5 multiply");
@@ -1127,7 +1232,10 @@ mod points {
         let zero = super::points::set(&[("a", "game.on('pvp_kills', function() return 0 end)")]);
         assert_eq!(zero.times(1, &|_, _| Ok(MultiValue::new())), 0);
         // A death is not counted when any extension says false.
-        let d = super::points::set(&[("a", "game.on('pvp_death', function() return true end)"), ("b", "game.on('pvp_death', function() return false end)")]);
+        let d = super::points::set(&[
+            ("a", "game.on('pvp_death', function() return true end)"),
+            ("b", "game.on('pvp_death', function() return false end)"),
+        ]);
         assert!(!d.death_counts(&|_| Ok(MultiValue::new())));
         assert!(super::points::set(&[("a", "game.on('pvp_death', function() end)")]).death_counts(&|_| Ok(MultiValue::new())));
         assert!(ScriptSet::empty().death_counts(&|_| Ok(MultiValue::new())));
@@ -1135,7 +1243,10 @@ mod points {
 
     #[test]
     fn an_item_is_used_kept_refused_or_left_to_the_core() {
-        let s = set(&[("a", "game.on_item({'25/1'}, function(p, item) if item.count == 1 then return 'use' elseif item.count == 2 then return 'keep' elseif item.count == 3 then return false, 'Not now' elseif item.count == 4 then return 'wat' elseif item.count == 5 then error('boom') end end)")]);
+        let s = set(&[(
+            "a",
+            "game.on_item({'25/1'}, function(p, item) if item.count == 1 then return 'use' elseif item.count == 2 then return 'keep' elseif item.count == 3 then return false, 'Not now' elseif item.count == 4 then return 'wat' elseif item.count == 5 then error('boom') end end)",
+        )]);
         let ask = |count: i64| {
             s.extensions()[0].item_use(25, 1, &|lua| {
                 let t = lua.create_table()?;
@@ -1156,7 +1267,10 @@ mod points {
 
     #[test]
     fn a_point_in_an_endless_loop_ends_within_its_limit_and_counts_a_fault() {
-        let s = set(&[("a", "game.on('chat', function() while true do end end)"), ("b", "game.on('chat', function() return false, 'second' end)")]);
+        let s = set(&[
+            ("a", "game.on('chat', function() while true do end end)"),
+            ("b", "game.on('chat', function() return false, 'second' end)"),
+        ]);
         let t = std::time::Instant::now();
         let refusal = s.refuse(Point::Chat, &args).expect("b still refuses");
         assert!(t.elapsed() < Duration::from_secs(1), "{:?}", t.elapsed());

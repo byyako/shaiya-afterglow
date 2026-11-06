@@ -63,7 +63,10 @@ pub fn valid_name(name: &str) -> bool {
 /// A script path: `^[a-z0-9_-]+(/[a-z0-9_-]+)*\.lua$`.
 pub fn valid_script_path(path: &str) -> bool {
     let Some(stem) = path.strip_suffix(".lua") else { return false };
-    !stem.is_empty() && stem.split('/').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-'))
+    !stem.is_empty()
+        && stem
+            .split('/')
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-'))
 }
 
 fn string(table: &Table, key: &str, required: bool) -> Result<Option<String>, String> {
@@ -78,10 +81,9 @@ fn string(table: &Table, key: &str, required: bool) -> Result<Option<String>, St
 fn strings(table: &Table, key: &str) -> Result<Vec<String>, String> {
     match table.get(key) {
         None => Ok(Vec::new()),
-        Some(toml::Value::Array(items)) => items
-            .iter()
-            .map(|v| v.as_str().map(str::to_owned).ok_or_else(|| format!("`{key}` must be a list of strings")))
-            .collect(),
+        Some(toml::Value::Array(items)) => {
+            items.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| format!("`{key}` must be a list of strings"))).collect()
+        }
         Some(other) => Err(format!("`{key}` must be a list, not {}", other.type_str())),
     }
 }
@@ -128,13 +130,33 @@ impl Manifest {
             }
             Some(other) => return Err(format!("`format` must be {FORMAT}, not {other}")),
         }
-        only_keys(&table, &["format", "name", "version", "title", "description", "authors", "license", "ids", "settings", "rules", "api", "scripts", "options", "client"], "the manifest")?;
+        only_keys(
+            &table,
+            &[
+                "format",
+                "name",
+                "version",
+                "title",
+                "description",
+                "authors",
+                "license",
+                "ids",
+                "settings",
+                "rules",
+                "api",
+                "scripts",
+                "options",
+                "client",
+            ],
+            "the manifest",
+        )?;
         let name = string(&table, "name", true)?.unwrap_or_default();
         if !valid_name(&name) {
             return Err(format!("name {name:?} must match ^[a-z][a-z0-9-]{{1,39}}$"));
         }
         let version_text = string(&table, "version", true)?.unwrap_or_default();
-        let version = semver::Version::parse(&version_text).map_err(|e| format!("version {version_text:?} is not a semantic version: {e}"))?;
+        let version =
+            semver::Version::parse(&version_text).map_err(|e| format!("version {version_text:?} is not a semantic version: {e}"))?;
         let title = string(&table, "title", true)?.unwrap_or_default();
         let description = string(&table, "description", true)?.unwrap_or_default();
         let _ = strings(&table, "authors")?;
@@ -178,7 +200,8 @@ impl Manifest {
             features = strings(client, "features").map_err(|e| format!("[client] {e}"))?;
             if let Some(toml::Value::Array(list)) = client.get("art") {
                 for (n, entry) in list.iter().enumerate() {
-                    let entry = entry.as_table().ok_or_else(|| format!("[client] art #{}: must be {{ member = \"…\", file = \"…\" }}", n + 1))?;
+                    let entry =
+                        entry.as_table().ok_or_else(|| format!("[client] art #{}: must be {{ member = \"…\", file = \"…\" }}", n + 1))?;
                     only_keys(entry, &["member", "file"], &format!("[client] art #{}", n + 1))?;
                     let member = string(entry, "member", true).map_err(|e| format!("[client] art #{}: {e}", n + 1))?.unwrap_or_default();
                     let file = string(entry, "file", true).map_err(|e| format!("[client] art #{}: {e}", n + 1))?.unwrap_or_default();
@@ -210,7 +233,9 @@ fn scripts_part(table: &Table) -> Result<(Option<u32>, Vec<String>, BTreeMap<Str
             for v in items {
                 let Some(path) = v.as_str() else { return Err("`scripts` must be a list of strings".into()) };
                 if !valid_script_path(path) {
-                    return Err(format!("scripts: {path:?} is not a script path (^[a-z0-9_-]+(/[a-z0-9_-]+)*\\.lua$, inside the extension's folder)"));
+                    return Err(format!(
+                        "scripts: {path:?} is not a script path (^[a-z0-9_-]+(/[a-z0-9_-]+)*\\.lua$, inside the extension's folder)"
+                    ));
                 }
                 if out.iter().any(|p| p == path) {
                     return Err(format!("scripts: {path:?} is listed twice"));
@@ -368,11 +393,23 @@ doc = "Gold."
             (format!("{head}api = 1\nscripts = [\"a//b.lua\"]\n"), "is not a script path"),
             (format!("{head}api = 1\nscripts = [\"main.lua\", \"main.lua\"]\n"), "listed twice"),
             (format!("{head}api = 1\nscripts = [1]\n"), "list of strings"),
-            (format!("{head}api = 1\nscripts = [{}]\n", (0..65).map(|i| format!("\"f{i}.lua\"")).collect::<Vec<_>>().join(", ")), "1 to 64 files"),
+            (
+                format!("{head}api = 1\nscripts = [{}]\n", (0..65).map(|i| format!("\"f{i}.lua\"")).collect::<Vec<_>>().join(", ")),
+                "1 to 64 files",
+            ),
             (format!("{head}{}", opt.trim_start()), "[options] without `scripts`"),
-            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.X]\ntype = \"integer\"\ndefault = 1\ndoc = \"d\"\n"), "[options.X]: the key must match"),
-            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = \"a\"\ndoc = \"d\"\n"), "[options.x]: default:"),
-            (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = 1\n"), "[options.x]: doc is required"),
+            (
+                format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.X]\ntype = \"integer\"\ndefault = 1\ndoc = \"d\"\n"),
+                "[options.X]: the key must match",
+            ),
+            (
+                format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = \"a\"\ndoc = \"d\"\n"),
+                "[options.x]: default:",
+            ),
+            (
+                format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options.x]\ntype = \"integer\"\ndefault = 1\n"),
+                "[options.x]: doc is required",
+            ),
             (format!("{head}api = 1\nscripts = [\"m.lua\"]\n[options]\nx = 1\n"), "[options.x] must be a table"),
         ];
         for (text, needle) in cases {
@@ -383,7 +420,9 @@ doc = "Gold."
         let many: String = (0..65).map(|i| format!("[options.o{i}]\ntype = \"boolean\"\ndefault = true\ndoc = \"d\"\n")).collect();
         let error = Manifest::parse(&format!("{head}api = 1\nscripts = [\"m.lua\"]\n{many}")).unwrap_err();
         assert!(error.contains("at most 64 options"), "{error}");
-        assert!(valid_script_path("a.lua") && valid_script_path("a/b-c_d/e1.lua") && !valid_script_path(".lua") && !valid_script_path("a/.lua"));
+        assert!(
+            valid_script_path("a.lua") && valid_script_path("a/b-c_d/e1.lua") && !valid_script_path(".lua") && !valid_script_path("a/.lua")
+        );
     }
 
     #[test]

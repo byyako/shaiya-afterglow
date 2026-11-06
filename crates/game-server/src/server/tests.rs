@@ -111,7 +111,20 @@ fn script_commands_are_parsed_from_chat_lines() {
     assert_eq!(cmd(b"<<012c05!hi there\0"), Some(("hi".into(), "there".into())));
     assert_eq!(cmd(b"<<012c05!hi"), Some(("hi".into(), String::new())));
     // Not commands: the whisper prefix (a space), no word, a word with other characters, a marker that is not one, text before it.
-    for text in [&b"! name text"[..], b"!", b"!\0", b"!bad-word x", b"!hi,there", b"<<12c05!hi", b"<<012x05!hi", b"<<012c0", b"hello !hi", b" !hi", b"", b"!!hi"] {
+    for text in [
+        &b"! name text"[..],
+        b"!",
+        b"!\0",
+        b"!bad-word x",
+        b"!hi,there",
+        b"<<12c05!hi",
+        b"<<012x05!hi",
+        b"<<012c0",
+        b"hello !hi",
+        b" !hi",
+        b"",
+        b"!!hi",
+    ] {
         assert_eq!(cmd(text), None, "{:?}", String::from_utf8_lossy(text));
     }
     // The text is cut at its first zero.

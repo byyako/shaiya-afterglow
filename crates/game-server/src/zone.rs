@@ -55,7 +55,6 @@ mod trade;
 mod vehicle;
 
 pub use admin::{AdminOrder, BanKind, Bans, CureKind, usable_def};
-pub use script::{SPAWNS_ALIVE, SPAWNS_PER_CALL};
 pub use items::Member;
 use monsters::{
     fight_turn, find_target, go_home, mob_enter, mob_strike, mobs_in_view, paced_next, retarget, set_target, stop_moving, take_target,
@@ -63,6 +62,7 @@ use monsters::{
 };
 pub use party::Invitee;
 pub use pvp::{Verdict, same_side};
+pub use script::{SPAWNS_ALIVE, SPAWNS_PER_CALL};
 pub use vehicle::{Mount, Riding};
 
 /// Side of a cell (`CZone::Create`).
@@ -1163,7 +1163,11 @@ impl<R: FnMut() -> u32> Effect<'_, '_, R> {
             id: self.zones.last_field_id.fetch_add(1, Ordering::Relaxed) + 1,
             owner: caster,
             country: self.cast.country,
-            owner_who: self.players.get(&caster).map(pvp::who).unwrap_or(crate::rules::Who { level: 1, kills: 0, country: self.cast.country }),
+            owner_who: self.players.get(&caster).map(pvp::who).unwrap_or(crate::rules::Who {
+                level: 1,
+                kills: 0,
+                country: self.cast.country,
+            }),
             skill: *s,
             position: self.at,
             cell: self.cell,

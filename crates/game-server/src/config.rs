@@ -152,49 +152,229 @@ const fn s(name: &'static str, default: &'static str, kind: Kind, doc: &'static 
 
 /// Every game setting, in the order the example file lists them. Any other name is refused wherever it appears.
 pub const SETTINGS: &[Setting] = &[
-    s("check_ip", "true", Kind::Flag, "The game connection must come from the address the account logged in from (the original did not check).", any),
+    s(
+        "check_ip",
+        "true",
+        Kind::Flag,
+        "The game connection must come from the address the account logged in from (the original did not check).",
+        any,
+    ),
     s("heartbeat_secs", "5", Kind::Number, "Seconds between the writes of the player count and liveness to game_servers.", uint::<u64>),
-    s("handshake_secs", "30", Kind::Number, "Seconds allowed for the whole handshake from the connect (the original: no deadline).", uint::<u64>),
-    s("idle_secs", "600", Kind::Number, "Seconds of silence allowed after the handshake, counted from the client's last bytes.", uint::<u64>),
+    s(
+        "handshake_secs",
+        "30",
+        Kind::Number,
+        "Seconds allowed for the whole handshake from the connect (the original: no deadline).",
+        uint::<u64>,
+    ),
+    s(
+        "idle_secs",
+        "600",
+        Kind::Number,
+        "Seconds of silence allowed after the handshake, counted from the client's last bytes.",
+        uint::<u64>,
+    ),
     s("max_per_ip", "8", Kind::Number, "Simultaneous connections from one address; the rest are closed unread.", uint::<usize>),
-    s("connects_per_minute", "30", Kind::Number, "New connections one address may open in a minute; the rest are closed unread.", uint::<u32>),
-    s("write_timeout_secs", "20", Kind::Number, "A client that does not take a packet in this many seconds is disconnected as a lost connection.", uint::<u64>),
-    s("outbox_limit", "4194304", Kind::Number, "Bytes of packets queued for one connection before it counts as not keeping up and ends.", uint::<usize>),
-    s("chat_per_sec", "3", Kind::Number, "Lines a second for the chat channels without a cooldown; extra lines are dropped. 0 turns the limit off.", uint::<u32>),
+    s(
+        "connects_per_minute",
+        "30",
+        Kind::Number,
+        "New connections one address may open in a minute; the rest are closed unread.",
+        uint::<u32>,
+    ),
+    s(
+        "write_timeout_secs",
+        "20",
+        Kind::Number,
+        "A client that does not take a packet in this many seconds is disconnected as a lost connection.",
+        uint::<u64>,
+    ),
+    s(
+        "outbox_limit",
+        "4194304",
+        Kind::Number,
+        "Bytes of packets queued for one connection before it counts as not keeping up and ends.",
+        uint::<usize>,
+    ),
+    s(
+        "chat_per_sec",
+        "3",
+        Kind::Number,
+        "Lines a second for the chat channels without a cooldown; extra lines are dropped. 0 turns the limit off.",
+        uint::<u32>,
+    ),
     s("chat_burst", "5", Kind::Number, "The burst of the chat limit above.", uint::<u32>),
-    s("packets_per_sec", "100", Kind::Number, "Packets a second a connection may send, with a burst of twice that; over it for 5 seconds ends the connection. 0 turns the limit off.", uint::<u32>),
+    s(
+        "packets_per_sec",
+        "100",
+        Kind::Number,
+        "Packets a second a connection may send, with a burst of twice that; over it for 5 seconds ends the connection. 0 turns the limit off.",
+        uint::<u32>,
+    ),
     s("db_pool", "24", Kind::Number, "The database pool's size (PostgreSQL allows 100 connections by default).", uint::<u32>),
     s("db_acquire_secs", "10", Kind::Number, "Seconds a query waits for a connection from the pool.", uint::<u64>),
-    s("delete_delay_secs", "7200", Kind::Number, "A character deletion request takes effect after this many seconds (as in the original).", uint::<u64>),
-    s("logout_secs", "10", Kind::Number, "A logout request (exit to character selection or quit) takes effect after this many seconds (as in the original).", uint::<u64>),
-    s("linger_secs", "10", Kind::Number, "A character whose connection ended in the world stays there this many seconds (as in the original).", uint::<u64>),
-    s("kick_notice_secs", "3", Kind::Number, "After an operator's kick or ban notice the connection stays open this many seconds so the client shows it; 0 closes at once.", uint::<u64>),
+    s(
+        "delete_delay_secs",
+        "7200",
+        Kind::Number,
+        "A character deletion request takes effect after this many seconds (as in the original).",
+        uint::<u64>,
+    ),
+    s(
+        "logout_secs",
+        "10",
+        Kind::Number,
+        "A logout request (exit to character selection or quit) takes effect after this many seconds (as in the original).",
+        uint::<u64>,
+    ),
+    s(
+        "linger_secs",
+        "10",
+        Kind::Number,
+        "A character whose connection ended in the world stays there this many seconds (as in the original).",
+        uint::<u64>,
+    ),
+    s(
+        "kick_notice_secs",
+        "3",
+        Kind::Number,
+        "After an operator's kick or ban notice the connection stays open this many seconds so the client shows it; 0 closes at once.",
+        uint::<u64>,
+    ),
     s("move_check", "true", Kind::Flag, "The move speed check, as the original; false leaves only the 35-unit step check.", any),
-    s("smooth_chase", "true", Kind::Flag, "Running steps (chasing, guards, walking NPCs) wait for the client's own walking time, so they move without stops; false keeps the original's waits.", any),
+    s(
+        "smooth_chase",
+        "true",
+        Kind::Flag,
+        "Running steps (chasing, guards, walking NPCs) wait for the client's own walking time, so they move without stops; false keeps the original's waits.",
+        any,
+    ),
     s("log", "true", Kind::Flag, "The game log: what the original sent to its log server is written to PostgreSQL (game_log).", any),
-    s("chat_log", "true", Kind::Flag, "The chat log: every chat line of types 1 to 7, whispers and staff chat included, as the original.", any),
-    s("log_days", "0", Kind::Number, "Rows of the game log and the chat log older than this many days are deleted daily; 0 keeps them.", uint::<u32>),
+    s(
+        "chat_log",
+        "true",
+        Kind::Flag,
+        "The chat log: every chat line of types 1 to 7, whispers and staff chat included, as the original.",
+        any,
+    ),
+    s(
+        "log_days",
+        "0",
+        Kind::Number,
+        "Rows of the game log and the chat log older than this many days are deleted daily; 0 keeps them.",
+        uint::<u32>,
+    ),
     s("item_mall", "true", Kind::Flag, "The item mall sells and sends gifts; false refuses both, as the original's g_bDisableShop.", any),
-    s("town_secs", "10", Kind::Number, "/town moves the player to the map's bind position after this many seconds standing still (as in the original).", uint::<u64>),
-    s("handshake_wait_secs", "15", Kind::Number, "A new connection of an account whose older one is still leaving waits this many seconds for it (the original: refused at once).", uint::<u64>),
-    s("trade_chat_min_level", "10", Kind::Number, "Trade chat ($, faction-wide): the lowest level, as the US client limits it; 0 turns the limit off.", uint::<u16>),
+    s(
+        "town_secs",
+        "10",
+        Kind::Number,
+        "/town moves the player to the map's bind position after this many seconds standing still (as in the original).",
+        uint::<u64>,
+    ),
+    s(
+        "handshake_wait_secs",
+        "15",
+        Kind::Number,
+        "A new connection of an account whose older one is still leaving waits this many seconds for it (the original: refused at once).",
+        uint::<u64>,
+    ),
+    s(
+        "trade_chat_min_level",
+        "10",
+        Kind::Number,
+        "Trade chat ($, faction-wide): the lowest level, as the US client limits it; 0 turns the limit off.",
+        uint::<u16>,
+    ),
     s("trade_chat_cooldown_secs", "5", Kind::Number, "Trade chat: seconds between two messages; 0 turns the limit off.", uint::<u64>),
-    s("cross_faction_trade_maps", "", Kind::Text, "Maps (ids, e.g. [42] for the Auction House) where players of both factions may trade; none, as the original.", maps_ok),
-    s("market_maps", "", Kind::Text, "Maps (ids, e.g. [35, 36, 42]) where a personal shop may be set up; empty for every map, as the original.", maps_ok),
-    s("guild_party_size", "7", Kind::Number, "The party size needed to create a guild (the original: exactly 7); 1 or 0 lets a player create one alone.", uint::<usize>),
+    s(
+        "cross_faction_trade_maps",
+        "",
+        Kind::Text,
+        "Maps (ids, e.g. [42] for the Auction House) where players of both factions may trade; none, as the original.",
+        maps_ok,
+    ),
+    s(
+        "market_maps",
+        "",
+        Kind::Text,
+        "Maps (ids, e.g. [35, 36, 42]) where a personal shop may be set up; empty for every map, as the original.",
+        maps_ok,
+    ),
+    s(
+        "guild_party_size",
+        "7",
+        Kind::Number,
+        "The party size needed to create a guild (the original: exactly 7); 1 or 0 lets a player create one alone.",
+        uint::<usize>,
+    ),
     s("kill_count", "true", Kind::Flag, "The factions' kill counts move with player kills, as the original's console default.", any),
-    s("ranking_times", "", Kind::Text, "The guild ranking battle's open times as (weekday,hour,hours) entries, e.g. \"(1,14,1),(3,10,2)\"; empty keeps map 50's own. A test override.", ranking_times_ok),
-    s("ranking_update_delay_secs", "1800", Kind::Number, "Seconds after the ranking battle closes until the ranking is updated (as in the original).", uint::<u64>),
-    s("exp_rate", "1", Kind::Number, "The monster experience event's factor at start, 0 or more; the console's exp changes it until the next start.", exp_rate_ok),
-    s("kill_rate", "1", Kind::Number, "What each counted player kill adds to the killer's kills, 1 to 100; the console's killrate changes it.", kill_rate_ok),
-    s("kill_boost_skills", "", Kind::Text, "A shorthand for the kill boost: id[/level][:times], comma-separated, e.g. \"200/1:2,200/2:5\". At start each entry gives those skills a kill_boost ability, which multiplies a counted kill while the skill is applied; an extension's rows can give the same ability (docs/server/effects.md).", kill_boosts_ok),
-    s("mini_game", "true", Kind::Flag, "The gambling house: places its NPCs and handles the slot machine and the card double-up; false hides the NPCs, as the original does.", any),
-    s("slot_payout_percent", "100", Kind::Number, "Each winning slot line pays multiplier x bet x this / 100, 1 to 1000; 100 is the original's table (about 41 % back), 220 about 90 %.", slot_payout_ok),
-    s("card_win_chances", "400,200,100,50,10", Kind::Text, "The double-up's chance in per mille, rounds 1 to 5, that the card falls on the guessed side; the default is the original's.", card_win_ok),
+    s(
+        "ranking_times",
+        "",
+        Kind::Text,
+        "The guild ranking battle's open times as (weekday,hour,hours) entries, e.g. \"(1,14,1),(3,10,2)\"; empty keeps map 50's own. A test override.",
+        ranking_times_ok,
+    ),
+    s(
+        "ranking_update_delay_secs",
+        "1800",
+        Kind::Number,
+        "Seconds after the ranking battle closes until the ranking is updated (as in the original).",
+        uint::<u64>,
+    ),
+    s(
+        "exp_rate",
+        "1",
+        Kind::Number,
+        "The monster experience event's factor at start, 0 or more; the console's exp changes it until the next start.",
+        exp_rate_ok,
+    ),
+    s(
+        "kill_rate",
+        "1",
+        Kind::Number,
+        "What each counted player kill adds to the killer's kills, 1 to 100; the console's killrate changes it.",
+        kill_rate_ok,
+    ),
+    s(
+        "kill_boost_skills",
+        "",
+        Kind::Text,
+        "A shorthand for the kill boost: id[/level][:times], comma-separated, e.g. \"200/1:2,200/2:5\". At start each entry gives those skills a kill_boost ability, which multiplies a counted kill while the skill is applied; an extension's rows can give the same ability (docs/server/effects.md).",
+        kill_boosts_ok,
+    ),
+    s(
+        "mini_game",
+        "true",
+        Kind::Flag,
+        "The gambling house: places its NPCs and handles the slot machine and the card double-up; false hides the NPCs, as the original does.",
+        any,
+    ),
+    s(
+        "slot_payout_percent",
+        "100",
+        Kind::Number,
+        "Each winning slot line pays multiplier x bet x this / 100, 1 to 1000; 100 is the original's table (about 41 % back), 220 about 90 %.",
+        slot_payout_ok,
+    ),
+    s(
+        "card_win_chances",
+        "400,200,100,50,10",
+        Kind::Text,
+        "The double-up's chance in per mille, rounds 1 to 5, that the card falls on the guessed side; the default is the original's.",
+        card_win_ok,
+    ),
     s("console_level", "1", Kind::Number, "1 to 5: staff levels 1 to this may type .command lines in the game.", console_level_ok),
     s("max_connections", "5000", Kind::Number, "Total connections.", uint::<usize>),
     s("scripts", "true", Kind::Flag, "The enabled extensions' Lua scripts run; false loads no script at all (an operator's switch).", any),
-    s("script_memory_mb", "16", Kind::Number, "The memory limit of one extension's Lua state in MB, 1 to 256; a script past it is an error and disables its extension.", script_memory_ok),
+    s(
+        "script_memory_mb",
+        "16",
+        Kind::Number,
+        "The memory limit of one extension's Lua state in MB, 1 to 256; a script past it is an error and disables its extension.",
+        script_memory_ok,
+    ),
 ];
 
 /// The setting called `name`.
@@ -350,7 +530,8 @@ pub const DEFAULT_CONFIG: &str = "config/game.toml";
 
 impl Startup {
     pub fn from_env() -> Result<Self> {
-        let vars: Vec<(String, String)> = std::env::vars_os().filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))).collect();
+        let vars: Vec<(String, String)> =
+            std::env::vars_os().filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))).collect();
         Self::from_vars(&vars)
     }
 
@@ -413,17 +594,23 @@ fn toml_to_json(value: &toml::Value) -> Result<serde_json::Value, String> {
     Ok(match value {
         toml::Value::String(s) => Value::String(s.clone()),
         toml::Value::Integer(i) => Value::from(*i),
-        toml::Value::Float(f) => Value::Number(serde_json::Number::from_f64(*f).ok_or_else(|| format!("{f} is not a number a rule can hold"))?),
+        toml::Value::Float(f) => {
+            Value::Number(serde_json::Number::from_f64(*f).ok_or_else(|| format!("{f} is not a number a rule can hold"))?)
+        }
         toml::Value::Boolean(b) => Value::Bool(*b),
         toml::Value::Array(items) => Value::Array(items.iter().map(toml_to_json).collect::<Result<_, _>>()?),
-        toml::Value::Table(table) => Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_to_json(v)?))).collect::<Result<_, String>>()?),
+        toml::Value::Table(table) => {
+            Value::Object(table.iter().map(|(k, v)| Ok((k.clone(), toml_to_json(v)?))).collect::<Result<_, String>>()?)
+        }
         toml::Value::Datetime(_) => return Err("a date cannot be in a rule".into()),
     })
 }
 
 fn valid_extension_name(name: &str) -> bool {
     let bytes = name.as_bytes();
-    (2..=40).contains(&bytes.len()) && bytes[0].is_ascii_lowercase() && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+    (2..=40).contains(&bytes.len())
+        && bytes[0].is_ascii_lowercase()
+        && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
 fn line_of(text: &str, offset: usize) -> usize {
@@ -435,7 +622,8 @@ fn line_of(text: &str, offset: usize) -> usize {
 pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
     let fail = |line: usize, message: String| anyhow::anyhow!("{path} line {line}: {message}");
     let spans = toml::de::DeTable::parse(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
-    let values: toml::Table = toml::from_str(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
+    let values: toml::Table =
+        toml::from_str(text).map_err(|e| fail(e.span().map_or(1, |s| line_of(text, s.start)), e.message().to_owned()))?;
     let mut file = FileLayer { path: path.to_owned(), values: Vec::new(), rules: Vec::new(), options: Vec::new() };
     for (key, value) in spans.get_ref().iter() {
         let name: &str = key.get_ref();
@@ -478,10 +666,13 @@ pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
                         return Err(fail(rule_line, format!("rules.{rule_name}: a rule is a table, [rules.{rule_name}]")));
                     };
                     let key_lines = match rule_value.get_ref() {
-                        toml::de::DeValue::Table(keys) => keys.iter().map(|(k, _)| (k.get_ref().to_string(), line_of(text, k.span().start))).collect(),
+                        toml::de::DeValue::Table(keys) => {
+                            keys.iter().map(|(k, _)| (k.get_ref().to_string(), line_of(text, k.span().start))).collect()
+                        }
                         _ => Vec::new(),
                     };
-                    let json = toml_to_json(&toml::Value::Table(body.clone())).map_err(|e| fail(rule_line, format!("rules.{rule_name}: {e}")))?;
+                    let json =
+                        toml_to_json(&toml::Value::Table(body.clone())).map_err(|e| fail(rule_line, format!("rules.{rule_name}: {e}")))?;
                     file.rules.push(FileRule { name: rule_name.to_owned(), value: json, line: rule_line, key_lines });
                 }
                 continue;
@@ -502,10 +693,14 @@ pub fn read_file(path: &str, text: &str) -> Result<FileLayer> {
 /// (and for the file the line): `config/game.toml line 6: market_maps: …`, `extension kill-boost: kill_boost_skills: …`,
 /// `data editor (change set 12): …`.
 pub fn resolve(startup: &Startup, sources: &Sources) -> Result<(Config, Vec<Resolved>)> {
-    let mut resolved: Vec<Resolved> =
-        SETTINGS.iter().map(|s| Resolved { name: s.name, value: s.default.to_owned(), layer: Layer::Default, default: s.default }).collect();
+    let mut resolved: Vec<Resolved> = SETTINGS
+        .iter()
+        .map(|s| Resolved { name: s.name, value: s.default.to_owned(), layer: Layer::Default, default: s.default })
+        .collect();
     let mut put = |name: &str, value: &str, layer: Layer, place: String| -> Result<()> {
-        let Some(slot) = resolved.iter_mut().find(|r| r.name == name) else { anyhow::bail!("{place}: {name:?} is not a game setting (docs/server/settings.md)") };
+        let Some(slot) = resolved.iter_mut().find(|r| r.name == name) else {
+            anyhow::bail!("{place}: {name:?} is not a game setting (docs/server/settings.md)")
+        };
         check_setting(name, value).map_err(|e| anyhow::anyhow!("{place}: {name}: {e:#}"))?;
         slot.value = value.to_owned();
         slot.layer = layer;
@@ -611,9 +806,11 @@ impl Config {
         if migrate {
             sqlx::migrate!("../../db/migrations").run(&mut conn).await?;
         }
-        let present: bool = sqlx::query_scalar("SELECT to_regclass('content.ext_settings') IS NOT NULL AND to_regclass('content.setting_values') IS NOT NULL")
-            .fetch_one(&mut conn)
-            .await?;
+        let present: bool = sqlx::query_scalar(
+            "SELECT to_regclass('content.ext_settings') IS NOT NULL AND to_regclass('content.setting_values') IS NOT NULL",
+        )
+        .fetch_one(&mut conn)
+        .await?;
         if present {
             sources.extensions = sqlx::query_as(
                 "SELECT s.extension, s.name, s.value FROM content.ext_settings s JOIN content.extensions e ON e.name = s.extension \
@@ -635,7 +832,8 @@ impl Config {
         rules.extensions = layers.extensions;
         rules.editor = layers.editor;
         let mut scripts = read_script_sources(&mut conn).await?;
-        scripts.file = sources.file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
+        scripts.file =
+            sources.file.as_ref().map(|f| crate::script::sources::FileOptions { path: f.path.clone(), options: f.options.clone() });
         conn.close().await?;
         let (config, resolved) = resolve(&startup, &sources)?;
         rules.setting_layers = resolved
@@ -666,7 +864,9 @@ pub async fn read_script_sources_in(conn: &mut sqlx::PgConnection, content: &str
     if !present {
         return Ok(out);
     }
-    out.installed = sqlx::query_as(AssertSqlSafe(format!("SELECT name, enabled FROM {content}.extensions ORDER BY install_seq"))).fetch_all(&mut *conn).await?;
+    out.installed = sqlx::query_as(AssertSqlSafe(format!("SELECT name, enabled FROM {content}.extensions ORDER BY install_seq")))
+        .fetch_all(&mut *conn)
+        .await?;
     let scripts: Vec<(String, String, String)> = sqlx::query_as(AssertSqlSafe(format!(
         "SELECT s.extension, s.path, s.source FROM {content}.ext_scripts s JOIN {content}.extensions e ON e.name = s.extension \
          WHERE e.enabled ORDER BY e.install_seq, s.seq"
@@ -676,7 +876,11 @@ pub async fn read_script_sources_in(conn: &mut sqlx::PgConnection, content: &str
     for (extension, path, source) in scripts {
         match out.extensions.last_mut() {
             Some(e) if e.name == extension => e.scripts.push((path, source)),
-            _ => out.extensions.push(crate::script::sources::ScriptExtension { name: extension, scripts: vec![(path, source)], ..Default::default() }),
+            _ => out.extensions.push(crate::script::sources::ScriptExtension {
+                name: extension,
+                scripts: vec![(path, source)],
+                ..Default::default()
+            }),
         }
     }
     let options: Vec<(String, String, String)> = sqlx::query_as(AssertSqlSafe(format!(
@@ -693,16 +897,21 @@ pub async fn read_script_sources_in(conn: &mut sqlx::PgConnection, content: &str
         }
     }
     let globals: Vec<(String, String, String)> =
-        sqlx::query_as(AssertSqlSafe(format!("SELECT extension, key, value::text FROM {content}.script_globals ORDER BY extension, key"))).fetch_all(&mut *conn).await?;
+        sqlx::query_as(AssertSqlSafe(format!("SELECT extension, key, value::text FROM {content}.script_globals ORDER BY extension, key")))
+            .fetch_all(&mut *conn)
+            .await?;
     for (extension, key, value) in globals {
         let json: serde_json::Value = serde_json::from_str(&value).with_context(|| format!("content.script_globals {extension}.{key}"))?;
         if let Some(e) = out.extensions.iter_mut().find(|e| e.name == extension) {
             e.globals.push((key, json));
         }
     }
-    let settings: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{content}.setting_values') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+    let settings: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{content}.setting_values') IS NOT NULL")))
+        .fetch_one(&mut *conn)
+        .await?;
     if settings {
-        let has_edits: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+        let has_edits: bool =
+            sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
         let query = if has_edits {
             format!(
                 "SELECT v.name, v.value, (SELECT max(f.change_set) FROM {edits}.fields f WHERE f.target = 'setting' AND f.key = v.name) \
@@ -747,7 +956,8 @@ pub async fn read_rule_layers_in(conn: &mut sqlx::PgConnection, content: &str, e
         let value = json(&rule, format!("content.ext_rules {extension}/{name}"))?;
         layers.extensions.push((extension, name, value));
     }
-    let has_edits: bool = sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
+    let has_edits: bool =
+        sqlx::query_scalar(AssertSqlSafe(format!("SELECT to_regclass('{edits}.fields') IS NOT NULL"))).fetch_one(&mut *conn).await?;
     let query = if has_edits {
         format!(
             "SELECT v.name, v.rule::text, (SELECT max(f.change_set) FROM {edits}.fields f WHERE f.target = 'rule' AND f.key = v.name) \
@@ -793,7 +1003,8 @@ pub fn show(resolved: &[Resolved]) -> String {
         let setting = setting(r.name).expect("resolved settings are registered");
         let value = toml_value(setting, &r.value);
         let default = toml_value(setting, r.default);
-        let comment = if r.layer != Layer::Default && value != default { format!("{} (default {default})", r.layer) } else { r.layer.to_string() };
+        let comment =
+            if r.layer != Layer::Default && value != default { format!("{} (default {default})", r.layer) } else { r.layer.to_string() };
         out.push_str(&format!("{:<44} # {comment}\n", format!("{} = {value}", r.name)));
     }
     out
@@ -1032,8 +1243,16 @@ mod tests {
         let (config, all) = resolved(&sources).unwrap();
         assert_eq!(value(&all, "kill_boost_skills").layer, Layer::Extension("kill-boost".into()));
         assert_eq!(config.kill_boost_skills.len(), 1);
-        assert_eq!((value(&all, "guild_party_size").layer.clone(), config.guild_party_size), (Layer::File, 2), "the file beats the extension");
-        assert_eq!((value(&all, "market_maps").layer.clone(), config.market_maps.clone()), (Layer::Editor(Some(12)), vec![42]), "the editor beats the file");
+        assert_eq!(
+            (value(&all, "guild_party_size").layer.clone(), config.guild_party_size),
+            (Layer::File, 2),
+            "the file beats the extension"
+        );
+        assert_eq!(
+            (value(&all, "market_maps").layer.clone(), config.market_maps.clone()),
+            (Layer::Editor(Some(12)), vec![42]),
+            "the editor beats the file"
+        );
         assert_eq!(value(&all, "trade_chat_min_level").layer, Layer::Default);
     }
 
@@ -1048,12 +1267,19 @@ mod tests {
 
     #[test]
     fn an_array_and_a_string_give_the_same_value() {
-        let a = file("market_maps = [35, 36, 42]\ncard_win_chances = [420, 200, 130, 100, 80]\nexp_rate = 1.5\nmini_game = false\nranking_times = \"(1,14,1)\"\n");
-        let b = file("market_maps = \"35,36,42\"\ncard_win_chances = \"420,200,130,100,80\"\nexp_rate = \"1.5\"\nmini_game = \"false\"\nranking_times = [\"(1,14,1)\"]\n");
+        let a = file(
+            "market_maps = [35, 36, 42]\ncard_win_chances = [420, 200, 130, 100, 80]\nexp_rate = 1.5\nmini_game = false\nranking_times = \"(1,14,1)\"\n",
+        );
+        let b = file(
+            "market_maps = \"35,36,42\"\ncard_win_chances = \"420,200,130,100,80\"\nexp_rate = \"1.5\"\nmini_game = \"false\"\nranking_times = [\"(1,14,1)\"]\n",
+        );
         let texts = |f: &FileLayer| f.values.iter().map(|(n, v, _)| (n.clone(), v.clone())).collect::<Vec<_>>();
         assert_eq!(texts(&a), texts(&b));
         let (config, _) = resolved(&Sources { file: Some(a), ..Sources::default() }).unwrap();
-        assert_eq!((config.market_maps.clone(), config.card_win_chances, config.exp_rate, config.mini_game), (vec![35, 36, 42], [420, 200, 130, 100, 80], 1.5, false));
+        assert_eq!(
+            (config.market_maps.clone(), config.card_win_chances, config.exp_rate, config.mini_game),
+            (vec![35, 36, 42], [420, 200, 130, 100, 80], 1.5, false)
+        );
         assert_eq!(config.ranking_times, Some(vec![[1, 14, 1]]));
     }
 
@@ -1077,7 +1303,8 @@ mod tests {
         let bad = file("guild_party_size = 2\n\nmarket_maps = \"x\"\n");
         let message = format!("{:#}", resolved(&Sources { file: Some(bad), ..Sources::default() }).unwrap_err());
         assert!(message.starts_with("config/game.toml line 3: market_maps: map id \"x\""), "{message}");
-        let extension = Sources { extensions: vec![("kill-boost".into(), "kill_boost_skills".into(), "200/1:101".into())], ..Sources::default() };
+        let extension =
+            Sources { extensions: vec![("kill-boost".into(), "kill_boost_skills".into(), "200/1:101".into())], ..Sources::default() };
         let message = format!("{:#}", resolved(&extension).unwrap_err());
         assert!(message.starts_with("extension kill-boost: kill_boost_skills: "), "{message}");
         let editor = Sources { editor: vec![("slot_payout_percent".into(), "0".into(), Some(12))], ..Sources::default() };
@@ -1089,11 +1316,24 @@ mod tests {
 
     #[test]
     fn a_game_variable_stops_the_start_with_the_line_to_paste() {
-        let ok = Startup::from_vars(&vars(&[("DATABASE_URL", "postgres://x/y"), ("GAME_BIND", "0.0.0.0:31810"), ("GAME_SERVER_ID", "3"), ("GAME_CONFIG", "/etc/g.toml"), ("RUST_LOG", "debug")])).unwrap();
+        let ok = Startup::from_vars(&vars(&[
+            ("DATABASE_URL", "postgres://x/y"),
+            ("GAME_BIND", "0.0.0.0:31810"),
+            ("GAME_SERVER_ID", "3"),
+            ("GAME_CONFIG", "/etc/g.toml"),
+            ("RUST_LOG", "debug"),
+        ]))
+        .unwrap();
         assert_eq!((ok.bind.port(), ok.server_id, ok.config.as_deref()), (31810, 3, Some("/etc/g.toml")));
         let refused = format!(
             "{:#}",
-            Startup::from_vars(&vars(&[("DATABASE_URL", "x"), ("GAME_MARKET_MAPS", "35,36,42"), ("GAME_GUILD_PARTY_SIZE", "2"), ("GAME_MINI_GAME", "true")])).unwrap_err()
+            Startup::from_vars(&vars(&[
+                ("DATABASE_URL", "x"),
+                ("GAME_MARKET_MAPS", "35,36,42"),
+                ("GAME_GUILD_PARTY_SIZE", "2"),
+                ("GAME_MINI_GAME", "true")
+            ]))
+            .unwrap_err()
         );
         assert!(refused.contains("config/game.toml now, not from the environment"), "{refused}");
         assert!(refused.contains("guild_party_size = \"2\"") && refused.contains("# was GAME_GUILD_PARTY_SIZE"), "{refused}");
@@ -1102,7 +1342,10 @@ mod tests {
         let typo = format!("{:#}", Startup::from_vars(&vars(&[("DATABASE_URL", "x"), ("GAME_MARKET_MAP", "35")])).unwrap_err());
         assert!(typo.contains("GAME_MARKET_MAP is not a setting"), "{typo}");
         assert!(Startup::from_vars(&[]).is_err(), "DATABASE_URL is required");
-        assert!(format!("{:#}", Startup::from_vars(&vars(&[("DATABASE_URL", "x"), ("GAME_BIND", "nowhere")])).unwrap_err()).contains("GAME_BIND"));
+        assert!(
+            format!("{:#}", Startup::from_vars(&vars(&[("DATABASE_URL", "x"), ("GAME_BIND", "nowhere")])).unwrap_err())
+                .contains("GAME_BIND")
+        );
     }
 
     #[test]
@@ -1116,7 +1359,10 @@ mod tests {
         let text = show(&all);
         let line = |name: &str| text.lines().find(|l| l.starts_with(&format!("{name} = "))).unwrap().to_owned();
         assert!(line("guild_party_size").ends_with("# config file (default 7)"), "{}", line("guild_party_size"));
-        assert!(line("kill_boost_skills").starts_with("kill_boost_skills = \"200/1:2,200/2:5,200/3:10\"") && line("kill_boost_skills").ends_with("# extension kill-boost (default \"\")"));
+        assert!(
+            line("kill_boost_skills").starts_with("kill_boost_skills = \"200/1:2,200/2:5,200/3:10\"")
+                && line("kill_boost_skills").ends_with("# extension kill-boost (default \"\")")
+        );
         assert!(line("trade_chat_min_level").ends_with("# default") && line("trade_chat_min_level").contains("= 10"));
         assert!(line("mini_game").ends_with("# config file"), "set to its default: no default part: {}", line("mini_game"));
         // What `show` prints reads back as the same values.
@@ -1133,10 +1379,12 @@ mod tests {
         let text = example();
         assert!(read_file("example", &text).unwrap().values.is_empty(), "every setting is commented out");
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/game.toml.example");
-        let committed = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}; write it with: game-server config --example > config/game.toml.example", path.display()));
+        let committed = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{}: {e}; write it with: game-server config --example > config/game.toml.example", path.display()));
         assert_eq!(committed, text, "config/game.toml.example is out of date: game-server config --example > config/game.toml.example");
         // Uncommenting a setting line gives a valid file.
-        let is_setting = |line: &str| line.strip_prefix("# ").and_then(|r| r.split_once(" = ")).is_some_and(|(name, _)| setting(name).is_some());
+        let is_setting =
+            |line: &str| line.strip_prefix("# ").and_then(|r| r.split_once(" = ")).is_some_and(|(name, _)| setting(name).is_some());
         let uncommented: String = text.lines().map(|l| if is_setting(l) { &l[2..] } else { l }).collect::<Vec<_>>().join("\n");
         let all = read_file("example", &uncommented).unwrap();
         assert_eq!(all.values.len(), SETTINGS.len());
@@ -1168,7 +1416,11 @@ message = \"Too far apart.\"
         let layer = file(RULES_FILE);
         assert_eq!(layer.values.len(), 1, "the setting is still a setting");
         let names: Vec<_> = layer.rules.iter().map(|r| (r.name.as_str(), r.line)).collect();
-        assert_eq!(names, [("level-gap", 14), ("market-no-pvp-gain", 4), ("pets/no-capture", 11)], "the order of the table; each at its header's line");
+        assert_eq!(
+            names,
+            [("level-gap", 14), ("market-no-pvp-gain", 4), ("pets/no-capture", 11)],
+            "the order of the table; each at its header's line"
+        );
         let gap = layer.rules.iter().find(|r| r.name == "level-gap").unwrap();
         assert_eq!(gap.value, serde_json::json!({ "type": "level_gap", "gap": 20, "maps": { "not": [42] }, "message": "Too far apart." }));
         assert_eq!(gap.key_lines, [("gap".to_owned(), 16), ("maps".to_owned(), 17), ("message".to_owned(), 18), ("type".to_owned(), 15)]);
@@ -1182,7 +1434,8 @@ message = \"Too far apart.\"
     fn rules_error(text: &str) -> String {
         let layer = file(text);
         let (config, _) = resolved(&Sources { file: Some(layer.clone()), ..Sources::default() }).unwrap();
-        let sources = RuleSources { file: Some(crate::rules::RuleFile { path: layer.path.clone(), rules: layer.rules }), ..RuleSources::default() };
+        let sources =
+            RuleSources { file: Some(crate::rules::RuleFile { path: layer.path.clone(), rules: layer.rules }), ..RuleSources::default() };
         format!("{:#}", crate::rules::resolve(&config, &sources).unwrap_err())
     }
 
@@ -1202,7 +1455,10 @@ message = \"Too far apart.\"
         let message = file_error("[rules.x]\nfactor = nan\n");
         assert!(message.contains("line 1") && message.contains("is not a number a rule can hold"), "{message}");
         let message = file_error("guild_party_size = 2\n[ext.welcome]\nx = 1\n[ext.welcome.deeper]\ny = 2\n");
-        assert!(message.contains("line 4") && message.contains("ext.welcome.deeper: an option is a value, not a table"), "nested tables are refused: {message}");
+        assert!(
+            message.contains("line 4") && message.contains("ext.welcome.deeper: an option is a value, not a table"),
+            "nested tables are refused: {message}"
+        );
         let message = file_error("ext = 3\n");
         assert!(message.starts_with("config/game.toml line 1: ext:") && message.contains("[ext.<name>]"), "{message}");
         let message = file_error("[ext.welcome]\nwhen = 1979-05-27T07:32:00Z\n");
@@ -1212,12 +1468,31 @@ message = \"Too far apart.\"
     #[test]
     fn the_examples_rules_are_valid_when_uncommented() {
         let rules_part = &example()[example().find("# [rules]\n").unwrap()..];
-        let uncommented: String =
-            rules_part.lines().skip(1).filter(|l| l.starts_with("# [rules.") || l.starts_with("# type") || l.starts_with("# maps") || l.starts_with("# exp") || l.starts_with("# kills") || l.starts_with("# deaths") || l.starts_with("# gap") || l.starts_with("# jumps") || l.starts_with("# items") || l.starts_with("# point") || l.starts_with("# days") || l.starts_with("# hours") || l.starts_with("# message")).map(|l| format!("{}\n", &l[2..])).collect();
+        let uncommented: String = rules_part
+            .lines()
+            .skip(1)
+            .filter(|l| {
+                l.starts_with("# [rules.")
+                    || l.starts_with("# type")
+                    || l.starts_with("# maps")
+                    || l.starts_with("# exp")
+                    || l.starts_with("# kills")
+                    || l.starts_with("# deaths")
+                    || l.starts_with("# gap")
+                    || l.starts_with("# jumps")
+                    || l.starts_with("# items")
+                    || l.starts_with("# point")
+                    || l.starts_with("# days")
+                    || l.starts_with("# hours")
+                    || l.starts_with("# message")
+            })
+            .map(|l| format!("{}\n", &l[2..]))
+            .collect();
         let layer = read_file("example", &uncommented).unwrap();
         assert_eq!(layer.rules.len(), 5);
         let (config, _) = resolved(&Sources::default()).unwrap();
-        let sources = RuleSources { file: Some(crate::rules::RuleFile { path: "example".into(), rules: layer.rules }), ..RuleSources::default() };
+        let sources =
+            RuleSources { file: Some(crate::rules::RuleFile { path: "example".into(), rules: layer.rules }), ..RuleSources::default() };
         assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 6, "the five and the trade-chat level's");
     }
 
@@ -1232,7 +1507,10 @@ message = \"Too far apart.\"
         std::fs::write(&good, "[rules.x]\ntype = \"exp\"\nfactor = 2\n").unwrap();
         assert_eq!(crate::rules::check_file(path).unwrap(), format!("{path}: 1 rule, no errors"));
         std::fs::write(&good, "guild_party_size = 2\n[rules.x]\ntype = \"exp\"\nfactor = 200\n").unwrap();
-        assert_eq!(format!("{:#}", crate::rules::check_file(path).unwrap_err()), format!("{path} line 4: rules.x.factor: 200 is not 0 to 100"));
+        assert_eq!(
+            format!("{:#}", crate::rules::check_file(path).unwrap_err()),
+            format!("{path} line 4: rules.x.factor: 200 is not 0 to 100")
+        );
         std::fs::write(&good, "market_maps = \"x\"\n").unwrap();
         assert!(format!("{:#}", crate::rules::check_file(path).unwrap_err()).contains("market_maps"), "the settings are checked too");
         assert!(crate::rules::check_file(dir.join("nothing.toml").to_str().unwrap()).is_err());

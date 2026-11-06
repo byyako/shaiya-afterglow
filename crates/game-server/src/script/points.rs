@@ -20,8 +20,11 @@ static NEXT_REFUSAL: AtomicU32 = AtomicU32::new(1_000_000_000);
 fn refusal_text(text: &Value) -> Option<Arc<str>> {
     let Value::String(s) = text else { return None };
     let bytes = s.as_bytes();
-    (!bytes.is_empty() && bytes.len() <= 100 && bytes.iter().all(|b| (0x20..=0x7e).contains(b)) && shaiya_proto::chat::markup_is_safe(&bytes))
-        .then(|| Arc::from(String::from_utf8_lossy(&bytes).as_ref()))
+    (!bytes.is_empty()
+        && bytes.len() <= 100
+        && bytes.iter().all(|b| (0x20..=0x7e).contains(b))
+        && shaiya_proto::chat::markup_is_safe(&bytes))
+    .then(|| Arc::from(String::from_utf8_lossy(&bytes).as_ref()))
 }
 
 impl ExtScript {
@@ -171,7 +174,10 @@ impl ExtScript {
             Some(Value::String(s)) if s.as_bytes() == b"keep" => ItemUse::Keep,
             Some(Value::Boolean(false)) => ItemUse::Refused(answer.get(1).and_then(refusal_text)),
             Some(other) => {
-                self.fault("item_use", &mlua::Error::runtime(format!("wrong answer: {} where \"use\", \"keep\", false or nothing is wanted", describe(other))));
+                self.fault(
+                    "item_use",
+                    &mlua::Error::runtime(format!("wrong answer: {} where \"use\", \"keep\", false or nothing is wanted", describe(other))),
+                );
                 ItemUse::Core
             }
         }

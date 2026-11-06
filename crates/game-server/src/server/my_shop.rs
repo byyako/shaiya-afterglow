@@ -30,7 +30,9 @@ pub(super) async fn packet<S: Backend>(
                     }
                     _ => tracing::debug!(id, map, motion = state.motion, "personal shop refused: not sitting or not a market map"),
                 }
-                if state.motion == w::MOTION_SIT && let Some(refusal) = refusal {
+                if state.motion == w::MOTION_SIT
+                    && let Some(refusal) = refusal
+                {
                     super::refused::tell_refused(conn, state, &refusal).await?;
                 }
                 return Ok(());

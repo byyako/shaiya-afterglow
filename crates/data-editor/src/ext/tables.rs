@@ -17,9 +17,27 @@ pub struct ExtTable {
 }
 
 pub static TABLES: &[ExtTable] = &[
-    ExtTable { tbl: "defs.items", side: Side::Defs, table: "items", key_cols: &["itemid"], locked_cols: &["rowid", "itemid", "type", "typeid"] },
-    ExtTable { tbl: "defs.skills", side: Side::Defs, table: "skills", key_cols: &["skillid", "skilllevel"], locked_cols: &["rowid", "skillid", "skilllevel"] },
-    ExtTable { tbl: "defs.mob_items", side: Side::Defs, table: "mob_items", key_cols: &["mobid", "itemorder"], locked_cols: &["rowid", "mobid", "itemorder"] },
+    ExtTable {
+        tbl: "defs.items",
+        side: Side::Defs,
+        table: "items",
+        key_cols: &["itemid"],
+        locked_cols: &["rowid", "itemid", "type", "typeid"],
+    },
+    ExtTable {
+        tbl: "defs.skills",
+        side: Side::Defs,
+        table: "skills",
+        key_cols: &["skillid", "skilllevel"],
+        locked_cols: &["rowid", "skillid", "skilllevel"],
+    },
+    ExtTable {
+        tbl: "defs.mob_items",
+        side: Side::Defs,
+        table: "mob_items",
+        key_cols: &["mobid", "itemorder"],
+        locked_cols: &["rowid", "mobid", "itemorder"],
+    },
 ];
 
 /// The extendable table named `defs.items` (or just `items`).

@@ -55,7 +55,9 @@ pub struct OptionSpec {
 /// An option key: `^[a-z][a-z0-9_]{0,39}$`.
 pub fn valid_key(key: &str) -> bool {
     let mut chars = key.chars();
-    key.len() <= 40 && chars.next().is_some_and(|c| c.is_ascii_lowercase()) && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    key.len() <= 40
+        && chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn printable(text: &str) -> bool {
@@ -72,7 +74,9 @@ impl OptionSpec {
             }
         }
         let ty = match map.get("type") {
-            Some(Value::String(name)) => OptType::from_name(name).ok_or_else(|| anyhow::anyhow!("type {name:?} is not one of {}", OptType::NAMES.join(", ")))?,
+            Some(Value::String(name)) => {
+                OptType::from_name(name).ok_or_else(|| anyhow::anyhow!("type {name:?} is not one of {}", OptType::NAMES.join(", ")))?
+            }
             Some(_) => bail!("type must be a string"),
             None => bail!("type is required"),
         };
@@ -287,7 +291,10 @@ fn readonly(lua: &mlua::Lua, inner: mlua::Table) -> mlua::Result<mlua::Table> {
     let proxy = lua.create_table()?;
     let meta = lua.create_table()?;
     meta.raw_set("__index", inner.clone())?;
-    meta.raw_set("__newindex", lua.create_function(|_, _: mlua::MultiValue| -> mlua::Result<()> { Err(mlua::Error::runtime("game.options is read-only")) })?)?;
+    meta.raw_set(
+        "__newindex",
+        lua.create_function(|_, _: mlua::MultiValue| -> mlua::Result<()> { Err(mlua::Error::runtime("game.options is read-only")) })?,
+    )?;
     meta.raw_set("__metatable", false)?;
     // `pairs` and `next` over the proxy would see nothing, so scripts walking the options use the keys they know; `ipairs` of a
     // list option works through `__index`.

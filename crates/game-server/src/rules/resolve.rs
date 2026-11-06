@@ -119,7 +119,10 @@ pub fn from_settings(config: &Config) -> Vec<(&'static str, Value)> {
         rules.push(("cross_faction_trade_maps", json!({ "type": "cross_faction_trade", "maps": config.cross_faction_trade_maps })));
     }
     if !config.market_maps.is_empty() {
-        rules.push(("market_maps", json!({ "type": "deny", "point": "personal_shop", "maps": { "not": config.market_maps }, "message": "" })));
+        rules.push((
+            "market_maps",
+            json!({ "type": "deny", "point": "personal_shop", "maps": { "not": config.market_maps }, "message": "" }),
+        ));
     }
     if config.trade_chat_min_level >= 2 {
         let top = (config.trade_chat_min_level - 1).min(255);
@@ -163,7 +166,12 @@ impl Resolver {
             Parsed::Rule(draft) => {
                 if let Some(at) = below {
                     let slot = self.active.remove(at);
-                    self.gone.push(ResolvedRule { name: slot.name, layer: slot.layer, value: slot.value, state: RuleState::Replaced(layer.clone()) });
+                    self.gone.push(ResolvedRule {
+                        name: slot.name,
+                        layer: slot.layer,
+                        value: slot.value,
+                        state: RuleState::Replaced(layer.clone()),
+                    });
                 }
                 self.active.push(Slot { name: name.to_owned(), layer, value: value.clone(), draft });
             }

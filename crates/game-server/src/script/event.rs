@@ -38,14 +38,37 @@ pub enum Killer {
 /// The arguments of one event.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Payload {
-    Login { p: PlayerRef },
-    Logout { p: PlayerRef },
-    MapEnter { p: PlayerRef, map: u16 },
-    MapLeave { p: PlayerRef, map: u16 },
+    Login {
+        p: PlayerRef,
+    },
+    Logout {
+        p: PlayerRef,
+    },
+    MapEnter {
+        p: PlayerRef,
+        map: u16,
+    },
+    MapLeave {
+        p: PlayerRef,
+        map: u16,
+    },
     /// `kill` and `boss_kill`: the player of most damage, the monster, the players the kill was shared with.
-    Kill { p: PlayerRef, mob: MobInfo, near: Vec<PlayerRef> },
-    PvpKill { killer: PlayerRef, victim: PlayerRef, last_hit: Option<PlayerRef>, near: Vec<PlayerRef> },
-    Death { victim: PlayerRef, killer: Killer, pvp: bool },
+    Kill {
+        p: PlayerRef,
+        mob: MobInfo,
+        near: Vec<PlayerRef>,
+    },
+    PvpKill {
+        killer: PlayerRef,
+        victim: PlayerRef,
+        last_hit: Option<PlayerRef>,
+        near: Vec<PlayerRef>,
+    },
+    Death {
+        victim: PlayerRef,
+        killer: Killer,
+        pvp: bool,
+    },
 }
 
 /// What a script does to a player (section 4.4): carried out by that player's own connection.

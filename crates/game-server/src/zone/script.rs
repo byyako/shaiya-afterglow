@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use super::*;
 use crate::mobs::{MobDefs, MobMap};
-use crate::world::World;
 use crate::script::event::{Job, Killer, MobInfo, Payload, PlayerRef};
 use crate::script::runner;
 use crate::script::world::PlayerView;
 use crate::script::{Event, ScriptSet};
+use crate::world::World;
 
 /// What a script thread needs of a player the zone holds.
 fn view(map: u16, p: &Placed) -> PlayerView {
@@ -130,7 +130,9 @@ impl Zones {
     pub fn script_find(&self, name: &str) -> Option<PlayerView> {
         let found = {
             let maps = self.maps.guard();
-            maps.iter().find_map(|(&map, players)| players.values().find(|p| p.occupant.shape.name.eq_ignore_ascii_case(name.as_bytes())).map(|p| view(map, p)))
+            maps.iter().find_map(|(&map, players)| {
+                players.values().find(|p| p.occupant.shape.name.eq_ignore_ascii_case(name.as_bytes())).map(|p| view(map, p))
+            })
         };
         found.and_then(|v| self.with_staff(vec![v]).pop())
     }
@@ -283,7 +285,8 @@ impl Zones {
     /// The extension's monsters of `uids` that are still alive.
     pub fn ext_alive(&self, extension: &str, uids: &[u32]) -> usize {
         let spawns = self.ext_spawns.guard();
-        let mine: Vec<(u32, u16)> = uids.iter().filter_map(|u| spawns.get(u).filter(|s| s.extension == extension).map(|s| (*u, s.map))).collect();
+        let mine: Vec<(u32, u16)> =
+            uids.iter().filter_map(|u| spawns.get(u).filter(|s| s.extension == extension).map(|s| (*u, s.map))).collect();
         drop(spawns);
         let all = self.mobs.guard();
         mine.iter().filter(|(u, map)| all.get(map).and_then(|m| m.mobs.get(u)).is_some_and(|m| m.dead_until.is_none())).count()

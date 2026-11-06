@@ -1134,7 +1134,10 @@ mod tests {
         let req = EnchantRequest { lapisia: (1, 1), material: (1, 2), count: 100, item: (1, 0) };
         let with = |effect: serde_json::Value| ItemEffects::new([(95001, check_effect(&effect).unwrap())]);
         let core = enchant(&inv1, &defs, 3_000_000, req).unwrap();
-        assert!(!core.succeeds(999_999) && core.dangerous && core.own_jump(0).is_none() && !core.always, "the core's rate, danger and rules");
+        assert!(
+            !core.succeeds(999_999) && core.dangerous && core.own_jump(0).is_none() && !core.always,
+            "the core's rate, danger and rules"
+        );
         // A rate of 1,000,000 always succeeds, even with 100 of material and the highest draw.
         let e = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1000000 }))).unwrap();
         assert!(e.always && e.succeeds(999_999) && e.succeeds(0));
@@ -1150,12 +1153,16 @@ mod tests {
         assert_eq!((t.own_jump(0), t.own_jump(600_000), t.own_jump(900_000), t.own_jump(999_999)), (Some(1), Some(2), Some(3), Some(3)));
         assert!(t.always, "an effect with a table alone has the default rate: always");
         // `safe` keeps a failed item whatever VG says; without it the core's rule stays.
-        let safe = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1, "safe": true }))).unwrap();
+        let safe =
+            enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1, "safe": true }))).unwrap();
         assert!(!safe.dangerous && safe.outcome(&inv1, &defs, false).destroyed.is_none(), "kept");
         let unsafe_ = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1 }))).unwrap();
         assert!(unsafe_.dangerous && unsafe_.outcome(&inv1, &defs, false).destroyed == Some((1, 0)));
         // An effect of another type, or on another item, changes nothing.
-        let other = ItemEffects::new([(95001, check_effect(&serde_json::json!({ "type": "level_up", "levels": 1 })).unwrap()), (95002, check_effect(&serde_json::json!({ "type": "enchant", "rate": 1000000 })).unwrap())]);
+        let other = ItemEffects::new([
+            (95001, check_effect(&serde_json::json!({ "type": "level_up", "levels": 1 })).unwrap()),
+            (95002, check_effect(&serde_json::json!({ "type": "enchant", "rate": 1000000 })).unwrap()),
+        ]);
         let same = enchant_with(&inv1, &defs, 3_000_000, req, &other).unwrap();
         assert_eq!((same.rate, same.always, same.dangerous), (core.rate, false, true));
         // The step still stops at 20 with a table that jumps further.

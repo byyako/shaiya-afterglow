@@ -89,7 +89,8 @@ impl Budget {
 
 /// The names removed from the base library (section 8.1; Lua 5.1 loads `coroutine` with the base, and a coroutine would run apart
 /// from the hook).
-pub const REMOVED: [&str; 10] = ["dofile", "loadfile", "load", "loadstring", "require", "module", "getfenv", "setfenv", "newproxy", "coroutine"];
+pub const REMOVED: [&str; 10] =
+    ["dofile", "loadfile", "load", "loadstring", "require", "module", "getfenv", "setfenv", "newproxy", "coroutine"];
 
 /// A Lua state for the extension `name`: `math`, `string`, `table`, a reduced `os` and the base library without what could reach a
 /// file or build code; the memory limit; the budget hook. Nothing else is loaded (`io`, `package`, `debug`, `coroutine` never are).

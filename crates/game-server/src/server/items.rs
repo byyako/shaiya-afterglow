@@ -140,160 +140,178 @@ pub(super) async fn use_item<S: Backend>(
     } else {
         None
     };
-    let done = if let Some(early) = scripted { early } else { match effect {
-        Effect::Skill { id: skill_id, level } if request.kind != it::KIND_SELF => {
-            let target = (request.kind, request.target.unwrap_or(0));
-            item_skill_on(conn, ctx, character, state, country, (skill_id, level), target).await?
-        }
-        Effect::Skill { id: skill_id, level } => item_skill(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
-        Effect::ExpWheel { .. } | Effect::Ext if request.kind != it::KIND_SELF => Done::Failed,
-        // An extension's effect (`docs/plans/ext-3-effects.md` section 3.3), after the rules, the reuse time and the script.
-        Effect::Ext => super::effects::use_effect(conn, ctx, character, state, def.item_id, (bag, slot)).await?,
-        Effect::ExpWheel { id: skill_id, level } => exp_wheel(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
-        // Recover, Cure, the resurrection of another player and the Message To Server stay effect-then-use-up (audit R13): the effect
-        // is transient and its worst case is a free potion on a database failure, which ends the connection anyway.
-        Effect::Recover(amounts) => recovered(conn, ctx.zones.recover_add(state.map, id, amounts)).await?,
-        Effect::RecoverPercent(percent) => recovered(conn, ctx.zones.recover_percent(state.map, id, percent)).await?,
-        Effect::Cure(cure) => {
-            for packet in ctx.zones.cure(state.map, id, &cure) {
-                conn.send(packet).await?;
+    let done = if let Some(early) = scripted {
+        early
+    } else {
+        match effect {
+            Effect::Skill { id: skill_id, level } if request.kind != it::KIND_SELF => {
+                let target = (request.kind, request.target.unwrap_or(0));
+                item_skill_on(conn, ctx, character, state, country, (skill_id, level), target).await?
             }
-            Done::UsedUp
-        }
-        Effect::StatReset => {
-            let used = consume(ctx, character, state, bag, slot).await?;
-            reset_stats(conn, ctx, character, state).await?;
-            used
-        }
-        Effect::SkillReset => {
-            let used = consume(ctx, character, state, bag, slot).await?;
-            reset_skills(conn, ctx, character, state, false).await?;
-            used
-        }
-        Effect::Recall(special) => match item_use::recall_destination(special, country) {
-            Some((to_map, position)) if recall_allowed(ctx, state, character.level, to_map, position) => {
-                start_move(conn, ctx, id, state, MoveKind::To(to_map, position), (bag, slot, def.special), item_use::RESULT_RECALL, armed)
-                    .await?
+            Effect::Skill { id: skill_id, level } => item_skill(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
+            Effect::ExpWheel { .. } | Effect::Ext if request.kind != it::KIND_SELF => Done::Failed,
+            // An extension's effect (`docs/plans/ext-3-effects.md` section 3.3), after the rules, the reuse time and the script.
+            Effect::Ext => super::effects::use_effect(conn, ctx, character, state, def.item_id, (bag, slot)).await?,
+            Effect::ExpWheel { id: skill_id, level } => {
+                exp_wheel(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?
             }
-            _ => Done::Failed,
-        },
-        Effect::GuildHouseStone => {
-            let (to_map, position) = item_use::guild_house_destination(country);
-            let allowed = item_use::level_allows(to_map, character.level)
-                && ctx.data.world.is_safe_pos(to_map, position)
-                && ctx.data.world.create_type(to_map) == create_type::GUILD_HOUSE
-                && ctx.zones.guild_house_of(id).is_some_and(|(_, _, house)| house.enabled())
-                && state.item_move.is_none()
-                && state.logout.is_none();
-            if allowed {
-                let kind = MoveKind::GuildHouse(to_map, position);
-                start_move(conn, ctx, id, state, kind, (bag, slot, def.special), item_use::RESULT_RECALL, armed).await?
-            } else {
-                Done::Failed
-            }
-        }
-        Effect::Teleport => match teleport_target(ctx, character, state, request.target) {
-            Some((point, index)) => {
-                start_move(conn, ctx, id, state, MoveKind::To(point.map, point.position), (bag, slot, def.special), index, armed).await?
-            }
-            None => Done::Failed,
-        },
-        Effect::MovementRune => match rune_target(ctx, state, id, character.level, request.target) {
-            Some(m) => {
-                start_move(
-                    conn,
-                    ctx,
-                    id,
-                    state,
-                    MoveKind::To(m.map, m.position),
-                    (bag, slot, def.special),
-                    item_use::RESULT_MOVEMENT_RUNE,
-                    armed,
-                )
-                .await?
-            }
-            None => Done::Failed,
-        },
-        Effect::PartySummon => {
-            let kind = ctx.data.world.create_type(state.map);
-            let refused = matches!(kind, create_type::PARTY | create_type::GUILD_RANKING)
-                || state.map == item_use::MAP_NO_PARTY_MOVE
-                || ctx.zones.party_members_placed(id).is_none()
-                || state.item_move.is_some();
-            if refused {
-                Done::Failed
-            } else {
-                start_move(conn, ctx, id, state, MoveKind::Summon, (bag, slot, def.special), item_use::RESULT_SUMMON, armed).await?
-            }
-        }
-        // Everything equipped back to full quality, for nothing (`docs/original/repair.md` section 5).
-        Effect::RepairAll => {
-            let used = consume(ctx, character, state, bag, slot).await?;
-            save_repair(conn, ctx, character, state, crate::repair::repair_all_free(&state.inventory, &ctx.data.items)).await?;
-            conn.send(it::repaired_all(state.money)).await?;
-            used
-        }
-        Effect::TargetResurrection => match request.target {
-            Some(target) if ctx.zones.resurrect_by_item(state.map, id, target) => {
-                tracing::info!(id, target, "resurrected by item");
+            // Recover, Cure, the resurrection of another player and the Message To Server stay effect-then-use-up (audit R13): the effect
+            // is transient and its worst case is a free potion on a database failure, which ends the connection anyway.
+            Effect::Recover(amounts) => recovered(conn, ctx.zones.recover_add(state.map, id, amounts)).await?,
+            Effect::RecoverPercent(percent) => recovered(conn, ctx.zones.recover_percent(state.map, id, percent)).await?,
+            Effect::Cure(cure) => {
+                for packet in ctx.zones.cure(state.map, id, &cure) {
+                    conn.send(packet).await?;
+                }
                 Done::UsedUp
             }
-            _ => Done::Failed,
-        },
-        Effect::Fame(vg) => match u16::try_from(vg).ok().filter(|&vg| vg > 0).and_then(|vg| character.honor.checked_add(vg)) {
-            Some(honor) => {
+            Effect::StatReset => {
                 let used = consume(ctx, character, state, bag, slot).await?;
-                ctx.store.save_honor(id, honor).await?;
-                character.honor = honor;
-                conn.send(w::honor(honor)).await?;
+                reset_stats(conn, ctx, character, state).await?;
                 used
             }
-            None => Done::Failed,
-        },
-        Effect::Firecracker => Done::UsedUp,
-        // Refused while counting is off or a top grade's ten minutes run (`CWorld::AddKillCountGrade`).
-        Effect::Blessing => {
-            // The check, the item, then the effect (audit R13): counting may freeze while the item is saved, and `add_grade` checks
-            // again; the item is then used up for nothing, which a one-in-a-million race can afford.
-            if ctx.kill_counts.guard().can_add_grade(country) {
+            Effect::SkillReset => {
                 let used = consume(ctx, character, state, bag, slot).await?;
-                let changes = ctx.kill_counts.guard().add_grade(country, crate::kc::BLESSING_GRADES, Instant::now());
-                match changes {
-                    Some(changes) => {
-                        tracing::info!(id, country, "goddess blessing");
-                        kill_count_changes(ctx, changes).await;
-                    }
-                    None => tracing::warn!(id, country, "goddess blessing refused after the item was used up: counting froze meanwhile"),
-                }
+                reset_skills(conn, ctx, character, state, false).await?;
                 used
-            } else {
+            }
+            Effect::Recall(special) => match item_use::recall_destination(special, country) {
+                Some((to_map, position)) if recall_allowed(ctx, state, character.level, to_map, position) => {
+                    start_move(
+                        conn,
+                        ctx,
+                        id,
+                        state,
+                        MoveKind::To(to_map, position),
+                        (bag, slot, def.special),
+                        item_use::RESULT_RECALL,
+                        armed,
+                    )
+                    .await?
+                }
+                _ => Done::Failed,
+            },
+            Effect::GuildHouseStone => {
+                let (to_map, position) = item_use::guild_house_destination(country);
+                let allowed = item_use::level_allows(to_map, character.level)
+                    && ctx.data.world.is_safe_pos(to_map, position)
+                    && ctx.data.world.create_type(to_map) == create_type::GUILD_HOUSE
+                    && ctx.zones.guild_house_of(id).is_some_and(|(_, _, house)| house.enabled())
+                    && state.item_move.is_none()
+                    && state.logout.is_none();
+                if allowed {
+                    let kind = MoveKind::GuildHouse(to_map, position);
+                    start_move(conn, ctx, id, state, kind, (bag, slot, def.special), item_use::RESULT_RECALL, armed).await?
+                } else {
+                    Done::Failed
+                }
+            }
+            Effect::Teleport => match teleport_target(ctx, character, state, request.target) {
+                Some((point, index)) => {
+                    start_move(conn, ctx, id, state, MoveKind::To(point.map, point.position), (bag, slot, def.special), index, armed)
+                        .await?
+                }
+                None => Done::Failed,
+            },
+            Effect::MovementRune => match rune_target(ctx, state, id, character.level, request.target) {
+                Some(m) => {
+                    start_move(
+                        conn,
+                        ctx,
+                        id,
+                        state,
+                        MoveKind::To(m.map, m.position),
+                        (bag, slot, def.special),
+                        item_use::RESULT_MOVEMENT_RUNE,
+                        armed,
+                    )
+                    .await?
+                }
+                None => Done::Failed,
+            },
+            Effect::PartySummon => {
+                let kind = ctx.data.world.create_type(state.map);
+                let refused = matches!(kind, create_type::PARTY | create_type::GUILD_RANKING)
+                    || state.map == item_use::MAP_NO_PARTY_MOVE
+                    || ctx.zones.party_members_placed(id).is_none()
+                    || state.item_move.is_some();
+                if refused {
+                    Done::Failed
+                } else {
+                    start_move(conn, ctx, id, state, MoveKind::Summon, (bag, slot, def.special), item_use::RESULT_SUMMON, armed).await?
+                }
+            }
+            // Everything equipped back to full quality, for nothing (`docs/original/repair.md` section 5).
+            Effect::RepairAll => {
+                let used = consume(ctx, character, state, bag, slot).await?;
+                save_repair(conn, ctx, character, state, crate::repair::repair_all_free(&state.inventory, &ctx.data.items)).await?;
+                conn.send(it::repaired_all(state.money)).await?;
+                used
+            }
+            Effect::TargetResurrection => match request.target {
+                Some(target) if ctx.zones.resurrect_by_item(state.map, id, target) => {
+                    tracing::info!(id, target, "resurrected by item");
+                    Done::UsedUp
+                }
+                _ => Done::Failed,
+            },
+            Effect::Fame(vg) => match u16::try_from(vg).ok().filter(|&vg| vg > 0).and_then(|vg| character.honor.checked_add(vg)) {
+                Some(honor) => {
+                    let used = consume(ctx, character, state, bag, slot).await?;
+                    ctx.store.save_honor(id, honor).await?;
+                    character.honor = honor;
+                    conn.send(w::honor(honor)).await?;
+                    used
+                }
+                None => Done::Failed,
+            },
+            Effect::Firecracker => Done::UsedUp,
+            // Refused while counting is off or a top grade's ten minutes run (`CWorld::AddKillCountGrade`).
+            Effect::Blessing => {
+                // The check, the item, then the effect (audit R13): counting may freeze while the item is saved, and `add_grade` checks
+                // again; the item is then used up for nothing, which a one-in-a-million race can afford.
+                if ctx.kill_counts.guard().can_add_grade(country) {
+                    let used = consume(ctx, character, state, bag, slot).await?;
+                    let changes = ctx.kill_counts.guard().add_grade(country, crate::kc::BLESSING_GRADES, Instant::now());
+                    match changes {
+                        Some(changes) => {
+                            tracing::info!(id, country, "goddess blessing");
+                            kill_count_changes(ctx, changes).await;
+                        }
+                        None => {
+                            tracing::warn!(id, country, "goddess blessing refused after the item was used up: counting froze meanwhile")
+                        }
+                    }
+                    used
+                } else {
+                    Done::Failed
+                }
+            }
+            Effect::Box(set) => open_box(ctx, id, state, set),
+            // Refused while one is armed or the all-server cooldown runs (`docs/original/small-items.md` section 5.1).
+            Effect::MessageToServer if state.chat_item_armed || state.next_all_chat.is_some_and(|next| now < next) => Done::Failed,
+            Effect::MessageToServer => {
+                state.chat_item_armed = true;
+                Done::UsedUp
+            }
+            // Once per world entry; the count and the stone go together, and 255 renames already refuse it (deviation 6).
+            Effect::NameChange if state.rename_stone_used => Done::Failed,
+            Effect::NameChange => match state.inventory.get(bag, slot).cloned() {
+                Some(item) if ctx.store.add_rename(id, &used_change(&item)).await? => {
+                    state.inventory.apply(&used_change(&item));
+                    state.rename_stone_used = true;
+                    tracing::info!(id, "rename allowed");
+                    Done::Consumed(item)
+                }
+                _ => Done::Failed,
+            },
+            Effect::NotBuilt => {
+                tracing::debug!(id, item = def.item_id, special = def.special, "item use: not built");
                 Done::Failed
             }
+            Effect::QuestItem { .. } | Effect::Refused => unreachable!("handled above"),
         }
-        Effect::Box(set) => open_box(ctx, id, state, set),
-        // Refused while one is armed or the all-server cooldown runs (`docs/original/small-items.md` section 5.1).
-        Effect::MessageToServer if state.chat_item_armed || state.next_all_chat.is_some_and(|next| now < next) => Done::Failed,
-        Effect::MessageToServer => {
-            state.chat_item_armed = true;
-            Done::UsedUp
-        }
-        // Once per world entry; the count and the stone go together, and 255 renames already refuse it (deviation 6).
-        Effect::NameChange if state.rename_stone_used => Done::Failed,
-        Effect::NameChange => match state.inventory.get(bag, slot).cloned() {
-            Some(item) if ctx.store.add_rename(id, &used_change(&item)).await? => {
-                state.inventory.apply(&used_change(&item));
-                state.rename_stone_used = true;
-                tracing::info!(id, "rename allowed");
-                Done::Consumed(item)
-            }
-            _ => Done::Failed,
-        },
-        Effect::NotBuilt => {
-            tracing::debug!(id, item = def.item_id, special = def.special, "item use: not built");
-            Done::Failed
-        }
-        Effect::QuestItem { .. } | Effect::Refused => unreachable!("handled above"),
-    } };
+    };
     match done {
         Done::UsedUp => {
             tracing::info!(id, bag, slot, item = def.item_id, special = def.special, "item used");
@@ -356,7 +374,13 @@ pub(super) async fn use_up_unsent<S: Backend>(
 /// One of the item at (`bag`, `slot`) used up and saved, `0x050A` not sent yet: `Done::Consumed`, or `Done::Failed` for an empty
 /// slot. An effect that saves something lasting (fame, a reset, a repair) runs after this, so a failed write never leaves both the
 /// effect and the item (the original saves the effect first).
-pub(super) async fn consume<S: Backend>(ctx: &Context<S>, character: &PlayCharacter, state: &mut WorldState, bag: u8, slot: u8) -> Result<Done> {
+pub(super) async fn consume<S: Backend>(
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    state: &mut WorldState,
+    bag: u8,
+    slot: u8,
+) -> Result<Done> {
     let Some(item) = state.inventory.get(bag, slot).cloned() else { return Ok(Done::Failed) };
     let change = used_change(&item);
     let Some(rows) = ctx.store.trade(character.id, 0, std::slice::from_ref(&change)).await? else {
@@ -581,7 +605,8 @@ async fn item_skill_on<S: Backend>(
 ) -> Result<Done> {
     let (id, map, now) = (character.id, state.map, Instant::now());
     let Some(def) = ctx.data.skills.get(skill_id, level).copied() else { return Ok(Done::Failed) };
-    let verdict = if kind == it::KIND_PLAYER { Some(ctx.zones.attack_verdict(map, id, target, ctx.data.world.is_war_map(map))) } else { None };
+    let verdict =
+        if kind == it::KIND_PLAYER { Some(ctx.zones.attack_verdict(map, id, target, ctx.data.world.is_war_map(map))) } else { None };
     if let Some(crate::zone::Verdict::Ruled(refusal)) = &verdict {
         tracing::debug!(id, map, point = "attack", rule = &*refusal.name, "refused by a rule");
         super::refused::tell_refused(conn, state, refusal).await?;

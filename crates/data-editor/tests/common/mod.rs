@@ -119,7 +119,11 @@ impl Db {
         .await;
         run(&pool, RULES_MIGRATION.replace("content.", &format!("{}.", s.content))).await;
         // Without the game's own tables (`characters`) the stored values have nothing to point at.
-        let scripts = if full { SCRIPTS_MIGRATION.to_owned() } else { SCRIPTS_MIGRATION.replace(" REFERENCES characters (id) ON DELETE CASCADE", "") };
+        let scripts = if full {
+            SCRIPTS_MIGRATION.to_owned()
+        } else {
+            SCRIPTS_MIGRATION.replace(" REFERENCES characters (id) ON DELETE CASCADE", "")
+        };
         run(&pool, scripts.replace("content.", &format!("{}.", s.content))).await;
         run(&pool, EFFECTS_MIGRATION.replace("content.", &format!("{}.", s.content))).await;
         let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s, pub_schema: full.then_some(pub_schema) };
@@ -258,21 +262,30 @@ impl Db {
     /// live schema made from the DDL can be filled from.
     pub async fn freeze_from_ddl(&self) {
         let s = &self.s;
-        let ddl = DEFS_SCHEMA.replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {};", s.original_defs)).replace("defs.", &format!("{}.", s.original_defs));
+        let ddl = DEFS_SCHEMA
+            .replace("CREATE SCHEMA IF NOT EXISTS defs;", &format!("CREATE SCHEMA {};", s.original_defs))
+            .replace("defs.", &format!("{}.", s.original_defs));
         run(&self.pool, format!("DROP SCHEMA IF EXISTS {} CASCADE", s.original_defs)).await;
         run(&self.pool, ddl).await;
-        run(&self.pool, format!("INSERT INTO {}.exp_defs (rowid, level, grow, exp) VALUES (1, 1, 0, 100), (2, 2, 0, 250)", s.original_defs)).await;
+        run(
+            &self.pool,
+            format!("INSERT INTO {}.exp_defs (rowid, level, grow, exp) VALUES (1, 1, 0, 100), (2, 2, 0, 250)", s.original_defs),
+        )
+        .await;
         let mut conn = self.pool.acquire().await.unwrap();
         let mut recorded = serde_json::Map::new();
         for table in data_editor::content::tables_of(&mut conn, &s.original_defs).await.unwrap() {
             let (rows, md5) = data_editor::content::table_hash(&mut conn, &s.original_defs, &table).await.unwrap();
             recorded.insert(table, json!({"rows": rows, "md5": md5}));
         }
-        sqlx::query(AssertSqlSafe(format!("INSERT INTO {}.imports (part, source, files, tables) VALUES ('defs', 'test', '{{}}', $1)", s.content)))
-            .bind(Value::Object(recorded))
-            .execute(&self.pool)
-            .await
-            .unwrap();
+        sqlx::query(AssertSqlSafe(format!(
+            "INSERT INTO {}.imports (part, source, files, tables) VALUES ('defs', 'test', '{{}}', $1)",
+            s.content
+        )))
+        .bind(Value::Object(recorded))
+        .execute(&self.pool)
+        .await
+        .unwrap();
     }
 
     /// An extension row: the extension (made when missing) owns `tbl` `key`, written as `action` with the whole row `row`.
@@ -280,15 +293,17 @@ impl Db {
         let c = &self.s.content;
         run(&self.pool, format!("INSERT INTO {c}.extensions (name, version, title, description, manifest) VALUES ('{extension}', '1.0.0', 't', 'd', '{{}}') ON CONFLICT DO NOTHING")).await;
         let seq: i64 = self.count(format!("SELECT count(*) FROM {c}.ext_rows")).await;
-        sqlx::query(AssertSqlSafe(format!("INSERT INTO {c}.ext_rows (extension, tbl, key, action, row, seq) VALUES ($1, $2, $3, $4, $5, {seq})")))
-            .bind(extension)
-            .bind(tbl)
-            .bind(key)
-            .bind(action)
-            .bind(row)
-            .execute(&self.pool)
-            .await
-            .unwrap();
+        sqlx::query(AssertSqlSafe(format!(
+            "INSERT INTO {c}.ext_rows (extension, tbl, key, action, row, seq) VALUES ($1, $2, $3, $4, $5, {seq})"
+        )))
+        .bind(extension)
+        .bind(tbl)
+        .bind(key)
+        .bind(action)
+        .bind(row)
+        .execute(&self.pool)
+        .await
+        .unwrap();
     }
 
     /// "Imports" what the scratch `defs` and `world` hold now: copies them as the frozen `original_defs` / `original_world` and records
@@ -335,7 +350,10 @@ impl Db {
 
     /// One text value of a fully named table: `value_text("content.extensions", "version", "name = 'kb'")`.
     pub async fn value_text(&self, table: &str, column: &str, filter: &str) -> String {
-        sqlx::query_scalar::<_, String>(AssertSqlSafe(format!("SELECT {column}::text FROM {table} WHERE {filter}"))).fetch_one(&self.pool).await.unwrap()
+        sqlx::query_scalar::<_, String>(AssertSqlSafe(format!("SELECT {column}::text FROM {table} WHERE {filter}")))
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
     }
 
     pub async fn count(&self, query: String) -> i64 {

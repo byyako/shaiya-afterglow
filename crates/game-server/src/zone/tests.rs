@@ -2876,7 +2876,8 @@ fn the_kill_boost_finds_an_applied_skill_by_id_and_level() {
     duel_fight(&zones, &mut inboxes);
     let any = |id, times| KillBoost { skill: SkillMatch { id, level: None }, times };
     let at = |id, level, times| KillBoost { skill: SkillMatch { id, level: Some(level) }, times };
-    let skill = |id, level, keep_time| SkillDef { id, level, type_effect: skills::BUFF, kind: buffs::ABILITIES, keep_time, ..Default::default() };
+    let skill =
+        |id, level, keep_time| SkillDef { id, level, type_effect: skills::BUFF, kind: buffs::ABILITIES, keep_time, ..Default::default() };
     // The multiplier the zone finds for `player` after `skill` is applied to it as the definitions `boosts` attach to give it.
     let boost = |player: u32, def: SkillDef, boosts: &[KillBoost]| {
         let mut defs = SkillDefs::new([def]);
@@ -4291,7 +4292,10 @@ fn trade_requests_ask_the_rules_after_the_cores_own_checks() {
     // A deny trade rule beats the permission: START_BUSY for the requester, the refusal returned for the whisper, nothing for Bob.
     put_rules(
         &zones,
-        &[("grant", json!({ "type": "cross_faction_trade" })), ("busy", json!({ "type": "deny", "point": "trade", "maps": [1], "message": "Not here." }))],
+        &[
+            ("grant", json!({ "type": "cross_faction_trade" })),
+            ("busy", json!({ "type": "deny", "point": "trade", "maps": [1], "message": "Not here." })),
+        ],
     );
     let refusal = zones.trade_request(1, 1, 2, now).expect("refused by a rule");
     assert_eq!((&*refusal.name, refusal.text.as_deref()), ("busy", Some("Not here.")));
@@ -4347,7 +4351,8 @@ fn a_kill_queues_one_kill_event_with_the_party_near() {
         [(1, vec![0u8; 2048 * 2048 / 8])].into(),
         [(1, vec![SpawnArea::new([100.0, 0.0, 105.0, 100.0, 0.0, 105.0], vec![(7, 1)])])].into(),
     );
-    let defs = MobDefs::new([MobDef { id: 7, level: 4, hp: 30, size: 1, country: 2, respawn: Duration::from_secs(30), ..Default::default() }]);
+    let defs =
+        MobDefs::new([MobDef { id: 7, level: 4, hp: 30, size: 1, country: 2, respawn: Duration::from_secs(30), ..Default::default() }]);
     let zones = Zones::new(&world, &defs);
     let (a, _a_in, _) = member(1, 100.0, 100.0, 0, b"Alice", 10);
     let (b, _b_in, _) = member(2, 100.0, 199.0, 0, b"Bob", 20);
@@ -4391,7 +4396,10 @@ fn a_boss_groups_boss_queues_kill_then_boss_kill() {
     let zones = Zones::new(&world, &defs);
     let (a, _a_in) = player(1, 100.0, 100.0);
     zones.enter(1, a);
-    watch(&zones, "game.on('kill', function(p, mob) note('kill ' .. mob.id .. ' ' .. tostring(mob.boss)) end) game.on('boss_kill', function(p, mob) note('boss_kill ' .. mob.id) end)");
+    watch(
+        &zones,
+        "game.on('kill', function(p, mob) note('kill ' .. mob.id .. ' ' .. tostring(mob.boss)) end) game.on('boss_kill', function(p, mob) note('boss_kill ' .. mob.id) end)",
+    );
     let t = Instant::now();
     zones.respawn(t, &world, &defs, &mut || 0);
     kill(&zones, 1, 1, &defs, t);
@@ -4417,7 +4425,10 @@ fn a_faction_kill_queues_pvp_kill_and_death_and_a_duels_death_only_death() {
     edit(&zones, 2, |p| p.occupant.shape.name = b"Bob".to_vec());
     edit(&zones, 3, |p| p.occupant.shape.name = b"Carol".to_vec());
     duel_fight(&zones, &mut inboxes);
-    watch(&zones, "game.on('pvp_kill', function() note('pvp') end) game.on('death', function(victim, by, killer, pvp) note('death ' .. victim.name .. ' ' .. tostring(pvp)) end)");
+    watch(
+        &zones,
+        "game.on('pvp_kill', function() note('pvp') end) game.on('death', function(victim, by, killer, pvp) note('death ' .. victim.name .. ' ' .. tostring(pvp)) end)",
+    );
     let (_, _, defs) = fighting_ground();
     assert!(matches!(strike(&zones, &defs, 2, &blows(20, 100), 3, false), AttackOutcome::Struck { killed: true, .. }));
     assert_eq!(logged(&zones, 1), ["death Carol false"]);
@@ -4470,15 +4481,20 @@ fn spawned_monsters_are_capped_tagged_expire_quietly_and_give_what_they_were_tol
     // A kill of a spawned monster: the script's `kill` names the extension; no experience with exp = false, no gold with drops = false.
     let quiet = spawn(1, (false, false));
     let fighter = combat::player(10, [100, 10, 10, 10, 10, 0], &combat::Gear { kind: Some(combat::MELEE), ..Default::default() });
-    let attack = Attack { attacker: 1, country: 0, fighter: &fighter, kind: combat::MELEE, slack: 40.0, range: 0, rec: 0, cross_road: false };
-    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, quiet[0], &attack, &defs, no_loot(), now, &mut || 0) else { panic!("a hit") };
+    let attack =
+        Attack { attacker: 1, country: 0, fighter: &fighter, kind: combat::MELEE, slack: 40.0, range: 0, rec: 0, cross_road: false };
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, quiet[0], &attack, &defs, no_loot(), now, &mut || 0) else {
+        panic!("a hit")
+    };
     assert!(killed);
     assert_eq!(logged(&zones, 1), ["kill w"]);
     assert!(a_ev.try_recv().is_err(), "exp = false: no Kill event for the experience");
     assert!(zones.ground.guard().get(&1).is_none_or(|g| g.items.is_empty()));
     // The default gives both.
     let normal = spawn(1, (true, true));
-    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, normal[0], &attack, &defs, no_loot(), now, &mut || 0) else { panic!("a hit") };
+    let AttackOutcome::Struck { killed, .. } = zones.attack_mob(1, normal[0], &attack, &defs, no_loot(), now, &mut || 0) else {
+        panic!("a hit")
+    };
     assert!(killed);
     assert!(matches!(a_ev.try_recv().ok(), Some(ZoneEvent::Kill { mob_id: 7, .. })));
 }

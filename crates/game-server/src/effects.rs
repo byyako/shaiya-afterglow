@@ -489,17 +489,18 @@ mod tests {
 
     #[test]
     fn every_type_parses() {
-        assert_eq!(
-            effect(json!({ "type": "level_up", "levels": 1 })),
-            ItemEffect::LevelUp(LevelUp { by: LevelBy::Levels(1), max: None })
-        );
+        assert_eq!(effect(json!({ "type": "level_up", "levels": 1 })), ItemEffect::LevelUp(LevelUp { by: LevelBy::Levels(1), max: None }));
         assert_eq!(
             effect(json!({ "type": "level_up", "to": 30, "max": 50 })),
             ItemEffect::LevelUp(LevelUp { by: LevelBy::To(30), max: Some(50) })
         );
         assert!(check_effect(&json!({ "type": "level_up", "levels": 59 })).is_ok());
-        assert!(check_effect(&json!({ "type": "level_up", "to": 2 })).is_ok() && check_effect(&json!({ "type": "level_up", "to": 60 })).is_ok());
-        let ItemEffect::Enchant(e) = effect(json!({ "type": "enchant", "rate": 1000000, "jumps": [[1, 60], [2, 30], [3, 10]], "safe": true })) else {
+        assert!(
+            check_effect(&json!({ "type": "level_up", "to": 2 })).is_ok() && check_effect(&json!({ "type": "level_up", "to": 60 })).is_ok()
+        );
+        let ItemEffect::Enchant(e) =
+            effect(json!({ "type": "enchant", "rate": 1000000, "jumps": [[1, 60], [2, 30], [3, 10]], "safe": true }))
+        else {
             panic!()
         };
         assert_eq!((e.rate, e.safe), (1_000_000, true));
@@ -519,10 +520,14 @@ mod tests {
         assert_eq!(effect(json!({ "type": "enchant", "safe": false })).request(), Request::Enchant);
         assert_eq!(effect(json!({ "type": "recreate", "stats": ["str"] })).request(), Request::Recreate);
         // Each type refuses under an id of its own, above the rules' and the scripts'.
-        let ids: Vec<u32> = [json!({ "type": "level_up", "levels": 1 }), json!({ "type": "enchant", "safe": true }), json!({ "type": "recreate", "stats": ["str"] })]
-            .into_iter()
-            .map(|v| effect(v).refusal_id())
-            .collect();
+        let ids: Vec<u32> = [
+            json!({ "type": "level_up", "levels": 1 }),
+            json!({ "type": "enchant", "safe": true }),
+            json!({ "type": "recreate", "stats": ["str"] }),
+        ]
+        .into_iter()
+        .map(|v| effect(v).refusal_id())
+        .collect();
         assert_eq!(ids, [REFUSAL_BASE, REFUSAL_BASE + 1, REFUSAL_BASE + 2]);
         assert_eq!(item_id(100, 215), 100215);
     }
@@ -559,7 +564,9 @@ mod tests {
         assert!(error(json!({ "type": "recreate", "stats": "str" })).starts_with("stats: \"str\" is not a list"));
         assert_eq!(error(json!({ "type": "recreate", "stats": ["str"], "value": "high" })), "value: \"high\" is not \"random\" or \"max\"");
         assert!(error(json!({ "type": "recreate", "stats": ["str"], "rate": 1 })).contains("not a key of the recreate effect"));
-        assert!(error(json!({ "type": "nothing" })).starts_with("type: unknown type \"nothing\"; the types are level_up, enchant, recreate"));
+        assert!(
+            error(json!({ "type": "nothing" })).starts_with("type: unknown type \"nothing\"; the types are level_up, enchant, recreate")
+        );
         assert!(error(json!({ "levels": 1 })).contains("needs a type"));
         assert!(error(json!({ "type": 3 })).starts_with("type: "));
         assert!(error(json!(3)).contains("is a table"));
@@ -572,7 +579,10 @@ mod tests {
             assert_eq!(fits_row(&level_up, item_type, 0), Ok(()), "type {item_type}");
         }
         let wrong = fits_row(&level_up, 95, 0).unwrap_err();
-        assert!(wrong.starts_with("effect level_up needs an item the core uses (item type 25, 44 or 100)") && wrong.ends_with("type 95"), "{wrong}");
+        assert!(
+            wrong.starts_with("effect level_up needs an item the core uses (item type 25, 44 or 100)") && wrong.ends_with("type 95"),
+            "{wrong}"
+        );
         assert!(fits_row(&level_up, 16, 0).is_err(), "armour");
         let enchant = effect(json!({ "type": "enchant", "safe": true }));
         assert_eq!(fits_row(&enchant, 95, 0), Ok(()));
@@ -595,9 +605,14 @@ mod tests {
         assert!(e(json!([])).starts_with("0 abilities is not 1 to 4"));
         assert_eq!(e(json!([{ "type": "kill_boost", "times": 0 }])), "ability 1: times: 0 is not 1 to 100");
         assert_eq!(e(json!([{ "type": "kill_boost", "times": 101 }])), "ability 1: times: 101 is not 1 to 100");
-        assert_eq!(e(json!([{ "type": "kill_boost", "times": 2 }, { "type": "kill_boost" }])), "ability 2: a kill_boost ability needs times, 1 to 100");
+        assert_eq!(
+            e(json!([{ "type": "kill_boost", "times": 2 }, { "type": "kill_boost" }])),
+            "ability 2: a kill_boost ability needs times, 1 to 100"
+        );
         assert_eq!(e(json!([{ "type": "kill_boost", "times": 2, "extra": 1 }])), "ability 1: unknown key \"extra\"");
-        assert!(e(json!([{ "type": "haste", "times": 2 }])).starts_with("ability 1: type: unknown type \"haste\"; the types are kill_boost"));
+        assert!(
+            e(json!([{ "type": "haste", "times": 2 }])).starts_with("ability 1: type: unknown type \"haste\"; the types are kill_boost")
+        );
         assert!(e(json!([{ "times": 2 }])).contains("needs a type"));
         assert!(e(json!({ "type": "kill_boost", "times": 2 })).contains("is a list of tables"));
         assert!(e(json!([3])).starts_with("ability 1: an ability is a table"));
@@ -639,7 +654,10 @@ mod tests {
             effect(json!({ "type": "enchant", "jumps": [[1, 60], [3, 10]], "safe": true })).describe(),
             "enchant rate = 1000000, jumps = [[1, 60], [3, 10]], safe = true"
         );
-        assert_eq!(effect(json!({ "type": "recreate", "stats": ["str", "wis"], "value": "max" })).describe(), "recreate stats = [\"str\", \"wis\"], value = \"max\"");
+        assert_eq!(
+            effect(json!({ "type": "recreate", "stats": ["str", "wis"], "value": "max" })).describe(),
+            "recreate stats = [\"str\", \"wis\"], value = \"max\""
+        );
         assert_eq!(Ability::KillBoost { times: 2 }.describe(), "kill_boost times = 2");
     }
 

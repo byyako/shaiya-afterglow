@@ -41,7 +41,11 @@ impl Folder {
     fn new(name: &str, version: &str, extra: &str) -> Self {
         let to = std::env::temp_dir().join(format!("scripts-test-{:08x}", rand::random::<u32>()));
         std::fs::create_dir_all(to.join("lib")).unwrap();
-        std::fs::write(to.join("extension.toml"), format!("format = 1\nname = \"{name}\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{extra}\n")).unwrap();
+        std::fs::write(
+            to.join("extension.toml"),
+            format!("format = 1\nname = \"{name}\"\nversion = \"{version}\"\ntitle = \"T\"\ndescription = \"D\"\n{extra}\n"),
+        )
+        .unwrap();
         std::fs::write(to.join("rows.toml"), "").unwrap();
         Self(to)
     }
@@ -103,7 +107,13 @@ async fn a_scripted_extension_installs_with_its_scripts_in_order_and_shows_the_d
     let Some(db) = seeded().await else { return };
     let f = Folder::standard();
     let check = db.editor.ext_check(f.path()).await.unwrap();
-    assert!(has(&check, "scripts (API 1): 2 files, 3 options") && has(&check, "events: kill, login") && has(&check, "commands: !hi") && has(&check, "timers: 1"), "{check:#?}");
+    assert!(
+        has(&check, "scripts (API 1): 2 files, 3 options")
+            && has(&check, "events: kill, login")
+            && has(&check, "commands: !hi")
+            && has(&check, "timers: 1"),
+        "{check:#?}"
+    );
     assert_eq!(stored(&db, "ext_scripts", "sx").await, 0, "a check writes nothing");
 
     let lines = db.editor.ext_install(f.path(), false).await.unwrap();
@@ -111,19 +121,29 @@ async fn a_scripted_extension_installs_with_its_scripts_in_order_and_shows_the_d
     let rows = db.scalar(format!("SELECT jsonb_agg(jsonb_build_object('seq', seq, 'path', path, 'sha', sha256, 'len', length(source)) ORDER BY seq) AS v FROM {}.ext_scripts WHERE extension = 'sx'", db.s.content)).await;
     let rows = rows["v"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
-    assert_eq!((rows[0]["seq"].clone(), rows[0]["path"].clone(), rows[1]["seq"].clone(), rows[1]["path"].clone()), (json!(0), json!("main.lua"), json!(1), json!("lib/more.lua")));
+    assert_eq!(
+        (rows[0]["seq"].clone(), rows[0]["path"].clone(), rows[1]["seq"].clone(), rows[1]["path"].clone()),
+        (json!(0), json!("main.lua"), json!(1), json!("lib/more.lua"))
+    );
     assert_eq!(rows[0]["sha"], json!(data_editor::ext::ops::hex(MAIN.as_bytes())));
     assert_eq!(rows[1]["len"], json!(MORE.len()));
-    let options = db.scalar(format!("SELECT jsonb_object_agg(name, spec) AS v FROM {}.ext_options WHERE extension = 'sx'", db.s.content)).await;
+    let options =
+        db.scalar(format!("SELECT jsonb_object_agg(name, spec) AS v FROM {}.ext_options WHERE extension = 'sx'", db.s.content)).await;
     assert_eq!(options["v"]["gold"], json!({"type": "integer", "default": 100, "doc": "Gold.", "min": 0, "max": 1000}));
     assert_eq!(options["v"]["maps"]["default"], json!([35]));
     let manifest = db.value_text(&format!("{}.extensions", db.s.content), "manifest", "name = 'sx'").await;
-    assert!(manifest.contains("\"api\": 1") && manifest.contains("\"scripts\"") && manifest.contains("\"options\""), "the manifest keeps the three keys: {manifest}");
+    assert!(
+        manifest.contains("\"api\": 1") && manifest.contains("\"scripts\"") && manifest.contains("\"options\""),
+        "the manifest keeps the three keys: {manifest}"
+    );
 
     let shown = db.editor.ext_show("sx").await.unwrap();
     assert!(has(&shown, "script main.lua:") && has(&shown, "script lib/more.lua:") && has(&shown, "sha256 "), "{shown:#?}");
     assert!(has(&shown, "option gold (integer) default 100") && has(&shown, "option maps (maps)"), "{shown:#?}");
-    assert!(has(&shown, "dry run of the load registers:") && has(&shown, "events: kill, login") && has(&shown, "commands: !hi"), "{shown:#?}");
+    assert!(
+        has(&shown, "dry run of the load registers:") && has(&shown, "events: kill, login") && has(&shown, "commands: !hi"),
+        "{shown:#?}"
+    );
     let list = db.editor.ext_list().await.unwrap();
     assert!(list[0].contains("scripts") && list[1].starts_with("sx") && list[1].trim_end().ends_with('2'), "{list:#?}");
     let off = db.editor.ext_set_enabled("sx", false).await.unwrap();
@@ -171,19 +191,31 @@ async fn ext_scripts_replaces_the_scripts_and_refuses_everything_else() {
     let Some(db) = seeded().await else { return };
     let f = Folder::standard();
     db.editor.ext_install(f.path(), false).await.unwrap();
-    let before_upgraded: String = db.value_text(&format!("{}.extensions", db.s.content), "coalesce(upgraded_at::text, '-')", "name = 'sx'").await;
+    let before_upgraded: String =
+        db.value_text(&format!("{}.extensions", db.s.content), "coalesce(upgraded_at::text, '-')", "name = 'sx'").await;
 
     // New scripts and a new option, same version: replaced.
-    let g = Folder::standard()
-        .file("main.lua", "game.on('login', function(p) end)\ngame.on('logout', function(p) end)\n")
-        .edit("extension.toml", "[options.gold]", "[options.extra]\ntype = \"boolean\"\ndefault = true\ndoc = \"E.\"\n\n[options.gold]");
+    let g = Folder::standard().file("main.lua", "game.on('login', function(p) end)\ngame.on('logout', function(p) end)\n").edit(
+        "extension.toml",
+        "[options.gold]",
+        "[options.extra]\ntype = \"boolean\"\ndefault = true\ndoc = \"E.\"\n\n[options.gold]",
+    );
     let lines = db.editor.ext_scripts(g.path()).await.unwrap();
-    assert!(has(&lines, "sx 1.0.0: scripts replaced") && has(&lines, "events: kill, login, logout") && has(&lines, "`console <server id> reload` puts them in force"), "{lines:#?}");
+    assert!(
+        has(&lines, "sx 1.0.0: scripts replaced")
+            && has(&lines, "events: kill, login, logout")
+            && has(&lines, "`console <server id> reload` puts them in force"),
+        "{lines:#?}"
+    );
     let source = db.value_text(&format!("{}.ext_scripts", db.s.content), "source", "extension = 'sx' AND path = 'main.lua'").await;
     assert!(source.contains("logout"));
     assert_eq!(stored(&db, "ext_options", "sx").await, 4);
     assert_eq!(db.value_text(&format!("{}.extensions", db.s.content), "version", "name = 'sx'").await, "1.0.0");
-    assert_eq!(db.value_text(&format!("{}.extensions", db.s.content), "coalesce(upgraded_at::text, '-')", "name = 'sx'").await, before_upgraded, "no upgrade happened");
+    assert_eq!(
+        db.value_text(&format!("{}.extensions", db.s.content), "coalesce(upgraded_at::text, '-')", "name = 'sx'").await,
+        before_upgraded,
+        "no upgrade happened"
+    );
     assert!(db.value_text(&format!("{}.extensions", db.s.content), "manifest", "name = 'sx'").await.contains("\"extra\""));
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.ext_log WHERE extension = 'sx' AND action = 'scripts'", db.s.content)).await, 1);
 
@@ -192,13 +224,19 @@ async fn ext_scripts_replaces_the_scripts_and_refuses_everything_else() {
     assert!(failure(db.editor.ext_scripts(v2.path()).await.unwrap_err()).contains("use `ext upgrade`"));
     let title = Folder::standard().edit("extension.toml", "title = \"T\"", "title = \"U\"");
     let text = failure(db.editor.ext_scripts(title.path()).await.unwrap_err());
-    assert!(text.contains("rows, rules, settings or migrations changed: use `ext upgrade` with a higher version") && text.contains("manifest"), "{text}");
+    assert!(
+        text.contains("rows, rules, settings or migrations changed: use `ext upgrade` with a higher version") && text.contains("manifest"),
+        "{text}"
+    );
     let setting = Folder::standard().edit("extension.toml", "[options.text]", "[settings]\nguild_party_size = 2\n\n[options.text]");
     let text = failure(db.editor.ext_scripts(setting.path()).await.unwrap_err());
     assert!(text.contains("changed: use `ext upgrade`") && text.contains("settings"), "{text}");
-    let rule = Folder::standard().edit("extension.toml", "[options.text]", "[rules.no-pvp]\ntype = \"pvp_gain\"\nexp = 0\n\n[options.text]");
+    let rule =
+        Folder::standard().edit("extension.toml", "[options.text]", "[rules.no-pvp]\ntype = \"pvp_gain\"\nexp = 0\n\n[options.text]");
     assert!(failure(db.editor.ext_scripts(rule.path()).await.unwrap_err()).contains("rules"));
-    let rows = Folder::standard().edit("extension.toml", "[options.text]", "[ids]\nskills = [\"200/1\"]\n\n[options.text]").file("rows.toml", "[[skill]]\nid = \"200/1\"\ncopy = { from = \"250/1\" }\n");
+    let rows = Folder::standard()
+        .edit("extension.toml", "[options.text]", "[ids]\nskills = [\"200/1\"]\n\n[options.text]")
+        .file("rows.toml", "[[skill]]\nid = \"200/1\"\ncopy = { from = \"250/1\" }\n");
     assert!(failure(db.editor.ext_scripts(rows.path()).await.unwrap_err()).contains("changed: use `ext upgrade`"));
     let migration = Folder::standard().file("migrations/0001_t.sql", "CREATE TABLE t (id integer);");
     assert!(failure(db.editor.ext_scripts(migration.path()).await.unwrap_err()).contains("migrations"));
@@ -224,8 +262,16 @@ async fn remove_drops_scripts_options_and_stored_values_and_disable_keeps_them()
     let Some(db) = seeded().await else { return };
     db.editor.ext_install(Folder::standard().path(), false).await.unwrap();
     let c = &db.s.content;
-    sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO {c}.script_values (extension, character_id, key, value) VALUES ('sx', 7, 'streak', '3')"))).execute(&db.pool).await.unwrap();
-    sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO {c}.script_globals (extension, key, value) VALUES ('sx', 'bounty.7', '5000')"))).execute(&db.pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {c}.script_values (extension, character_id, key, value) VALUES ('sx', 7, 'streak', '3')"
+    )))
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO {c}.script_globals (extension, key, value) VALUES ('sx', 'bounty.7', '5000')")))
+        .execute(&db.pool)
+        .await
+        .unwrap();
     db.editor.ext_set_enabled("sx", false).await.unwrap();
     assert_eq!((stored(&db, "script_values", "sx").await, stored(&db, "script_globals", "sx").await), (1, 1), "disable keeps the values");
     let lines = db.editor.ext_remove("sx", false, |_| Ok(true)).await.unwrap();
@@ -263,7 +309,11 @@ async fn the_editor_sets_an_extensions_option_checked_against_its_spec() {
     let applied = db.apply("tune sx").await;
     assert_eq!(applied.effects.iter().map(|e| e.name()).collect::<Vec<_>>(), ["live"], "an option takes effect at reload");
     let values = db.scalar(format!("SELECT jsonb_object_agg(name, value) AS v FROM {}.setting_values", db.s.content)).await;
-    assert_eq!(values["v"], json!({"ext.sx.gold": "250", "ext.sx.text": "\"Hi there, {name}\"", "ext.sx.maps": "[35,\"40-42\"]"}), "JSON text");
+    assert_eq!(
+        values["v"],
+        json!({"ext.sx.gold": "250", "ext.sx.text": "\"Hi there, {name}\"", "ext.sx.maps": "[35,\"40-42\"]"}),
+        "JSON text"
+    );
     let shown = db.editor.ext_show("sx").await.unwrap();
     assert!(has(&shown, "option gold (integer) default 100, data editor 250"), "{shown:#?}");
 
@@ -285,7 +335,10 @@ async fn the_editor_sets_an_extensions_option_checked_against_its_spec() {
     assert!(report.problems.is_empty(), "{:?}", report.problems);
     assert_eq!(db.value_text(&format!("{}.setting_values", db.s.content), "value", "name = 'ext.sx.text'").await, "\"plain\"");
     sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {}.setting_values", db.s.content))).execute(&db.pool).await.unwrap();
-    sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {}.ext_options WHERE name = 'text'", db.s.content))).execute(&db.pool).await.unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {}.ext_options WHERE name = 'text'", db.s.content)))
+        .execute(&db.pool)
+        .await
+        .unwrap();
     let report = db.editor.apply_edits().await.unwrap();
     assert!(report.problems.iter().any(|p| p.key == "ext.sx.text" && p.text.contains("has no option")), "{:?}", report.problems);
     db.drop().await;

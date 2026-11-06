@@ -82,7 +82,11 @@ pub fn resolve_options(sources: &ScriptSources) -> Result<Resolution> {
     for e in &sources.extensions {
         out.extensions.push(ExtOptions {
             extension: e.name.clone(),
-            options: e.options.iter().map(|(key, spec)| (ResolvedOption { key: key.clone(), spec: spec.clone(), value: spec.default.clone() }, Layer::Default)).collect(),
+            options: e
+                .options
+                .iter()
+                .map(|(key, spec)| (ResolvedOption { key: key.clone(), spec: spec.clone(), value: spec.default.clone() }, Layer::Default))
+                .collect(),
         });
     }
     if let Some(file) = &sources.file {
@@ -117,7 +121,8 @@ pub fn resolve_options(sources: &ScriptSources) -> Result<Resolution> {
             out.warnings.push(format!("{place}: {name} is ignored: {}", unknown_option(ext, key)));
             continue;
         };
-        let value: Value = serde_json::from_str(text).map_err(|e| anyhow::anyhow!("{place}: {name}: the value {text:?} is not JSON ({e})"))?;
+        let value: Value =
+            serde_json::from_str(text).map_err(|e| anyhow::anyhow!("{place}: {name}: the value {text:?} is not JSON ({e})"))?;
         let o = &mut ext.options[slot];
         o.0.spec.check(&value).map_err(|e| anyhow::anyhow!("{place}: {name}: {e:#}"))?;
         o.0.value = value;
@@ -135,7 +140,12 @@ impl Resolution {
             .map(|e| ExtInput {
                 name: e.name.clone(),
                 scripts: e.scripts.clone(),
-                options: self.extensions.iter().find(|x| x.extension == e.name).map(|x| x.options.iter().map(|(o, _)| o.clone()).collect()).unwrap_or_default(),
+                options: self
+                    .extensions
+                    .iter()
+                    .find(|x| x.extension == e.name)
+                    .map(|x| x.options.iter().map(|(o, _)| o.clone()).collect())
+                    .unwrap_or_default(),
             })
             .collect()
     }

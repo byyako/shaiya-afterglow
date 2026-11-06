@@ -37,15 +37,29 @@ async fn a_setting_is_drafted_applied_and_taken_over_the_file_by_resolve() {
     assert_eq!(applied.effects.iter().map(|e| e.name()).collect::<Vec<_>>(), ["restart"]);
     assert_eq!(db.value_text(&format!("{}.setting_values", db.s.content), "value", "name = 'trade_chat_min_level'").await, "12");
     assert_eq!(db.value_text(&format!("{}.setting_values", db.s.content), "value", "name = 'market_maps'").await, "35,36");
-    let fields = db.scalar(format!("SELECT jsonb_agg(jsonb_build_object('k', key, 'f', field, 'v', value, 'o', original) ORDER BY key) AS v FROM {}.fields", db.s.edits)).await;
-    assert_eq!(fields["v"][1], json!({"k": "trade_chat_min_level", "f": "value", "v": "12", "o": null}), "an added override has no original");
-    let rows = db.scalar(format!("SELECT jsonb_agg(jsonb_build_object('k', key, 'a', action) ORDER BY key) AS v FROM {}.rows", db.s.edits)).await;
+    let fields = db
+        .scalar(format!(
+            "SELECT jsonb_agg(jsonb_build_object('k', key, 'f', field, 'v', value, 'o', original) ORDER BY key) AS v FROM {}.fields",
+            db.s.edits
+        ))
+        .await;
+    assert_eq!(
+        fields["v"][1],
+        json!({"k": "trade_chat_min_level", "f": "value", "v": "12", "o": null}),
+        "an added override has no original"
+    );
+    let rows =
+        db.scalar(format!("SELECT jsonb_agg(jsonb_build_object('k', key, 'a', action) ORDER BY key) AS v FROM {}.rows", db.s.edits)).await;
     assert_eq!(rows["v"], json!([{"k": "market_maps", "a": "add"}, {"k": "trade_chat_min_level", "a": "add"}]));
     let log = db.editor.history_detail(applied.change_set).await.unwrap();
-    assert_eq!(log.iter().map(|l| (l.target.as_str(), l.key.as_str(), l.action.as_str())).collect::<Vec<_>>(), [("setting", "trade_chat_min_level", "add"), ("setting", "market_maps", "add")]);
+    assert_eq!(
+        log.iter().map(|l| (l.target.as_str(), l.key.as_str(), l.action.as_str())).collect::<Vec<_>>(),
+        [("setting", "trade_chat_min_level", "add"), ("setting", "market_maps", "add")]
+    );
 
     // The game server's own resolve over those rows: the editor beats the file, which beats the default.
-    let sources = Sources { file: file("trade_chat_min_level = 8\nguild_party_size = 2\n"), editor: overrides(&db).await, ..Sources::default() };
+    let sources =
+        Sources { file: file("trade_chat_min_level = 8\nguild_party_size = 2\n"), editor: overrides(&db).await, ..Sources::default() };
     let (config, all) = resolve(&startup(), &sources).unwrap();
     let layer = |name: &str| all.iter().find(|r| r.name == name).unwrap().layer.clone();
     assert_eq!(config.trade_chat_min_level, 12);
@@ -64,7 +78,10 @@ async fn a_setting_is_drafted_applied_and_taken_over_the_file_by_resolve() {
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.fields", db.s.edits)).await, 0);
     assert_eq!(db.count(format!("SELECT count(*) FROM {}.rows", db.s.edits)).await, 0);
     let (config, all) = resolve(&startup(), &Sources::default()).unwrap();
-    assert_eq!((config.trade_chat_min_level, all.iter().find(|r| r.name == "trade_chat_min_level").unwrap().layer.clone()), (10, Layer::Default));
+    assert_eq!(
+        (config.trade_chat_min_level, all.iter().find(|r| r.name == "trade_chat_min_level").unwrap().layer.clone()),
+        (10, Layer::Default)
+    );
     db.drop().await;
 }
 
@@ -97,7 +114,10 @@ async fn bad_setting_lines_never_reach_the_draft() {
     // An override that exists is not added twice.
     db.draft(add("setting", "market_maps", json!({"value": "1"}))).await;
     db.apply("one").await;
-    assert!(refusal(db.editor.draft_add(&add("setting", "market_maps", json!({"value": "2"})), "t").await.unwrap_err()).contains("exists already"));
+    assert!(
+        refusal(db.editor.draft_add(&add("setting", "market_maps", json!({"value": "2"})), "t").await.unwrap_err())
+            .contains("exists already")
+    );
     db.drop().await;
 }
 
@@ -145,7 +165,10 @@ async fn export_and_import_carry_the_overrides() {
     let report = db.editor.import(&export, true).await.unwrap();
     assert!(report.problems.is_empty(), "{:?}", report.problems);
     assert_eq!(db.editor.export(false).await.unwrap(), export);
-    assert_eq!(overrides(&db).await.iter().map(|(n, v, _)| (n.as_str(), v.as_str())).collect::<Vec<_>>(), [("card_win_chances", "420,200,130,100,80"), ("exp_rate", "2.5")]);
+    assert_eq!(
+        overrides(&db).await.iter().map(|(n, v, _)| (n.as_str(), v.as_str())).collect::<Vec<_>>(),
+        [("card_win_chances", "420,200,130,100,80"), ("exp_rate", "2.5")]
+    );
 
     // Another server's copy: the rows are written by the import's apply.
     let other = Db::create().await.unwrap();
@@ -157,7 +180,11 @@ async fn export_and_import_carry_the_overrides() {
     run(&other.pool, format!("DELETE FROM {}.setting_values", other.s.content)).await;
     run(&other.pool, format!("UPDATE {}.fields SET value = '\"-1\"' WHERE key = 'exp_rate'", other.s.edits)).await;
     let report = other.editor.apply_edits().await.unwrap();
-    assert!(report.problems.iter().any(|p| p.target == "setting" && p.key == "exp_rate" && p.text.contains("left alone")), "{:?}", report.problems);
+    assert!(
+        report.problems.iter().any(|p| p.target == "setting" && p.key == "exp_rate" && p.text.contains("left alone")),
+        "{:?}",
+        report.problems
+    );
     assert_eq!(overrides(&other).await.len(), 1, "only the valid one was written");
     other.drop().await;
     db.drop().await;

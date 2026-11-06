@@ -32,11 +32,7 @@ pub(super) async fn kill_counted<S: Backend>(
         return Ok(());
     }
     quest_player_kill(conn, ctx, character, state).await?;
-    let by = ctx
-        .switches
-        .kill_rate()
-        .saturating_mul(ctx.zones.kill_boost(state.map, character.id))
-        .saturating_mul(times);
+    let by = ctx.switches.kill_rate().saturating_mul(ctx.zones.kill_boost(state.map, character.id)).saturating_mul(times);
     let Some(kills) = pvp::counted(character.kills[0], by) else { return Ok(()) };
     character.kills[0] = kills;
     // The faction's kill count (`CWorld::AddKillCount`, `docs/original/pvp-2.md` section 9).

@@ -40,9 +40,19 @@ pub(super) enum Kind {
     DenyItemUse(Option<ItemRanges>),
     LevelGap(u16),
     CrossFactionTrade,
-    PvpGain { exp: f64, kills: u32, deaths: bool },
-    Exp { factor: f64, sources: u8 },
-    Enchant { jumps: Vec<(u8, u32)>, items: Items },
+    PvpGain {
+        exp: f64,
+        kills: u32,
+        deaths: bool,
+    },
+    Exp {
+        factor: f64,
+        sources: u8,
+    },
+    Enchant {
+        jumps: Vec<(u8, u32)>,
+        items: Items,
+    },
 }
 
 impl Kind {
@@ -144,7 +154,9 @@ fn point_of(name: &str) -> Option<Point> {
 
 fn take_sources(obj: &mut Map<String, Value>) -> Result<u8, RuleError> {
     let Some(value) = obj.remove("sources") else { return Ok(ExpSource::Mob.bit() | ExpSource::Party.bit()) };
-    let Value::Array(items) = value else { return Err(key_err("sources", format!("{value} is not a list of \"mob\", \"party\", \"quest\""))) };
+    let Value::Array(items) = value else {
+        return Err(key_err("sources", format!("{value} is not a list of \"mob\", \"party\", \"quest\"")));
+    };
     if items.is_empty() {
         return Err(key_err("sources", "an empty list matches nothing"));
     }
@@ -198,7 +210,11 @@ fn take_item_list(obj: &mut Map<String, Value>) -> Result<Option<ItemRanges>, Ru
     for entry in &list {
         let text = entry.as_str().ok_or_else(|| key_err("items", format!("{entry} is not {wanted}")))?;
         let number = |part: &str| -> Result<u8, RuleError> {
-            part.trim().parse::<u8>().ok().filter(|n| *n >= 1).ok_or_else(|| key_err("items", format!("{text:?}: {part:?} is not 1 to 255")))
+            part.trim()
+                .parse::<u8>()
+                .ok()
+                .filter(|n| *n >= 1)
+                .ok_or_else(|| key_err("items", format!("{text:?}: {part:?} is not 1 to 255")))
         };
         let (kind, ids) = match text.split_once('/') {
             None => (number(text)?, (1, 255)),
@@ -240,7 +256,9 @@ pub(super) fn parse(value: &Value) -> Result<Parsed, RuleError> {
             (scope::parse(&mut obj, who, true)?, kind, take_message(&mut obj)?)
         }
         "level_gap" => {
-            let Some(gap) = take_whole(&mut obj, "gap", 1, 255)? else { return Err(RuleError::rule("a level_gap rule needs a gap, 1 to 255")) };
+            let Some(gap) = take_whole(&mut obj, "gap", 1, 255)? else {
+                return Err(RuleError::rule("a level_gap rule needs a gap, 1 to 255"));
+            };
             (scope::parse(&mut obj, Some(WhoMode::Either), true)?, Kind::LevelGap(gap as u16), take_message(&mut obj)?)
         }
         "cross_faction_trade" => (scope::parse(&mut obj, Some(WhoMode::Both), true)?, Kind::CrossFactionTrade, None),
@@ -255,7 +273,9 @@ pub(super) fn parse(value: &Value) -> Result<Parsed, RuleError> {
             (scope::parse(&mut obj, None, false)?, kind, None)
         }
         "exp" => {
-            let Some(factor) = take_number(&mut obj, "factor", 0.0, 100.0)? else { return Err(RuleError::rule("an exp rule needs a factor, 0 to 100")) };
+            let Some(factor) = take_number(&mut obj, "factor", 0.0, 100.0)? else {
+                return Err(RuleError::rule("an exp rule needs a factor, 0 to 100"));
+            };
             let sources = take_sources(&mut obj)?;
             (scope::parse(&mut obj, None, true)?, Kind::Exp { factor, sources }, None)
         }
@@ -319,7 +339,9 @@ mod tests {
         }
         assert!(matches!(draft(json!({ "type": "level_gap", "gap": 20 })).kind, Kind::LevelGap(20)));
         assert!(matches!(draft(json!({ "type": "cross_faction_trade", "maps": [42] })).kind, Kind::CrossFactionTrade));
-        let Kind::PvpGain { exp, kills, deaths } = draft(json!({ "type": "pvp_gain", "exp": 0, "kills": 0, "deaths": false })).kind else { panic!() };
+        let Kind::PvpGain { exp, kills, deaths } = draft(json!({ "type": "pvp_gain", "exp": 0, "kills": 0, "deaths": false })).kind else {
+            panic!()
+        };
         assert_eq!((exp, kills, deaths), (0.0, 0, false));
         let Kind::PvpGain { exp, kills, deaths } = draft(json!({ "type": "pvp_gain", "exp": 0.5 })).kind else { panic!() };
         assert_eq!((exp, kills, deaths), (0.5, 1, true), "the others stay at their defaults");
@@ -327,7 +349,9 @@ mod tests {
         assert_eq!((factor, sources), (2.0, ExpSource::Mob.bit() | ExpSource::Party.bit()));
         let Kind::Exp { sources, .. } = draft(json!({ "type": "exp", "factor": 2, "sources": ["quest"] })).kind else { panic!() };
         assert_eq!(sources, ExpSource::Quest.bit());
-        let Kind::Enchant { jumps, items } = draft(json!({ "type": "enchant", "jumps": [[1, 70], [2, 20], [3, 10]] })).kind else { panic!() };
+        let Kind::Enchant { jumps, items } = draft(json!({ "type": "enchant", "jumps": [[1, 70], [2, 20], [3, 10]] })).kind else {
+            panic!()
+        };
         assert_eq!((jumps, items), (vec![(1, 70), (2, 20), (3, 10)], Items::Both));
         let Kind::Enchant { items, .. } = draft(json!({ "type": "enchant", "jumps": [[2, 1]], "items": "armour" })).kind else { panic!() };
         assert_eq!(items, Items::Armour);
@@ -337,9 +361,15 @@ mod tests {
     fn deny_item_use_takes_items_and_nothing_else_does() {
         let Kind::DenyItemUse(items) = draft(json!({ "type": "deny", "point": "item_use" })).kind else { panic!() };
         assert_eq!(items, None, "every item");
-        let d = draft(json!({ "type": "deny", "point": "item_use", "items": ["100/217", "100/215-216", "25", "100/215-216", " 7 / 3 "], "maps": [2] }));
+        let d = draft(
+            json!({ "type": "deny", "point": "item_use", "items": ["100/217", "100/215-216", "25", "100/215-216", " 7 / 3 "], "maps": [2] }),
+        );
         let Kind::DenyItemUse(items) = d.kind else { panic!() };
-        assert_eq!(items, Some(vec![(7, 3, 3), (25, 1, 255), (100, 215, 216), (100, 217, 217)]), "sorted, a repeat once, a type is all its ids");
+        assert_eq!(
+            items,
+            Some(vec![(7, 3, 3), (25, 1, 255), (100, 215, 216), (100, 217, 217)]),
+            "sorted, a repeat once, a type is all its ids"
+        );
         assert_eq!(d.text.as_deref(), Some("You cannot use that here."));
         assert!(error(json!({ "type": "deny", "point": "item_use", "items": [] })).starts_with("items: an empty list"));
         assert!(error(json!({ "type": "deny", "point": "item_use", "items": "100/215" })).starts_with("items: \"100/215\" is not a list"));
@@ -352,7 +382,10 @@ mod tests {
         let e = parse(&json!({ "type": "deny", "point": "attack", "items": ["100"] })).unwrap_err();
         assert!(e.msg.starts_with("unknown key \"items\"") && e.msg.contains("only a deny rule with point = \"item_use\""), "{}", e.msg);
         assert!(error(json!({ "type": "level_gap", "gap": 3, "items": ["100"] })).contains("not a key of a level_gap rule"));
-        assert!(error(json!({ "type": "enchant", "jumps": [[2, 1]], "items": ["100"] })).starts_with("items: "), "the enchant rule's own key");
+        assert!(
+            error(json!({ "type": "enchant", "jumps": [[2, 1]], "items": ["100"] })).starts_with("items: "),
+            "the enchant rule's own key"
+        );
         // A scope and a silent message work as at the other points.
         assert!(draft(json!({ "type": "deny", "point": "item_use", "message": "" })).text.is_none());
         assert!(error(json!({ "type": "deny", "point": "item_use", "who": "both" })).contains("unknown key \"who\""));
@@ -430,7 +463,10 @@ mod tests {
         assert!(e.msg.starts_with("unknown key \"gap\"") && e.msg.contains("not a key of a deny rule"), "{}", e.msg);
         assert!(error(json!({ "type": "level_gap", "gap": 3, "factor": 2 })).contains("unknown key \"factor\""));
         assert!(error(json!({ "type": "exp", "factor": 2, "exp": 3 })).contains("unknown key \"exp\""));
-        assert!(error(json!({ "type": "cross_faction_trade", "message": "x" })).contains("unknown key \"message\""), "a permission has no message");
+        assert!(
+            error(json!({ "type": "cross_faction_trade", "message": "x" })).contains("unknown key \"message\""),
+            "a permission has no message"
+        );
         assert!(error(json!({ "type": "pvp_gain", "exp": 0, "message": "x" })).contains("unknown key \"message\""));
     }
 

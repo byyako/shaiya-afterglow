@@ -56,7 +56,9 @@ fn key_err(key: &str, msg: impl Into<String>) -> RuleError {
 pub fn check_name(name: &str) -> Result<(), String> {
     fn plain(name: &str) -> bool {
         let mut chars = name.chars();
-        name.len() <= 40 && chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        name.len() <= 40
+            && chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     }
     if let Some(setting) = name.strip_prefix("setting.") {
         return Err(format!("names starting with `setting.` belong to the settings (change the setting `{setting}` instead)"));
@@ -319,7 +321,16 @@ impl RuleSet {
 
     /// The rules in force in order, with their hits since this set was built.
     pub fn list(&self) -> Vec<RuleLine> {
-        self.all.iter().map(|m| RuleLine { name: m.name.clone(), ty: m.ty, layer: m.layer.clone(), short: m.short.clone(), hits: m.hits.load(Ordering::Relaxed) }).collect()
+        self.all
+            .iter()
+            .map(|m| RuleLine {
+                name: m.name.clone(),
+                ty: m.ty,
+                layer: m.layer.clone(),
+                short: m.short.clone(),
+                hits: m.hits.load(Ordering::Relaxed),
+            })
+            .collect()
     }
 
     /// Point 1: whether `attacker` may not attack `target` on `map` (both players, enemies by faction). The first refusing rule.

@@ -5,7 +5,8 @@ use super::*;
 use crate::config::{self, Config, Sources, Startup};
 
 fn config() -> Config {
-    let startup = Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None };
+    let startup =
+        Startup { bind: "0.0.0.0:30810".parse().unwrap(), database_url: "postgres://localhost/test".into(), server_id: 1, config: None };
     config::resolve(&startup, &Sources::default()).unwrap().0
 }
 
@@ -15,7 +16,11 @@ fn p(level: u16, country: u8) -> Who {
 
 /// The rules of a config file, by name.
 fn file(rules: &[(&str, Value)]) -> RuleSources {
-    let rules = rules.iter().enumerate().map(|(i, (name, value))| FileRule { name: (*name).into(), value: value.clone(), line: 10 + i, key_lines: vec![] }).collect();
+    let rules = rules
+        .iter()
+        .enumerate()
+        .map(|(i, (name, value))| FileRule { name: (*name).into(), value: value.clone(), line: 10 + i, key_lines: vec![] })
+        .collect();
     RuleSources { file: Some(RuleFile { path: "config/game.toml".into(), rules }), ..RuleSources::default() }
 }
 
@@ -121,7 +126,10 @@ fn the_one_player_refusals() {
 #[test]
 fn deny_item_use_covers_the_items_it_names_in_its_scope() {
     let s = set(&[
-        ("stones", json!({ "type": "deny", "point": "item_use", "items": ["100/215-217", "25/3", "95"], "maps": [2, 3], "message": "Level stones do not work here." })),
+        (
+            "stones",
+            json!({ "type": "deny", "point": "item_use", "items": ["100/215-217", "25/3", "95"], "maps": [2, 3], "message": "Level stones do not work here." }),
+        ),
         ("novices", json!({ "type": "deny", "point": "item_use", "level": "1-9", "maps": [5] })),
     ]);
     let a = p(30, 0);
@@ -130,7 +138,10 @@ fn deny_item_use_covers_the_items_it_names_in_its_scope() {
     assert!(s.item_use(2, &a, 100, 215).is_some() && s.item_use(2, &a, 100, 217).is_some(), "both ends");
     assert!(s.item_use(2, &a, 100, 214).is_none() && s.item_use(2, &a, 100, 218).is_none(), "just outside");
     assert!(s.item_use(3, &a, 25, 3).is_some() && s.item_use(3, &a, 25, 4).is_none(), "one item");
-    assert!(s.item_use(3, &a, 95, 1).is_some() && s.item_use(3, &a, 95, 255).is_some() && s.item_use(3, &a, 96, 1).is_none(), "a whole type");
+    assert!(
+        s.item_use(3, &a, 95, 1).is_some() && s.item_use(3, &a, 95, 255).is_some() && s.item_use(3, &a, 96, 1).is_none(),
+        "a whole type"
+    );
     assert!(s.item_use(1, &a, 100, 216).is_none(), "another map");
     // Without `items` every item is covered, within the scope.
     assert!(s.item_use(5, &p(5, 0), 25, 1).is_some() && s.item_use(5, &p(5, 0), 100, 48).is_some());
@@ -170,7 +181,10 @@ fn player_kill_gains_kills_and_deaths() {
     assert_eq!((s.pvp_kills(42, &a).value, s.pvp_kills(1, &a).value, s.pvp_kills(9, &a).value), (0, 1, 6));
     assert!(!s.pvp_deaths(42, &a) && s.pvp_deaths(1, &a) && s.pvp_deaths(9, &a));
     let only_deaths = set(&[("d", json!({ "type": "pvp_gain", "deaths": false }))]);
-    assert_eq!((only_deaths.exp_factor(1, &a, ExpSource::Pvp).value, only_deaths.pvp_kills(1, &a).value, only_deaths.pvp_deaths(1, &a)), (1.0, 1, false));
+    assert_eq!(
+        (only_deaths.exp_factor(1, &a, ExpSource::Pvp).value, only_deaths.pvp_kills(1, &a).value, only_deaths.pvp_deaths(1, &a)),
+        (1.0, 1, false)
+    );
 }
 
 #[test]
@@ -183,7 +197,11 @@ fn enchant_draws_by_weight_at_the_boundaries() {
     let always = set(&[("three", json!({ "type": "enchant", "jumps": [[3, 1]] }))]);
     assert_eq!((always.enchant_jump(1, &a, false, 0).value, always.enchant_jump(1, &a, false, 999_999).value), (3, 3));
     let big = set(&[("big", json!({ "type": "enchant", "jumps": [[1, 1_000_000], [19, 1_000_000]] }))]);
-    assert_eq!((big.enchant_jump(1, &a, false, 499_999).value, big.enchant_jump(1, &a, false, 500_000).value), (1, 19), "weights up to 1,000,000 each");
+    assert_eq!(
+        (big.enchant_jump(1, &a, false, 499_999).value, big.enchant_jump(1, &a, false, 500_000).value),
+        (1, 19),
+        "weights up to 1,000,000 each"
+    );
 }
 
 #[test]
@@ -237,11 +255,17 @@ fn the_file_replaces_an_extensions_rule_and_the_editor_the_files() {
     let mut sources = file(&[("pets/no-capture", json!({ "type": "deny", "point": "attack", "maps": [2] }))]);
     sources.extensions = vec![extension("pets", "no-capture", json!({ "type": "deny", "point": "attack", "maps": [1] }))];
     let (s, all) = resolve(&cfg, &sources).unwrap();
-    assert!(s.attack(2, &p(1, 0), &p(1, 1)).is_some() && s.attack(1, &p(1, 0), &p(1, 1)).is_none(), "the file's rule replaced the extension's whole");
+    assert!(
+        s.attack(2, &p(1, 0), &p(1, 1)).is_some() && s.attack(1, &p(1, 0), &p(1, 1)).is_none(),
+        "the file's rule replaced the extension's whole"
+    );
     assert_eq!(names(&s), ["pets/no-capture"]);
     assert_eq!(s.list()[0].layer, "config file");
     let replaced = all.iter().find(|r| r.state != RuleState::InForce).unwrap();
-    assert_eq!((replaced.layer.clone(), replaced.state.clone()), (RuleLayer::Extension("pets".into()), RuleState::Replaced(RuleLayer::File)));
+    assert_eq!(
+        (replaced.layer.clone(), replaced.state.clone()),
+        (RuleLayer::Extension("pets".into()), RuleState::Replaced(RuleLayer::File))
+    );
 
     sources.editor = vec![("pets/no-capture".into(), json!({ "type": "deny", "point": "attack", "maps": [3] }), Some(12))];
     let (s, all) = resolve(&cfg, &sources).unwrap();
@@ -290,7 +314,10 @@ fn setting_names_are_refused_in_the_upper_layers() {
     assert!(message.contains("rules.setting.market_maps") && message.contains("change the setting `market_maps` instead"), "{message}");
     let sources = RuleSources { editor: vec![("setting.x".into(), json!({ "enabled": false }), None)], ..RuleSources::default() };
     assert!(error(&cfg, &sources).contains("belong to the settings"));
-    let sources = RuleSources { extensions: vec![extension("pets", "setting.x", json!({ "type": "deny", "point": "attack" }))], ..RuleSources::default() };
+    let sources = RuleSources {
+        extensions: vec![extension("pets", "setting.x", json!({ "type": "deny", "point": "attack" }))],
+        ..RuleSources::default()
+    };
     assert!(resolve(&cfg, &sources).is_err());
 }
 
@@ -302,7 +329,10 @@ fn the_rules_in_force_are_ordered_editor_file_extension_settings() {
     sources.extensions = vec![extension("pets", "z", rule.clone()), extension("pets", "a", rule.clone())];
     sources.editor = vec![("b-editor".into(), rule.clone(), Some(2)), ("a-editor".into(), rule.clone(), None)];
     let (s, _) = resolve(&cfg, &sources).unwrap();
-    assert_eq!(names(&s), ["a-editor", "b-editor", "a-file", "b-file", "pets/a", "pets/z", "setting.market_maps", "setting.trade_chat_min_level"]);
+    assert_eq!(
+        names(&s),
+        ["a-editor", "b-editor", "a-file", "b-file", "pets/a", "pets/z", "setting.market_maps", "setting.trade_chat_min_level"]
+    );
 }
 
 #[test]
@@ -318,7 +348,8 @@ fn two_refusals_give_the_first_ones_message() {
 #[test]
 fn errors_name_the_layer_the_line_and_the_key() {
     let cfg = Config { trade_chat_min_level: 0, ..config() };
-    let mut sources = file(&[("level-gap", json!({ "type": "level_gap", "gap": 0 })), ("safe", json!({ "type": "deny", "point": "attack", "hour": 3 }))]);
+    let mut sources =
+        file(&[("level-gap", json!({ "type": "level_gap", "gap": 0 })), ("safe", json!({ "type": "deny", "point": "attack", "hour": 3 }))]);
     sources.file.as_mut().unwrap().rules[0].key_lines = vec![("gap".into(), 14)];
     sources.file.as_mut().unwrap().rules[1].key_lines = vec![("hour".into(), 20)];
     let message = format!("{:#}", resolve(&cfg, &sources).unwrap_err());
@@ -328,7 +359,8 @@ fn errors_name_the_layer_the_line_and_the_key() {
     assert_eq!(message, "config/game.toml line 20: rules.safe: unknown key \"hour\"");
     let missing = error(&cfg, &file(&[("x", json!({}))]));
     assert_eq!(missing, "config/game.toml line 10: rules.x: a rule needs a type");
-    let sources = RuleSources { extensions: vec![extension("pets", "x", json!({ "type": "level_gap", "gap": 300 }))], ..RuleSources::default() };
+    let sources =
+        RuleSources { extensions: vec![extension("pets", "x", json!({ "type": "level_gap", "gap": 300 }))], ..RuleSources::default() };
     assert_eq!(error(&cfg, &sources), "extension pets: rules.x.gap: 300 is not 1 to 255");
     let sources = RuleSources { editor: vec![("x".into(), json!({ "type": "exp" }), Some(12))], ..RuleSources::default() };
     assert_eq!(error(&cfg, &sources), "data editor (change set 12): rules.x: an exp rule needs a factor, 0 to 100");
@@ -388,7 +420,10 @@ fn trade_chat_min_level_is_the_old_test_at_its_edges() {
             assert!(refused.is_none_or(|r| r.text.is_none()), "silent, as the setting is today");
         }
     }
-    assert!(from(&Config { trade_chat_min_level: 0, ..config() }).is_empty() && from(&Config { trade_chat_min_level: 1, ..config() }).is_empty());
+    assert!(
+        from(&Config { trade_chat_min_level: 0, ..config() }).is_empty()
+            && from(&Config { trade_chat_min_level: 1, ..config() }).is_empty()
+    );
 }
 
 #[test]
