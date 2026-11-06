@@ -240,6 +240,10 @@ the whole test suite passes and the old settings keys work as before.
 
 ### 7.3 Chunk 3, item effects and skill abilities
 
+**Specified** 2026-11-05 (`docs/plans/ext-3-effects.md`, the maintainer's decisions in its section 1: custom GM status levels move to wave
+R3; the level-up stone, the Kill Boost Stone ported, Perfect Lapisia and stat Recreation Runes are built; the rules gain an item-use
+point; `kill_boost_skills` stays as a shorthand). Not built.
+
 **Needs**: chunks 1 and 2 built. **Inputs**: this plan, `docs/plans/ext-1-foundation.md`, `docs/plans/ext-2-rules.md`,
 `docs/original/item-use.md`, `item_use.rs`, `docs/original/skills.md`, `docs/original/skills-buffs.md`, `buffs.rs`,
 `docs/original/operator-console.md` decision 3 (the Kill Boost Stone), `docs/plans/done/client-patches.md`.
