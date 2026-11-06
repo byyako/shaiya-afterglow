@@ -52,6 +52,12 @@ For every slot: STR to LUC += the item's `wConstStr` to `wConstLuc`; max HP += `
 defence gets **`m_byShieldValue`** (`+0x1334`), the sum of the shield-mastery passives learned (`docs/original/skills.md` section 5). A
 shield has **no block value** of its own: nothing in `ItemEquipmentAdd` or `CUser::ChkBlock` (0x44c5a0) reads one, and blocks come only
 from buffs (`wType` 85, 86, 92; `docs/original/skills-buffs.md` section 10). (The earlier "block value" here was this mastery value.)
+Checked across the binary (2026-11-05): the `CUser` code that reads slot 6 directly (`+0x1dc`) is the shield check of skills
+(`EnableUseSkillUser`, `EnableUseSkillMob`), `EnableEquipment` (a shield against a two-handed weapon), `EnterDead` (the body's look) and
+the shield-mastery passive (`AddSkillPassive`, `RemSkillPassive`); the block state (`m_bBlockAll` `+0x1360`, `nBlock` and
+`nBlockValue` at `+0x13a8` and `+0x13ac` per attack kind, stride `0x2c`) is written only by `AddApplySkillBuff`, `RemApplySkillBuff`,
+`ChkBlock` (the count), `ClearApplySkillByDeath`, `SkillClearAll` and `InitEquipment` (which clears block-all). The 998 shield rows of
+the data have only defence, magic defence, stats and HP/SP/MP.
 
 **Crafted stats** (`m_wCraftExpansionAddValue`), for items whose definition allows them (`stItemInfo` `+0x4a`, the `server` column, not 0, and
 `+0x3e`, the `reqwis` column, 1 to 99; `CItem::CopyCraftExpassion` 0x4ba670): the 20-character craft name is read as ten two-digit numbers;
