@@ -192,8 +192,16 @@ The owner is the killer of record (0 without one).
 4. **Gold**: with chance **30 %** (`rand() % 100 < 30`): `Money1 + rand() % Money2` (without the second part when `Money2` is 0); when above 0,
    a gold item (type 26, type id 0, count 1, the amount) on the ground.
 
-Nothing of the killer is read but its id, zone, map and party (confirmed, 0x4a5ea0): **no stat (LUC included), level, buff or grade changes
-a drop chance**; the chances are the monster's definition alone.
+**No number of the killer changes a drop chance or count** (confirmed, 0x4a5ea0 and 0x4a65a0, rechecked 2026-11-05): no stat (LUC
+included), level, buff, kill-count grade, premium state or event rate. The chances and counts are the monster's definition alone; neither
+function reads a rate global (the one global of 0x4a65a0, `g_ServerInfo` 0x542ca0, is the server byte of the new item's id), and
+`CMob::Death` (0x4910f0) calls 0x4a5ea0 once per death (0x491263 a killer without a party, 0x49149c with its party, 0x491566 no killer).
+What the killer's side is read for: its id (the owner), its zone and map (`CMob::EnableApplyZoneItem` 0x4a6560, who in a party gets an
+item), **its quests and its party members' quests** (only whether the quest item may drop, `docs/original/quest-drops.md` section 3.1),
+**its guild** (the ranking-zone points of step 3, 0x4a6182), and in a party each member's zone, map, distance (100), state and **gold
+bonus** for its gold share (0x4a6311 to 0x4a642e: `m_bSkillMobGold` + 20 or 50 for a charm of level 2 or 3, `docs/original/item-flags.md`
+section 4). Without a party the gold lies on the ground and the same bonus is added when it is picked up (`CUser::ItemGet`). So a gold
+charm raises how much gold a kill gives, never whether anything drops.
 
 **On the ground** (`CZone::EnterItem` 0x417320): at the monster's position plus `rand() % 1000 / 1000 − 0.5` on x and on z, **y = 0**; a new
 object id (the items' own counter); removal at **now + 60 s**; owner as above. **`0x0401`** (22 bytes: `u32 id, u8 kind` 2 for a fresh drop,

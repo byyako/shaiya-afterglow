@@ -112,9 +112,12 @@ skill (an applied skill with `+0x32` = 95) is not overridden (the existing buffs
 
 **Crafted values and the enchant level** (`CItem::CopyCraftExpassion` 0x4ba670, `ItemEquipmentAdd`): a craftable item's 20-character craft
 name is ten two-digit numbers; numbers 1 to 9 are the crafted stats (built, `docs/original/stats.md`); the tenth, `v` (characters 18 and
-19), is the **enchant level**: `v` 1 to 20 a weapon step, 51 to 70 an armour step `v − 50`; anything else nothing. A weapon step `s` adds
+19), is the **enchant level**: `v` 0 to 20 a weapon step, 51 to 70 an armour step `v − 50`; anything else nothing. A weapon step `s` adds
 **attack** `E[s].weapon` (unless in a shape), an armour step **absorption** `E[s].armour`, from `g_LapisianEnchantAddValue` (0x542100):
-step `s` → weapon `7s`, armour `5s` (step 20: 140 and 100) **as built in**; the server's start overwrites this table (below).
+step `s` → weapon `7s`, armour `5s` (step 20: 140 and 100) **as built in**; the server's start overwrites this table (below). `v` 0 (no
+step) reads step 0's weapon value, 0 in the built-in table and in both files below. The weapon value counts for every equipped item
+whose definition has the `server` column set, in any slot (`CUser::ItemEquipmentAttackAdd` 0x456546), so only craftable items carry
+one; `CItem::SetEnchantStep` (0x4ba9f0) writes the new step's value at an enchant.
 
 **The enchant tables come from a data file** (confirmed, `CGameData::InitItemEnchant` 0x4c7ab0, called from `CGameData::LoadData`
 0x4bf320 at start): it opens `data/ItemEnchant.ini` (when that fails it logs "CGameData::InitItemEnchant fopen error" and the built-in
@@ -131,7 +134,13 @@ tables stay) and, for steps 00 to 20, sets **both** `g_LapisianEnchantPercentRat
 The weapon row is `Σ (3 × max(1, ⌈k/3⌉) + 4)` for `k` = 1 to the step, the formula the US client's character window uses
 (`docs/client/research-balance.md`); the armour row equals the built-in `5s`. A second copy in the original files
 (`PSM_Client/Bin/Data/`) has 99 % for every rate and a different attack row from step 14 (175, 200, 245, 300, 350, 425, 500): a
-private-server edit, not the original's.
+private-server edit, not the original's. (`New Files/OmegaFiles/` holds a byte-identical copy of each, so four files, two contents.)
+The values are taken as they come: the add values are stored as `u16` and the rates as `u32` and compared unsigned (0x45fcbf `jae`), so
+a negative value in the file would wrap.
+
+**The reload** (`/reitemenh`, `CGameData::ReItemEnchant` 0x4c7bc0) reads the same keys, but **writes the weapon value into the defence
+slot** whenever the two differ, for the rate (0x4c7c7c to 0x4c7c87) and the add value (0x4c7cc8 to 0x4c7cd5): after a reload armour
+uses the weapon row (confirmed; `docs/client/research-balance.md` had it as inferred).
 
 **Absorption** (`CUser::Damage` 0x44c1e0, after give up SP/MP): HP damage `d` > 0 with absorption `A` > 0: `d ≤ A` → `d` = 1 and `d − 1`
 absorbed; otherwise `d − A` and `A` absorbed. When something was absorbed: **`0x0525`** (4 bytes: `u16 absorbed`) to the player ("<n>

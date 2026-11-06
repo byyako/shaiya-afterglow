@@ -57,7 +57,12 @@ Checked across the binary (2026-11-05): the `CUser` code that reads slot 6 direc
 the shield-mastery passive (`AddSkillPassive`, `RemSkillPassive`); the block state (`m_bBlockAll` `+0x1360`, `nBlock` and
 `nBlockValue` at `+0x13a8` and `+0x13ac` per attack kind, stride `0x2c`) is written only by `AddApplySkillBuff`, `RemApplySkillBuff`,
 `ChkBlock` (the count), `ClearApplySkillByDeath`, `SkillClearAll` and `InitEquipment` (which clears block-all). The 998 shield rows of
-the data have only defence, magic defence, stats and HP/SP/MP.
+the data (real type 19) have only defence, magic defence, stats, HP/SP/MP and lapis rooms. Rechecked 2026-11-05 (every access to
+`+0x1334`, `+0x1360`, the block slots and `+0x1dc` listed by function; `EnterWorld`'s `+0x1dc` is a stack slot): as above. One precision:
+the mastery reaches slot 6 on two paths that never add up, `ItemEquipmentAdd` (0x454f7d, slot 6, the whole sum) and
+`ItemEquipmentAttackAdd` (0x456508, the slot-6 case of its jump table 0x45658c), which only `InitEquipment(bool)` 0x454ba0 calls after
+zeroing attack, spread, defence and magic defence (the recount, for example on leaving a shape); a passive learned while a shield is worn adds its own value at once only when the shield's
+real type is the passive's (`AddSkillPassive` 0x489b2a), otherwise from the next equipment change.
 
 **Crafted stats** (`m_wCraftExpansionAddValue`), for items whose definition allows them (`stItemInfo` `+0x4a`, the `server` column, not 0, and
 `+0x3e`, the `reqwis` column, 1 to 99; `CItem::CopyCraftExpassion` 0x4ba670): the 20-character craft name is read as ten two-digit numbers;
