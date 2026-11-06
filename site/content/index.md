@@ -8,6 +8,8 @@ says so; where it is an inference it says that too.
 
 ## Where to start
 
+- **How the game's numbers work, for players:** the [player guide](guide.md): stats, hitting and being hit, elements and defences,
+  every formula with worked examples.
 - **How the client and server talk:** [Protocol notes](original/protocol-notes.md), then the login server ([`ps_login`](original/ps_login.md)) and the game
   server ([`ps_game`](original/ps_game.md)): the handshake, the encryption and the character screen.
 - **A game system:** use the tabs above, or the search box. Each page covers one system from the packets in, through the checks the original
@@ -24,9 +26,6 @@ says so; where it is an inference it says that too.
 - Addresses such as `CUser::PacketShop 0x46b55a` are in the EP4.5 `ps_game.exe` the notes were built from.
 - Every page starts with **In short**, a plain-language summary of the system, then the technical detail.
 - "Confirmed" means read in the binary; "inferred" means it follows from what was read but was not checked directly.
-
-!!! note "A player guide is planned"
-    A plain-language guide to the game's mechanics will be added next to this reference.
 
 !!! note "The open-source server"
     A server built from this research is open source: [shaiya-afterglow on GitHub](https://github.com/byyako/shaiya-afterglow) (Rust and PostgreSQL,

@@ -7,6 +7,7 @@ about the original are the reference; the code's comments cite them by file name
 |---|---|
 | [`original/`](original/README.md) | what the original server does, one note per system (60 notes), reference notes, and the raw data read from the original files (`symbols/`, `db/`, `inventory/`) |
 | [`server/`](server/README.md) | running this server: architecture, settings, deployment, the list of deviations from the original, the robustness audit |
+| [`guide/`](guide/README.md) | the player guide: plain-language pages on the game's numbers for players (published as the site's Player guide tab) |
 | [`plans/`](plans/README.md) | the roadmap, the plans for what is not built yet, the plans of what is (`done/`), the balance work (`balance/`) |
 | [`testing/`](testing/README.md) | the live tests to walk with a real client, and the queue of questions only the client can answer |
 | [`client/`](client/README.md) | findings about the US client `game.exe` (maintained on the client side; the server's notes cite them) |

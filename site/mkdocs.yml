@@ -58,6 +58,11 @@ validation:
 # and the patch kit zip it builds from tools/server-patches/).
 nav:
   - Home: index.md
+  - Player guide:
+      - About the guide: guide.md
+      - Your character's numbers: guide/character-numbers.md
+      - Hitting and being hit: guide/hitting.md
+      - Elements, resistances and defences: guide/elements-defences.md
   - Protocol and servers:
       - Protocol notes: original/protocol-notes.md
       - Login server (ps_login): original/ps_login.md
