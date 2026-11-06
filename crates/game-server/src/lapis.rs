@@ -565,10 +565,26 @@ pub struct Enchant {
     /// How many steps a success rises: 1, or what an `enchant` rule drew (`docs/plans/ext-2-rules.md` point 8); the step never passes
     /// `MAX_STEP`.
     pub jump: u8,
+    /// A rate of 1,000,000 from the Lapisia's `enchant` effect: succeeds without a draw (`docs/plans/ext-3-effects.md` section 5.2).
+    pub always: bool,
+    /// The Lapisia's own jump table (its `enchant` effect's `jumps`): drawn on success in place of the `enchant` rules.
+    pub own_jumps: Option<crate::effects::Jumps>,
 }
 
 /// `CUser::ItemLapisianAdd` before the roll; `None` when the original ignores the request.
 pub fn enchant(inv: &Inventory, defs: &ItemDefs, money: u32, request: EnchantRequest) -> Option<Enchant> {
+    enchant_with(inv, defs, money, request, &crate::effects::ItemEffects::default())
+}
+
+/// As [`enchant`], for a Lapisia that may have an `enchant` effect (section 5.2): its rate replaces the step's, its jump table the rules',
+/// and `safe` keeps a failure from destroying the item. Everything else (the checks, the price, the material) is the core's.
+pub fn enchant_with(
+    inv: &Inventory,
+    defs: &ItemDefs,
+    money: u32,
+    request: EnchantRequest,
+    effects: &crate::effects::ItemEffects,
+) -> Option<Enchant> {
     let EnchantRequest { lapisia: lapisia_at, material: material_at, count, item: item_at } = request;
     if !inv.is_bag(lapisia_at) || !inv.is_bag(item_at) {
         return None;
@@ -601,21 +617,35 @@ pub fn enchant(inv: &Inventory, defs: &ItemDefs, money: u32, request: EnchantReq
         return None;
     }
     let armour = !is_weapon(item_def);
+    let own = effects.get(lapisia_def.item_id).and_then(|e| match &**e {
+        crate::effects::ItemEffect::Enchant(own) => Some(own),
+        _ => None,
+    });
     Some(Enchant {
         request,
         price,
-        rate: ENCHANT_RATES[usize::from(step)][usize::from(armour)],
+        rate: own.map_or(ENCHANT_RATES[usize::from(step)][usize::from(armour)], |own| own.rate),
         material: material.map(|_| (material_at, count.min(MAX_MATERIAL))),
         armour,
         step,
-        dangerous: lapisia_def.vg != 0,
+        dangerous: lapisia_def.vg != 0 && !own.is_some_and(|own| own.safe),
         jump: 1,
+        always: own.is_some_and(|own| own.rate() == crate::effects::Rate::Always),
+        own_jumps: own.and_then(|own| own.jumps.clone()),
     })
 }
 
 impl Enchant {
+    /// The jump a draw below one million gives from the Lapisia's own table, `None` when it has none (the rules are asked then).
+    pub fn own_jump(&self, draw: u32) -> Option<u8> {
+        self.own_jumps.as_ref().map(|j| weighted_jump(&j.list, j.total, draw))
+    }
+
     /// Whether a draw below one million succeeds.
     pub fn succeeds(&self, draw: u32) -> bool {
+        if self.always {
+            return true;
+        }
         let added = self.material.map_or(0, |(_, n)| u32::from(n));
         added + draw < self.rate
     }
@@ -1091,6 +1121,48 @@ mod tests {
         assert_eq!(enchant_bonus(b"00000000000000000020"), (140, 0));
         assert_eq!(enchant_bonus(b"00000000000000000055"), (0, 25));
         assert_eq!(enchant_bonus(b"00000000000000000030"), (0, 0));
+    }
+
+    #[test]
+    fn a_lapisias_enchant_effect_sets_the_rate_the_jump_table_and_the_danger() {
+        use crate::effects::{ItemEffects, check_effect};
+        let defs = defs();
+        let mut sword = unit(1, 0, 1, 1, 1);
+        sword.craft_name = b"01000000000000000000".to_vec();
+        // The Lapisia 95/1 is dangerous (VG 1); the largest material of 100.
+        let inv1 = inv(&[sword, unit(1, 1, 95, 1, 2), unit(1, 2, 25, 43, 100)]);
+        let req = EnchantRequest { lapisia: (1, 1), material: (1, 2), count: 100, item: (1, 0) };
+        let with = |effect: serde_json::Value| ItemEffects::new([(95001, check_effect(&effect).unwrap())]);
+        let core = enchant(&inv1, &defs, 3_000_000, req).unwrap();
+        assert!(!core.succeeds(999_999) && core.dangerous && core.own_jump(0).is_none() && !core.always, "the core's rate, danger and rules");
+        // A rate of 1,000,000 always succeeds, even with 100 of material and the highest draw.
+        let e = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1000000 }))).unwrap();
+        assert!(e.always && e.succeeds(999_999) && e.succeeds(0));
+        assert_eq!((e.price, e.step, e.dangerous), (2_500_000, 0, true), "the price and the danger stay the core's");
+        assert_eq!(e.own_jump(0), None, "no table: the rules are asked");
+        // A lower rate replaces the step's and still adds the material to the draw.
+        let half = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 500000 }))).unwrap();
+        assert_eq!((half.rate, half.always), (500_000, false));
+        assert!(half.succeeds(499_899) && !half.succeeds(499_900), "100 of material + the draw below 500,000");
+        // The Lapisia's own table: used on success, with its weights.
+        let table = with(serde_json::json!({ "type": "enchant", "jumps": [[1, 60], [2, 30], [3, 10]] }));
+        let t = enchant_with(&inv1, &defs, 3_000_000, req, &table).unwrap();
+        assert_eq!((t.own_jump(0), t.own_jump(600_000), t.own_jump(900_000), t.own_jump(999_999)), (Some(1), Some(2), Some(3), Some(3)));
+        assert!(t.always, "an effect with a table alone has the default rate: always");
+        // `safe` keeps a failed item whatever VG says; without it the core's rule stays.
+        let safe = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1, "safe": true }))).unwrap();
+        assert!(!safe.dangerous && safe.outcome(&inv1, &defs, false).destroyed.is_none(), "kept");
+        let unsafe_ = enchant_with(&inv1, &defs, 3_000_000, req, &with(serde_json::json!({ "type": "enchant", "rate": 1 }))).unwrap();
+        assert!(unsafe_.dangerous && unsafe_.outcome(&inv1, &defs, false).destroyed == Some((1, 0)));
+        // An effect of another type, or on another item, changes nothing.
+        let other = ItemEffects::new([(95001, check_effect(&serde_json::json!({ "type": "level_up", "levels": 1 })).unwrap()), (95002, check_effect(&serde_json::json!({ "type": "enchant", "rate": 1000000 })).unwrap())]);
+        let same = enchant_with(&inv1, &defs, 3_000_000, req, &other).unwrap();
+        assert_eq!((same.rate, same.always, same.dangerous), (core.rate, false, true));
+        // The step still stops at 20 with a table that jumps further.
+        let mut item = unit(1, 0, 1, 1, 1);
+        item.craft_name = b"01000000000000000018".to_vec();
+        let far = Enchant { step: 18, jump: 19, ..t };
+        assert_eq!(&far.new_name(&item, defs.get(1, 1).unwrap())[18..], b"20");
     }
 
     #[test]

@@ -303,7 +303,7 @@ pub(super) async fn enchant<S: Backend>(
         return Ok(());
     }
     let request = EnchantRequest { lapisia, material, count, item };
-    let Some(mut e) = lapis::enchant(&state.inventory, &ctx.data.items, state.money, request) else {
+    let Some(mut e) = lapis::enchant_with(&state.inventory, &ctx.data.items, state.money, request, &ctx.data.effects) else {
         tracing::debug!(id, ?request, "enchant ignored");
         return Ok(());
     };
@@ -311,21 +311,30 @@ pub(super) async fn enchant<S: Backend>(
         use rand::Rng;
         e.succeeds(rand::rng().random_range(0..lapis::ENCHANT_DRAW))
     };
-    // A success may rise more than one step: the first `enchant` rule in scope draws the jump with a draw of its own
-    // (`docs/plans/ext-2-rules.md` point 8). A failure is as it was.
+    // A success may rise more than one step: the Lapisia's own jump table when it has one (its `enchant` effect, section 5.2), else the
+    // first `enchant` rule in scope, either with a draw of its own (`docs/plans/ext-2-rules.md` point 8). A failure is as it was.
     if success {
         use rand::Rng;
-        let who = rules_who(character, character.family / 2);
         let draw = rand::rng().random_range(0..lapis::ENCHANT_DRAW);
-        let jump = ctx.zones.rules().enchant_jump(state.map, &who, e.armour, draw);
-        if jump.value != 1 {
-            tracing::debug!(id, map = state.map, point = "enchant", rules = ?jump.rules, before = 1, after = jump.value, "changed by rules");
-        }
-        // The scripts after the rules: the jump so far in, a jump out (1 to 19); no lock is held here (section 4.3).
+        let jump = match e.own_jump(draw) {
+            Some(steps) => {
+                tracing::debug!(id, item = ?item, jump = steps, "enchant jump from the Lapisia's own table");
+                steps
+            }
+            None => {
+                let who = rules_who(character, character.family / 2);
+                let ruled = ctx.zones.rules().enchant_jump(state.map, &who, e.armour, draw);
+                if ruled.value != 1 {
+                    tracing::debug!(id, map = state.map, point = "enchant", rules = ?ruled.rules, before = 1, after = ruled.value, "changed by rules");
+                }
+                ruled.value
+            }
+        };
+        // The scripts after either: the jump so far in, a jump out (1 to 19); no lock is held here (section 4.3).
         let item_unit = state.inventory.get(item.0, item.1).map(|i| (i.item_type, i.type_id, e.step));
         e.jump = match item_unit {
-            Some(unit) => super::script::enchant_jump(ctx, character, state.map, unit, jump.value),
-            None => jump.value,
+            Some(unit) => super::script::enchant_jump(ctx, character, state.map, unit, jump),
+            None => jump,
         };
     }
     let o = e.outcome(&state.inventory, &ctx.data.items, success);
@@ -380,8 +389,15 @@ pub(super) async fn compose<S: Backend>(
                     SlotChange::SetCount { bag: rune.0, slot: rune.1, count: r.count - 1 }
                 }
             });
-            reroll(conn, ctx, character, state, gem::OP_COMPOSE, place, 2, use_rune, rune_item.clone()).await?;
-            if let Some(before) = rune_item {
+            // A rune with a `recreate` effect redraws only the numbers it names (section 5.3).
+            let named = rune_item.as_ref().and_then(|r| ctx.data.items.get(r.item_type, r.type_id)).and_then(|def| {
+                match ctx.data.effects.get(def.item_id).map(|e| &**e) {
+                    Some(crate::effects::ItemEffect::Recreate(named)) => Some(*named),
+                    _ => None,
+                }
+            });
+            let done = reroll(conn, ctx, character, state, gem::OP_COMPOSE, place, 2, named, use_rune, rune_item.clone()).await?;
+            if let Some(before) = rune_item.filter(|_| done) {
                 send_used(conn, ctx, id, state, &(rune, before)).await?;
             }
             Ok(())
@@ -405,11 +421,12 @@ pub(super) async fn consider<S: Backend>(
     match lapis::consider(&state.inventory, &ctx.data.items, place, make_type) {
         Err(Refused::Ignored) => Ok(()),
         Err(Refused::Result(_)) => conn.send(gem::rerolled(gem::OP_CONSIDER, None)).await,
-        Ok(()) => reroll(conn, ctx, character, state, gem::OP_CONSIDER, place, 3, None, None).await,
+        Ok(()) => reroll(conn, ctx, character, state, gem::OP_CONSIDER, place, 3, None, None, None).await.map(drop),
     }
 }
 
-/// The new craft numbers of an item, saved with `extra` (the rune used), answered with `op`.
+/// The new craft numbers of an item, saved with `extra` (the rune used), answered with `op`. `named` is a rune's `recreate` effect:
+/// only those numbers change, and an item with none of them is refused (result 1) with `false`, the rune kept.
 #[allow(clippy::too_many_arguments)]
 async fn reroll<S: Backend>(
     conn: &mut Connection,
@@ -419,12 +436,24 @@ async fn reroll<S: Backend>(
     op: u16,
     place: (u8, u8),
     draws: u8,
+    named: Option<crate::effects::Recreate>,
     extra: Option<SlotChange>,
     rune: Option<ItemUnit>,
-) -> Result<()> {
-    let Some(item) = state.inventory.get(place.0, place.1).cloned() else { return Ok(()) };
-    let Some(def) = ctx.data.items.get(item.item_type, item.type_id) else { return Ok(()) };
-    let values = lapis::roll_craft(def, draws, &mut rand15);
+) -> Result<bool> {
+    let Some(item) = state.inventory.get(place.0, place.1).cloned() else { return Ok(true) };
+    let Some(def) = ctx.data.items.get(item.item_type, item.type_id) else { return Ok(true) };
+    let values = match &named {
+        None => lapis::roll_craft(def, draws, &mut rand15),
+        // None of the named numbers on the item: the core's refusal answer (result 1), the rune kept.
+        Some(named) => match lapis::rerolled_values(&item, def, named, &mut rand15) {
+            Some(values) => values,
+            None => {
+                tracing::debug!(id = character.id, ?place, "recreation refused: none of the named numbers is on the item");
+                conn.send(gem::rerolled(op, None)).await?;
+                return Ok(false);
+            }
+        },
+    };
     let craft_name = lapis::rerolled_name(&item, values);
     let mut changes = vec![SlotChange::SetCraftName { bag: place.0, slot: place.1, craft_name }];
     changes.extend(extra);
@@ -446,7 +475,8 @@ async fn reroll<S: Backend>(
     tracing::info!(id = character.id, ?place, op, name = %String::from_utf8_lossy(&craft_name), "new craft stats");
     let name = state.inventory.get(place.0, place.1).map(|i| i.craft_name.clone()).unwrap_or_default();
     conn.send(gem::rerolled(op, Some((place, &name)))).await?;
-    finish(conn, ctx, character, state, &o).await
+    finish(conn, ctx, character, state, &o).await?;
+    Ok(true)
 }
 
 /// `0x0807` (`CUser::ItemRemake`, section 7): one new item from three of the same.

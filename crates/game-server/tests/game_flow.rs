@@ -5392,6 +5392,159 @@ async fn a_rule_refuses_an_item_use_before_the_reuse_time_is_taken() {
     assert!(whisper_texts(&seen).is_empty(), "the rule does not refuse a potion");
 }
 
+// ------------------------------------------------------------------------------------------------ Lapisia and rune effects (step 7)
+
+/// Test data for `docs/plans/ext-3-effects.md` sections 5.2 and 5.3: the start sword made craftable with material 25043, the material,
+/// two Lapisia 95/3 and 95/4 (a weapon Lapisia of grade 31, dangerous: VG 1) and three Recreation Runes 100/221 to 223 (special 62);
+/// `effects` are in force.
+fn lapis_data(effects: &[(u32, serde_json::Value)]) -> GameData {
+    use game_server::effects::{ItemEffects, check_effect};
+    let mut data = data();
+    let sword = *data.items.get(5, 1).unwrap();
+    let sword = ItemDef { server: 6, craftable: true, craft_max: 10, material: 25043, ..sword };
+    let material = ItemDef { item_id: 25043, item_type: 25, type_id: 43, max_count: 255, ..Default::default() };
+    let lapisia = |type_id: u8| ItemDef {
+        item_id: 95_000 + u32::from(type_id),
+        item_type: 95,
+        type_id,
+        level: 1,
+        country: 6,
+        jobs: [true; 6],
+        reuse_group: 31,
+        vg: 1,
+        max_count: 5,
+        ..Default::default()
+    };
+    let rune = |type_id: u8| ItemDef { item_id: 100_000 + u32::from(type_id), item_type: 100, type_id, special: 62, max_count: 255, ..Default::default() };
+    let others = data.items.iter().filter(|d| (d.item_type, d.type_id) != (5, 1)).cloned().collect::<Vec<_>>();
+    data.items = ItemDefs::new(others.into_iter().chain([sword, material, lapisia(3), lapisia(4), rune(221), rune(222), rune(223)]));
+    data.effects = ItemEffects::new(effects.iter().map(|(id, effect)| (*id, check_effect(effect).unwrap())));
+    data
+}
+
+/// A character in the world with a million gold, material 25/43 x20 at bag 1 slot 4, `lapisia` Lapisia at slot 5 and, in bag 1 slot 6, a
+/// sword named `name` (`b""` for none) and, at slot 7, the runes 100/`rune`.
+async fn at_the_blacksmith(
+    data: GameData,
+    lapisia: Option<u8>,
+    rune: Option<u8>,
+    name: &[u8],
+) -> (Arc<MemoryBackend>, Arc<Context<Arc<MemoryBackend>>>, Client, u32) {
+    use game_server::backend::ItemUnit;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start_with_data(backend.clone(), config(true), data).await;
+    let mut client = Client::connect(addr).await;
+    client.enter(7, [5; 16]).await;
+    client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
+    client.write(create(0, 0, 0, b"Walker")).await;
+    assert_eq!(client.read().await.unwrap(), g::char_create_response(0));
+    client.read_list().await;
+    backend.set_money(1, 1_000_000);
+    let unit = |slot, item_type, type_id, count, craft_name: &[u8]| ItemUnit { bag: 1, slot, item_type, type_id, count, quality: 1200, gems: [0; 6], craft_name: craft_name.to_vec() };
+    let mut items = vec![unit(4, 25, 43, 20, b""), unit(6, 5, 1, 1, name)];
+    items.extend(lapisia.map(|id| unit(5, 95, id, 3, b"")));
+    items.extend(rune.map(|id| unit(7, 100, id, 3, b"")));
+    backend.give_items(1, items);
+    let id = select_and_enter(&mut client).await;
+    (backend, ctx, client, id)
+}
+
+fn item_at(backend: &MemoryBackend, id: u32, bag: u8, slot: u8) -> Option<game_server::backend::ItemUnit> {
+    backend.stored(id).unwrap().1.into_iter().find(|i| (i.bag, i.slot) == (bag, slot))
+}
+
+#[tokio::test]
+async fn a_perfect_lapisia_always_succeeds_and_jumps_by_its_own_table() {
+    use shaiya_proto::gem;
+    let perfect = serde_json::json!({ "type": "enchant", "rate": 1000000, "jumps": [[3, 1]], "safe": true });
+    let (backend, ctx, mut client, id) = at_the_blacksmith(lapis_data(&[(95003, perfect)]), Some(3), None, b"").await;
+    // The rules' enchant rule is not asked for a Lapisia with a table of its own: this one would make it +2.
+    put_rules(&ctx, &[("two", serde_json::json!({ "type": "enchant", "jumps": [[2, 1]] }))]);
+    client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+    let answer = read_op(&mut client, gem::OP_ENCHANT).await;
+    assert_eq!(answer[4], 1, "a success: {answer:x?}");
+    let sword = item_at(&backend, id, 1, 6).unwrap();
+    assert_eq!(sword.craft_name, b"00000000000000000003", "+3 from the Lapisia's own table");
+    assert_eq!((item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count), (2, 19), "the Lapisia and the material are used");
+    assert_eq!(backend.stored(id).unwrap().0, 1_000_000 - 4_095, "the price is the core's");
+    // Again, five times over: every enchant succeeds.
+    for _ in 0..2 {
+        client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+        assert_eq!(read_op(&mut client, gem::OP_ENCHANT).await[4], 1);
+    }
+    assert_eq!(item_at(&backend, id, 1, 6).unwrap().craft_name, b"00000000000000000009");
+}
+
+#[tokio::test]
+async fn a_lapisia_effect_without_a_table_leaves_the_jump_to_the_rules() {
+    use shaiya_proto::gem;
+    let sure = serde_json::json!({ "type": "enchant", "rate": 1000000 });
+    let (backend, ctx, mut client, id) = at_the_blacksmith(lapis_data(&[(95003, sure)]), Some(3), None, b"").await;
+    put_rules(&ctx, &[("two", serde_json::json!({ "type": "enchant", "jumps": [[2, 1]] }))]);
+    client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+    assert_eq!(read_op(&mut client, gem::OP_ENCHANT).await[4], 1);
+    assert_eq!(item_at(&backend, id, 1, 6).unwrap().craft_name, b"00000000000000000002", "the rule's +2");
+}
+
+#[tokio::test]
+async fn safe_keeps_an_item_a_failed_enchant_would_destroy() {
+    use shaiya_proto::gem;
+    // A rate of 1 in a million fails every time. 95/3 is safe: the sword stays, as it was.
+    let effects = [(95003, serde_json::json!({ "type": "enchant", "rate": 1, "safe": true }))];
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), Some(3), None, b"").await;
+    client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+    let answer = read_op(&mut client, gem::OP_ENCHANT).await;
+    assert_eq!(answer[4], 0, "a failure: {answer:x?}");
+    let sword = item_at(&backend, id, 1, 6).expect("safe: the sword stays");
+    assert_eq!(sword.craft_name, Vec::<u8>::new(), "and is as it was");
+    assert_eq!((item_at(&backend, id, 1, 5).unwrap().count, item_at(&backend, id, 1, 4).unwrap().count), (2, 19), "the Lapisia and the material are used either way");
+}
+
+#[tokio::test]
+async fn a_dangerous_lapisia_with_an_effect_still_destroys_a_failed_item() {
+    use shaiya_proto::gem;
+    let effects = [(95004, serde_json::json!({ "type": "enchant", "rate": 1 }))];
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), Some(4), None, b"").await;
+    client.write(shaiya_proto::encode(gem::OP_ENCHANT, &[1, 5, 1, 4, 1, 1, 6])).await;
+    let answer = read_op(&mut client, gem::OP_ENCHANT).await;
+    assert_eq!(answer[4], 0, "a failure");
+    assert!(item_at(&backend, id, 1, 6).is_none(), "safe defaults to false: the core's VG decides, and the sword is gone");
+}
+
+#[tokio::test]
+async fn a_stat_rune_changes_only_the_stats_it_names_and_is_kept_when_none_is_there() {
+    use shaiya_proto::gem;
+    let effects = [
+        (100221, serde_json::json!({ "type": "recreate", "stats": ["str"], "value": "max" })),
+        (100222, serde_json::json!({ "type": "recreate", "stats": ["wis", "luc"] })),
+    ];
+    // STR 5, DEX 3 and enchant step 2: the max rune makes STR the item's 10 (reqwis) and leaves DEX and the step.
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(221), b"05030000000000000002").await;
+    client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
+    let answer = read_op(&mut client, gem::OP_COMPOSE).await;
+    assert_eq!(answer[4], 0, "done: {answer:x?}");
+    assert_eq!(item_at(&backend, id, 1, 6).unwrap().craft_name, b"10030000000000000002");
+    assert_eq!(item_at(&backend, id, 1, 7).unwrap().count, 2, "one rune used");
+    // The item has no WIS or LUC: the other rune is refused with the core's answer (result 1) and kept.
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(222), b"05030000000000000002").await;
+    client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
+    let answer = read_op(&mut client, gem::OP_COMPOSE).await;
+    assert_eq!(answer, gem::rerolled(gem::OP_COMPOSE, None));
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    assert_eq!(read_op(&mut client, w::OP_MOTION).await, w::motion(id, 0), "no 0x050A for the rune in between");
+    assert_eq!(item_at(&backend, id, 1, 7).unwrap().count, 3, "the rune is kept");
+    assert_eq!(item_at(&backend, id, 1, 6).unwrap().craft_name, b"05030000000000000002");
+    // The random rune names two stats the item has: both are redrawn within 0 to 10, nothing else moves.
+    let (backend, _ctx, mut client, id) = at_the_blacksmith(lapis_data(&effects), None, Some(222), b"00000708090600000004").await;
+    client.write(shaiya_proto::encode(gem::OP_COMPOSE, &[1, 7, 1, 6])).await;
+    assert_eq!(read_op(&mut client, gem::OP_COMPOSE).await[4], 0);
+    let name = item_at(&backend, id, 1, 6).unwrap().craft_name;
+    let numbers: Vec<u8> = name.chunks(2).map(|p| (p[0] - b'0') * 10 + (p[1] - b'0')).collect();
+    assert_eq!((numbers[0], numbers[1], numbers[2], numbers[3], numbers[9]), (0, 0, 7, 8, 4), "STR, DEX, REC, INT and the step stay");
+    assert_eq!(numbers[6..9], [0, 0, 0]);
+    assert!(numbers[4] <= 10 && numbers[5] <= 10, "WIS and LUC redrawn: {numbers:?}");
+}
+
 #[tokio::test]
 async fn a_script_sees_the_effect_and_may_let_it_run_or_keep_the_stone() {
     for (mode, level, left) in [("core", 11, Some(2)), ("keep", 10, Some(3)), ("use", 10, Some(2))] {
