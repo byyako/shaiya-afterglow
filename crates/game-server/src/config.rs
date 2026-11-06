@@ -1025,7 +1025,7 @@ pub fn example() -> String {
     }
     out.push_str("\n# [rules]\n");
     out.push_str(crate::rules::EXAMPLE);
-    out.push_str("\n");
+    out.push('\n');
     out.push_str(crate::script::sources::EXAMPLE);
     out
 }

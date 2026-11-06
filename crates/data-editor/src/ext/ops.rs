@@ -1248,8 +1248,8 @@ fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Op
                 x.len(),
                 y.len(),
                 n + 1,
-                x.get(n).map(&short).unwrap_or("none".into()),
-                y.get(n).map(&short).unwrap_or("none".into())
+                x.get(n).map(short).unwrap_or("none".into()),
+                y.get(n).map(short).unwrap_or("none".into())
             ));
         }
         return Some(format!("{label}: installed {} / folder {}", short(a), short(b)));

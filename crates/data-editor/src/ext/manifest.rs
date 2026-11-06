@@ -220,7 +220,10 @@ impl Manifest {
 }
 
 /// `api`, `scripts` and `[options.<key>]` (`docs/plans/ext-5-lua.md` section 3.1).
-fn scripts_part(table: &Table) -> Result<(Option<u32>, Vec<String>, BTreeMap<String, game_server::script::OptionSpec>), String> {
+/// The `[scripts]` part of a manifest: the API level, the file names and the declared options.
+type ScriptsPart = (Option<u32>, Vec<String>, BTreeMap<String, game_server::script::OptionSpec>);
+
+fn scripts_part(table: &Table) -> Result<ScriptsPart, String> {
     let api = match table.get("api") {
         None => None,
         Some(toml::Value::Integer(n)) if *n >= 1 => Some(u32::try_from(*n).map_err(|_| format!("api = {n} is not an API version"))?),

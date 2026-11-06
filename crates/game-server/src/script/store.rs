@@ -209,7 +209,7 @@ pub fn from_lua(value: &mlua::Value) -> Result<Option<Value>, String> {
     Ok(Some(match value {
         mlua::Value::Nil => return Ok(None),
         mlua::Value::Boolean(b) => Value::Bool(*b),
-        mlua::Value::Integer(i) => Value::from(*i as i64),
+        mlua::Value::Integer(i) => Value::from(*i),
         mlua::Value::Number(n) if n.is_finite() && n.fract() == 0.0 && n.abs() < 9.0e15 => Value::from(*n as i64),
         mlua::Value::Number(n) if n.is_finite() => serde_json::Number::from_f64(*n).map(Value::Number).ok_or("not a finite number")?,
         mlua::Value::Number(_) => return Err("a number that is not finite is not stored".to_owned()),

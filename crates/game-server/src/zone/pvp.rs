@@ -64,7 +64,7 @@ impl Verdict {
 
 /// What the rules test of a player (`crate::rules::Who`).
 pub(super) fn who(p: &Placed) -> crate::rules::Who {
-    crate::rules::Who { level: p.occupant.vitals.guard.level.into(), kills: p.occupant.shape.kills, country: p.occupant.shape.country }
+    crate::rules::Who { level: p.occupant.vitals.guard.level, kills: p.occupant.shape.kills, country: p.occupant.shape.country }
 }
 
 /// Whether `me` may strike `target` as an enemy: the core's enmity first, then the rules for a faction enemy only (point 1).

@@ -404,8 +404,7 @@ fn the_default_install_has_one_rule_the_trade_chat_level() {
     assert_eq!(names(&s), ["setting.trade_chat_min_level"]);
     assert_eq!(s.list()[0].layer, "setting trade_chat_min_level");
     assert_eq!(all.len(), 1);
-    let mut sources = RuleSources::default();
-    sources.setting_layers = vec![("trade_chat_min_level".into(), "default".into())];
+    let sources = RuleSources { setting_layers: vec![("trade_chat_min_level".into(), "default".into())], ..Default::default() };
     assert_eq!(resolve(&config(), &sources).unwrap().0.list()[0].layer, "setting trade_chat_min_level (default)");
 }
 

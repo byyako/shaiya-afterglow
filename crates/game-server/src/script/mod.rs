@@ -33,6 +33,9 @@ pub use sandbox::Limit;
 
 use api::Shared;
 
+/// What is told when an extension is disabled: its name and the reason.
+pub type DisableNotice = Box<dyn Fn(&str, &str) + Send + Sync>;
+
 /// The Lua API version this server offers (section 3.1).
 pub const API_VERSION: u32 = 1;
 /// The default memory limit of one extension's state, MB (the `script_memory_mb` setting, section 8.2).
@@ -174,7 +177,7 @@ pub struct ExtScript {
     is_disabled: AtomicBool,
     fault_total: AtomicU64,
     /// Told when the extension is disabled: the extension's name and the reason (step 4 sets the staff whisper here).
-    on_disable: Mutex<Option<Box<dyn Fn(&str, &str) + Send + Sync>>>,
+    on_disable: Mutex<Option<DisableNotice>>,
     /// The ids of the refusals this extension makes, one per point (`points.rs`).
     refusal_ids: [u32; 8],
 }
@@ -298,7 +301,7 @@ impl ExtScript {
     }
 
     /// Sets what is told when the extension is disabled.
-    pub fn set_on_disable(&self, f: Box<dyn Fn(&str, &str) + Send + Sync>) {
+    pub fn set_on_disable(&self, f: DisableNotice) {
         *self.on_disable.lock().unwrap_or_else(|e| e.into_inner()) = Some(f);
     }
 

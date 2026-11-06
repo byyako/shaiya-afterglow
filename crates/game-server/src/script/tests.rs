@@ -80,9 +80,9 @@ fn an_endless_loop_ends_within_its_limit_at_the_load_in_an_event_and_in_a_point(
 
     let ext = load("game.on('login', function() while true do end end) game.on('exp', function() while true do end end)").unwrap();
     let t = Instant::now();
-    let err = ext.call::<_, ()>("login", Limit::EVENT, ()).err().expect("an error").to_string();
+    let err = ext.call::<_, ()>("login", Limit::EVENT, ()).expect_err("an error").to_string();
     assert!(err.contains("extension t: login:") && (err.contains("ran over 1000000") || err.contains("took longer than 20")), "{err}");
-    let err = ext.call::<_, ()>("exp", Point::Exp.limit(), ()).err().expect("an error").to_string();
+    let err = ext.call::<_, ()>("exp", Point::Exp.limit(), ()).expect_err("an error").to_string();
     assert!(err.contains("extension t: exp:") && (err.contains("ran over 200000") || err.contains("took longer than 5")), "{err}");
     assert!(t.elapsed() < Duration::from_secs(1), "both calls end in a moment");
 }
@@ -101,7 +101,7 @@ fn pcall_cannot_swallow_the_limit() {
 #[test]
 fn a_huge_string_is_a_memory_error_and_disables_the_extension() {
     let ext = load("game.on('login', function() return string.rep('x', 2^30) end)").unwrap();
-    let err = ext.call::<_, String>("login", Limit::EVENT, ()).err().expect("memory error").to_string();
+    let err = ext.call::<_, String>("login", Limit::EVENT, ()).expect_err("memory error").to_string();
     assert!(err.contains("extension t: login:"), "{err}");
     assert!(ext.is_disabled(), "one memory error disables");
     assert!(ext.disabled_reason().unwrap().contains("a memory error"));
@@ -128,7 +128,7 @@ fn the_budget_is_per_call() {
 fn five_faults_in_a_minute_disable_and_four_do_not() {
     let ext = load("game.on('login', function() error('boom') end)").unwrap();
     for n in 1..=4 {
-        let err = ext.call::<_, ()>("login", Limit::EVENT, ()).err().expect("an error").to_string();
+        let err = ext.call::<_, ()>("login", Limit::EVENT, ()).expect_err("an error").to_string();
         assert!(err.contains("boom"), "{err}");
         assert!(!ext.is_disabled(), "{n} faults");
     }
@@ -181,7 +181,7 @@ fn registrations_after_the_load_are_refused_but_timers_are_not() {
         "#,
     )
     .unwrap();
-    let err = ext.call::<_, ()>("login", Limit::EVENT, ()).err().expect("refused").to_string();
+    let err = ext.call::<_, ()>("login", Limit::EVENT, ()).expect_err("refused").to_string();
     assert!(err.contains("while the scripts load") && err.contains("main.lua:3"), "{err}");
     assert!(ext.call::<_, ()>("logout", Limit::EVENT, ()).unwrap().is_some());
     assert_eq!(ext.timer_count(), 1, "the timer set after the load stands");
@@ -269,10 +269,10 @@ fn two_extensions_cannot_share_a_command_or_an_item() {
 fn check_names_the_file_and_line_of_a_syntax_error() {
     let mut inp = input("t", "local ok = 1\n");
     inp.scripts.push(("lib/more.lua".to_owned(), "local a = 1\nlocal = = 2\n".to_owned()));
-    let err = check(&inp, None).err().expect("refused").to_string();
+    let err = check(&inp, None).expect_err("refused").to_string();
     assert!(err.contains("t/lib/more.lua:2"), "{err}");
     // A top-level error names the line too.
-    let err = check(&input("t", "local x = 1\nerror('nope')"), None).err().expect("refused").to_string();
+    let err = check(&input("t", "local x = 1\nerror('nope')"), None).expect_err("refused").to_string();
     assert!(err.contains("t/main.lua:2") && err.contains("nope"), "{err}");
     // Files load in order into one state: the second sees the first's globals.
     let mut inp = input("t", "shared = 41");
@@ -438,7 +438,7 @@ fn game_options_holds_the_values_with_maps_as_a_set_and_is_read_only() {
     assert_eq!(eval::<i64>(&ext, "local s = 0 for _, v in ipairs(game.options.steps) do s = s + v end return s + #game.options.steps"), 17);
     assert!(eval::<bool>(&ext, "return next(game.options.empty) == nil"), "no maps: the set is empty");
     assert!(eval::<bool>(&ext, "return game.options.nothing == nil"));
-    let err = ext.run("test", Limit::EVENT, |lua| lua.load("game.options.gold = 1").exec()).err().expect("refused").to_string();
+    let err = ext.run("test", Limit::EVENT, |lua| lua.load("game.options.gold = 1").exec()).expect_err("refused").to_string();
     assert!(err.contains("read-only"), "{err}");
     assert!(eval::<bool>(&ext, "return getmetatable(game.options) == false"), "the metatable is hidden");
 }
@@ -838,7 +838,7 @@ mod acting {
         );
         fake.sent.lock().unwrap().clear();
         // A long message is cut into whisper lines of 120 bytes.
-        run(&format!("game.player(2):message(string.rep('x', 250))")).unwrap();
+        run("game.player(2):message(string.rep('x', 250))").unwrap();
         let sent = fake.sent.lock().unwrap().clone();
         assert_eq!(sent.iter().map(|s| s.len() - "whisper 2: ".len()).collect::<Vec<_>>(), [120, 120, 10]);
         for (code, expect) in [
@@ -866,13 +866,13 @@ mod acting {
         let run = |code: &str| ext.run("t", Limit::EVENT, |lua| lua.load(code).exec());
         // Five messages a second to one player; the sixth is a Lua error (a fault), another player is not limited.
         run("for i = 1, 5 do game.player(2):message('m' .. i) end").unwrap();
-        let error = run("game.player(2):message('m6')").err().expect("limited").to_string();
+        let error = run("game.player(2):message('m6')").expect_err("limited").to_string();
         assert!(error.contains("at most 5 messages and notices a second to one player"), "{error}");
         run("game.player(3):message('other')").unwrap();
         assert_eq!(fake.sent.lock().unwrap().len(), 6);
         // Twenty notices to many a minute.
         run("for i = 1, 20 do game.notice_all('n' .. i) end").unwrap();
-        let error = run("game.banner('one more')").err().expect("limited").to_string();
+        let error = run("game.banner('one more')").expect_err("limited").to_string();
         assert!(error.contains("at most 20 notices and banners a minute"), "{error}");
         assert_eq!(ext.fault_count(), 2);
         assert!(!ext.is_disabled());
@@ -910,7 +910,7 @@ mod acting {
         }
         // Fifty orders a second for one player.
         run("for i = 1, 50 do game.player(1):give_gold(1) end").unwrap();
-        let error = run("game.player(1):give_gold(1)").err().expect("limited").to_string();
+        let error = run("game.player(1):give_gold(1)").expect_err("limited").to_string();
         assert!(error.contains("at most 50 orders a second"), "{error}");
     }
 
@@ -956,10 +956,7 @@ mod acting {
         let a = PlayerRef { id: 1, name: "Alice".into() };
         let b = PlayerRef { id: 2, name: "Bob".into() };
         let mob = MobInfo { id: 7, uid: 99, name: "Boar".into(), level: 12, map: 1, x: 5.0, z: 6.0, boss: false, spawned: None };
-        let set = {
-            let ext = Arc::new(ext);
-            ext
-        };
+        let set = { Arc::new(ext) };
         let fire = |event: Event, payload: Payload| {
             let _ =
                 set.call_built::<()>(event.name(), Limit::EVENT, |lua| crate::script::act::event_args(lua, &*set.shared().world, &payload));
