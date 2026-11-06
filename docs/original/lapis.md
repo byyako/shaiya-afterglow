@@ -336,7 +336,7 @@ place is emptied, and the player gets **`0x0206`** (7 bytes: `u8 bag, u8 slot, u
 - Random numbers come from the server's generator (`rand() % n` where the original uses `rand`, a uniform draw below 1000000 for the
   enchant). **The enchant rates and add values are the built-in tables of section 5 and 2** (`lapis::ENCHANT_RATES`, a flat 7 attack and 5
   absorption a step); the server does not read an `ItemEnchant.ini`, so it differs from the original with its shipped file (rates from
-  step 0, attack from step 4). Not decided yet (2026-11-05).
+  step 0, attack from step 4). **Decided 2026-11-05: the server will load the file** (`docs/plans/enchant-table.md`, not built yet).
 - The absorption of section 2 is applied to monster blows (and since to player blows, `docs/original/pvp.md` section 9, and the guards' kind 3,
   `docs/original/guards.md` section 6); `0x0525` tells the player. Lapis state blocks make monster skills of that
   state miss.

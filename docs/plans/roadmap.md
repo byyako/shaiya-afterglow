@@ -46,8 +46,9 @@ work items are kept under "Not scheduled" in case a part of them is wanted later
 A "Player guide" tab on the docs site, decided with the maintainer on 2026-11-05 and built the same day (live at `tylerd.me/shaiya/guide/`):
 three pages on the player stat system (a character's numbers, hitting and being hit, elements, resistances and defences) with every
 formula, its source note and five worked examples checked with `tools/balance/`. Gaps G1 to G8 are settled (the plan's Built section).
-**Open from it:** Shaiya Afterglow's enchant values are the built-in tables, while the original loads `Data/ItemEnchant.ini` (rates and
-attack per step): a decision for the maintainer, then a deviation row or a change.
+**Next from it:** Shaiya Afterglow's enchant values are the built-in tables, while the original loads `Data/ItemEnchant.ini` (rates and
+attack per step). Decided 2026-11-05: follow the original; the spec is `docs/plans/enchant-table.md` (import, load, use, the model,
+tests, docs), not built yet.
 
 ## Testing
 

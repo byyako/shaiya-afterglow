@@ -87,6 +87,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | lapis | 3 | linking, extraction and enchanting anywhere → a blacksmith in view | fix | |
 | lapis | 4 | the Operator's Exclusive (2000 %) capped at 50 % → always links | gameplay | |
 | lapis | 5 | extraction always answered with 34 bytes (read one byte off by this client) → 33 to a 4-byte request | client | |
+| lapis | 6 | the enchant rates and the attack and absorption a step adds come from `Data/ItemEnchant.ini` → the built-in tables (a flat 7 and 5 a step, weapons stop at +12, armour at +14); **to be fixed**: `docs/plans/enchant-table.md` | fix (not built) | |
 | item-options | 1 | an empty shield or helmet slot ends the lapis scan, so body-armour lapis rarely strike back at players → empty slots skipped | fix | |
 | item-options | 2 | a gem skill still rolls on a target an earlier gem killed → nothing | fix | |
 | item-mall | 1-3 | points checked against memory and taken after the items; the gift lock left set; gifts through a billing server → one transaction each, points from the account | fix, tooling | |
