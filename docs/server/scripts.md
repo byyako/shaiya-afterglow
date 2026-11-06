@@ -5,6 +5,9 @@ versioned API (items, gold, buffs, notices, teleports, monsters spawned for a wh
 action or change a number at the places the [rules](rules.md) are asked. Scripts are an addition: no script is installed by default, and
 with none the server behaves as the original. `docs/plans/ext-5-lua.md` is the design; this page is how to use them.
 
+**Not released yet.** Scripts are on `main` and come with 0.3.0; the latest release, 0.2.0, does not have them. The extension system is
+still being built, so this page may change before then.
+
 The scripts are the extensions' own. The original's monster scripts (`Data/Lua/*.lua`, the Cailum Sacra bosses) are another thing and
 are not touched (`docs/original/scripted-mobs.md`, `docs/original/instances.md`).
 

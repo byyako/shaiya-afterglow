@@ -9,7 +9,7 @@ No original code, binaries or game data are included. You bring your own copy of
     |---|---|
     | Original server | EP4.5 `ps_login.exe`, `ps_game.exe` and their neighbours, from the widely shared server pack ([file inventory](original/server-inventory.md); binaries of mid-2009, pack of 2010-03) |
     | Client | US `game.exe`, built 2010-04-26, patch level 108, unmodified (only its login address is pointed at your server) |
-    | Version | 0.2.0 (0.1.0 was the first public release) ([changelog](https://github.com/byyako/shaiya-afterglow/blob/main/CHANGELOG.md)) |
+    | Version | 0.2.0 is the latest release (0.1.0 was the first) ([changelog](https://github.com/byyako/shaiya-afterglow/blob/main/CHANGELOG.md)). These pages describe `main`, 0.3.0 in the making: [Rules](server/rules.md) and [Scripts](server/scripts.md) are not in 0.2.0 yet |
     | Runs on | Linux, with Docker for PostgreSQL; Rust 1.94 or newer to build |
 
     There is no closed alpha and no official test server: the public release is the trial. If you run it and something behaves differently from the original, a report is welcome ([issues](https://github.com/byyako/shaiya-afterglow/issues)).
