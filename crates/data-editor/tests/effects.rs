@@ -247,3 +247,47 @@ async fn the_server_loads_the_effects_of_enabled_extensions_only() {
     assert!(message.contains("extension fx: skill 200/1") && message.contains("not in defs.skills"), "{message}");
     db.drop().await;
 }
+
+/// The Kill Boost port (`docs/plans/ext-3-effects.md` section 5.4): 1.0.0 (the setting) upgrades to the real folder's 1.1.0 (the
+/// abilities) and nothing the client or `defs` holds changes, so patch 109 still regenerates the same.
+#[tokio::test]
+async fn kill_boost_moves_from_its_setting_to_abilities_without_touching_defs_or_the_client_rows() {
+    let Some(db) = seeded(false).await else { return };
+    let real = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions/kill-boost");
+    // The 1.0.0 folder, made from the real one: the setting instead of the abilities.
+    let old = std::env::temp_dir().join(format!("kb-old-{:08x}", rand::random::<u32>()));
+    std::fs::create_dir_all(&old).unwrap();
+    let manifest = std::fs::read_to_string(real.join("extension.toml")).unwrap();
+    assert!(manifest.contains("version = \"1.1.0\"") && !manifest.contains("[settings]"), "the real folder is 1.1.0 without a setting");
+    std::fs::write(old.join("extension.toml"), format!("{}\n[settings]\nkill_boost_skills = \"200/1:2,200/2:5,200/3:10\"\n", manifest.replace("version = \"1.1.0\"", "version = \"1.0.0\""))).unwrap();
+    let rows = std::fs::read_to_string(real.join("rows.toml")).unwrap();
+    assert_eq!(rows.lines().filter(|l| l.starts_with("abilities = ")).count(), 3);
+    std::fs::write(old.join("rows.toml"), rows.lines().filter(|l| !l.starts_with("abilities = ")).collect::<Vec<_>>().join("\n")).unwrap();
+
+    db.editor.ext_install(&old, false).await.unwrap();
+    assert_eq!(count(&db, "ext_settings").await, 1, "1.0.0 sets the setting");
+    assert_eq!(count(&db, "ext_skill_abilities").await, 0);
+    let snapshot = || async {
+        let hashes = db.editor.content_hashes(&[db.s.defs.clone(), db.s.world.clone()]).await.unwrap();
+        let client = db
+            .scalar(format!(
+                "SELECT (SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.type, i.typeid), '[]'::jsonb) FROM {c}.client_items i)
+                      || (SELECT coalesce(jsonb_agg(to_jsonb(k) ORDER BY k.skill_id, k.level), '[]'::jsonb) FROM {c}.client_skills k) AS v",
+                c = db.s.content
+            ))
+            .await["v"]
+            .clone();
+        (hashes, client)
+    };
+    let before = snapshot().await;
+    assert_eq!(before.1.as_array().map(Vec::len), Some(6), "three stones and three buffs");
+
+    let lines = db.editor.ext_upgrade(&real).await.unwrap();
+    assert!(has(&lines, "upgrading kill-boost 1.0.0 -> 1.1.0") && has(&lines, "200/1 kill_boost times = 2") && has(&lines, "200/3 kill_boost times = 10"), "{lines:#?}");
+    assert_eq!(snapshot().await, before, "the defs rows and the client rows are the same bytes");
+    assert_eq!(count(&db, "ext_settings").await, 0, "the setting's default is gone");
+    let times = db.scalar(format!("SELECT jsonb_agg(abilities -> 0 ->> 'times' ORDER BY level) AS v FROM {}.ext_skill_abilities WHERE skill_id = 200", db.s.content)).await;
+    assert_eq!(times["v"], json!(["2", "5", "10"]));
+    let _ = std::fs::remove_dir_all(&old);
+    db.drop().await;
+}

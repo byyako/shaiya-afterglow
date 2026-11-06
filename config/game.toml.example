@@ -109,7 +109,7 @@
 # What each counted player kill adds to the killer's kills, 1 to 100; the console's killrate changes it.
 # kill_rate = 1
 
-# Skills that multiply a counted kill while applied: id[/level][:times], comma-separated, e.g. "200/1:2,200/2:5". The kill-boost extension sets it.
+# A shorthand for the kill boost: id[/level][:times], comma-separated, e.g. "200/1:2,200/2:5". At start each entry gives those skills a kill_boost ability, which multiplies a counted kill while the skill is applied; an extension's rows can give the same ability (docs/server/effects.md).
 # kill_boost_skills = ""
 
 # The gambling house: places its NPCs and handles the slot machine and the card double-up; false hides the NPCs, as the original does.

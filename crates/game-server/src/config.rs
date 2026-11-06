@@ -187,7 +187,7 @@ pub const SETTINGS: &[Setting] = &[
     s("ranking_update_delay_secs", "1800", Kind::Number, "Seconds after the ranking battle closes until the ranking is updated (as in the original).", uint::<u64>),
     s("exp_rate", "1", Kind::Number, "The monster experience event's factor at start, 0 or more; the console's exp changes it until the next start.", exp_rate_ok),
     s("kill_rate", "1", Kind::Number, "What each counted player kill adds to the killer's kills, 1 to 100; the console's killrate changes it.", kill_rate_ok),
-    s("kill_boost_skills", "", Kind::Text, "Skills that multiply a counted kill while applied: id[/level][:times], comma-separated, e.g. \"200/1:2,200/2:5\". The kill-boost extension sets it.", kill_boosts_ok),
+    s("kill_boost_skills", "", Kind::Text, "A shorthand for the kill boost: id[/level][:times], comma-separated, e.g. \"200/1:2,200/2:5\". At start each entry gives those skills a kill_boost ability, which multiplies a counted kill while the skill is applied; an extension's rows can give the same ability (docs/server/effects.md).", kill_boosts_ok),
     s("mini_game", "true", Kind::Flag, "The gambling house: places its NPCs and handles the slot machine and the card double-up; false hides the NPCs, as the original does.", any),
     s("slot_payout_percent", "100", Kind::Number, "Each winning slot line pays multiplier x bet x this / 100, 1 to 1000; 100 is the original's table (about 41 % back), 220 about 90 %.", slot_payout_ok),
     s("card_win_chances", "400,200,100,50,10", Kind::Text, "The double-up's chance in per mille, rounds 1 to 5, that the card falls on the guessed side; the default is the original's.", card_win_ok),
