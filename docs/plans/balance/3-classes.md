@@ -27,6 +27,18 @@ CSV tables to `data/balance/` (git-ignored); `tools/balance/builds_report.py` pr
 | `builds_factions.csv`, `builds_modes.csv` | the faction steps; normal and hard against ultimate |
 | `builds_lever_wall.csv`, `builds_lever_skills.csv`, `builds_lever_hp.csv` | the levers of section 8 |
 
+**Revised 2026-11-06** (every table regenerated with `builds.py` and `builds_report.py`; two causes):
+
+- **Enchant tables** (commit e9ae177): the server and the model now read `Data/ItemEnchant.ini`. The builds' gear is weapon +3 and armour
+  +4, which give the same 21 attack and 20 absorption as the old built-in tables, so no fight changed from this; only the cost of
+  those steps fell (about 90 dangerous Lapisia to about 30, section 2.1) and part 2 section 4.3 was rewritten.
+- **Physical PvP averages** (commit 829aeaa): the model's expected physical blow in PvP had used a 17-point grid whose fractional
+  spread values were truncated, so it came out about 0.5 a blow low. Kill times in PvP are now shorter by up to a few percent: 30 of
+  the document's table rows changed, each by 1 to 3 seconds at most, in the PvP kill-time tables (section 5), the faction and
+  mode comparisons, the stat-split scores and the PvE tables' PvP columns. The chosen builds are the same except one, the
+  normal-mode level-30 assassin, which now picks weapon 10 over 15 and has 497 attack, not 486 (the modes table).
+  No ranking or conclusion changed.
+
 ## 0. The maintainer's goals (asked 2026-10-26)
 
 | question | answer |
@@ -115,8 +127,9 @@ CSV tables to `data/balance/` (git-ignored); `tools/balance/builds_report.py` pr
    - **good**: crafted numbers at the size a tenth of drops reach (7 on level-60 armour: 700 HP), grade-36 lapis (Lv5; 1 to 4 % a link).
    - **plain**: no enchant, no crafted numbers, no lapis: a character as it finds its gear.
    What expected gear costs at 60 (modelled arithmetic from part 2): 29 armour rooms of Life Lapis Lv4 at 12 % is about 240 links
-   (33 million at 137,900 a try) and as many lapis (monster 738 drops one in 7); the enchant steps need about 90 dangerous Lapisia (20
-   for the weapon, 14 a piece for five armour pieces) from the Cailum Sacra floor bosses (one in 10 a kill).
+   (33 million at 137,900 a try) and as many lapis (monster 738 drops one in 7); the enchant steps need about 30 dangerous Lapisia (5
+   for the weapon, 5 a piece for five armour pieces; about 90 with the server's old built-in tables) from the Cailum Sacra floor
+   bosses (one in 10 a kill).
 
 ### 2.2 Elements
 
@@ -234,7 +247,7 @@ Each cell: the split and lapis order, then its PvE and PvP score relative to the
 | class | chosen (PvE / PvP, 1 = the best) | best PvE | best PvP | all damage stat | round 1 choice |
 |---|---|---|---|---|---|
 | fighter | str:3,dex:1 stat: 0.95 / 1.00 | str:1,dex:3 stat: 1.00 / 0.75 | str:3,dex:1 stat: 0.95 / 1.00 | str:4 stat: 0.93 / 0.86 | str:3,dex:1 stat |
-| defender | str:3,dex:1 stat: 1.00 / 1.00 | str:3,luc:1 stat: 1.00 / 0.73 | str:3,dex:1 stat: 1.00 / 1.00 | str:4 stat: 1.00 / 0.92 | str:3,dex:1 stat |
+| defender | str:3,dex:1 stat: 1.00 / 1.00 | str:3,luc:1 stat: 1.00 / 0.74 | str:3,dex:1 stat: 1.00 / 1.00 | str:4 stat: 1.00 / 0.92 | str:3,dex:1 stat |
 | ranger | str:4 stat: 0.99 / 1.00 | str:2,dex:1,luc:1 stat: 1.00 / 0.62 | str:4 stat: 0.99 / 1.00 | str:4 stat: 0.99 / 1.00 | str:4 stat |
 | archer | str:4 stat: 1.00 / 0.64 | str:4 stat: 1.00 / 0.64 | rec:4 stat: 0.49 / 1.00 | str:4 stat: 1.00 / 0.64 | str:4 stat |
 | mage | int:4 stat: 1.00 / 0.87 | int:4 stat: 1.00 / 0.87 | int:3,wis:1 stat: 0.80 / 1.00 | int:4 stat: 1.00 / 0.87 | int:4 stat |
@@ -242,7 +255,7 @@ Each cell: the split and lapis order, then its PvE and PvP score relative to the
 | warrior | str:1,dex:2,rec:1 stat: 0.98 / 0.99 | str:1,dex:3 stat: 1.00 / 0.88 | str:2,dex:1,rec:1 stat: 0.95 / 1.00 | str:4 stat: 0.93 / 0.75 | str:1,dex:2,rec:1 stat |
 | guardian | str:3,dex:1 stat: 1.00 / 1.00 | str:3,luc:1 stat: 1.00 / 0.71 | str:3,dex:1 stat: 1.00 / 1.00 | str:4 stat: 1.00 / 0.91 | str:3,dex:1 stat |
 | assassin | str:4 stat: 0.99 / 1.00 | str:2,dex:1,luc:1 stat: 1.00 / 0.63 | str:4 stat: 0.99 / 1.00 | str:4 stat: 0.99 / 1.00 | str:4 stat |
-| hunter | str:4 stat: 1.00 / 0.68 | str:4 stat: 1.00 / 0.68 | rec:4 stat: 0.49 / 1.00 | str:4 stat: 1.00 / 0.68 | str:4 stat |
+| hunter | str:4 stat: 1.00 / 0.67 | str:4 stat: 1.00 / 0.67 | rec:4 stat: 0.49 / 1.00 | str:4 stat: 1.00 / 0.67 | str:4 stat |
 | pagan | int:3,wis:1 stat: 1.00 / 1.00 | int:3,wis:1 stat: 1.00 / 1.00 | int:3,wis:1 stat: 1.00 / 1.00 | int:4 stat: 0.98 / 0.84 | int:3,wis:1 stat |
 | oracle | int:3,wis:1 stat: 0.97 / 1.00 | int:2,wis:2 stat: 1.00 / 0.93 | int:3,wis:1 stat: 0.97 / 1.00 | int:4 stat: 0.93 / 0.89 | int:3,wis:1 stat |
 
@@ -256,9 +269,9 @@ Each cell: the split and lapis order, then its PvE and PvP score relative to the
 | archer | luc:4 stat: 0.99 / 1.00 | str:4 stat: 1.00 / 0.79 | luc:4 stat: 0.99 / 1.00 | str:4 stat: 1.00 / 0.79 | luc:4 stat |
 | mage | int:2,wis:2 stat: 1.00 / 1.00 | wis:4 stat: 1.00 / 0.41 | int:2,wis:2 stat: 1.00 / 1.00 | int:4 stat: 0.95 / 0.67 | int:2,wis:2 stat |
 | priest | int:3,wis:1 stat: 1.00 / 0.87 | int:4 stat: 1.00 / 0.56 | luc:4 stat: 0.78 / 1.00 | int:4 stat: 1.00 / 0.56 | int:3,wis:1 stat |
-| warrior | str:2,rec:2 stat: 0.93 / 0.83 | str:2,dex:2 stat: 1.00 / 0.68 | dex:2,rec:2 stat: 0.64 / 1.00 | str:4 stat: 0.97 / 0.57 | str:2,dex:2 stat |
-| guardian | str:1,dex:2,rec:1 stat: 0.88 / 0.92 | str:1,luc:3 stat: 1.00 / 0.47 | dex:3,rec:1 stat: 0.79 / 1.00 | str:4 stat: 0.99 / 0.53 | str:1,dex:2,rec:1 stat |
-| assassin | str:4 stat: 0.99 / 0.91 | str:2,dex:2 stat: 1.00 / 0.71 | str:2,rec:2 stat: 0.85 / 1.00 | str:4 stat: 0.99 / 0.91 | str:4 stat |
+| warrior | str:2,rec:2 stat: 0.93 / 0.83 | str:2,dex:2 stat: 1.00 / 0.68 | dex:2,rec:2 stat: 0.64 / 1.00 | str:4 stat: 0.97 / 0.56 | str:2,dex:2 stat |
+| guardian | str:1,dex:2,rec:1 stat: 0.88 / 0.93 | str:1,luc:3 stat: 1.00 / 0.47 | dex:3,rec:1 stat: 0.79 / 1.00 | str:4 stat: 0.99 / 0.54 | str:1,dex:2,rec:1 stat |
+| assassin | str:4 stat: 0.99 / 0.90 | str:2,dex:2 stat: 1.00 / 0.71 | str:2,rec:2 stat: 0.85 / 1.00 | str:4 stat: 0.99 / 0.90 | str:4 stat |
 | hunter | luc:4 stat: 0.99 / 1.00 | str:3,dex:1 stat: 1.00 / 0.74 | luc:4 stat: 0.99 / 1.00 | str:4 stat: 0.70 / 0.78 | luc:4 stat |
 | pagan | int:2,wis:2 stat: 0.99 / 1.00 | wis:4 stat: 1.00 / 0.33 | int:2,wis:2 stat: 0.99 / 1.00 | int:4 stat: 0.95 / 0.55 | int:2,wis:2 stat |
 | oracle | luc:4 stat: 0.78 / 1.00 | int:4 stat: 1.00 / 0.76 | luc:4 stat: 0.78 / 1.00 | int:4 stat: 1.00 / 0.76 | int:4 stat |
@@ -277,7 +290,7 @@ Each cell: the split and lapis order, then its PvE and PvP score relative to the
 | guardian | dex:1,luc:3 stat: 0.90 / 1.00 | str:3,dex:1 stat: 1.00 / 0.83 | dex:1,luc:3 stat: 0.90 / 1.00 | str:4 stat: 0.79 / 0.62 | dex:1,luc:3 stat |
 | assassin | str:3,luc:1 stat: 0.98 / 0.95 | str:2,luc:2 stat: 1.00 / 0.93 | dex:1,luc:3 stat: 0.73 / 1.00 | str:4 stat: 0.97 / 0.95 | str:3,luc:1 stat |
 | hunter | dex:1,luc:3 stat: 1.00 / 1.00 | dex:1,luc:3 stat: 1.00 / 1.00 | dex:1,luc:3 stat: 1.00 / 1.00 | str:4 stat: 0.93 / 0.65 | dex:1,luc:3 stat |
-| pagan | wis:2,luc:2 stat: 1.00 / 0.90 | wis:2,luc:2 stat: 1.00 / 0.90 | wis:2,rec:2 stat: 0.74 / 1.00 | int:4 stat: 0.93 / 0.78 | wis:2,luc:2 stat |
+| pagan | wis:2,luc:2 stat: 1.00 / 0.89 | wis:2,luc:2 stat: 1.00 / 0.89 | wis:2,rec:2 stat: 0.74 / 1.00 | int:4 stat: 0.93 / 0.78 | wis:2,luc:2 stat |
 | oracle | int:4 stat: 1.00 / 1.00 | int:4 stat: 1.00 / 1.00 | int:4 stat: 1.00 / 1.00 | int:4 stat: 1.00 / 1.00 | int:3,wis:1 stat |
 
 - **The top is flat**: at 60 most classes have three or more splits within 0.05 of the best on both scores.
@@ -485,7 +498,7 @@ does not make.
 | **Fig** | 30 | 55 | 16 | 13 | 11 | 12 | 55 | 58 | 16 | 14 | 11 | 12 |
 | **Def** | 66 | 152 | 38 | 30 | 24 | 26 | 121 | 157 | 39 | 30 | 25 | 29 |
 | **Ran** | 36 | 69 | 22 | 20 | 15 | 16 | 62 | 70 | 22 | 20 | 15 | 18 |
-| **Arc** | 62 | 76 | 39 | 30 | 20 | 21 | 102 | 75 | 40 | 29 | 22 | 23 |
+| **Arc** | 62 | 75 | 39 | 30 | 20 | 21 | 102 | 75 | 40 | 29 | 22 | 23 |
 | **Mag** | 28 | 34 | 18 | 18 | 16 | never | 30 | 36 | 20 | 18 | 26 | 38 |
 | **Pri** | never | never | 16 | 18 | 16 | never | never | never | 18 | 18 | never | never |
 | **War** | 48 | 146 | 23 | 21 | 16 | 19 | 95 | 151 | 22 | 21 | 16 | 19 |
@@ -501,12 +514,12 @@ does not make.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | **Fig** | 86 | never | 62 | 46 | 15 | 18 | 86 | never | 62 | 46 | 15 | 22 |
 | **Def** | 87 | never | 37 | 33 | 16 | 18 | 87 | never | 39 | 32 | 18 | 19 |
-| **Ran** | 60 | 172 | 25 | 26 | 18 | 20 | 62 | 176 | 26 | 26 | 19 | 22 |
+| **Ran** | 60 | 172 | 25 | 26 | 18 | 20 | 62 | 174 | 26 | 26 | 19 | 22 |
 | **Arc** | 65 | 179 | 30 | 30 | 18 | 20 | 63 | 177 | 30 | 30 | 18 | 24 |
 | **Mag** | 38 | 40 | 28 | 30 | never | never | 38 | 40 | 28 | 30 | never | never |
 | **Pri** | never | never | 21 | 22 | never | never | never | never | 21 | 22 | never | never |
-| **War** | 79 | never | 65 | 47 | 16 | 18 | 77 | never | 65 | 46 | 16 | 24 |
-| **Gua** | 87 | never | 39 | 32 | 16 | 18 | 87 | never | 42 | 33 | 18 | 19 |
+| **War** | 79 | never | 65 | 46 | 16 | 18 | 76 | never | 65 | 46 | 16 | 24 |
+| **Gua** | 87 | never | 39 | 32 | 16 | 18 | 87 | never | 39 | 33 | 18 | 19 |
 | **Asn** | 52 | 172 | 22 | 22 | 16 | 18 | 54 | 176 | 24 | 24 | 16 | 20 |
 | **Hun** | 65 | 180 | 30 | 30 | 18 | 20 | 65 | 180 | 30 | 30 | 18 | 24 |
 | **Pag** | 34 | 36 | 24 | 26 | never | never | 36 | 38 | 26 | 26 | never | never |
@@ -518,12 +531,12 @@ does not make.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | **Fig** | 86 | never | 62 | 46 | 15 | 18 | 86 | never | 62 | 46 | 15 | 22 |
 | **Def** | 87 | never | 37 | 33 | 16 | 18 | 87 | never | 39 | 32 | 18 | 19 |
-| **Ran** | 60 | 172 | 25 | 26 | 18 | 20 | 62 | 176 | 26 | 26 | 19 | 22 |
+| **Ran** | 60 | 172 | 25 | 26 | 18 | 20 | 62 | 174 | 26 | 26 | 19 | 22 |
 | **Arc** | 65 | 179 | 30 | 30 | 18 | 20 | 63 | 177 | 30 | 30 | 18 | 24 |
 | **Mag** | 38 | 40 | 27 | 30 | never | never | 38 | 40 | 28 | 30 | never | 46 |
 | **Pri** | never | never | 21 | 22 | never | never | never | never | 21 | 22 | never | never |
-| **War** | 79 | never | 65 | 47 | 16 | 18 | 77 | never | 65 | 46 | 16 | 24 |
-| **Gua** | 87 | never | 39 | 32 | 16 | 18 | 87 | never | 42 | 33 | 18 | 19 |
+| **War** | 79 | never | 65 | 46 | 16 | 18 | 76 | never | 65 | 46 | 16 | 24 |
+| **Gua** | 87 | never | 39 | 32 | 16 | 18 | 87 | never | 39 | 33 | 18 | 19 |
 | **Asn** | 52 | 172 | 22 | 22 | 16 | 18 | 54 | 176 | 24 | 24 | 16 | 20 |
 | **Hun** | 65 | 180 | 30 | 30 | 18 | 20 | 65 | 180 | 30 | 30 | 18 | 24 |
 | **Pag** | 33 | 36 | 24 | 26 | never | 217 | 34 | 36 | 26 | 26 | never | 39 |
@@ -540,7 +553,7 @@ does not make.
 | **Mag** | 9.5 | 16 | 9.0 | 9.0 | 12 | 12 | 9.5 | 16 | 11 | 11 | 12 | 12 |
 | **Pri** | 18 | 26 | 16 | 16 | 46 | 22 | 20 | 27 | 18 | 18 | 46 | 24 |
 | **War** | 3.5 | 18 | 7.0 | 7.0 | 3.5 | 3.5 | 3.5 | 18 | 5.2 | 7.0 | 3.5 | 3.5 |
-| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 103 | 22 | 26 | 9.0 | 10 |
+| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 102 | 22 | 26 | 9.0 | 10 |
 | **Asn** | 4.0 | 15 | 5.0 | 5.0 | 3.0 | 3.0 | 4.0 | 15 | 4.0 | 5.0 | 3.0 | 3.0 |
 | **Hun** | 4.8 | 6.0 | 6.0 | 6.0 | 4.8 | 4.8 | 4.8 | 6.0 | 6.0 | 6.0 | 4.8 | 4.8 |
 | **Pag** | 9.0 | 16 | 9.0 | 9.0 | 11 | 12 | 9.5 | 16 | 9.0 | 9.0 | 12 | 12 |
@@ -553,12 +566,12 @@ does not make.
 | **Fig** | 11 | 49 | 18 | 18 | 3.8 | 3.8 | 12 | 49 | 18 | 18 | 3.8 | 3.8 |
 | **Def** | 18 | 108 | 26 | 26 | 9.0 | 10 | 20 | 110 | 24 | 27 | 9.0 | 10 |
 | **Ran** | 10 | 39 | 10 | 10 | 6.0 | 7.0 | 10 | 39 | 10 | 10 | 6.0 | 7.0 |
-| **Arc** | 10 | 20 | 13 | 13 | 7.2 | 7.8 | 12 | 21 | 13 | 14 | 7.8 | 7.8 |
+| **Arc** | 10 | 20 | 13 | 13 | 7.2 | 7.8 | 12 | 21 | 12 | 14 | 7.8 | 7.8 |
 | **Mag** | 24 | 34 | 22 | 22 | 29 | 30 | 24 | 37 | 24 | 24 | 30 | 33 |
 | **Pri** | 18 | 26 | 16 | 16 | 46 | 22 | 20 | 27 | 18 | 18 | 46 | 24 |
 | **War** | 12 | 46 | 19 | 19 | 3.5 | 3.5 | 13 | 46 | 19 | 19 | 3.5 | 5.2 |
-| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 103 | 22 | 26 | 9.0 | 10 |
-| **Asn** | 7.0 | 36 | 9.0 | 9.0 | 5.0 | 6.0 | 8.0 | 35 | 9.0 | 10 | 5.0 | 6.0 |
+| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 102 | 22 | 26 | 9.0 | 10 |
+| **Asn** | 7.0 | 35 | 9.0 | 9.0 | 5.0 | 6.0 | 8.0 | 35 | 9.0 | 10 | 5.0 | 6.0 |
 | **Hun** | 10 | 19 | 13 | 13 | 6.5 | 7.8 | 10 | 20 | 12 | 13 | 7.8 | 7.8 |
 | **Pag** | 22 | 31 | 21 | 21 | 28 | 30 | 24 | 32 | 22 | 22 | 30 | 32 |
 | **Ora** | 16 | 24 | 15 | 15 | 36 | 20 | 18 | 24 | 16 | 16 | 38 | 20 |
@@ -570,12 +583,12 @@ does not make.
 | **Fig** | 11 | 49 | 18 | 18 | 3.8 | 3.8 | 12 | 49 | 18 | 18 | 3.8 | 3.8 |
 | **Def** | 18 | 108 | 26 | 26 | 9.0 | 10 | 20 | 110 | 24 | 27 | 9.0 | 10 |
 | **Ran** | 10 | 39 | 10 | 10 | 6.0 | 7.0 | 10 | 39 | 10 | 10 | 6.0 | 7.0 |
-| **Arc** | 10 | 20 | 13 | 13 | 7.2 | 7.8 | 12 | 21 | 13 | 14 | 7.8 | 7.8 |
+| **Arc** | 10 | 20 | 13 | 13 | 7.2 | 7.8 | 12 | 21 | 12 | 14 | 7.8 | 7.8 |
 | **Mag** | 30 | 54 | 30 | 33 | 60 | 58 | 32 | 58 | 32 | 34 | 60 | 60 |
 | **Pri** | 18 | 26 | 16 | 16 | 46 | 22 | 20 | 27 | 18 | 18 | 46 | 24 |
 | **War** | 12 | 46 | 19 | 19 | 3.5 | 3.5 | 13 | 46 | 19 | 19 | 3.5 | 5.2 |
-| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 103 | 22 | 26 | 9.0 | 10 |
-| **Asn** | 7.0 | 36 | 9.0 | 9.0 | 5.0 | 6.0 | 8.0 | 35 | 9.0 | 10 | 5.0 | 6.0 |
+| **Gua** | 16 | 103 | 24 | 24 | 9.0 | 10 | 18 | 102 | 22 | 26 | 9.0 | 10 |
+| **Asn** | 7.0 | 35 | 9.0 | 9.0 | 5.0 | 6.0 | 8.0 | 35 | 9.0 | 10 | 5.0 | 6.0 |
 | **Hun** | 10 | 19 | 13 | 13 | 6.5 | 7.8 | 10 | 20 | 12 | 13 | 7.8 | 7.8 |
 | **Pag** | 27 | 46 | 27 | 27 | 54 | 51 | 28 | 49 | 28 | 30 | 56 | 54 |
 | **Ora** | 16 | 24 | 15 | 15 | 36 | 20 | 18 | 24 | 16 | 16 | 38 | 20 |
@@ -587,7 +600,7 @@ does not make.
 | class | every skill |
 |---|---|
 | fighter | 10: 14 / 50 |
-| defender | 9: 30 / 76 |
+| defender | 9: 30 / 75 |
 | ranger | 4: 20 / 20 |
 | archer | 1: 39 / 20 |
 | mage | 2: 28 / 16 |
@@ -609,7 +622,7 @@ does not make.
 | archer | 4: 30 / 30 | 4: 30 / 30 |
 | mage | 0: 38 / 18 | 0: 38 / 18 |
 | priest | 0: never / 20 | 0: never / 20 |
-| warrior | 7: 47 / 65 | 7: 47 / 65 |
+| warrior | 7: 46 / 65 | 7: 46 / 65 |
 | guardian | 10: 33 / 180 | 10: 33 / 180 |
 | assassin | 9: 22 / 30 | 9: 22 / 30 |
 | hunter | 4: 30 / 30 | 4: 30 / 30 |
@@ -621,7 +634,7 @@ does not make.
 | class | every skill | without 180-184 | without 180-184 and mage DoT | with opening debuffs | plain gear | good gear |
 |---|---|---|---|---|---|---|
 | fighter | 5: 7.5 / 9.0 | 4: 18 / 16 | 4: 18 / 16 | 5: 7.5 / 9.0 | 8: 2.5 / 4.5 | 6: 10 / 14 |
-| defender | 4: 20 / 17 | 8: 20 / 34 | 8: 20 / 39 | 4: 18 / 14 | 7: 6.0 / 7.5 | 4: 24 / 20 |
+| defender | 4: 20 / 17 | 8: 20 / 34 | 8: 20 / 39 | 4: 16 / 14 | 7: 6.0 / 7.5 | 4: 24 / 20 |
 | ranger | 10: 5.0 / 9.0 | 8: 10 / 18 | 8: 10 / 18 | 10: 5.0 / 8.0 | 6: 3.0 / 4.5 | 8: 6.0 / 12 |
 | archer | 8: 4.8 / 9.0 | 8: 12 / 18 | 8: 12 / 18 | 8: 4.8 / 8.0 | 6: 3.5 / 4.5 | 8: 6.0 / 12 |
 | mage | 2: 11 / 4.8 | 2: 24 / 7.2 | 0: 34 / 7.2 | 2: 8.0 / 4.8 | 2: 4.5 / 1.5 | 2: 15 / 4.0 |
@@ -694,7 +707,7 @@ and skills). Steps 4 and 5 put both sides at kill-count grade 13 and 30 (part 1 
 
 | pair | same build, no race skills | + race skills | + own builds (the real ones) | + grade 13 both | + grade 30 both |
 |---|---|---|---|---|---|
-| fighter / warrior | 96 / 95 | 86 / 79 | 86 / 79 | 95 / 79 | 68 / 63 |
+| fighter / warrior | 96 / 94 | 86 / 79 | 86 / 79 | 95 / 79 | 68 / 63 |
 | defender / guardian | never / never | never / never | never / never | never / never | 257 / 234 |
 | ranger / assassin | 25 / 26 | 26 / 22 | 26 / 22 | 29 / 22 | 22 / 19 |
 | archer / hunter | 30 / 30 | 30 / 30 | 30 / 30 | 32 / 30 | 26 / 22 |
@@ -777,7 +790,7 @@ in any table; its value is a 30-second dodge window after which the elf fights w
 | fighter | 2,761 / 2,830 / 3,110 | 222 / 250 / 279 | 47 / 61 / 75 | 1.8:never / 1.8:never / 1.8:never | 0.4 / 0.8 / 0.7 | 32:31 / 18:36 |
 | defender | 3,047 / 3,125 / 3,438 | 175 / 203 / 232 | 47 / 61 / 75 | 7.0:never / 5.2:never / 3.5:never | 0.4 / 0.7 / 0.6 | 64:58 / 46:63 |
 | ranger | 1,931 / 1,991 / 2,232 | 202 / 239 / 275 | 47 / 61 / 75 | 4.5:never / 3.0:never / 3.0:never | 0.4 / 0.6 / 0.6 | 37:18 / 26:19 |
-| archer | 1,908 / 1,965 / 2,195 | 193 / 221 / 249 | 47 / 61 / 75 | 6.8:never / 6.8:never / 2.2:never | 0.6 / 1.1 / 0.7 | 46:17 / 40:17 |
+| archer | 1,908 / 1,965 / 2,195 | 193 / 221 / 249 | 47 / 61 / 75 | 6.8:never / 6.8:never / 2.2:never | 0.6 / 1.1 / 0.7 | 46:17 / 39:17 |
 | mage | 1,620 / 1,659 / 1,816 | 216 / 253 / 289 | 47 / 61 / 75 | 4.0:never / 4.5:never / 2.5:never | 0.4 / 0.8 / 0.6 | 44:14 / 36:16 |
 | priest | 1,705 / 1,749 / 1,926 | 145 / 166 / 187 | 47 / 61 / 75 | 4.0:never / 4.0:never / 1.5:never | 0.6 / 1.1 / 0.8 | never:22 / never:22 |
 | warrior | 2,866 / 2,970 / 3,285 | 178 / 240 / 252 | 47 / 61 / 75 | 1.8:never / 1.8:never / 1.8:never | 0.4 / 0.8 / 0.7 | 42:47 / 24:59 |
@@ -792,15 +805,15 @@ in any table; its value is a 30-second dodge window after which the elf fights w
 | class | HP | attack | skill points | field monster kill:die s | hours a level | normal, hard against the ultimate twelve (median kill:killed s) |
 |---|---|---|---|---|---|---|
 | fighter | 9,376 / 9,912 / 10,681 | 469 / 506 / 544 | 92 / 121 / 150 | 3.5:never / 0.0:never / 0.0:never | 2.2 / 4.1 / 3.6 | 73:40 / 60:50 |
-| defender | 9,663 / 10,138 / 10,897 | 767 / 791 / 816 | 92 / 121 / 150 | 8.8:never / 7.0:never / 7.0:never | 2.3 / 6.3 / 6.1 | 56:116 / 44:143 |
+| defender | 9,663 / 10,138 / 10,897 | 767 / 791 / 816 | 92 / 121 / 150 | 8.8:never / 7.0:never / 7.0:never | 2.3 / 6.3 / 6.1 | 55:116 / 43:142 |
 | ranger | 7,095 / 7,466 / 7,991 | 435 / 522 / 587 | 92 / 121 / 150 | 3.0:never / 3.0:never / 3.0:never | 1.4 / 4.2 / 4.2 | 46:25 / 36:26 |
 | archer | 7,016 / 7,378 / 7,870 | 271 / 169 / 281 | 92 / 121 / 150 | 2.2:never / 8.0:never / 0.0:never | 1.7 / 5.8 / 3.2 | 62:26 / 148:28 |
 | mage | 6,325 / 6,644 / 6,962 | 375 / 419 / 471 | 92 / 121 / 150 | 4.5:never / 4.5:never / 3.0:never | 3.0 / 8.7 / 7.2 | never:17 / never:17 |
 | priest | 6,545 / 6,876 / 7,270 | 362 / 422 / 498 | 92 / 121 / 150 | 3.5:never / 3.5:never / 1.5:never | 2.4 / 7.0 / 4.9 | never:18 / never:18 |
 | warrior | 9,396 / 9,932 / 10,701 | 471 / 609 / 647 | 92 / 121 / 150 | 3.5:never / 0.0:never / 0.0:never | 2.3 / 4.1 / 3.6 | 75:40 / 62:51 |
 | guardian | 9,683 / 10,158 / 10,917 | 769 / 794 / 819 | 92 / 121 / 150 | 8.8:never / 7.0:never / 7.0:never | 2.3 / 6.3 / 6.1 | 57:120 / 45:148 |
-| assassin | 7,299 / 7,670 / 8,195 | 486 / 573 / 638 | 92 / 121 / 150 | 3.0:never / 3.0:never / 3.0:never | 1.4 / 4.2 / 4.2 | 42:26 / 33:27 |
-| hunter | 7,021 / 7,383 / 7,890 | 167 / 167 / 282 | 92 / 121 / 150 | 10:never / 8.0:never / 0.0:never | 2.2 / 5.8 / 3.2 | 206:26 / 140:28 |
+| assassin | 7,299 / 7,670 / 8,195 | 497 / 573 / 638 | 92 / 121 / 150 | 3.0:never / 3.0:never / 3.0:never | 1.4 / 4.2 / 4.2 | 40:26 / 33:27 |
+| hunter | 7,021 / 7,383 / 7,890 | 167 / 167 / 282 | 92 / 121 / 150 | 10:never / 8.0:never / 0.0:never | 2.2 / 5.8 / 3.2 | 206:26 / 139:28 |
 | pagan | 6,529 / 6,848 / 7,166 | 436 / 479 / 531 | 92 / 121 / 150 | 4.5:never / 4.5:never / 3.0:never | 3.0 / 8.7 / 7.2 | never:17 / 176:18 |
 | oracle | 6,784 / 7,115 / 7,479 | 204 / 201 / 212 | 92 / 121 / 150 | 3.0:never / 3.5:never / 3.0:never | 2.2 / 6.8 / 6.3 | 203:19 / 169:21 |
 
@@ -812,13 +825,13 @@ in any table; its value is a 30-second dodge window after which the elf fights w
 | defender | 16,149 / 18,228 / 21,083 | 847 / 907 / 901 | 182 / 241 / 300 | 30:194 / 16:285 / 9.0:never | - / - / - | 46:11 / 31:14 |
 | ranger | 11,550 / 13,294 / 15,835 | 607 / 711 / 779 | 182 / 241 / 300 | 19:69 / 11:86 / 8.8:105 | - / - / - | 32:6.4 / 11:7.1 |
 | archer | 11,291 / 13,059 / 15,494 | 437 / 603 / 629 | 182 / 241 / 300 | 20:64 / 9.0:88 / 6.0:114 | - / - / - | 26:6.4 / 15:7.1 |
-| mage | 9,767 / 10,991 / 12,945 | 426 / 458 / 466 | 182 / 241 / 300 | 15:42 / 12:48 / 6.5:57 | - / - / - | 215:4.8 / 28:6.1 |
+| mage | 9,767 / 10,991 / 12,945 | 426 / 458 / 466 | 182 / 241 / 300 | 15:42 / 12:48 / 6.5:57 | - / - / - | 214:4.8 / 28:6.1 |
 | priest | 10,238 / 11,874 / 13,952 | 760 / 939 / 1078 | 182 / 241 / 300 | 12:47 / 9.0:55 / 7.5:64 | - / - / - | 34:5.9 / 27:6.9 |
 | warrior | 15,272 / 17,611 / 18,090 | 978 / 1254 / 1345 | 182 / 241 / 300 | 9.0:89 / 6.0:118 / 1.8:120 | - / - / - | 39:6.4 / 23:7.4 |
 | guardian | 16,169 / 18,808 / 21,663 | 849 / 915 / 910 | 182 / 241 / 300 | 30:193 / 12:284 / 9.0:never | - / - / - | 48:11 / 30:14 |
 | assassin | 12,008 / 13,943 / 16,484 | 821 / 979 / 1086 | 182 / 241 / 300 | 16:66 / 11:78 / 8.8:94 | - / - / - | 26:6.4 / 9.4:7.1 |
 | hunter | 11,311 / 13,614 / 16,049 | 438 / 616 / 642 | 182 / 241 / 300 | 20:63 / 7.5:89 / 6.0:114 | - / - / - | 26:6.4 / 14:7.1 |
-| pagan | 10,225 / 11,669 / 13,623 | 537 / 573 / 589 | 182 / 241 / 300 | 15:42 / 12:49 / 6.5:58 | - / - / - | 145:5.1 / 26:6.1 |
+| pagan | 10,225 / 11,669 / 13,623 | 537 / 573 / 589 | 182 / 241 / 300 | 15:42 / 12:49 / 6.5:58 | - / - / - | 144:5.1 / 26:6.1 |
 | oracle | 10,696 / 12,492 / 14,570 | 871 / 1056 / 1203 | 182 / 241 / 300 | 10:47 / 7.5:55 / 7.5:64 | - / - / - | 31:6.1 / 22:6.9 |
 
 - **At 60 a normal character is prey**: the ultimate twelve kill it in a median 4.8 to 11 s and it needs 26 to 215 s for them. Hard
@@ -1011,7 +1024,7 @@ placing 44 and 45 is answered: the original's data does.
 7. **Casters with short swords** casting a third faster than with staves: keep, or tie spell speed to something else?
 8. **LUC** as the best second stat at 60: keep?
 9. **Factions**: mirror them (kill-count grades, race skills, the Fury bracelets and shields), or keep the differences as flavour?
-10. **Enchant ceiling**: weapon +3 and armour +4 as play reaches now, or a higher ceiling (safe Lapisia in play, different rates)?
+10. **Enchant ceiling**: weapon +3 and armour +4 are what the builds use; with the original's `ItemEnchant.ini` rates players can reach about +6 / +7 (part 2 section 4.3). Keep that, or change the rates or put safe Lapisia in play?
 11. **Origins**: should the safe Lapisia, the Recreation Rune and the Lucky Charm come into play (drops, quests, a currency), or stay
     out?
 12. **The guild halls** (section 9.1): they are open to all as the original placed them; anything to change?

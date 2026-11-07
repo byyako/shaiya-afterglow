@@ -48,9 +48,11 @@ document keeps what a reader needs; the CSVs have every row:
 3. **Armour is worth its HP, MP and SP, not its defence** (section 3.4): the best obtainable level-60 set gives defence 93 against
    monster attacks of 961, but 1,813 HP. **Crafted stats can outweigh the item** (section 3.5): one crafted HP number on a level-60
    piece is up to 1,300 HP, more than the piece's own; the roll cannot be redone (the Recreation Rune has no origin).
-4. **Enchanting past +3 (weapon) or +4 (armour) is out of reach without the mall** (section 4.3): the only Lapisia players can get are
-   **dangerous** (a failure destroys the item), they drop only at levels 59 to 63 in Cailum Sacra, and a weapon at +5 takes about 7,600
-   of them and 3,500 weapons. The safe Lapisia, the Recreation Rune and the Lucky Charm's enchant use are not in play.
+4. **Enchanting past about +6 (weapon) or +7 (armour) is out of reach without the mall** (section 4.3, with the rates of the original
+   patch's `ItemEnchant.ini`, which the server now loads): the only Lapisia players can get are **dangerous** (a failure destroys the
+   item), they drop only at levels 59 to 63 in Cailum Sacra, and a weapon at +6 takes about 150 of them and 41 weapons, at +7 about
+   1,500 and 413 weapons (3.7 billion). Armour is cheaper: +7 takes 146 Lapisia and 28 pieces. The safe Lapisia, the Recreation Rune and
+   the Lucky Charm's enchant use are not in play.
 5. **The strongest lapis are not in the game** (section 4.1): the state lapis 110 to 139, among them the 90 % and 100 % HP lapis 136
    and 138 that part 1 worried about, have no origin (grades 38 to 40, 98, 99 that nothing drops). The obtainable top is grade 37
    (+30 a stat, +32 attack, absorption 75) at a **1 % link rate**; the Lv7 debuff lapis (grade 36) link at 4 %, better than the
@@ -259,8 +261,9 @@ So **a lucky level-60 armour piece holds up to 1,300 HP from one number**, and a
 at 60 (part 1 section 3.1: 6,019 for the fighter); the chance of a 13 is 1 in 2,744 per number. **The Recreation Rune (100/171), which
 rerolls with two draws, has no origin**, so the roll an item drops with is the roll it keeps.
 
-**The enchant effect** (verified, `lapis::enchant_bonus`): weapon **+7 attack a step**, armour **+5 absorption a step** (a flat cut off
-every blow). 4,944 obtainable items are enchantable (craftable with a material). What the steps cost is section 4.3.
+**The enchant effect** (verified, `lapis::enchant_bonus` with the table from `Data/ItemEnchant.ini`): armour **+5 absorption a step**
+(a flat cut off every blow); weapon **+7 attack a step to +3, then 10 or 13, up to 16 and more a step** (+4 = 31, +5 = 41, +7 = 64,
++10 = 106, +20 = 311). The built-in tables the server used before 2026-11-06 gave 7 a step all the way. 4,944 obtainable items are enchantable (craftable with a material). What the steps cost is section 4.3.
 
 ### 3.6 Item skills (verified, `item_use::effect`; `item_skills.csv`)
 
@@ -378,8 +381,8 @@ section 4.9); a Linking Hammer multiplies it by 110 to 450 %, premium by 1.5, a 
   final-boss form, map 67). Both dangerous. Five pieces with Lv6 would take **375 off every blow**, which against PvP physical damage
   (attack minus defence, part 1 section 4.5) is a large share. At 1 % to link, a dangerous lapis destroys the piece 99 times in 100
   without a Lucky Charm (mall only).
-- **What the strongest obtainable stat lapis give**: a grade-37 Craft Lapis (STR +30) on a weapon is 39 melee attack, as much as 5.5
-  enchant steps; at 1 % a try, about 100 tries and 48 million a success (modelled arithmetic).
+- **What the strongest obtainable stat lapis give**: a grade-37 Craft Lapis (STR +30) on a weapon is 39 melee attack, as much as a weapon at +4.8
+  (+4 = 31, +5 = 41); at 1 % a try, about 100 tries and 48 million a success (modelled arithmetic).
 - **Origins**: grades 31 to 34 drop everywhere (the only merchants with lapis are the guild-house general goods, section 2.4); grade 35 drops at levels 50 to 55
   (monster 738, 1 in 7; Dual lapis from 1500, 1501, 1600 at 1 in 120 to 240); grade 36 from 1188 (level 58, 1 in 28); grade 37 from
   2412 (level 62, map 64, 1 in 15 to 17) and the jewel lapis from 1540 and 1546 (levels 56, 58, 1 in 120).
@@ -406,27 +409,43 @@ at 1 in 6 to 20.
 
 ### 4.3 Enchant cost (verified rule `Enchant::succeeds`; modelled arithmetic, `enchant.csv`)
 
+**Revised 2026-11-06.** The first version of this section used the server's built-in tables (weapon 70 % at +1 falling to 1 in a million
+from +12, +7 a step; armour 99 % to 1 in a million from +15). The server now reads the rates and the attack from `Data/ItemEnchant.ini`
+as the original does (`docs/plans/enchant-table.md`), and `content.py --only enchant` reads the same `world.item_enchant` table, so the
+table below changed in every row: **the rates are higher at every step** (weapon +1 is 90 %, +3 70 %, +5 40 %; armour +4 80 %, +7 20 %),
+**the weapon's attack grows faster after +3** (+4 = 31, +7 = 64, +10 = 106) and **no step is "never"** to +20 (the last rates are 0.02 %
+from +14). The steps to +3 weapon and +4 armour, which the builds use, give the same 21 attack and 20 absorption as before; only what
+they cost fell (about 20 to 5 dangerous Lapisia for a weapon +3, 14 to 5 for armour +4).
+
 Success when the material count (1) + a draw below 1,000,000 is below the step's rate. With the **dangerous** Lapisia players can get, a
-failure destroys the item, so a step is reached only by succeeding at every step from 0 with one item: tries `T(n) = (T(n−1) + 1) /
-p(n−1)`, items used `1 / (p(0) × … × p(n−1))`. A weapon try costs 2,500,000 (grade 96), an armour try 1,040,000 (grade 40).
+failure destroys the item, so a step is reached only by succeeding at every step from 0 with one item: tries `T(n) = (T(n-1) + 1) /
+p(n-1)`, items used `1 / (p(0) x ... x p(n-1))`. A weapon try costs 2,500,000 (grade 96), an armour try 1,040,000 (grade 40), the
+material extra.
 
 | to step | weapon: attack, chance | safe tries from 0 | **dangerous Lapisia / weapons used** | money (dangerous) | armour: absorption, chance | safe tries | **dangerous Lapisia / pieces used** |
 |---|---|---|---|---|---|---|---|
-| 1 | +7, 70 % | 1 | 1 / 1 | 2.5 million | +5, 99 % | 1 | 1 / 1 |
-| 2 | +14, 50 % | 3 | 5 / 3 | 12 million | +10, 98 % | 2 | 2 / 1 |
-| 3 | +21, 30 % | 7 | 20 / 10 | 50 million | +15, 97 % | 3 | 3 / 1 |
-| 4 | +28, 9 % | 18 | **228 / 106** | 570 million | +20, 30 % | 6 | 14 / 4 |
-| 5 | +35, 3 % | 51 | **7,635 / 3,528** | 19 billion | +25, 10 % | 16 | **148 / 35** |
-| 6 | +42, 1 % | 151 | 763,689 / 352,787 | | +30, 3 % | 50 | **4,973 / 1,181** |
-| 7 | +49, 0.3 % | 485 | 2.5 × 10⁸ | | +35, 1 % | 150 | 497,450 / 118,084 |
-| 10 | +70, 0.01 % | 14,931 | 8.6 × 10¹⁸ | | +50, 0.03 % | 4,829 | 5.6 × 10¹⁴ |
-| 12 | +84, 0.001 % | 160,525 | 3.3 × 10²⁸ | | +60, 0.003 % | 49,412 | 1.9 × 10²³ |
-| 13 and up | never (weapon) | never | never | | +65 / +70 (13, 14) | 160,524 / 660,524 | |
+| 1 | +7, 90 % | 1 | 1 / 1 | 2.8 million | +5, 99 % | 1 | 1 / 1 |
+| 2 | +14, 80 % | 2 | 3 / 1 | 6.6 million | +10, 98 % | 2 | 2 / 1 |
+| 3 | +21, 70 % | 4 | 5 / 2 | 13 million | +15, 97 % | 3 | 3 / 1 |
+| 4 | +31, 60 % | 5 | 10 / 3 | 26 million | +20, 80 % | 4 | 5 / 1 |
+| 5 | +41, 40 % | 8 | 28 / 8 | 71 million | +25, 60 % | 6 | **10 / 2** |
+| 6 | +51, 20 % | 13 | **147 / 41** | 370 million | +30, 40 % | 8 | **28 / 6** |
+| 7 | +64, 10 % | 23 | **1,476 / 413** | 3.7 billion | +35, 20 % | 13 | **146 / 28** |
+| 8 | +77, 8 % | 35 | 18,467 / 5,167 | 46 billion | +40, 10 % | 23 | 1,473 / 277 |
+| 10 | +106, 1 % | 152 | 3.1 x 10^7 | | +50, 6 % | 53 | 307,092 / 57,652 |
+| 12 | +138, 0.2 % | 819 | 2.6 x 10^12 | | +60, 0.6 % | 319 | 5.1 x 10^9 |
+| 14 | +176, 0.06 % | 3,490 | 4.3 x 10^18 | | +70, 0.1 % | 1,821 | 2.6 x 10^15 |
 
-- **In play, a weapon tops out at +3 or +4 and armour at +4 or +5**: +4 on a weapon takes 228 Lapisia that drop at 1 in 10 from four
-  floor bosses of one instance, and 106 copies of the weapon; +5 is out of reach. A character can hold 4.29 billion, so even money
-  rules out weapon +5.
-- **The safe Lapisia would make +7 a matter of 485 tries** (1.2 billion) and +9 of 4,830 (part 1 section 4.9). They are not in play.
+(The chances are 1 in a million lower than printed because of the material.) Steps 15 to 20 stay at 0.02 % (weapon +15 is 195 attack,
++20 311; armour +20 is 100).
+
+- **In play, a weapon tops out at +5 or +6 and armour at +6 or +7**: +5 on a weapon takes 28 Lapisia (that drop at 1 in 10 from four
+  floor bosses of one instance) and 8 copies of the weapon, +6 takes 147 and 41, +7 takes 1,476 and 413 and 3.7 billion in Lapisia
+  alone, which is the edge of what a character can hold (4.29 billion). The first version said +4 was the edge and +5 out of reach
+  (228 Lapisia at +4); with the original's file the edge moved up about two steps. The builds in part 3 keep weapon +3 and armour +4,
+  which now cost little (5 Lapisia each); whether players would go further was not modelled.
+- **The safe Lapisia would make +7 a matter of 23 tries** (57 million) and +10 of 152 (380 million) (part 1 section 4.9). They are
+  not in play.
 - The material counts as a hindrance, not a help (more material lowers the chance: part 1 section 4.9); with one material per try the
   numbers above are the best case.
 
@@ -603,7 +622,7 @@ Grouped by what they touch; each names where the change would live (part 1 secti
 - **What players really get**: drop rates are known, but how often a party clears Cailum Sacra (the only Lapisia), which monsters
   people farm at 51 to 58, and how many 1-in-120 Dual lapis a week brings.
 - **Crafted stats in practice**: how good the rolls on worn items are after a few weeks (the smallest of three draws).
-- **Whether players accept enchant +3 / +4** as the ceiling, or quit for it.
+- **Whether players accept enchant +5 / +6 (weapon) and +6 / +7 (armour) as the ceiling** (with the original's rates), or quit for it.
 - **The percentage skills in PvP**: how often 70 % lands decide a fight, against healers, potions and reflection.
 - **The guild houses and the ranking battle**: whether a guild can ever start the circle of section 2.4 without operator help.
 - **Whether the client's tooltips mislead** players in the 132 items and 30 skills that differ.

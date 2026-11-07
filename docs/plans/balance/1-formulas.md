@@ -151,7 +151,7 @@ In this order: base stats and the status row; each item in slots 0 to 12 (not th
 spread for the weapon** (effects 1 and 2), **defence and magic defence for armour and the shield** (effects 3 and 4), all four effects
 and move speed for accessories (slots 8 to 12); its **lapis** (any slot but the cloak: stats, HP/MP/SP, attack, spread, defence, magic
 defence, range, speeds, **absorption**, a state block outside the weapon); its **crafted stats** (craftable items: nine numbers, the six
-stats as points, HP/MP/SP × 100); its **enchant step** (weapon +7 attack a step, armour +5 absorption a step); then the faction grade;
+stats as points, HP/MP/SP × 100); its **enchant step** (weapon +7 attack a step to +3 and more after it with `ItemEnchant.ini` (31 at +4, 311 at +20), armour +5 absorption a step); then the faction grade;
 then passives and buffs (abilities). Weapon and armour effects fall to **half below half quality and to nothing below a tenth**
 (`combat::wear_level`; accessories and lapis never wear).
 
@@ -354,6 +354,13 @@ The enchant figures below describe the **built-in tables** (what the server used
   |---|---|---|---|---|---|---|---|---|---|---|
   | weapon | 7 | 51 | 485 | 4,830 | 14,931 | 49,414 | 160,525 | never | never | never |
   | armour | 3 | 16 | 150 | 1,484 | 4,829 | 14,930 | 49,412 | 160,524 | 660,524 | never |
+
+  With the original patch's `ItemEnchant.ini` (what `enchant.csv` and part 2 section 4.3 now use, one material) the expected tries are:
+
+  | to reach | +3 | +5 | +7 | +9 | +10 | +11 | +12 | +13 | +14 | +20 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | weapon | 4 | 8 | 23 | 52 | 152 | 319 | 819 | 1,820 | 3,490 | 33,640 |
+  | armour | 3 | 6 | 13 | 36 | 53 | 153 | 319 | 820 | 1,821 | 28,616 |
 
   A failure keeps the step; a **dangerous** Lapisia destroys the item on failure (no Lucky Charm for enchanting). In money alone
   (modelled arithmetic), a weapon to +7 costs about 1.2 billion and to +9 about 12 billion, past the 4.29 billion a character can hold.
