@@ -5,8 +5,8 @@ A **rule** is a named, scoped statement the server asks at a few fixed places (t
 are an addition: with none written the server behaves as the original, apart from the one rule the `trade_chat_min_level` setting has
 always made (section 8). `docs/plans/ext-2-rules.md` is the design; this page is how to use them.
 
-**Not released yet.** Rules are on `main` and come with 0.3.0; the latest release, 0.2.0, does not have them. The extension system is
-still being built, so this page may change before then.
+**Released in 0.3.0.** Rules are in 0.3.0; 0.2.0 does not have them. The extension system is still being built (pets are next),
+so this page may change in the next releases.
 
 ## 1. Where rules come from
 

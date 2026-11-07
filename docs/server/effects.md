@@ -6,7 +6,7 @@ applied to a player: a kill that counts five times. An extension names the type 
 rest. Effects are an addition: a server without an extension that has them behaves as the original. `docs/plans/ext-3-effects.md` is the
 design; this page is how to use them, and (section 6) how to add a new type.
 
-**Not released yet.** Effects are on `main` and come with 0.3.0; the latest release, 0.2.0, does not have them.
+**Released in 0.3.0.** Effects are in 0.3.0; 0.2.0 does not have them.
 
 ## 1. The reference extensions
 

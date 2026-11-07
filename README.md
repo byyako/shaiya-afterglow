@@ -47,7 +47,7 @@ is the same path step by step, and everything after it.
 
 ## Status
 
-Version 0.2.0 ([changelog](CHANGELOG.md)). Every game system of the original EP4.5 server is built: login and the server list; the character screen; the world, maps,
+Version 0.3.0 ([changelog](CHANGELOG.md)). Every game system of the original EP4.5 server is built: login and the server list; the character screen; the world, maps,
 portals and gatekeepers; chat; NPCs and shops; items, the warehouse, repair, lapis and enchanting; stats, experience and death; monsters
 with their AI, paths, skills and scripted bosses; combat and every skill type; parties and union parties; trade; guilds, guild houses,
 the guild bank and the ranking battle; quests and quest drops; friends and memos; PvP, kill counts, duels and guild wars; obelisks and the

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.3.0 in the making)
+## 0.3.0 (2026-11-06)
 
 **The game data is built from the originals, extensions and edits** (extensions chunk 1, part A; `docs/plans/ext-1-foundation.md`)
 - The original data is imported **once**, into frozen copies (`original_defs`, `original_world`, and `client` on a developer's box), and
