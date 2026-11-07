@@ -79,6 +79,8 @@ def psql_run(sql=None, stdin=None):
 def query(sql):
     """The rows of a SELECT as lists of strings (None for NULL)."""
     out = psql_run(f"COPY ({sql}) TO STDOUT WITH (FORMAT csv, NULL '\\N')")
+    # A patch file's bytes as hex (the ledger's `encrypted`) are far longer than the csv module's default field limit of 131072.
+    csv.field_size_limit(1 << 30)
     return [[None if v == "\\N" else v for v in row] for row in csv.reader(io.StringIO(out, newline=""))]
 
 
