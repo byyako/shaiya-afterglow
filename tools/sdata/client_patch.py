@@ -227,7 +227,10 @@ def sha(data):
 
 def has_monsters():
     """Whether client.monsters holds the imported Monster.SData (an import from before the pets has no such table)."""
-    return query("SELECT to_regclass('client.monsters') IS NOT NULL AND EXISTS (SELECT 1 FROM client.monsters)")[0][0] == "t"
+    # Two statements: one that names the table fails to parse where the table does not exist, whatever the AND says.
+    if query("SELECT to_regclass('client.monsters') IS NOT NULL")[0][0] != "t":
+        return False
+    return query("SELECT EXISTS (SELECT 1 FROM client.monsters)")[0][0] == "t"
 
 
 def restored():
