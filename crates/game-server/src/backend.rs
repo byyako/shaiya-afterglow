@@ -507,6 +507,10 @@ pub trait CharacterStore: Send + Sync + 'static {
     /// One more rename allowed, and the Name Change Stone's slot change, together. False, with nothing changed, at 255 renames already
     /// or when the slot is not as the change expects.
     fn add_rename(&self, character_id: u32, stone: &SlotChange) -> impl Future<Output = Result<bool>> + Send;
+    /// The craft name of the egg whose pet the character has out (`docs/plans/ext-4-pets.md` section 8), if one is stored.
+    fn pet(&self, character_id: u32) -> impl Future<Output = Result<Option<String>>> + Send;
+    /// Stores the egg whose pet is out (an upsert), or clears it (`None`).
+    fn set_pet(&self, character_id: u32, egg: Option<&str>) -> impl Future<Output = Result<()>> + Send;
     /// Renames a live character of this account and server that has a rename left, all together: the name, the old name kept, one
     /// rename less, the log row, and the auction house's seller and bidder names of that character.
     fn rename(&self, user_id: u32, server_id: u8, character_id: u32, new_name: &str) -> impl Future<Output = Result<RenameOutcome>> + Send;
@@ -1162,6 +1166,12 @@ impl<T: CharacterStore> CharacterStore for std::sync::Arc<T> {
     }
     fn add_rename(&self, character_id: u32, stone: &SlotChange) -> impl Future<Output = Result<bool>> + Send {
         (**self).add_rename(character_id, stone)
+    }
+    fn pet(&self, character_id: u32) -> impl Future<Output = Result<Option<String>>> + Send {
+        (**self).pet(character_id)
+    }
+    fn set_pet(&self, character_id: u32, egg: Option<&str>) -> impl Future<Output = Result<()>> + Send {
+        (**self).set_pet(character_id, egg)
     }
     fn rename(&self, user_id: u32, server_id: u8, character_id: u32, new_name: &str) -> impl Future<Output = Result<RenameOutcome>> + Send {
         (**self).rename(user_id, server_id, character_id, new_name)

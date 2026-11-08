@@ -16,10 +16,12 @@ pub(super) async fn use_effect<S: Backend>(
     state: &mut WorldState,
     item_id: u32,
     at: (u8, u8),
+    country: u8,
 ) -> Result<Done> {
     let Some(effect) = ctx.data.effects.for_use(item_id).cloned() else { return Ok(Done::Failed) };
     match &*effect {
         ItemEffect::LevelUp(stone) => level_up(conn, ctx, character, state, &effect, stone, item_id, at).await,
+        ItemEffect::PetEgg(egg) => super::pets::use_pet_egg(conn, ctx, character, state, country, &effect, egg, at).await,
         other => {
             tracing::debug!(item = item_id, effect = other.type_name(), "item use: an effect of another request");
             Ok(Done::Failed)
@@ -28,7 +30,7 @@ pub(super) async fn use_effect<S: Backend>(
 }
 
 /// Whispers `text` as the refusal of `effect`'s type, within the limit of `refused::tell_refused`.
-async fn refuse(conn: &mut Connection, state: &mut WorldState, effect: &ItemEffect, text: &str) -> Result<()> {
+pub(super) async fn refuse(conn: &mut Connection, state: &mut WorldState, effect: &ItemEffect, text: &str) -> Result<()> {
     let refusal = Refusal { rule: effect.refusal_id(), name: Arc::from(effect.type_name()), text: Some(Arc::from(text)) };
     super::refused::tell_refused(conn, state, &refusal).await
 }

@@ -165,8 +165,9 @@ struct Owner {
 impl Zones {
     /// Calls the pet of `look` out beside its owner on `map` (the egg's use, a login, a map change): the one already out goes first. The
     /// view gets `0x0601` with `new = 1` and `0x0608`, the owner included. `false` when the owner is not in the zone. An owner who is
-    /// dead or invisible has the pet kept hidden until it is alive and visible.
-    pub fn summon_pet(&self, map: u16, owner: u32, look: PetLook, egg: [u8; CRAFT_NAME_MAX], now: Instant) -> bool {
+    /// dead or invisible has the pet kept hidden until it is alive and visible; so does a `deny pet` rule the caller has found to match
+    /// (`ruled`: the arrival on a map; the caller has told the owner).
+    pub fn summon_pet(&self, map: u16, owner: u32, look: PetLook, egg: [u8; CRAFT_NAME_MAX], now: Instant, ruled: bool) -> bool {
         let maps = self.maps.guard();
         let Some(players) = maps.get(&map) else { return false };
         let Some(me) = players.get(&owner) else { return false };
@@ -176,7 +177,13 @@ impl Zones {
             Self::pet_gone(pets, players, old);
         }
         let id = self.last_mob_id.fetch_add(1, Ordering::Relaxed) + 1;
-        let hidden = (me.dead || !me.occupant.visible).then_some(Hide::Owner);
+        let hidden = if me.dead || !me.occupant.visible {
+            Some(Hide::Owner)
+        } else if ruled {
+            Some(Hide::Rule)
+        } else {
+            None
+        };
         let position = follow_spot(me.occupant.position, me.occupant.position);
         pets.pets.insert(id, Pet { id, owner, look, egg, position, cell: None, next_step: now, next_check: now + CHECK_EVERY, hidden });
         pets.owners.insert(owner, id);

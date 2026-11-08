@@ -69,6 +69,7 @@ mod mall;
 mod market;
 mod mini_game;
 mod my_shop;
+mod pets;
 mod pvp;
 mod record;
 mod refused;
@@ -1114,6 +1115,10 @@ struct WorldState {
     next_all_chat: Option<Instant>,
     /// A Name Change Stone was used since entering the world (`+0x58dc`).
     rename_stone_used: bool,
+    /// The pet the player has out, called again at every entering of a zone (`docs/plans/ext-4-pets.md` section 8); `pet_loaded`: the
+    /// stored one was looked at (the first entering of a login).
+    pet: Option<pets::ActivePet>,
+    pet_loaded: bool,
     /// The money and the bags, changed by shops and saved with every change.
     money: u32,
     /// The money at entering the world (the game log's `firstmoney`).
@@ -1268,6 +1273,8 @@ async fn in_world<S: Backend>(
         chat_item_armed: false,
         next_all_chat: None,
         rename_stone_used: false,
+        pet: None,
+        pet_loaded: false,
         money: character.money,
         first_money: character.money,
         inventory,
@@ -1513,6 +1520,8 @@ async fn world_loop<S: Backend>(
     let idle = ctx.config.idle_timeout;
     let mut shutdown = conn.shutdown.clone();
     loop {
+        // With a pet out, its egg must still be in the bags (a trade, a sale, the warehouse, a drop or a death may have taken it).
+        pets::check_egg(ctx, character, state).await?;
         let map = state.map;
         if crate::world::map_of(map) != crate::market::AUCTION_MAP {
             state.market_search = None;
@@ -1859,6 +1868,8 @@ async fn world_loop<S: Backend>(
                     conn.send(ctx.zones.change_speeds(map, id, attack, movement)).await?;
                 }
                 state.entered = true;
+                // The pet comes out beside the player again (a map change), or for the first time of a login.
+                pets::after_enter(conn, ctx, character, state, player.faction.map_or(0, |f| f.country)).await?;
                 script::load_values(ctx, state).await;
                 script::entered(ctx, state);
                 // Entering a zone starts the move check again (`CUser::EnterZone`).

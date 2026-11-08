@@ -6039,3 +6039,217 @@ async fn the_monster_madness_extension_spawns_around_staff_and_stops() {
     assert_eq!(next_chat(&mut bob).await, chat::by_id(chat::OP_NORMAL, alice_id, b"!madness 1 5 5\0"));
     assert_eq!(ctx2.zones.ext_spawn_count("monster-madness"), 0);
 }
+
+// ------------------------------------------------------------------------------------------------------- pets (chunk 4, step 6)
+
+const EGG_123: &[u8] = b"P00123.6731A2F0.00";
+const EGG_124: &[u8] = b"P00124.6731A2F0.01";
+
+/// Test data with a Capture Net (100/227, a stack of 10) and a Pet Egg (100/228, one to a slot) of the `pets` extension; the effects of
+/// `enabled` are in force (none: the extension is disabled).
+fn pet_data(enabled: bool) -> GameData {
+    use game_server::effects::{ItemEffects, check_effect};
+    let mut data = data();
+    let base = *data.items.get(100, 48).unwrap();
+    let item = |type_id: u8, max_count: u8| ItemDef {
+        item_id: 100_000 + u32::from(type_id),
+        type_id,
+        special: 0,
+        max_count,
+        reuse_group: 0,
+        ..base
+    };
+    data.items = ItemDefs::new(data.items.iter().cloned().chain([item(227, 10), item(228, 1)]));
+    if enabled {
+        data.effects = ItemEffects::new([
+            (100227, check_effect(&serde_json::json!({ "type": "capture", "egg": "100/228" })).unwrap()),
+            (100228, check_effect(&serde_json::json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"] })).unwrap()),
+        ]);
+    }
+    data
+}
+
+fn egg(slot: u8, craft: &[u8]) -> game_server::backend::ItemUnit {
+    game_server::backend::ItemUnit {
+        bag: 1,
+        slot,
+        item_type: 100,
+        type_id: 228,
+        count: 1,
+        quality: 0,
+        gems: [0; 6],
+        craft_name: craft.to_vec(),
+    }
+}
+
+/// A character in the world with these items.
+async fn with_items(
+    data: GameData,
+    items: Vec<game_server::backend::ItemUnit>,
+) -> (Arc<MemoryBackend>, Arc<Context<Arc<MemoryBackend>>>, Client, u32) {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start_with_data(backend.clone(), config(true), data).await;
+    let mut client = Client::connect(addr).await;
+    client.enter(7, [5; 16]).await;
+    client.write(shaiya_proto::encode(g::OP_CHAR_COUNTRY, &[0])).await;
+    let request =
+        CreateRequest { slot: 0, family: 0, grow: 1, hair: 3, face: 4, size: 5, job: 0, sex: 1, name: b"Walker".to_vec(), sent_len: 0 };
+    client.write(g::char_create_request(&request)).await;
+    assert_eq!(client.read().await.unwrap(), g::char_create_response(0));
+    client.read_list().await;
+    backend.give_items(1, items);
+    let id = select_and_enter(&mut client).await;
+    (backend, ctx, client, id)
+}
+
+fn stored_pet(backend: &MemoryBackend) -> Option<String> {
+    backend.pets.lock().unwrap().get(&1).cloned()
+}
+
+/// The record of the `0x0601` among `packets`.
+fn pet_records(packets: &[Vec<u8>]) -> Vec<u16> {
+    packets
+        .iter()
+        .filter(|p| frame::opcode(p) == w::OP_MOB_ENTER)
+        .map(|p| u16::from_le_bytes(frame::payload(p)[5..7].try_into().unwrap()))
+        .collect()
+}
+
+#[tokio::test]
+async fn an_egg_calls_the_pet_and_sends_it_back_and_the_egg_stays() {
+    let (backend, ctx, mut client, id) = with_items(pet_data(true), vec![egg(2, EGG_123), egg(3, EGG_124)]).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert_eq!(pet_records(&seen), [3123], "the record base + monster");
+    assert!(seen.iter().any(|p| frame::opcode(p) == w::OP_MOB_MAX_HP), "0x0608 follows the 0x0601");
+    assert!(seen.contains(&it::used(id, 1, 2, 100, 228, 1)), "0x050A with the egg's count unchanged: {seen:x?}");
+    assert_eq!(stored_pet(&backend).as_deref(), Some("P00123.6731A2F0.00"), "stored when it comes out");
+    assert_eq!(backend.stored(id).unwrap().1.iter().filter(|i| i.type_id == 228).count(), 2, "both eggs stay");
+    assert_eq!(ctx.zones.mob_count(1), 0);
+    // Used again: it goes (0x0602), the stored pet is cleared, the egg stays.
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.iter().any(|p| frame::opcode(p) == w::OP_MOB_LEAVE), "{seen:x?}");
+    assert!(seen.contains(&it::used(id, 1, 2, 100, 228, 1)));
+    assert_eq!(stored_pet(&backend), None);
+    // Another egg replaces the pet that is out: the first goes, the second comes, and the second is the stored one.
+    use_slot(&mut client, id, [1, 2]).await;
+    let seen = use_slot(&mut client, id, [1, 3]).await;
+    assert_eq!(pet_records(&seen), [3124]);
+    assert!(seen.iter().any(|p| frame::opcode(p) == w::OP_MOB_LEAVE), "the first pet went: {seen:x?}");
+    assert_eq!(stored_pet(&backend).as_deref(), Some("P00124.6731A2F0.01"));
+}
+
+#[tokio::test]
+async fn an_empty_egg_is_refused_and_stays() {
+    // A name that is not an egg's (made by /make, a script, or edited): "This egg is empty."
+    let (backend, _, mut client, id) = with_items(pet_data(true), vec![egg(2, b"")]).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["This egg is empty."], "{seen:x?}");
+    assert!(pet_records(&seen).is_empty());
+    assert_eq!(stored_pet(&backend), None);
+    assert_eq!(backend.stored(id).unwrap().1.iter().filter(|i| i.type_id == 228).count(), 1, "the egg stays");
+    // The whisper is at most once in ten seconds for the effect type; the refusal itself is every time.
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen).is_empty(), "{seen:x?}");
+}
+
+#[tokio::test]
+async fn an_egg_of_a_monster_the_effect_has_no_record_for_cannot_come_out() {
+    // An egg from an earlier configuration: monster 9999 is outside "1-2473".
+    let (backend, _, mut client, id) = with_items(pet_data(true), vec![egg(2, b"P09999.6731A2F0.00")]).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["This pet cannot come out."], "{seen:x?}");
+    assert!(pet_records(&seen).is_empty());
+    assert_eq!(stored_pet(&backend), None);
+    assert_eq!(backend.stored(id).unwrap().1.iter().filter(|i| i.type_id == 228).count(), 1);
+}
+
+#[tokio::test]
+async fn with_the_extension_disabled_the_egg_is_refused_and_nothing_comes_out() {
+    let (backend, _, mut client, id) = with_items(pet_data(false), vec![egg(2, EGG_123)]).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)), "the core's refusal: {seen:x?}");
+    assert!(pet_records(&seen).is_empty());
+    assert_eq!(stored_pet(&backend), None);
+}
+
+#[tokio::test]
+async fn a_deny_pet_rule_refuses_the_summon_and_the_egg_stays() {
+    let (backend, ctx, mut client, id) = with_items(pet_data(true), vec![egg(2, EGG_123)]).await;
+    put_rules(&ctx, &[("no-pets", serde_json::json!({ "type": "deny", "point": "pet", "maps": [1] }))]);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["Pets cannot come out here."], "{seen:x?}");
+    assert!(pet_records(&seen).is_empty());
+    assert_eq!(stored_pet(&backend), None);
+    put_rules(&ctx, &[]);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert_eq!(pet_records(&seen), [3123], "the rule lifted");
+}
+
+#[tokio::test]
+async fn the_pet_comes_out_again_on_a_new_map_and_at_the_next_login() {
+    let (backend, _, mut client, id) = with_items(pet_data(true), vec![egg(2, EGG_123)]).await;
+    use_slot(&mut client, id, [1, 2]).await;
+    // A portal to map 2: the pet goes with the zone and comes out beside the player in the new one.
+    client.write(w::portal_request(0)).await;
+    assert_eq!(client.read().await.unwrap(), w::position(id, 2, [165.25, 118.5, 397.89]));
+    client.write(shaiya_proto::encode(w::OP_USER_ENTER, &[])).await;
+    read_zone_entry(&mut client).await;
+    let seen = read_until(&mut client, w::OP_MOB_MAX_HP).await;
+    assert_eq!(pet_records(&seen), [3123], "out again on map 2: {seen:x?}");
+    assert_eq!(stored_pet(&backend).as_deref(), Some("P00123.6731A2F0.00"), "a map change does not touch the store");
+    // Logout and login: back at the first entering.
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[1])).await;
+    client.read().await.unwrap();
+    client.write(w::logout_done(w::OP_LOGOUT_TO_SELECT)).await;
+    assert_eq!(client.read().await.unwrap(), w::logout_done(w::OP_LOGOUT_TO_SELECT));
+    client.read().await.unwrap();
+    client.read_list().await;
+    select_and_enter(&mut client).await;
+    let seen = read_until(&mut client, w::OP_MOB_MAX_HP).await;
+    assert_eq!(pet_records(&seen), [3123], "back at login: {seen:x?}");
+}
+
+#[tokio::test]
+async fn a_stored_pet_whose_egg_is_gone_is_cleared_at_login() {
+    let (backend, _, mut client, id) = with_items(pet_data(true), vec![egg(2, EGG_123)]).await;
+    use_slot(&mut client, id, [1, 2]).await;
+    assert!(stored_pet(&backend).is_some());
+    // The egg disappears while the player is away (an operator took it).
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[1])).await;
+    client.read().await.unwrap();
+    client.write(w::logout_done(w::OP_LOGOUT_TO_SELECT)).await;
+    assert_eq!(client.read().await.unwrap(), w::logout_done(w::OP_LOGOUT_TO_SELECT));
+    client.read().await.unwrap();
+    client.read_list().await;
+    backend.take_item(1, 1, 2);
+    select_and_enter(&mut client).await;
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    let seen = read_until(&mut client, w::OP_MOTION).await;
+    assert!(pet_records(&seen).is_empty(), "{seen:x?}");
+    assert_eq!(stored_pet(&backend), None, "the row is cleared");
+}
+
+#[tokio::test]
+async fn a_pet_goes_when_its_egg_leaves_the_bags() {
+    use shaiya_proto::ground as gp;
+    let (backend, ctx, mut client, id) = with_items(pet_data(true), vec![egg(2, EGG_123)]).await;
+    use_slot(&mut client, id, [1, 2]).await;
+    assert!(ctx.zones.pet_egg(1, id).is_some());
+    // Dropping the egg on the ground sends the pet back at once and clears the stored one.
+    client.write(shaiya_proto::encode(gp::OP_ITEM_DROP, &[1, 2, 1])).await;
+    let seen = read_until(&mut client, gp::OP_ITEM_ENTER).await;
+    assert!(!seen.is_empty());
+    client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    let seen = read_until(&mut client, w::OP_MOTION).await;
+    assert!(seen.iter().any(|p| frame::opcode(p) == w::OP_MOB_LEAVE), "0x0602: {seen:x?}");
+    assert!(ctx.zones.pet_egg(1, id).is_none());
+    assert_eq!(stored_pet(&backend), None);
+    // Picking the egg up again does not bring the pet back by itself: the egg is used again.
+    client.write(shaiya_proto::encode(gp::OP_PICK_UP, &1u32.to_le_bytes())).await;
+    read_until(&mut client, gp::OP_PICK_UP).await;
+    let (_, items) = backend.stored(id).unwrap();
+    let back = items.iter().find(|i| i.type_id == 228).expect("the egg is back in the bags");
+    assert_eq!(back.craft_name, EGG_123, "the craft name went along with the egg");
+    let seen = use_slot(&mut client, id, [back.bag, back.slot]).await;
+    assert_eq!(pet_records(&seen), [3123], "{seen:x?}");
+}

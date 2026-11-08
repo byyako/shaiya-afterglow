@@ -1995,3 +1995,29 @@ async fn script_values_are_written_coalesced_deleted_and_cascade() {
     sqlx::query("DELETE FROM content.extensions WHERE name = $1").bind(&ext_b).execute(&pool).await.unwrap();
     sqlx::query("DELETE FROM accounts WHERE id = $1").bind(user).execute(&pool).await.unwrap();
 }
+
+#[tokio::test]
+async fn a_characters_pet_is_stored_replaced_cleared_and_goes_with_the_character() {
+    // docs/plans/ext-4-pets.md section 8.
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    let alice = db.account("alice").await;
+    backend.choose_faction(alice, 1, 0).await.unwrap();
+    let CreateOutcome::Created(id) = backend.create(&hero(alice, 0, "Ranger")).await.unwrap() else { panic!("not created") };
+    assert_eq!(backend.pet(id).await.unwrap(), None, "none out");
+    backend.set_pet(id, Some("P00123.6731A2F0.00")).await.unwrap();
+    assert_eq!(backend.pet(id).await.unwrap().as_deref(), Some("P00123.6731A2F0.00"));
+    // One row a character: another egg replaces it.
+    backend.set_pet(id, Some("P00124.6731A2F0.01")).await.unwrap();
+    assert_eq!(backend.pet(id).await.unwrap().as_deref(), Some("P00124.6731A2F0.01"));
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM character_pets").fetch_one(&db.pool).await.unwrap();
+    assert_eq!(rows, 1);
+    backend.set_pet(id, None).await.unwrap();
+    assert_eq!(backend.pet(id).await.unwrap(), None);
+    backend.set_pet(id, None).await.unwrap();
+    // The row goes with its character.
+    backend.set_pet(id, Some("P00123.6731A2F0.00")).await.unwrap();
+    sqlx::query("DELETE FROM characters WHERE id = $1").bind(id as i32).execute(&db.pool).await.unwrap();
+    assert_eq!(backend.pet(id).await.unwrap(), None, "ON DELETE CASCADE");
+    db.drop().await;
+}

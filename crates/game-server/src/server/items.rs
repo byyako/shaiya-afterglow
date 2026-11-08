@@ -59,7 +59,6 @@ pub(super) enum Done {
     UsedUpFor(NewItem),
     /// The item was used up and saved before the effect saved something lasting (see `consume`): `0x050A` left to send.
     Consumed(ItemUnit),
-    #[allow(dead_code)] // the pet_egg handler (pets step 6) answers with it
     /// The item stays as it is (a Pet Egg called or sent back): `0x050A` with the unchanged count, nothing saved
     /// (`docs/plans/ext-4-pets.md` section 4.3).
     Kept(ItemUnit),
@@ -155,7 +154,7 @@ pub(super) async fn use_item<S: Backend>(
             Effect::Skill { id: skill_id, level } => item_skill(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?,
             Effect::ExpWheel { .. } | Effect::Ext if request.kind != it::KIND_SELF => Done::Failed,
             // An extension's effect (`docs/plans/ext-3-effects.md` section 3.3), after the rules, the reuse time and the script.
-            Effect::Ext => super::effects::use_effect(conn, ctx, character, state, def.item_id, (bag, slot)).await?,
+            Effect::Ext => super::effects::use_effect(conn, ctx, character, state, def.item_id, (bag, slot), country).await?,
             Effect::ExpWheel { id: skill_id, level } => {
                 exp_wheel(conn, ctx, character, state, country, skill_id, level, (bag, slot)).await?
             }

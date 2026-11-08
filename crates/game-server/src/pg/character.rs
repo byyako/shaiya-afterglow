@@ -542,6 +542,31 @@ impl CharacterStore for PgBackend {
         Ok(true)
     }
 
+    async fn pet(&self, character_id: u32) -> Result<Option<String>> {
+        Ok(sqlx::query_scalar("SELECT egg FROM character_pets WHERE character_id = $1")
+            .bind(i32::try_from(character_id)?)
+            .fetch_optional(&self.pool)
+            .await?)
+    }
+
+    async fn set_pet(&self, character_id: u32, egg: Option<&str>) -> Result<()> {
+        let id = i32::try_from(character_id)?;
+        match egg {
+            Some(egg) => {
+                sqlx::query(
+                    "INSERT INTO character_pets (character_id, egg) VALUES ($1, $2)
+                     ON CONFLICT (character_id) DO UPDATE SET egg = EXCLUDED.egg, changed = now()",
+                )
+                .bind(id)
+                .bind(egg)
+                .execute(&self.pool)
+                .await?
+            }
+            None => sqlx::query("DELETE FROM character_pets WHERE character_id = $1").bind(id).execute(&self.pool).await?,
+        };
+        Ok(())
+    }
+
     async fn add_rename(&self, character_id: u32, stone: &SlotChange) -> Result<bool> {
         let id = i32::try_from(character_id)?;
         let mut tx = self.pool.begin().await?;

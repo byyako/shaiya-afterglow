@@ -103,6 +103,8 @@ pub struct MemoryBackend {
     pub market: Mutex<MemoryMarket>,
     /// The item mall's tables (`docs/original/item-mall.md`).
     pub mall: Mutex<MemoryMall>,
+    /// The egg each character has a pet out of (`character_pets`).
+    pub pets: Mutex<HashMap<u32, String>>,
     /// The unique id and making time of every item row, which the database rows carry (`ItemUnit` does not).
     ids: Mutex<ItemIds>,
 }
@@ -272,6 +274,13 @@ impl MemoryBackend {
     pub fn give_items(&self, character_id: u32, items: Vec<ItemUnit>) {
         for c in self.characters.guard().iter_mut().filter(|c| c.summary.id == character_id) {
             c.play.items.extend(items.iter().cloned());
+        }
+    }
+
+    /// Takes the item out of a slot of a character's bags, as an operator would in the database.
+    pub fn take_item(&self, character_id: u32, bag: u8, slot: u8) {
+        for c in self.characters.guard().iter_mut().filter(|c| c.summary.id == character_id) {
+            c.play.items.retain(|i| (i.bag, i.slot) != (bag, slot));
         }
     }
 
@@ -645,6 +654,18 @@ impl CharacterStore for MemoryBackend {
         c.play.items = items;
         c.rename_count += 1;
         Ok(true)
+    }
+
+    async fn pet(&self, character_id: u32) -> Result<Option<String>> {
+        Ok(self.pets.guard().get(&character_id).cloned())
+    }
+
+    async fn set_pet(&self, character_id: u32, egg: Option<&str>) -> Result<()> {
+        match egg {
+            Some(egg) => self.pets.guard().insert(character_id, egg.to_owned()),
+            None => self.pets.guard().remove(&character_id),
+        };
+        Ok(())
     }
 
     async fn rename(&self, user_id: u32, server_id: u8, character_id: u32, new_name: &str) -> Result<RenameOutcome> {
