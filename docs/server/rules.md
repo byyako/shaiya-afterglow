@@ -6,7 +6,7 @@ are an addition: with none written the server behaves as the original, apart fro
 always made (section 8). `docs/plans/ext-2-rules.md` is the design; this page is how to use them.
 
 **Released in 0.3.0.** Rules are in 0.3.0; 0.2.0 does not have them. The extension system is still being built (pets are next),
-so this page may change in the next releases.
+so this page may change in the next releases. The `capture` and `pet` points are new in 0.4.0.
 
 ## 1. Where rules come from
 
@@ -95,12 +95,35 @@ a one-player point. `kills` is also a key of `pvp_gain` (below), where it is the
 
 | `type` | point | own keys | what it does |
 |---|---|---|---|
-| `deny` | `point = "attack"`, `"trade"`, `"personal_shop"`, `"trade_chat"` or `"item_use"` (required) | `items`, at `item_use` only | refuses the action in scope |
+| `deny` | `point = "attack"`, `"trade"`, `"personal_shop"`, `"trade_chat"`, `"item_use"`, `"capture"` or `"pet"` (required) | `items`, at `item_use` only | refuses the action in scope |
 | `level_gap` | attack | `gap` (1 to 255, required) | refuses an attack between two players whose levels differ by more than `gap`, both ways |
 | `cross_faction_trade` | trade | | players of both factions may trade in scope (the original allows it nowhere); `who` defaults to `"both"` |
 | `pvp_gain` | experience of a player kill, kills, deaths | `exp` (0 to 100, default 1), `kills` (a whole number 0 to 100, default 1), `deaths` (`true`/`false`, default `true`); at least one | what a player kill gives in scope: the killer's experience × `exp`; the counted kill × `kills` (0: not counted at all, the player-kill quest and the faction's count too); `deaths = false`: the victim's death is not counted |
 | `exp` | experience | `factor` (0 to 100, required), `sources` (`"mob"`, `"party"`, `"quest"`; default `["mob", "party"]`) | experience from those sources × `factor` in scope; a player kill's experience is `pvp_gain`'s, not this one's |
 | `enchant` | enchant | `jumps` (a list of `[steps, weight]`, steps 1 to 19, weight 1 to 1,000,000, at most 19), `items` (`"weapons"`, `"armour"`, `"both"`) | on a successful enchant the step rises by a weighted draw of `steps` instead of 1, at most to step 20 |
+
+### `deny` at `capture` and `pet`
+
+The two points of the pets extension (`docs/server/pets.md`). Both are one-player points (`who` is an error), scoped by the player and the map
+(`maps`, `level`, `kills`, `faction`, `days`, `hours`). `capture` is asked when a capture item is used, before the monster is looked for: a
+refusal whispers its message and the item stays, its reuse time untouched. `pet` is asked when a pet is called out of its egg, when its owner
+arrives on a map, and every 5 seconds while it is out: a match at the summon whispers and nothing comes out; a match on a pet already out
+hides it (once, with the message) until the rule stops matching. They do nothing while the pets extension is not installed or enabled.
+
+```toml
+# No pets in the capitals and the Auction House.
+[rules.no-pets-in-town]
+type = "deny"
+point = "pet"
+maps = [35, 36, 42]
+
+# Catching only from level 10.
+[rules.capture-from-10]
+type = "deny"
+point = "capture"
+level = "1-9"
+message = "You can catch monsters from level 10."
+```
 
 ### `deny` at `item_use`
 
@@ -138,6 +161,8 @@ skipped silently. A message is printable ASCII, at most 100 bytes.
 | `deny` personal_shop | `A personal shop cannot be opened here.` |
 | `deny` trade_chat | `Trade chat is not allowed here.` |
 | `deny` item_use | `You cannot use that here.` |
+| `deny` capture | `You cannot catch monsters here.` |
+| `deny` pet | `Pets cannot come out here.` |
 
 The log, with `RUST_LOG=debug`, has a line for each refusal (`refused by a rule`) and each number a rule changed (`changed by rules`).
 
@@ -208,7 +233,7 @@ them live), as do `kill_count`, `kill_boost_skills`, `trade_chat_cooldown_secs` 
 
 ## 9. Not yet
 
-The points are the nine above. Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, damage and
+The points are the eleven above (the nine of the first wave, and the pets' `capture` and `pet`). Others (whisper, party and union invites, inspect, map entry and exit, equipping, skill use, damage and
 the stat formulas, item loss on death) are for later waves.
 
 ## 10. After the rules, scripts

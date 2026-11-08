@@ -106,6 +106,10 @@ pub enum Point {
     PvpDeaths,
     Enchant,
     ItemUse,
+    /// A capture item's use (`docs/plans/ext-4-pets.md` section 9): scope = the user and its map.
+    Capture,
+    /// A pet's summon, its arrival on a map and every few seconds while it is out: scope = the owner and its map.
+    Pet,
 }
 
 impl Point {
@@ -120,6 +124,8 @@ impl Point {
             Point::PvpDeaths => "pvp_deaths",
             Point::Enchant => "enchant",
             Point::ItemUse => "item_use",
+            Point::Capture => "capture",
+            Point::Pet => "pet",
         }
     }
 }
@@ -233,6 +239,8 @@ pub struct RuleSet {
     trade_grant: Vec<Entry<()>>,
     shop: Vec<Entry<()>>,
     trade_chat: Vec<Entry<()>>,
+    capture: Vec<Entry<()>>,
+    pet: Vec<Entry<()>>,
     exp: Vec<Entry<ExpRule>>,
     gain: Vec<Entry<Gain>>,
     enchant: Vec<Entry<EnchantRule>>,
@@ -280,6 +288,8 @@ impl RuleSet {
                 Kind::CrossFactionTrade => set.trade_grant.push(Entry { meta: m, scope, v: () }),
                 Kind::Deny(Point::PersonalShop) => set.shop.push(Entry { meta: m, scope, v: () }),
                 Kind::Deny(Point::TradeChat) => set.trade_chat.push(Entry { meta: m, scope, v: () }),
+                Kind::Deny(Point::Capture) => set.capture.push(Entry { meta: m, scope, v: () }),
+                Kind::Deny(Point::Pet) => set.pet.push(Entry { meta: m, scope, v: () }),
                 Kind::DenyItemUse(items) => set.item_use.push(Entry { meta: m, scope, v: items }),
                 Kind::Deny(other) => unreachable!("{other:?} is not a point a deny rule can name"),
                 Kind::PvpGain { exp, kills, deaths } => set.gain.push(Entry { meta: m, scope, v: Gain { exp, kills, deaths } }),
@@ -365,11 +375,14 @@ impl RuleSet {
         true
     }
 
-    /// Points 3 and 4 (the one-player refusals, `Point::PersonalShop` and `Point::TradeChat`): the first `deny` rule in scope.
+    /// Points 3 and 4 and the pets' two (the one-player refusals, `Point::PersonalShop`, `TradeChat`, `Capture` and `Pet`): the first `deny`
+    /// rule in scope.
     pub fn denied(&self, point: Point, map: u16, who: &Who) -> Option<Refusal> {
         let list = match point {
             Point::PersonalShop => &self.shop,
             Point::TradeChat => &self.trade_chat,
+            Point::Capture => &self.capture,
+            Point::Pet => &self.pet,
             other => unreachable!("{other:?} is not a one-player refusal"),
         };
         let e = list.iter().find(|e| e.scope.one(map, who))?;

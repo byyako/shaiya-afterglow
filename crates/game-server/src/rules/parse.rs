@@ -87,7 +87,7 @@ pub(super) enum Parsed {
 /// The keys that belong to one type or another, to say "not a key of this type" instead of only "unknown".
 const OWN_KEYS: &[&str] = &["point", "gap", "exp", "kills", "deaths", "factor", "sources", "jumps", "items", "message"];
 
-const DENY_POINTS: &str = "\"attack\", \"trade\", \"personal_shop\", \"trade_chat\" or \"item_use\"";
+const DENY_POINTS: &str = "\"attack\", \"trade\", \"personal_shop\", \"trade_chat\", \"item_use\", \"capture\" or \"pet\"";
 
 fn default_text(kind: &Kind) -> Option<&'static str> {
     Some(match kind {
@@ -97,6 +97,8 @@ fn default_text(kind: &Kind) -> Option<&'static str> {
         Kind::Deny(Point::PersonalShop) => "A personal shop cannot be opened here.",
         Kind::Deny(Point::TradeChat) => "Trade chat is not allowed here.",
         Kind::DenyItemUse(_) => "You cannot use that here.",
+        Kind::Deny(Point::Capture) => "You cannot catch monsters here.",
+        Kind::Deny(Point::Pet) => "Pets cannot come out here.",
         _ => return None,
     })
 }
@@ -148,6 +150,8 @@ fn point_of(name: &str) -> Option<Point> {
         "personal_shop" => Point::PersonalShop,
         "trade_chat" => Point::TradeChat,
         "item_use" => Point::ItemUse,
+        "capture" => Point::Capture,
+        "pet" => Point::Pet,
         _ => return None,
     })
 }

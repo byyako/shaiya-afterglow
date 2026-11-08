@@ -273,6 +273,19 @@ pub const EXAMPLE: &str = r#"# The rules (docs/server/rules.md): named, scoped a
 # items = ["100/215-217"]
 # maps = [2, 3, 4]
 # message = "Level stones do not work here."
+#
+# No pets in the capitals and the Auction House.
+# [rules.no-pets-in-town]
+# type = "deny"
+# point = "pet"
+# maps = [35, 36, 42]
+#
+# Catching only from level 10.
+# [rules.capture-from-10]
+# type = "deny"
+# point = "capture"
+# level = "1-9"
+# message = "You can catch monsters from level 10."
 "#;
 
 /// A JSON value as inline TOML.

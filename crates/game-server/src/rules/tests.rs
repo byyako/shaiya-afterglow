@@ -151,6 +151,44 @@ fn deny_item_use_covers_the_items_it_names_in_its_scope() {
     assert_eq!(hits.iter().sum::<u64>(), 9, "a hit for every refusal and none for a pass: {hits:?}");
 }
 
+/// `docs/plans/ext-4-pets.md` section 9: the two one-player points of the pets.
+#[test]
+fn deny_capture_and_deny_pet_are_one_player_refusals_with_their_own_texts() {
+    let s = set(&[
+        ("no-pets-in-town", json!({ "type": "deny", "point": "pet", "maps": [35, 36, 42] })),
+        (
+            "capture-from-10",
+            json!({ "type": "deny", "point": "capture", "level": "1-9", "message": "You can catch monsters from level 10." }),
+        ),
+        ("no-nets-in-pvp", json!({ "type": "deny", "point": "capture", "maps": [2], "message": "" })),
+    ]);
+    let a = p(30, 0);
+    let pet = s.denied(Point::Pet, 35, &a).expect("a pet map");
+    assert_eq!((&*pet.name, pet.text.as_deref()), ("no-pets-in-town", Some("Pets cannot come out here.")));
+    assert!(s.denied(Point::Pet, 1, &a).is_none(), "another map");
+    let capture = s.denied(Point::Capture, 1, &p(5, 0)).expect("a novice");
+    assert_eq!(capture.text.as_deref(), Some("You can catch monsters from level 10."));
+    assert!(s.denied(Point::Capture, 1, &a).is_none(), "level 30 may");
+    assert!(
+        s.denied(Point::Capture, 35, &p(5, 0)).is_some(),
+        "the points are separate: a pet map says nothing of capture, a level rule does"
+    );
+    assert!(s.denied(Point::Capture, 35, &a).is_none() && s.denied(Point::Pet, 1, &p(5, 0)).is_none(), "each point has its own rules");
+    let silent = s.denied(Point::Capture, 2, &a).unwrap();
+    assert!(silent.text.is_none() && &*silent.name == "no-nets-in-pvp", "message \"\" is silent");
+    assert_eq!(Point::Capture.name(), "capture");
+    assert_eq!(Point::Pet.name(), "pet");
+    // `who` and `items` belong to other points
+    for key in [("who", json!("both")), ("items", json!(["100/227"]))] {
+        let mut rule = json!({ "type": "deny", "point": "pet" });
+        rule[key.0] = key.1;
+        let e = RuleSet::from_values(&[("x", rule)]).unwrap_err().to_string();
+        assert!(e.contains(&format!("unknown key \"{}\"", key.0)), "{e}");
+    }
+    let e = RuleSet::from_values(&[("x", json!({ "type": "deny", "point": "chat" }))]).unwrap_err().to_string();
+    assert!(e.contains("\"capture\" or \"pet\""), "the point list names them: {e}");
+}
+
 #[test]
 fn experience_factors_by_source_and_the_product() {
     let s = set(&[

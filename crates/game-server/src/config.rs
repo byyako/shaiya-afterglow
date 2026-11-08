@@ -1475,6 +1475,7 @@ message = \"Too far apart.\"
                 l.starts_with("# [rules.")
                     || l.starts_with("# type")
                     || l.starts_with("# maps")
+                    || l.starts_with("# level =")
                     || l.starts_with("# exp")
                     || l.starts_with("# kills")
                     || l.starts_with("# deaths")
@@ -1489,11 +1490,11 @@ message = \"Too far apart.\"
             .map(|l| format!("{}\n", &l[2..]))
             .collect();
         let layer = read_file("example", &uncommented).unwrap();
-        assert_eq!(layer.rules.len(), 5);
+        assert_eq!(layer.rules.len(), 7);
         let (config, _) = resolved(&Sources::default()).unwrap();
         let sources =
             RuleSources { file: Some(crate::rules::RuleFile { path: "example".into(), rules: layer.rules }), ..RuleSources::default() };
-        assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 6, "the five and the trade-chat level's");
+        assert_eq!(crate::rules::resolve(&config, &sources).unwrap().0.len(), 8, "the seven and the trade-chat level's");
     }
 
     #[test]
