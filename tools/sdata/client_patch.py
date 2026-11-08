@@ -820,7 +820,8 @@ def cmd_generate(patch, dirty):
     (out_dir / "changes.txt").write_text(changes_text(patch, all_item_changes, all_skill_changes, all_monster_changes))
     print(f"wrote {out_dir}")
     for f in manifest["files"]:
-        print(f"  {f['member']}: {f['size']} bytes, sha256 {f['sha256']}, changed {', '.join(f['changed'])}")
+        shown = ", ".join(f["changed"][:12]) + (f" … ({len(f['changed'])} in all)" if len(f["changed"]) > 12 else "")
+        print(f"  {f['member']}: {f['size']} bytes, sha256 {f['sha256']}, changed {shown}")
     if manifest["dirty"]:
         print("DIRTY: a trial run; the client side refuses it, and the ledger and since_patch were not touched")
     else:

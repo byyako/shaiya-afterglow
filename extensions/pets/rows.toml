@@ -1,0 +1,34 @@
+# Items 100/227 and 100/228 (the empty "???177" of both copies of Item.SData, grade 999 already: no monster drops them), and the
+# client's monster records 3001 to 5473 (docs/plans/ext-4-pets.md sections 6 and 13.1).
+#
+# The two items take the Mini Sun EXP Stone 100/108's use and trade columns (eleven of them; `grade` stays 999, and `range`,
+# `attacktime` stay the placeholders' 0, so the core's own use of these rows is a refusal). What they do is the `capture` and
+# `pet_egg` effects, additions of the server that the client's rows do not carry. The egg is in reuse group 11, the 2 second one, so
+# calling the pet out and sending it back cannot be spammed.
+#
+# Disabled, each is special 0 with no HP, SP or MP: the core refuses it and the item stays in the bag.
+
+[[item]]
+id = "100/227"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "drop", "server", "count"] }
+set = { itemname = "Capture Net", grade = 999, count = 10 }
+effect = { type = "capture", egg = "100/228", below = 30, chance = [10, 60], range = 15 }
+client = { name = "Capture Net", look = "100/108", description = "Use it on a weakened monster that is fighting you (below 30% HP) to catch it in a Pet Egg. Bosses and quest monsters cannot be caught." }
+note = "pets: the capture item"
+
+# The look is the Mini Sun EXP Stone's with the icon and model of the Eggs of Wyvern (27/147): its type2 and type3 stay 100, a quest
+# item's would be 27.
+[[item]]
+id = "100/228"
+copy = { from = "100/108", columns = ["reqlevel", "country", "grow", "special", "slot", "quality", "buy", "sell", "drop", "server", "count"] }
+set = { itemname = "Pet Egg", grade = 999, count = 1, reqig = 11 }
+effect = { type = "pet_egg", base = 3000, monsters = ["1-2473"], loot = true, loot_range = 15, gold = true }
+client = { name = "Pet Egg", look = "100/108", model = 0, icon = 16, description = "A caught monster. Use it to call your pet; use it again to send it back. Your pet picks up your drops." }
+note = "pets: the egg"
+
+[[monster_look]]
+of = "1-2473"
+base = 3000
+day = { "0" = 6, "1" = 6, "2" = 0, "3" = 0, "4" = 1, "5" = 4, "6" = 6, "7" = 6 }
+set = { size = 0, hp = 1, quest_item = 0, normal_time = 1000, normal_step = 4, chase_time = 1000, chase_step = 10 }
+note = "pets: small, unclickable copies"
