@@ -1733,6 +1733,10 @@ the items show as `???` and a pet shows nothing). On the live dev box `pets` is 
 `/make 100 227 10` (Capture Net) and `/make 100 228` (an empty egg: the game says "This egg is empty."; real eggs come from catches). This
 section answers client research entries 28 to 32 (`docs/testing/client-research-queue.md`).
 
+Dev box state (rehearsed 2026-11-07): migration 0036 ran, `pets` is installed and disabled, patches 109 and 110 still regenerate byte for
+byte. The box has no `client.monsters` yet (it was imported before the pets): `generate --patch 111` needs `tools/sdata/load_client.py` to
+add it first, from the folder holding the original `Monster.SData`.
+
 1. [ ] **Patch 111 changes nothing else**: before installing `pets`, walk the maps you know: monsters look as before; spawn a placeholder
        monster whose id is a filler (2,500) with the GM's monster command: nothing shows, nothing crashes (entry 29).
 2. [ ] **Catch**: fight a normal monster, bring it under 30% HP, use a capture item: "It broke free!" (the net is gone) or the monster vanishes,
