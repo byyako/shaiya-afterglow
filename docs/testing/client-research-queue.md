@@ -48,6 +48,29 @@ it in the server spec it names.
 27. **A Recreation Rune in an empty record of group 100** (asked by `docs/plans/ext-3-effects.md` section 8, entry 26 there). 100/221 to 226,
     copies of 100/171 with special 62: does the client open the recreation window from the special (so any special-62 item does), and does
     it show the new craft name when only one number changes? What it changes: the stat runes' rows. Live test: section 61, item 4.
+28. **The Pet Egg's tooltip line (a `fixes.dll` feature)** (asked 2026-11-07 by `docs/plans/ext-4-pets.md` section 11 A). For items of type 100
+    (and 25, 44), the tooltip `0x49fa00` clears the craft-name pointer. A `fixes.dll` feature `pet-egg-tooltip`: for the item 100/228 only
+    (or any item whose craft name starts with `P` followed by five digits and a dot), add one line "Contains: <name>", the name being
+    `Monster.SData` record `<digits>`'s (`0x461210`). Say where the line is added, what the craft-name pointer holds at that point for type
+    100 (the function clears it), and how the feature is switched on. What it changes: the egg names its monster in the bag. Fallback
+    (built): every egg reads "Pet Egg"; the player sees which monster it is when the pet comes out. The research found this *inferred* small
+    (entry 10 b).
+29. **Appended `Monster.SData` records** (asked by `docs/plans/ext-4-pets.md` section 11 B). With patch 111: does a filler record (empty
+    name, model -1, all zeros) sent in `0x0601` behave as a missing record (nothing drawn, no crash, as `0x461210` returning null does for an
+    id past the end today), and are records 3001 to 5473 (copies of 1 to 2473 with Day mapped, Size 0, HP 1, normal 1000 ms and 4, chase
+    1000 ms and 10) loaded (the count read from the file, `0x460e20`), scaled, unclickable, walking at 3.7 and running at 9.7 units a second?
+    What it changes: the filler's values. Live test: section 63, items 1, 4 and 6.
+30. **`0x050A` for an item that stays** (asked by `docs/plans/ext-4-pets.md` section 11 C). The success answer of a use with the slot's count
+    unchanged (the Pet Egg, used to call and to send back the pet): does the client keep the item shown, its count and its reuse time
+    right? What it changes: whether the egg answers `0x050A` or something else. Live test: section 63, item 4.
+31. **The selected target (a refinement)** (asked by `docs/plans/ext-4-pets.md` section 11 D). Does the client send `0x0304` or `0x0305` when
+    the player selects a monster (the target bar asking for HP), or only when a monster enters view? If on selection, the server can
+    capture the selected monster instead of the weakest one that is fighting the player. What it changes: one line of the capture handler
+    (`server/pets.rs`, `use_capture`). No live test needed.
+32. **Patch 111** (asked by `docs/plans/ext-4-pets.md` section 11 E). The generated patch (`Item.SData` with 100/227 and 100/228,
+    `Monster.SData` with the 2,473 pets and 527 fillers) is the client side's to pack, sign and hand out, as patches 109 and 110. One
+    point to settle then: the archive member of `Monster.SData` (`data/monster/monster.sdata`) is written as `Monster/Monster.SData` in the
+    generator's manifest by the pattern of the other two (`Item/Item.SData`, `Character/Skill.SData`); the client side confirms it.
 
 ## Answered
 

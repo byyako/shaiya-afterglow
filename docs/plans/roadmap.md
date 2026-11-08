@@ -173,7 +173,7 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
 | Chunk 5 Lua (spec) | spec written 2026-11-04 (`docs/plans/ext-5-lua.md`; four decisions in its section 1) |
 | Chunk 5 Lua (build), release 0.3.0 | **built** 2026-11-04 (`docs/plans/ext-5-lua.md`, `docs/server/scripts.md`; rehearsed on the drill, then on the live dev box with the four reference extensions installed disabled; live-test items in section 60); the release 0.3.0 itself waits for the maintainer |
 | Chunk 3 item effects and skill abilities (spec, build) | spec written 2026-11-05 and **built** 2026-11-05 (`docs/plans/ext-3-effects.md`, `docs/server/effects.md`; rehearsed on the drill, then on the live dev box with the Kill Boost Stones upgraded and the three new extensions installed disabled; live-test items in section 61); custom GM status levels moved to wave R3 |
-| Chunk 4 pets (spec, build), release 0.4.0 | not started |
+| Chunk 4 pets (spec, build), release 0.4.0 | spec written 2026-11-07 and **built** (`docs/plans/ext-4-pets.md`, `docs/server/pets.md`; rehearsed on the drill; the dev box rehearsal, client patch 111 and the release 0.4.0 wait for the maintainer; live-test items in section 63) |
 
 ## Frozen or later (not scheduled)
 

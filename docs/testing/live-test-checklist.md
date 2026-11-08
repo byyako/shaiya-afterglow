@@ -1724,3 +1724,33 @@ item's material and a craftable weapon and armour piece with `/make`; enchant at
        step's value (+3: 15).
 4. [ ] The chances feel like the file's (+1 a weapon about 9 tries in 10, an armour piece almost always); past +12 a weapon can still
        succeed (one in 5,000 at +14 and above: GM-made Lapisias only, this is a smoke check, not a count).
+
+## 63. Pets (extensions chunk 4; `docs/plans/ext-4-pets.md`, `docs/server/pets.md`)
+
+For one or two real clients with **client data patch 111 installed** (it carries the two items and the pets' monster records; without it
+the items show as `???` and a pet shows nothing). On the live dev box `pets` is installed and **disabled**; turn it on with
+`target/release/data-editor ext enable pets` and `tools/game-server.sh restart` (effects are read at start). Give the items with the GM's
+`/make 100 227 10` (Capture Net) and `/make 100 228` (an empty egg: the game says "This egg is empty."; real eggs come from catches). This
+section answers client research entries 28 to 32 (`docs/testing/client-research-queue.md`).
+
+1. [ ] **Patch 111 changes nothing else**: before installing `pets`, walk the maps you know: monsters look as before; spawn a placeholder
+       monster whose id is a filler (2,500) with the GM's monster command: nothing shows, nothing crashes (entry 29).
+2. [ ] **Catch**: fight a normal monster, bring it under 30% HP, use a capture item: "It broke free!" (the net is gone) or the monster vanishes,
+       "Attained Pet Egg" and "Caught! The egg is in your bag." The monster respawns at its usual time.
+3. [ ] **Refusals** (the net stays each time): a healthy monster ("too strong"), nothing fighting you ("No monster is fighting you."), a
+       boss, a quest monster ("That monster cannot be caught."), a monster fighting your party member but not you. A full bag: "Your bags
+       are full."
+4. [ ] **Summon and dismiss**: use the egg: a small pet of that monster beside you (about 40% of its wild size); the egg stays with its
+       count and its tooltip is right (entry 30); use it again: the pet goes. Try to click the pet: nothing is selected.
+5. [ ] **Following**: walk, run, ride a mount, ride with a partner, take a portal, recall, die and revive, go invisible as staff: the pet
+       keeps up, snaps after a teleport, hides while you are dead or invisible, comes back.
+6. [ ] **What others see**: a second character sees the pet with the monster's name, walking and running with its animations; it cannot
+       target it.
+7. [ ] **Auto-loot**: kill monsters: the pet runs to each drop and you get "Attained" and the gold line; a party member's item stays; your
+       own dropped item stays; with a full bag: one "no room", the item stays on the ground and the pet leaves it.
+8. [ ] **Relog**: log out with the pet out and back in: it comes back. Trade the egg away: the pet goes at once; the other player calls the
+       same monster with it.
+9. [ ] **Rules**: `deny pet` on a map (the example in `extensions/pets/extension.toml` or `config/game.toml.example`): the pet hides within
+       5 seconds with the message and returns on leaving; `deny capture` by level refuses the net with its message.
+10. [ ] **Off**: `data-editor ext disable pets`, restart: both items are refused and stay, no pet comes out, nothing else differs.
+        `base = 0` (the wild record) on a client without patch 111: a full-size, clickable pet that the server ignores when it is attacked.

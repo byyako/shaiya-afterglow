@@ -1,6 +1,31 @@
 # Extensions chunk 4, pets (spec and build plan)
 
-**Specified 2026-11-07; not built.** Chunk 4 of `docs/plans/extensions.md` (section 6, work item 7.4). Chunks 1, 2, 3 and 5 are built
+**Specified 2026-11-07; built (steps 1 to 10; 978 Rust tests across game-server and data-editor, 20 for the generator).** What the build
+settled where the text left a choice or the code disagreed:
+
+- The migration is **0036**, not 0035 (`0035_item_enchant.sql` exists). `[[monster_look]]` is its own struct in `ext/rows.rs`, not a line of
+  `ext/tables.rs` (that table list is for `defs` rows with keys). A row of `content.client_monsters` keeps `day` as the **map** (`{"0": 6, …}`),
+  which `client_patch.py` resolves by the copied record's own day, so installing needs no `client` schema. `tools/setup.sh` runs no
+  importer; `load_client.py` (a developer's box) takes `Monster.SData` from the folder of the other two files, and an import recorded without it
+  gets `client.monsters` added by a plain run. The member path of `Monster.SData` in a patch, `Monster/Monster.SData`, is by the pattern of
+  the other two and is for the client side to confirm (entry 32).
+- The chance (3.3) is rounded down as the formula says: **26%** at 20% HP, not the 27% of the table (26.67 rounded down); 43% and 58% as written.
+- 100/108 has **no reuse group**, so the egg's "reuse time is its row's" gave none: the egg row sets `reqig = 11` (the 2 second group).
+  The egg's look is 100/108's with the **model and icon of 27/147** (`model = 0`, `icon = 16`), not `look = "27/147"`: that record's type2
+  and type3 are 27 (a quest item's), which the client may read. Net and egg are otherwise as 13.1.
+- The fillers are the 527 ids 2,474 to 3,000; the file is 5,474 records, 284,960 bytes encrypted (151,905 more than the original, not
+  125 KB).
+- The pets pass is `Zones::pets(now, quest_ok)`; a rule hiding the pet reaches the owner as `ZoneEvent::PetRuled` (the connection whispers it
+  through the usual limit); a fetched drop reaches it as `ZoneEvent::PetLoot`. `summon_pet` takes `ruled` (the arrival on a map where a rule
+  matches: kept hidden, whispered by the connection). The egg-left check runs at the **top of the connection's loop**, before it waits
+  for the next request or event, which covers every path. The "no room" answer, the game log and the money path are the pick-up's own
+  (`take_loot` was split out of `pick_up`). An owner in a gambling table is not asked about (the zone has no flag for it); a trade or a
+  personal shop stops the fetching. A catch's egg has make type `'S'`; "Caught!" is sent after the egg's "Attained" (`WorldState::after_use`).
+- Not tested: an area skill around a pet (it is out of every monster pass by construction; `attack_mob`, the monster passes and
+  `mob_count` are), and the trade, warehouse and guild-bank paths of an egg leaving the bags (one check covers them all; the drop is tested).
+  A catch, a summon and a pick were rehearsed by the TCP-level game tests, not by a client on the drill.
+
+Chunk 4 of `docs/plans/extensions.md` (section 6, work item 7.4). Chunks 1, 2, 3 and 5 are built
 (`docs/plans/ext-1-foundation.md`, `ext-2-rules.md`, `ext-3-effects.md`, `ext-5-lua.md`; the operator's pages `docs/server/rules.md`,
 `scripts.md`, `effects.md`). This chunk adds **pets**: a player weakens a monster that is fighting them and uses a **capture item** on it;
 caught, the monster becomes a **Pet Egg** in the bag; used, the egg calls a **small copy of that monster** that follows its owner, is never

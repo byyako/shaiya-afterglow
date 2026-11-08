@@ -197,6 +197,7 @@ nav:
           - Rules: server/rules.md
           - Scripts: server/scripts.md
           - Item effects and abilities: server/effects.md
+          - Pets: server/pets.md
           - Deploying on a VPS: server/deploy.md
           - Pointing the client at the server: original/client-login.md
       - Behaviour and safety:

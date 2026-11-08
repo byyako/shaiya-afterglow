@@ -10,13 +10,14 @@ design; this page is how to use them, and (section 6) how to add a new type.
 
 ## 1. The reference extensions
 
-Four folders of `extensions/` use them. None of the three new ones is installed by `tools/setup.sh`; each has a README.
+Five folders of `extensions/` use them (the fifth, `pets`, is the subject of `docs/server/pets.md`). None of the new ones is installed by `tools/setup.sh`; each has a README.
 
 | extension | items | what it does |
 |---|---|---|
 | `level-stones` | 100/215, 216, 217 | Level Stone (one level more), Level Stone (15) and (30) (up to that level) |
 | `perfect-lapisia` | 95/3 (weapon), 95/8 (armour) | an enchant always succeeds and may rise 1, 2 or 3 steps (60, 30, 10 in a hundred) and never destroys the item |
 | `stat-runes` | 100/221 to 226 | a Recreation Rune for each of STR, DEX, REC, INT, WIS and LUC: it redraws that number only |
+| `pets` (1.0.0) | 100/227, 228 | Capture Net and Pet Egg: catch a weakened monster, call it as a small follower that fetches your drops (`docs/server/pets.md`) |
 | `kill-boost` (1.1.0) | 100/212 to 214 and skill 200/1 to 3 | the Kill Boost Stones: the buff counts a player kill 2, 5 or 10 times; same as 1.0.0, the multipliers are now abilities |
 
 Every reference item is **grade 999**, the drop grade no monster drops, so they come only from the item mall, the GM's `/make <type>
@@ -123,7 +124,7 @@ after either); the step stays at most 20. `safe = true` means a failure never de
 stay. `"random"` draws each as the smaller of two draws from 0 to the item's top, as the core's rune does; `"max"` makes it the item's top.
 An item with none of the named numbers is refused as the core's rune refuses one (the window's failure, result 1), and the rune stays.
 
-**`capture` and `pet_egg`** (0.4.0, `docs/server/pets.md`) are two halves of one thing. The server checks the links between them when it
+**`capture` and `pet_egg`** (0.4.0; the operator's page is `docs/server/pets.md`, the extension `extensions/pets`) are two halves of one thing. The server checks the links between them when it
 starts: a `capture`'s `egg` must be a `pet_egg` item of the same extension; a `pet_egg` row must have `count` 1 (eggs never stack) and, with
 `base` above 0, every `base + m` must lie in the extension's `[ids] monsters`. An effect that fails a link is skipped with a warning naming
 the item and the reason (the item then does what its own columns say, as when an effect no longer suits its row); a `capture` whose egg was

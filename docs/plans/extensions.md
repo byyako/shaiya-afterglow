@@ -268,6 +268,9 @@ regenerates unchanged.
 
 ### 7.4 Chunk 4, pets
 
+**Specified** 2026-11-07 (`docs/plans/ext-4-pets.md`); **built** (steps 1 to 10; the spec's top line lists what the build settled where the text left
+a choice). The release 0.4.0 waits for the maintainer.
+
 **Needs**: chunks 1 to 3 built and client research entries 9 and 10 answered. **Inputs**: this plan (decision 1 is the pet design),
 `docs/plans/ext-1-foundation.md` to `docs/plans/ext-3-effects.md`, the client answers to entries 9 and 10 (`docs/client/`),
 `docs/original/mobs.md`, `mob-fight.md`, `pathing.md`, `item-drop.md`, `docs/original/combat.md` sections 7 and 8 (drops, pick-up),

@@ -244,6 +244,10 @@ raises the level, a Lapisia that always succeeds, a rune that redraws one number
 and the rules can keep an item off a map (`item_use`). Three reference extensions are in `extensions/`
 ([`docs/server/effects.md`](docs/server/effects.md), for operators and for authors).
 
+**Pets** (an extension, `extensions/pets`, not installed by default): a Capture Net on a weakened monster that is fighting you makes a Pet
+Egg; the egg calls a small, unclickable copy of the monster that follows you and fetches your drops into the bag. Two rule points keep
+nets and pets off some maps ([`docs/server/pets.md`](docs/server/pets.md)). The players' clients need a data patch for it.
+
 **Scripts**: an extension may carry Lua scripts that react to events (a login, a kill, a timer), answer `!commands` typed in chat, give
 items, gold and buffs, spawn monsters for a while, store values per character, and refuse or change a number at the places the rules are
 asked. Four are bundled in `extensions/` and none is installed by default: kill streaks with bounties, a welcome text with adverts, rewards for

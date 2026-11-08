@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+**Pets** (extensions chunk 4; `docs/plans/ext-4-pets.md`, `docs/server/pets.md`)
+- The `pets` extension (`extensions/pets`, not installed by `tools/setup.sh`): a Capture Net (100/227) catches the weakest monster that is
+  fighting the user at 30% HP or less into a Pet Egg (100/228, the monster in its craft name); the egg calls a small, unclickable copy of
+  the monster that follows its owner, never fights, and **fetches the owner's drops** and gold. One pet out per player, kept across map
+  changes and logins (`character_pets`), sent back when its egg leaves the bags.
+- Two item effects, `capture` and `pet_egg`, with their links checked when the server starts (`docs/server/effects.md`), and two rule
+  points, `deny capture` and `deny pet` (`docs/server/rules.md`; the points are eleven).
+- The pet is a monster record of the client's `Monster.SData`: `tools/sdata/load_client.py` imports the original file into
+  `client.monsters` (an older import gets the table added), the extensions' `[[monster_look]]` entry in `rows.toml` and `monsters` in
+  `[ids]` add records (`content.client_monsters`), and `tools/sdata/client_patch.py` generates `Monster.SData` when there are any. With
+  none, patches 109 and 110 rebuild byte for byte as before.
+- Migration 0036 (`content.client_monsters`, the `monster` kind of `content.ext_ranges`, `character_pets`).
+- The clients need a data patch (111) for the items and the pets' records; `base = 0` in the egg's effect makes the pet the wild monster's
+  own record for a client without it.
+
 ## 0.3.0 (2026-11-06)
 
 **The game data is built from the originals, extensions and edits** (extensions chunk 1, part A; `docs/plans/ext-1-foundation.md`)
