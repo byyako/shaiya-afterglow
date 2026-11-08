@@ -461,6 +461,8 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
         if turn == 0 {
             ctx.zones.npc_idle(now, &ctx.data.world, &live.mobs, loot, &mut rand);
         }
+        // The pets follow their owners (`docs/plans/ext-4-pets.md` section 5.3); nothing happens without one out.
+        ctx.zones.pets(now);
         // What changed of each party member, for the others (`docs/original/party.md` section 13).
         ctx.zones.party_status();
         obelisk_events(&ctx).await;

@@ -1712,6 +1712,10 @@ async fn world_loop<S: Backend>(
                     ZoneEvent::Trade => trade_exchange(ctx, character, state).await?,
                     ZoneEvent::GuildAgreed => found_guild(ctx, id, state).await,
                     ZoneEvent::PartyCalled { until } => state.party_call_due = Some(until),
+                    // A `deny pet` rule started to match: the pet is hidden, the player told once (the limit of every refusal).
+                    ZoneEvent::PetRuled { rule, name, text } => {
+                        refused::tell_refused(conn, state, &crate::rules::Refusal { rule, name, text }).await?
+                    }
                 }
                 continue;
             }
@@ -2360,7 +2364,18 @@ async fn world_loop<S: Backend>(
             w::OP_MOB_INFO | w::OP_MOB_HP if state.entered => {
                 // CUser::PacketGetInfo: nothing when the monster is not on this map.
                 let Some(target) = g::parse_char_id(payload) else { continue };
-                let Some(mob) = ctx.zones.mob(map, target) else { continue };
+                let Some(mob) = ctx.zones.mob(map, target) else {
+                    // A pet is a monster to the client: asked as one, it answers with HP 1 and the monsters' speeds.
+                    if let Some(at) = ctx.zones.pet_position(map, target) {
+                        if opcode == w::OP_MOB_INFO {
+                            conn.send(w::mob_move(target, 1, at[0], at[2])).await?;
+                            conn.send(w::mob_info(target, 1, crate::mobs::ATTACK_SPEED, crate::mobs::MOVE_SPEED)).await?;
+                        } else {
+                            conn.send(w::mob_hp(target, 1)).await?;
+                        }
+                    }
+                    continue;
+                };
                 if opcode == w::OP_MOB_INFO {
                     conn.send(w::mob_move(mob.id, 1, mob.position[0], mob.position[2])).await?;
                     let (attack_speed, move_speed) = ctx.zones.mob_speeds(map, mob.id);

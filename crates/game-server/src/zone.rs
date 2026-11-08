@@ -47,6 +47,7 @@ mod my_shop;
 mod npc;
 mod obelisk;
 mod party;
+mod pets;
 mod pvp;
 mod ranking;
 mod script;
@@ -61,6 +62,7 @@ use monsters::{
     targetable, wake, walk_mob,
 };
 pub use party::Invitee;
+pub use pets::{PET_RUN, PET_WALK, PetLook, PetLoot};
 pub use pvp::{Verdict, same_side};
 pub use script::{SPAWNS_ALIVE, SPAWNS_PER_CALL};
 pub use vehicle::{Mount, Riding};
@@ -101,6 +103,9 @@ pub enum ZoneEvent {
     /// experience at its own level (×1.2 alone; by the party's size and highest level otherwise) and a kill. `last_hit`: the
     /// player who struck the killing blow, 0 when a monster did.
     PlayerKill { victim: u32, victim_level: u16, last_hit: u32, party: Option<(u8, bool, u16)> },
+    /// A `deny pet` rule started to match the player's pet (`docs/plans/ext-4-pets.md` section 5.4): the pet is hidden and the player is
+    /// whispered the rule's message (`text` is `None` for a silent rule).
+    PetRuled { rule: u32, name: std::sync::Arc<str>, text: Option<std::sync::Arc<str>> },
     /// A monster's attack stood the sitting player up and cancels a pending logout (`CUser::StatusStand`).
     StoodUp,
     /// What the player's applied skills add up to changed (`docs/original/skills-buffs.md`): the numbers again.
@@ -717,6 +722,9 @@ pub struct Zones {
     script_staff: Mutex<HashMap<u32, u8>>,
     /// The monsters extensions spawned (`game.spawn`), by object id. A leaf lock, taken inside the zone's.
     ext_spawns: Mutex<HashMap<u32, script::ExtSpawn>>,
+    /// The pets out, by map (`zone/pets.rs`, `docs/plans/ext-4-pets.md` section 5). Taken after `maps` and `mobs`, before `ground`;
+    /// nothing is taken inside it.
+    pets: Mutex<HashMap<u16, pets::PetMap>>,
 }
 
 /// A packet for the players within `range` of a spot.
@@ -1748,6 +1756,7 @@ impl Zones {
             script_jobs: OnceLock::new(),
             script_staff: Mutex::default(),
             ext_spawns: Mutex::default(),
+            pets: Mutex::default(),
         }
     }
 
@@ -2738,6 +2747,7 @@ impl Zones {
         }
         let mobs = mobs_in_view(self.mobs.guard().get(&map), placed.cell, None);
         out.extend(mobs.iter().flat_map(|mob| mob_enter(mob, false)));
+        out.extend(self.pets_in_view(map, placed.cell, None).into_iter().flat_map(|(_, packets)| packets));
         out.extend(self.npcs_in_view(map, placed.cell, None).iter().map(w::npc_enter));
         let items = self.ground.guard().get(&map).map(|g| g.in_view(placed.cell, None)).unwrap_or_default();
         out.extend(items.iter().map(|item| item.enter_packet(gp::KIND_IN_VIEW)));
@@ -2767,6 +2777,8 @@ impl Zones {
         // The shop ends and the visit with it (`CUser::LeaveZone`; deviation 4: out of the seller's list).
         self.shop_left(players, id);
         let mut gone = players.remove(&id)?;
+        // Its pet goes with it (`docs/plans/ext-4-pets.md` section 4.3).
+        self.pet_left_with(map, players, id);
         // Its current NPC is let go (`CUser::LeaveZone`).
         npc::let_go(self.npcs.guard().get_mut(&map), &mut gone);
         // Leaving the map refuses a friend request waiting for this player (`CUser::LeaveZone`, `docs/original/friends.md` section 4).
@@ -2885,10 +2897,13 @@ impl Zones {
                 g.map(|g| g.in_view(new_cell, Some(old_cell))).unwrap_or_default(),
             )
         };
+        let (pets_left, pets_came) = (self.pets_in_view(map, old_cell, Some(new_cell)), self.pets_in_view(map, new_cell, Some(old_cell)));
         out.extend(left.iter().map(|mob| w::mob_leave(mob.id)));
+        out.extend(pets_left.iter().map(|(id, _)| w::mob_leave(*id)));
         out.extend(self.npcs_in_view(map, old_cell, Some(new_cell)).iter().map(|npc| w::npc_leave(npc.object_id)));
         out.extend(items_left.iter().map(|item| gp::item_leave(item.id)));
         out.extend(came.iter().flat_map(|mob| mob_enter(mob, false)));
+        out.extend(pets_came.into_iter().flat_map(|(_, packets)| packets));
         out.extend(self.npcs_in_view(map, new_cell, Some(old_cell)).iter().map(w::npc_enter));
         out.extend(items_came.iter().map(|item| item.enter_packet(gp::KIND_IN_VIEW)));
     }

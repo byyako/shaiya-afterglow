@@ -4498,3 +4498,277 @@ fn spawned_monsters_are_capped_tagged_expire_quietly_and_give_what_they_were_tol
     assert!(killed);
     assert!(matches!(a_ev.try_recv().ok(), Some(ZoneEvent::Kill { mob_id: 7, .. })));
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Pets (docs/plans/ext-4-pets.md section 5)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const EGG: [u8; crate::backend::CRAFT_NAME_MAX] = *b"P00007.6731A2F0.00\0\0";
+
+fn look() -> PetLook {
+    PetLook { record: 3007, wild: 7, loot: None }
+}
+
+/// The owner (1) at (100, 100), a viewer (2) in its view at (150, 100), and a stranger (3) far away; the owner's events, with the
+/// inboxes drained.
+fn pets_ground() -> (Zones, [crate::outbox::OutboxInbox; 3], UnboundedReceiver<ZoneEvent>) {
+    let zones = Zones::default();
+    let (owner, mut a_in) = player(1, 100.0, 100.0);
+    let (events, a_ev) = unbounded_channel();
+    zones.enter(1, Occupant { events, ..owner });
+    let (b, mut b_in) = player(2, 150.0, 100.0);
+    zones.enter(1, b);
+    let (c, mut c_in) = player(3, 1000.0, 1000.0);
+    zones.enter(1, c);
+    for inbox in [&mut a_in, &mut b_in, &mut c_in] {
+        received(inbox);
+    }
+    (zones, [a_in, b_in, c_in], a_ev)
+}
+
+/// The monster record and position of a `0x0601`.
+fn pet_enter_of(packet: &[u8]) -> (u32, u8, u16, f32, f32) {
+    let p = payload(packet);
+    (
+        u32::from_le_bytes(p[0..4].try_into().unwrap()),
+        p[4],
+        u16::from_le_bytes(p[5..7].try_into().unwrap()),
+        f32::from_le_bytes(p[7..11].try_into().unwrap()),
+        f32::from_le_bytes(p[11..15].try_into().unwrap()),
+    )
+}
+
+#[test]
+fn a_summoned_pet_shows_as_a_monster_record_to_everyone_in_view() {
+    let (zones, [mut a_in, mut b_in, mut c_in], _) = pets_ground();
+    let now = Instant::now();
+    assert!(!zones.summon_pet(1, 9, look(), EGG, now), "nobody of that id");
+    assert!(zones.summon_pet(1, 1, look(), EGG, now));
+    for inbox in [&mut a_in, &mut b_in] {
+        let seen = received(inbox);
+        assert_eq!(seen.iter().map(|p| opcode(p)).collect::<Vec<_>>(), [0x0601, 0x0608], "the owner and the viewer");
+        // The id, new = 1, the record 3007, 2.5 east of the owner.
+        assert_eq!(pet_enter_of(&seen[0]), (1, 1, 3007, 102.5, 100.0));
+        assert_eq!(payload(&seen[1]), [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], "max HP 1, HP 1: a max HP of 0 divides by zero in the client");
+    }
+    assert!(drain(&mut c_in).is_empty(), "too far");
+    assert_eq!(zones.pet_egg(1, 1), Some(EGG));
+    assert_eq!(zones.pet_egg(1, 2), None);
+    assert_eq!(zones.pet_position(1, 1), Some([102.5, 0.0, 100.0]));
+    assert_eq!(zones.mob_count(1), 0, "a pet is not a monster of the map");
+}
+
+#[test]
+fn a_player_coming_into_view_gets_the_pet_and_one_leaving_loses_it() {
+    let (zones, [_, _, mut c_in], _) = pets_ground();
+    zones.summon_pet(1, 1, look(), EGG, Instant::now());
+    received(&mut c_in);
+    // A new player entering the view.
+    let (d, _) = player(4, 120.0, 100.0);
+    let for_d = zones.enter(1, d);
+    let ops: Vec<u16> = opcodes(&for_d);
+    assert!(ops.windows(2).any(|w| w == [0x0601, 0x0608]), "the pet after the monsters, before the weather: {ops:x?}");
+    // A stranger walking into the view cell by cell: the pet enters with the view; walking away takes it.
+    let mut saw_enter = false;
+    for x in (1000..=1100).rev().step_by(20) {
+        let out = zones.move_to(1, 3, &step(x as f32 - 880.0, 100.0));
+        saw_enter |= opcodes(&out).contains(&0x0601);
+    }
+    assert!(saw_enter, "coming from 120 away into view got the pet");
+    let away = zones.move_to(1, 3, &step(1000.0, 1000.0));
+    assert!(opcodes(&away).contains(&0x0602), "and 0x0602 when it leaves the view");
+    let _ = c_in;
+}
+
+#[test]
+fn a_pet_follows_walks_runs_and_snaps() {
+    let (zones, [mut a_in, mut b_in, _], _) = pets_ground();
+    let t0 = Instant::now();
+    zones.summon_pet(1, 1, look(), EGG, t0);
+    received(&mut a_in);
+    received(&mut b_in);
+    let owner_at = |x: f32, z: f32| edit(&zones, 1, |p| p.occupant.position = [x, 0.0, z]);
+    // Within 4: it stays.
+    owner_at(104.0, 100.0);
+    zones.pets(t0);
+    assert!(drain(&mut b_in).is_empty());
+    // 4.5 to 8 away: it walks to the follow spot (2.5 from the owner on the line to the pet), motion 0.
+    owner_at(108.0, 100.0);
+    zones.pets(t0 + Duration::from_secs(1));
+    let seen = received(&mut b_in);
+    assert_eq!(opcodes(&seen), [0x0603]);
+    let walk = payload(&seen[0]);
+    assert_eq!(
+        (walk[4], f32::from_le_bytes(walk[5..9].try_into().unwrap())),
+        (0, 105.5),
+        "the spot is 2.5 from the owner (108) on the line to the pet"
+    );
+    assert_eq!(zones.pet_position(1, 1), Some([105.5, 0.0, 100.0]), "its position is the spot at once");
+    // Over 8 away: it runs.
+    received(&mut a_in);
+    owner_at(120.0, 100.0);
+    zones.pets(t0 + Duration::from_secs(3));
+    let seen = received(&mut a_in);
+    assert_eq!(opcodes(&seen), [0x0603]);
+    assert_eq!(payload(&seen[0])[4], 1, "motion 1: run");
+    // The pet is not asked again before its step is over: the walk of 14.5 at 9.7 a second takes 1.5 s.
+    zones.pets(t0 + Duration::from_millis(3_500));
+    owner_at(60.0, 60.0);
+    zones.pets(t0 + Duration::from_millis(3_600));
+    assert!(drain(&mut a_in).is_empty(), "next_step not come");
+    // Over 20 away: it snaps (0x0602 then 0x0601 with new = 0 at the spot), whatever the time.
+    received(&mut b_in);
+    zones.pets(t0 + Duration::from_secs(10));
+    let seen = received(&mut b_in);
+    assert_eq!(opcodes(&seen), [0x0602, 0x0601, 0x0608], "0x0602, then 0x0601 again at the spot");
+    assert_eq!(payload(&seen[1])[4], 0, "new = 0: it was there");
+    let spot = zones.pet_position(1, 1).unwrap();
+    assert!(distance(spot, [60.0, 0.0, 60.0]) < 2.6, "{spot:?}");
+}
+
+#[test]
+fn a_pet_is_hidden_while_its_owner_is_dead_or_invisible_and_comes_back() {
+    let (zones, [mut a_in, mut b_in, _], _) = pets_ground();
+    let t0 = Instant::now();
+    zones.summon_pet(1, 1, look(), EGG, t0);
+    received(&mut a_in);
+    received(&mut b_in);
+    edit(&zones, 1, |p| p.dead = true);
+    zones.pets(t0);
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)], "hidden: 0x0602");
+    assert_eq!(zones.pet_position(1, 1), None, "hidden: not in a cell, nothing to answer 0x0304 with");
+    assert_eq!(zones.pet_egg(1, 1), Some(EGG), "but still out");
+    zones.pets(t0 + Duration::from_secs(1));
+    assert!(drain(&mut b_in).is_empty(), "nothing while it stays hidden");
+    edit(&zones, 1, |p| p.dead = false);
+    zones.pets(t0 + Duration::from_secs(2));
+    let seen = received(&mut b_in);
+    assert_eq!(opcodes(&seen), [0x0601, 0x0608]);
+    assert_eq!(payload(&seen[0])[4], 1, "it comes out again, new = 1");
+    // A staff member who goes invisible: hidden too (a pet must not give the GM away).
+    edit(&zones, 1, |p| p.occupant.visible = false);
+    zones.pets(t0 + Duration::from_secs(3));
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
+    edit(&zones, 1, |p| p.occupant.visible = true);
+    zones.pets(t0 + Duration::from_secs(4));
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
+    // The owner dying while the pet is hidden by the rules etc. is covered by the same path; a pet that is out while its owner is dead at
+    // the summon stays hidden.
+    edit(&zones, 1, |p| p.dead = true);
+    zones.summon_pet(1, 1, look(), EGG, t0 + Duration::from_secs(5));
+    assert!(opcodes(&received(&mut b_in)).iter().all(|op| *op != 0x0601), "summoned while dead: nothing shown");
+    edit(&zones, 1, |p| p.dead = false);
+    zones.pets(t0 + Duration::from_secs(6));
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
+}
+
+#[test]
+fn a_deny_pet_rule_hides_the_pet_every_five_seconds_and_lifts() {
+    use serde_json::json;
+    let (zones, [mut a_in, mut b_in, _], mut a_ev) = pets_ground();
+    let t0 = Instant::now();
+    zones.summon_pet(1, 1, look(), EGG, t0);
+    received(&mut a_in);
+    received(&mut b_in);
+    put_rules(&zones, &[("no-pets-in-town", json!({ "type": "deny", "point": "pet", "maps": [1] }))]);
+    // The rules are asked every 5 seconds, not before.
+    zones.pets(t0 + Duration::from_secs(1));
+    assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
+    zones.pets(t0 + Duration::from_secs(5));
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
+    let Ok(ZoneEvent::PetRuled { name, text, .. }) = a_ev.try_recv() else { panic!("the owner is told") };
+    assert_eq!((&*name, text.as_deref()), ("no-pets-in-town", Some("Pets cannot come out here.")));
+    // Once: the next checks do not tell again.
+    zones.pets(t0 + Duration::from_secs(7));
+    zones.pets(t0 + Duration::from_secs(10));
+    zones.pets(t0 + Duration::from_secs(15));
+    assert!(a_ev.try_recv().is_err() && drain(&mut b_in).is_empty());
+    assert_eq!(zones.pet_egg(1, 1), Some(EGG), "still out");
+    // The rule stops matching (a reload): the pet comes back at the next check.
+    put_rules(&zones, &[]);
+    zones.pets(t0 + Duration::from_secs(20));
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
+    // A rule scoped to other maps never matches.
+    put_rules(&zones, &[("elsewhere", json!({ "type": "deny", "point": "pet", "maps": [2] }))]);
+    zones.pets(t0 + Duration::from_secs(30));
+    assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
+}
+
+#[test]
+fn a_pet_is_in_no_monster_pass() {
+    use crate::combat::{self, Gear};
+    let (world, _, defs) = fighting_ground();
+    let zones = Zones::new(&world, &defs);
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    zones.enter(1, a);
+    let now = Instant::now();
+    assert_eq!(zones.respawn(now, &world, &defs, &mut || 0), 1);
+    let before = zones.mob_count(1);
+    let mob = zones.mob(1, 1).expect("the monster is object 1");
+    received(&mut a_in);
+    zones.summon_pet(1, 1, look(), EGG, now);
+    let pet = zones.last_mob_id();
+    assert_eq!(pet, 2, "the pet's object id comes from the monsters' counter: no two objects share one");
+    assert_eq!(zones.mob_count(1), before, "not counted");
+    assert!(zones.mob(1, pet).is_none());
+    assert!(!zones.attackable(1, pet, 0, &defs), "never a target");
+    // An attack naming the pet finds no monster and does nothing.
+    let fighter = combat::player(10, [100, 10, 10, 10, 10, 0], &Gear { kind: Some(combat::MELEE), ..Default::default() });
+    let attack =
+        Attack { attacker: 1, country: 0, fighter: &fighter, kind: combat::MELEE, slack: 200.0, range: 0, rec: 0, cross_road: false };
+    assert_eq!(zones.attack_mob(1, pet, &attack, &defs, no_loot(), now, &mut || 0), AttackOutcome::Gone);
+    // The monster passes leave it alone: it is still out, at the same place, and the monster has not changed.
+    let mut rand = || 0;
+    for step in 1..=5u64 {
+        let at = now + Duration::from_secs(step);
+        zones.mob_fight(at, &world, &defs, no_loot(), &mut rand);
+        zones.idle(at, &world, &defs, &mut rand);
+        zones.remove_bodies(at, &defs, &mut rand);
+    }
+    assert_eq!(zones.pet_egg(1, 1), Some(EGG));
+    assert_eq!(zones.pet_position(1, pet), Some([102.5, 0.0, 100.0]));
+    assert_eq!(zones.mob_count(1), before);
+    let _ = mob;
+}
+
+#[test]
+fn a_second_summon_replaces_the_first_and_leaving_takes_the_pet() {
+    let (zones, [mut a_in, mut b_in, _], _) = pets_ground();
+    let now = Instant::now();
+    zones.summon_pet(1, 1, look(), EGG, now);
+    received(&mut a_in);
+    received(&mut b_in);
+    let other_egg = *b"P00008.6731A2F1.01\0\0";
+    zones.summon_pet(1, 1, PetLook { record: 3008, wild: 8, loot: None }, other_egg, now);
+    let seen = received(&mut b_in);
+    assert_eq!(opcodes(&seen), [0x0602, 0x0601, 0x0608], "the first goes, the second comes");
+    assert_eq!(pet_enter_of(&seen[1]).2, 3008);
+    assert_eq!(zones.pet_egg(1, 1), Some(other_egg));
+    assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 1, "one pet a player");
+    // Dismissed: 0x0602, and nothing out.
+    assert!(zones.dismiss_pet(1, 1));
+    assert_eq!(opcodes(&received(&mut a_in)).last(), Some(&0x0602));
+    assert_eq!(zones.pet_egg(1, 1), None);
+    assert!(!zones.dismiss_pet(1, 1), "none out");
+    // Leaving the zone takes the pet with its owner: the viewer is told.
+    zones.summon_pet(1, 1, look(), EGG, now);
+    received(&mut b_in);
+    zones.leave(1, 1);
+    let seen = drain(&mut b_in);
+    assert!(seen.contains(&(0x0602, 3)) && seen.contains(&(0x0202, 1)), "the pet and the owner leave the viewer's view: {seen:x?}");
+    assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 0);
+    // The pass finds nothing to do.
+    zones.pets(now + Duration::from_secs(10));
+}
+
+#[test]
+fn a_pet_whose_owner_is_gone_without_leaving_is_removed_by_the_pass() {
+    let (zones, [_, mut b_in, _], _) = pets_ground();
+    let now = Instant::now();
+    zones.summon_pet(1, 1, look(), EGG, now);
+    received(&mut b_in);
+    zones.maps.guard().get_mut(&1).unwrap().remove(&1);
+    zones.pets(now);
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
+    assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 0);
+}
