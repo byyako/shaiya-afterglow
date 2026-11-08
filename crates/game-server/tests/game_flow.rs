@@ -6253,3 +6253,142 @@ async fn a_pet_goes_when_its_egg_leaves_the_bags() {
     let seen = use_slot(&mut client, id, [back.bag, back.slot]).await;
     assert_eq!(pet_records(&seen), [3123], "{seen:x?}");
 }
+
+// ------------------------------------------------------------------------------------------------------- capture (chunk 4, step 7)
+
+/// Pet test data with a net of the given chance and a range that reaches the monster (it stands 28 from the start).
+fn net_data(chance: [u8; 2]) -> GameData {
+    use game_server::effects::{ItemEffects, check_effect};
+    let mut data = pet_data(true);
+    data.effects = ItemEffects::new([
+        (100227, check_effect(&serde_json::json!({ "type": "capture", "egg": "100/228", "chance": chance, "range": 60 })).unwrap()),
+        (100228, check_effect(&serde_json::json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"] })).unwrap()),
+    ]);
+    data
+}
+
+fn net_unit(slot: u8, count: u8) -> game_server::backend::ItemUnit {
+    game_server::backend::ItemUnit { bag: 1, slot, item_type: 100, type_id: 227, count, quality: 0, gems: [0; 6], craft_name: Vec::new() }
+}
+
+/// A character with a net (3) at bag 1 slot 2 and monster 1 respawned and fighting it at `hp` of its 120.
+async fn at_a_fight(chance: [u8; 2], hp: u32) -> (Arc<MemoryBackend>, Arc<Context<Arc<MemoryBackend>>>, Client, u32) {
+    let (backend, ctx, client, id) = with_items(net_data(chance), vec![net_unit(2, 3)]).await;
+    ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
+    ctx.zones.force_fight(1, 1, id, hp);
+    (backend, ctx, client, id)
+}
+
+fn nets_left(backend: &MemoryBackend, id: u32) -> Option<u8> {
+    backend.stored(id).unwrap().1.iter().find(|i| i.type_id == 227).map(|i| i.count)
+}
+
+#[tokio::test]
+async fn a_net_on_a_weakened_monster_makes_an_egg_and_the_monster_vanishes() {
+    let (backend, ctx, mut client, id) = at_a_fight([100, 100], 30).await;
+    let mut seen = use_slot(&mut client, id, [1, 2]).await;
+    // The zone's 0x0602 goes through the outbox and may come after the connection's own answers.
+    if !seen.contains(&w::mob_leave(1)) {
+        seen.extend(read_until(&mut client, w::OP_MOB_LEAVE).await);
+    }
+    assert!(seen.contains(&w::mob_leave(1)), "0x0602 for the monster");
+    let attained = seen.iter().position(|p| frame::opcode(p) == gp::OP_PICK_UP).expect("0x0205: Attained Pet Egg");
+    assert!(!seen.iter().any(|p| frame::opcode(p) == shaiya_proto::combat::OP_MOB_DEATH), "it vanishes, it does not die on screen");
+    assert_eq!(whisper_texts(&seen), ["Caught! The egg is in your bag."]);
+    let last = seen.iter().rposition(|p| frame::opcode(p) == chat::OP_WHISPER).unwrap();
+    assert!(last > attained, "the whisper follows the Attained line: {seen:x?}");
+    // One save: the net down by one and the egg with its craft name, both stored.
+    let (_, items) = backend.stored(id).unwrap();
+    assert_eq!(items.iter().find(|i| i.type_id == 227).map(|i| i.count), Some(2));
+    let egg = items.iter().find(|i| i.type_id == 228).expect("the egg");
+    assert_eq!((egg.item_type, egg.count), (100, 1));
+    let name = String::from_utf8_lossy(&egg.craft_name).into_owned();
+    assert!(name.starts_with("P00001.") && name.len() == 18 && name.ends_with(".00"), "{name}");
+    assert_eq!(ctx.zones.mob(1, 1).map(|m| m.hp), Some(0), "a body due now; the next pass removes it and the entry spawns again");
+    // The egg works: it calls the pet of monster 1 (record 3001).
+    let place = items.iter().find(|i| i.type_id == 228).map(|i| [i.bag, i.slot]).unwrap();
+    let seen = use_slot(&mut client, id, place).await;
+    assert_eq!(pet_records(&seen), [3001]);
+}
+
+#[tokio::test]
+async fn a_missed_catch_uses_the_net_up_and_the_monster_fights_on() {
+    let (backend, ctx, mut client, id) = at_a_fight([0, 0], 30).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert_eq!(whisper_texts(&seen), ["It broke free!"]);
+    assert!(seen.contains(&it::used(id, 1, 2, 100, 227, 2)), "{seen:x?}");
+    assert_eq!(nets_left(&backend, id), Some(2));
+    assert!(backend.stored(id).unwrap().1.iter().all(|i| i.type_id != 228), "no egg");
+    assert_eq!(ctx.zones.mob(1, 1).map(|m| (m.hp, m.dead_until.is_none())), Some((30, true)), "alive and fighting");
+    // Said every time (it answers a roll), not once in ten seconds.
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert_eq!(whisper_texts(&seen), ["It broke free!"]);
+}
+
+#[tokio::test]
+async fn a_net_is_kept_when_there_is_nothing_to_catch() {
+    // Nothing is fighting the player.
+    let (backend, ctx, mut client, id) = with_items(net_data([100, 100]), vec![net_unit(2, 3)]).await;
+    ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["No monster is fighting you."], "{seen:x?}");
+    assert_eq!(nets_left(&backend, id), Some(3));
+    // A healthy monster fighting it (120 of 120): too strong. A new character, since refusals whisper once in ten seconds.
+    let (backend, _, mut client, id) = at_a_fight([100, 100], 120).await;
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(
+        seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["It is too strong to catch. Bring it below 30% HP."],
+        "{seen:x?}"
+    );
+    assert_eq!(nets_left(&backend, id), Some(3));
+    assert!(backend.stored(id).unwrap().1.iter().all(|i| i.type_id != 228));
+}
+
+#[tokio::test]
+async fn a_net_is_kept_when_the_bags_are_full_or_a_rule_refuses_it() {
+    // Every slot of the two bags taken: the egg would have no place.
+    let mut items = vec![net_unit(2, 3)];
+    for slot in 1..24u8 {
+        if slot != 2 {
+            items.push(game_server::backend::ItemUnit {
+                bag: 1,
+                slot,
+                item_type: 25,
+                type_id: 1,
+                count: 5,
+                quality: 1200,
+                gems: [0; 6],
+                craft_name: Vec::new(),
+            });
+        }
+    }
+    for slot in 0..24u8 {
+        items.push(game_server::backend::ItemUnit {
+            bag: 2,
+            slot,
+            item_type: 25,
+            type_id: 1,
+            count: 5,
+            quality: 1200,
+            gems: [0; 6],
+            craft_name: Vec::new(),
+        });
+    }
+    let (backend, ctx, mut client, id) = with_items(net_data([100, 100]), items).await;
+    ctx.zones.respawn(std::time::Instant::now(), &ctx.data.world, &ctx.data.live().mobs, &mut || 0);
+    ctx.zones.force_fight(1, 1, id, 30);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["Your bags are full."], "{seen:x?}");
+    assert_eq!(nets_left(&backend, id), Some(3));
+    // A `deny capture` rule: its message, the net kept, and the monster untouched.
+    let (backend, ctx, mut client, id) = at_a_fight([100, 100], 30).await;
+    put_rules(&ctx, &[("not-here", serde_json::json!({ "type": "deny", "point": "capture", "maps": [1], "message": "No nets here." }))]);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&it::use_failed(id)) && whisper_texts(&seen) == ["No nets here."], "{seen:x?}");
+    assert_eq!(nets_left(&backend, id), Some(3));
+    assert_eq!(ctx.zones.mob(1, 1).map(|m| m.hp), Some(30));
+    // Without the rule it works.
+    put_rules(&ctx, &[]);
+    let seen = use_slot(&mut client, id, [1, 2]).await;
+    assert!(seen.contains(&w::mob_leave(1)), "{seen:x?}");
+}

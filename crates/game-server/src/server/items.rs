@@ -340,6 +340,10 @@ pub(super) async fn use_item<S: Backend>(
             conn.send(it::use_failed(id)).await?;
         }
     }
+    // A line that follows the item's answer (the catch's "Caught!" after the egg's "Attained").
+    if let Some(text) = state.after_use.take() {
+        super::pets::tell(conn, text).await?;
+    }
     Ok(())
 }
 

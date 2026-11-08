@@ -21,6 +21,7 @@ pub(super) async fn use_effect<S: Backend>(
     let Some(effect) = ctx.data.effects.for_use(item_id).cloned() else { return Ok(Done::Failed) };
     match &*effect {
         ItemEffect::LevelUp(stone) => level_up(conn, ctx, character, state, &effect, stone, item_id, at).await,
+        ItemEffect::Capture(net) => super::pets::use_capture(conn, ctx, character, state, country, &effect, net).await,
         ItemEffect::PetEgg(egg) => super::pets::use_pet_egg(conn, ctx, character, state, country, &effect, egg, at).await,
         other => {
             tracing::debug!(item = item_id, effect = other.type_name(), "item use: an effect of another request");

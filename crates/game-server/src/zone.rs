@@ -33,6 +33,7 @@ use crate::world::{MapTerrain, World};
 
 mod admin;
 mod boss;
+mod capture;
 mod duel;
 mod friends;
 mod guild;
@@ -56,6 +57,7 @@ mod trade;
 mod vehicle;
 
 pub use admin::{AdminOrder, BanKind, Bans, CureKind, usable_def};
+pub use capture::{catch_chance, catch_roll, hp_percent};
 pub use items::Member;
 use monsters::{
     fight_turn, find_target, go_home, mob_enter, mob_strike, mobs_in_view, paced_next, retarget, set_target, stop_moving, take_target,
@@ -725,6 +727,8 @@ pub struct Zones {
     /// The pets out, by map (`zone/pets.rs`, `docs/plans/ext-4-pets.md` section 5). Taken after `maps` and `mobs`, before `ground`;
     /// nothing is taken inside it.
     pets: Mutex<HashMap<u16, pets::PetMap>>,
+    /// The counter of the eggs' craft names (`zone/capture.rs`).
+    last_pet_stamp: AtomicU32,
 }
 
 /// A packet for the players within `range` of a spot.
@@ -1757,6 +1761,7 @@ impl Zones {
             script_staff: Mutex::default(),
             ext_spawns: Mutex::default(),
             pets: Mutex::default(),
+            last_pet_stamp: AtomicU32::new(0),
         }
     }
 

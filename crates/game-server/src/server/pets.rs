@@ -7,7 +7,8 @@
 use super::items::Done;
 use super::*;
 use crate::backend::CRAFT_NAME_MAX;
-use crate::effects::{ItemEffect, PetEgg, in_ranges};
+use crate::backend::{Kept, NewItem};
+use crate::effects::{Capture, ItemEffect, PetEgg, in_ranges};
 use crate::zone::{PetLook, PetLoot};
 
 /// The pet a connection has out: the egg it came from and how it looks, which every later `enter` (a map change) uses to call it again.
@@ -18,7 +19,6 @@ pub(super) struct ActivePet {
 }
 
 /// The craft name of an egg of `monster` made at `seconds` (unix) as the `counter`-th of the zone: 18 characters, padded with zeros.
-#[allow(dead_code)] // the capture handler (pets step 7) names the eggs it makes
 pub fn egg_name(monster: u16, seconds: u32, counter: u8) -> [u8; CRAFT_NAME_MAX] {
     let text = format!("P{monster:05}.{seconds:08X}.{counter:02X}");
     let mut out = [0; CRAFT_NAME_MAX];
@@ -114,6 +114,95 @@ pub(super) async fn use_pet_egg<S: Backend>(
     state.pet = Some(ActivePet { egg: name, look });
     tracing::info!(id, monster, record = look.record, "pet out");
     Ok(Done::Kept(unit))
+}
+
+/// A whisper from `Server`, sent every time (it answers a roll; it is not a refusal, which the limit of ten seconds covers).
+pub(super) async fn tell(conn: &mut Connection, text: &str) -> Result<()> {
+    let mut bytes = text.as_bytes().to_vec();
+    bytes.push(0);
+    conn.send(chat::whisper(false, SERVER_NAME, &bytes)).await
+}
+
+/// The make type of an egg a catch makes (the original's Maketype letter of an item from a box).
+const CATCH_MAKE_TYPE: u8 = b'S';
+
+/// The use of a capture item (section 3.1): the rules' `capture` point, the weakest monster fighting the user, the tests of 3.2 and of
+/// the HP, room for the egg, the roll; a miss uses the item up, a catch makes the egg and uses the item up in one save. A refusal keeps
+/// the item (`Done::Failed`, the reuse time put back).
+pub(super) async fn use_capture<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    state: &mut WorldState,
+    country: u8,
+    effect: &ItemEffect,
+    net: &Capture,
+) -> Result<Done> {
+    let id = character.id;
+    // 1. The rules' `capture` point.
+    if let Some(refusal) = ctx.zones.rules().denied(crate::rules::Point::Capture, state.map, &rules_who(character, country)) {
+        tracing::debug!(id, map = state.map, point = "capture", rule = &*refusal.name, "refused by a rule");
+        super::refused::tell_refused(conn, state, &refusal).await?;
+        return Ok(Done::Failed);
+    }
+    // Its egg's effect and item: the load checked the link, so both are there; a server that lost one refuses.
+    let egg_item = crate::effects::item_id(net.egg.0, net.egg.1);
+    let (Some(egg_def), Some(egg_effect)) = (ctx.data.items.get(net.egg.0, net.egg.1), ctx.data.effects.get(egg_item)) else {
+        tracing::warn!(id, egg = egg_item, "capture: the egg is not an item with an effect");
+        return Ok(Done::Failed);
+    };
+    let ItemEffect::PetEgg(egg) = &**egg_effect else { return Ok(Done::Failed) };
+    // 2 and 3. The weakest monster that is fighting the user.
+    let Some(mob) = ctx.zones.weakest_fighting(state.map, id, f32::from(net.range)) else {
+        super::effects::refuse(conn, state, effect, "No monster is fighting you.").await?;
+        return Ok(Done::Failed);
+    };
+    // 4. Whether it can be caught.
+    let live = ctx.data.live();
+    let Some(def) = live.mobs.get(mob.mob_id) else { return Ok(Done::Failed) };
+    if !ctx.zones.can_catch(&mob, def, &ctx.data.world, net, egg, character.level) {
+        super::effects::refuse(conn, state, effect, "That monster cannot be caught.").await?;
+        return Ok(Done::Failed);
+    }
+    // 5. Weak enough.
+    let percent = crate::zone::hp_percent(mob.hp, mob.max_hp);
+    if percent > u32::from(net.below) {
+        let text = format!("It is too strong to catch. Bring it below {}% HP.", net.below);
+        super::effects::refuse(conn, state, effect, &text).await?;
+        return Ok(Done::Failed);
+    }
+    // 6. Room for the egg.
+    let Some(&(bag, slot)) = state.inventory.free_slots().first() else {
+        super::effects::refuse(conn, state, effect, "Your bags are full.").await?;
+        return Ok(Done::Failed);
+    };
+    // 7. The roll. The item is used up on a miss as on a catch.
+    let chance = crate::zone::catch_chance(net.chance, net.below, percent);
+    let rand = {
+        use rand::Rng;
+        rand::rng().random::<u32>() & 0x7fff
+    };
+    let hit = crate::zone::catch_roll(chance, rand);
+    let caught = if hit { ctx.zones.capture_take(state.map, id, mob.id, net.below, Instant::now()) } else { None };
+    let Some(monster) = caught else {
+        tracing::info!(id, monster = mob.mob_id, percent, chance, hit, "catch missed");
+        tell(conn, "It broke free!").await?;
+        return Ok(Done::UsedUp);
+    };
+    let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as u32);
+    let kept = Kept { make_type: CATCH_MAKE_TYPE, craft_name: egg_name(monster, seconds, ctx.zones.next_egg_counter()), ..Kept::default() };
+    tracing::info!(id, monster, percent, chance, "monster caught");
+    state.after_use = Some("Caught! The egg is in your bag.");
+    Ok(Done::UsedUpFor(NewItem {
+        bag,
+        slot,
+        item_id: egg_def.item_id,
+        item_type: egg_def.item_type,
+        type_id: egg_def.type_id,
+        quality: egg_def.quality,
+        count: 1,
+        kept: Some(kept),
+    }))
 }
 
 /// After the player has entered a zone (a login, a map change): the pet comes out again beside it. At the first entering of a login, a

@@ -4772,3 +4772,193 @@ fn a_pet_whose_owner_is_gone_without_leaving_is_removed_by_the_pass() {
     assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
     assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 0);
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Capture (docs/plans/ext-4-pets.md section 3)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// A map with three level-5 monsters of id 7 (1000 HP) at (100, 105), the player (1) at (100, 100), a stranger (2) at (110, 100); the
+/// monsters have respawned.
+fn catch_ground() -> (World, MobDefs, Zones, crate::outbox::OutboxInbox, crate::outbox::OutboxInbox) {
+    use crate::mobs::SpawnArea;
+    let (mut world, def, _) = fighting_ground();
+    world.set_mob_data(
+        [(1, vec![0u8; 2048 * 2048 / 8])].into(),
+        [(1, vec![SpawnArea::new([100.0, 0.0, 105.0, 100.0, 0.0, 105.0], vec![(7, 3)])])].into(),
+    );
+    let defs = MobDefs::new([def]);
+    let zones = Zones::new(&world, &defs);
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    zones.enter(1, a);
+    let (b, mut b_in) = player(2, 110.0, 100.0);
+    zones.enter(1, b);
+    // One monster an entry a pass.
+    let spawned: usize = (0..3).map(|_| zones.respawn(Instant::now(), &world, &defs, &mut || 0)).sum();
+    assert_eq!(spawned, 3);
+    received(&mut a_in);
+    received(&mut b_in);
+    (world, defs, zones, a_in, b_in)
+}
+
+/// Puts monster `id` in a fight with `target` at `hp` of its 1000.
+fn fighting(zones: &Zones, id: u32, target: u32, hp: u32) {
+    let mut all = zones.mobs.guard();
+    let mob = all.get_mut(&1).unwrap().mobs.get_mut(&id).unwrap();
+    mob.state = MobState::Fighting(target);
+    mob.hp = hp;
+}
+
+fn net(extra: serde_json::Value) -> (crate::effects::Capture, crate::effects::PetEgg) {
+    let mut capture = serde_json::json!({ "type": "capture", "egg": "100/228" });
+    capture.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    let crate::effects::ItemEffect::Capture(c) = crate::effects::check_effect(&capture).unwrap() else { panic!() };
+    let crate::effects::ItemEffect::PetEgg(e) =
+        crate::effects::check_effect(&serde_json::json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"] })).unwrap()
+    else {
+        panic!()
+    };
+    (c, e)
+}
+
+#[test]
+fn the_weakest_monster_fighting_the_user_in_range_is_chosen() {
+    let (_, _, zones, _, _) = catch_ground();
+    assert!(zones.weakest_fighting(1, 1, 15.0).is_none(), "nothing is fighting yet");
+    fighting(&zones, 1, 1, 500);
+    fighting(&zones, 2, 1, 200);
+    fighting(&zones, 3, 2, 50);
+    assert_eq!(
+        zones.weakest_fighting(1, 1, 15.0).map(|m| m.id),
+        Some(2),
+        "the lowest percent of those fighting the user: 3 fights another"
+    );
+    assert_eq!(zones.weakest_fighting(1, 2, 15.0).map(|m| m.id), Some(3), "the stranger's own");
+    fighting(&zones, 1, 1, 200);
+    assert_eq!(zones.weakest_fighting(1, 1, 15.0).map(|m| m.id), Some(1), "a tie: the nearest, then the lower id");
+    zones.mobs.guard().get_mut(&1).unwrap().mobs.get_mut(&1).unwrap().position = [100.0, 0.0, 112.0];
+    assert_eq!(zones.weakest_fighting(1, 1, 15.0).map(|m| m.id), Some(2), "the nearer of two at 20 percent");
+    assert_eq!(zones.weakest_fighting(1, 1, 4.0).map(|m| m.id), None, "range 4: the monsters stand 5 away");
+    zones.mobs.guard().get_mut(&1).unwrap().mobs.get_mut(&2).unwrap().dead_until = Some(Instant::now());
+    assert_eq!(zones.weakest_fighting(1, 1, 15.0).map(|m| m.id), Some(1), "a body is not a target");
+    assert!(zones.weakest_fighting(1, 9, 15.0).is_none() && zones.weakest_fighting(2, 1, 15.0).is_none());
+}
+
+#[test]
+fn only_a_normal_monster_of_a_spawn_area_can_be_caught() {
+    use crate::boss::{FileBossGroup, FileFollowers};
+    let (mut world, defs, zones, _, _) = catch_ground();
+    let (capture, egg) = net(serde_json::json!({}));
+    let mob = || zones.mob(1, 1).unwrap();
+    let def = *defs.get(7).unwrap();
+    let can =
+        |zones: &Zones, world: &World, mob: &Mob, def: &MobDef, capture, egg, level| zones.can_catch(mob, def, world, capture, egg, level);
+    assert!(can(&zones, &world, &mob(), &def, &capture, &egg, 1), "a normal monster");
+    // Where it came from, and what runs it.
+    let changed = |change: &dyn Fn(&mut Mob)| {
+        let mut m = mob();
+        change(&mut m);
+        m
+    };
+    for (what, m) in [
+        ("obelisk", changed(&|m| m.origin = Origin::Obelisk(0))),
+        ("guard", changed(&|m| m.origin = Origin::Guard { obelisk: 0, group: 0, generation: 0 })),
+        ("boss", changed(&|m| m.origin = Origin::Boss(0))),
+        ("follower", changed(&|m| m.origin = Origin::Follower { chain: 0, set: 0, generation: 0 })),
+        ("chest", changed(&|m| m.origin = Origin::Chest(0))),
+        ("lua", changed(&|m| m.lua = true)),
+        ("scripted", changed(&|m| m.scripted = true)),
+        ("unbeatable", changed(&|m| m.unbeatable = true)),
+    ] {
+        assert!(!can(&zones, &world, &m, &def, &capture, &egg, 1), "{what}");
+    }
+    // A monster an extension's script spawned ("monster madness").
+    zones
+        .ext_spawns
+        .guard()
+        .insert(1, script::ExtSpawn { extension: "madness".into(), map: 1, until: Instant::now(), exp: true, drops: true });
+    assert!(!can(&zones, &world, &mob(), &def, &capture, &egg, 1), "script-spawned");
+    zones.ext_spawns.guard().clear();
+    // A quest monster.
+    assert!(!can(&zones, &world, &mob(), &MobDef { quest_item: Some((27, 3)), ..def }, &capture, &egg, 1), "drops a quest item");
+    // The egg has no record for it, or the net excepts it.
+    let (_, other_egg) = net(serde_json::json!({}));
+    let only_8 = crate::effects::PetEgg { monsters: vec![(8, 9)], ..other_egg };
+    assert!(!can(&zones, &world, &mob(), &def, &capture, &only_8, 1), "no pet record");
+    let (excepting, _) = net(serde_json::json!({ "except": [5, "6-8"] }));
+    assert!(!can(&zones, &world, &mob(), &def, &excepting, &egg, 1), "excepted");
+    let (elsewhere, _) = net(serde_json::json!({ "except": [8] }));
+    assert!(can(&zones, &world, &mob(), &def, &elsewhere, &egg, 1), "another id excepted");
+    // The level: the monster is level 5.
+    let (limited, _) = net(serde_json::json!({ "levels_above": 3 }));
+    assert!(
+        !can(&zones, &world, &mob(), &def, &limited, &egg, 1) && can(&zones, &world, &mob(), &def, &limited, &egg, 2),
+        "4 is too low, 5 is 2 + 3"
+    );
+    // A boss group names its id: a boss, a follower or a chest.
+    let group = |mobs: Vec<u16>, followers: Vec<u16>| FileBossGroup {
+        number: 1,
+        map: 1,
+        respawn_secs: 60,
+        portal: (1, 0),
+        position: [10.0, 0.0, 10.0],
+        mobs,
+        random: None,
+        followers: vec![FileFollowers { centre: [10.0, 0.0, 10.0], radius: 5.0, mobs: followers, count: 1 }],
+    };
+    for (what, file) in [
+        ("a boss", group(vec![7, 9], vec![0, 0, 0])),
+        ("a follower", group(vec![9, 9], vec![0, 7, 0])),
+        ("a chest", group(vec![9, 9], vec![0, 0, 7])),
+    ] {
+        let both = MobDefs::new([def, MobDef { id: 9, level: 5, hp: 100, ..def }]);
+        world.set_boss_groups(&[file], &both);
+        assert!(!can(&zones, &world, &mob(), &def, &capture, &egg, 1), "{what} that also stands in an area is a boss");
+    }
+    world.set_boss_groups(&[], &defs);
+    assert!(can(&zones, &world, &mob(), &def, &capture, &egg, 1));
+}
+
+#[test]
+fn a_catch_takes_the_monster_out_as_a_death_without_rewards_and_it_respawns() {
+    let (world, defs, zones, mut a_in, mut b_in) = catch_ground();
+    let now = Instant::now();
+    let (events, mut a_ev) = unbounded_channel();
+    edit(&zones, 1, |p| p.occupant.events = events);
+    fighting(&zones, 1, 1, 100);
+    // Not while healthy, fighting another or too far gone.
+    fighting(&zones, 2, 1, 900);
+    assert_eq!(zones.capture_take(1, 1, 2, 30, now), None, "90 percent is above 30");
+    assert_eq!(zones.capture_take(1, 2, 1, 30, now), None, "it fights the user, not player 2");
+    assert_eq!(zones.capture_take(1, 1, 99, 30, now), None, "no such monster");
+    assert!(drain(&mut a_in).is_empty() && drain(&mut b_in).is_empty());
+    // The catch: 0x0602 at once, to everyone in view; the monster is a body due now.
+    assert_eq!(zones.capture_take(1, 1, 1, 30, now), Some(7));
+    assert_eq!(drain(&mut a_in), [(0x0602, 1)]);
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
+    let body = zones.mob(1, 1).unwrap();
+    assert_eq!((body.hp, body.state, body.dead_until), (0, MobState::Idle, Some(now)));
+    assert_eq!(zones.weakest_fighting(1, 1, 15.0).map(|m| m.id), Some(2), "the caught one is not a candidate any more");
+    assert_eq!(zones.capture_take(1, 1, 1, 30, now), None, "not twice");
+    // Nothing a death gives: no event for experience, kills or quests, no gold or item on the ground, no 0x0606.
+    assert!(a_ev.try_recv().is_err());
+    assert!(zones.ground.guard().get(&1).is_none_or(|g| g.items.is_empty()));
+    // The body pass removes it and counts its spawn entry down; the entry is not full any more and spawns again after the respawn time.
+    assert_eq!(zones.mob_count(1), 3);
+    assert_eq!(zones.remove_bodies(now, &defs, &mut || 0), 1);
+    assert_eq!(drain(&mut a_in), [(0x0602, 1)]);
+    assert_eq!(zones.mob_count(1), 2);
+    assert_eq!(zones.respawn(now + Duration::from_secs(60), &world, &defs, &mut || 0), 1, "respawned as usual");
+    assert_eq!(zones.mob_count(1), 3);
+}
+
+#[test]
+fn the_egg_counter_makes_two_catches_in_a_second_differ() {
+    let zones = Zones::default();
+    let a = zones.next_egg_counter();
+    let b = zones.next_egg_counter();
+    assert_eq!((a, b), (0, 1));
+    for _ in 0..254 {
+        zones.next_egg_counter();
+    }
+    assert_eq!(zones.next_egg_counter(), 0, "it wraps");
+}

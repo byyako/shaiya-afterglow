@@ -1119,6 +1119,8 @@ struct WorldState {
     /// stored one was looked at (the first entering of a login).
     pet: Option<pets::ActivePet>,
     pet_loaded: bool,
+    /// A whisper to send after the answer of the item being used (`items::use_item`).
+    after_use: Option<&'static str>,
     /// The money and the bags, changed by shops and saved with every change.
     money: u32,
     /// The money at entering the world (the game log's `firstmoney`).
@@ -1275,6 +1277,7 @@ async fn in_world<S: Backend>(
         rename_stone_used: false,
         pet: None,
         pet_loaded: false,
+        after_use: None,
         money: character.money,
         first_money: character.money,
         inventory,
