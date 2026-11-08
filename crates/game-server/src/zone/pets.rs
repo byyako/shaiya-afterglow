@@ -42,6 +42,26 @@ pub struct PetLook {
     pub loot: Option<PetLoot>,
 }
 
+/// What a shown pet is doing (section 10.2).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PetState {
+    /// Following its owner, looking for a drop to fetch.
+    Follow,
+    /// Running to a drop; it arrives at `arrive`.
+    Fetch { item: u32, arrive: Instant },
+    /// Standing on the drop, waiting for its owner's connection to pick it up (at most 5 s).
+    Waiting { item: u32, since: Instant },
+}
+
+/// How often a pet waiting on a drop looks whether it is picked up.
+const WAIT_POLL: Duration = Duration::from_millis(200);
+/// The real type of a quest item (`real_type` 27).
+const QUEST_REAL_TYPE: u8 = 27;
+/// How long a pet waits on a drop for the pick-up before it skips the item.
+const WAIT_ON_DROP: Duration = Duration::from_secs(5);
+/// A fetch is given up when the owner gets this much farther than `loot_range` from the pet.
+const FETCH_SLACK: f32 = 10.0;
+
 /// Why a pet that is out is not shown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Hide {
@@ -63,6 +83,9 @@ pub(super) struct Pet {
     next_step: Instant,
     next_check: Instant,
     hidden: Option<Hide>,
+    state: PetState,
+    /// Drops it gave up (no room, no answer): not tried again. Cleared when it hides, pruned of drops gone at each check.
+    skipped: Vec<u32>,
 }
 
 /// The pets of one map.
@@ -185,7 +208,22 @@ impl Zones {
             None
         };
         let position = follow_spot(me.occupant.position, me.occupant.position);
-        pets.pets.insert(id, Pet { id, owner, look, egg, position, cell: None, next_step: now, next_check: now + CHECK_EVERY, hidden });
+        pets.pets.insert(
+            id,
+            Pet {
+                id,
+                owner,
+                look,
+                egg,
+                position,
+                cell: None,
+                next_step: now,
+                next_check: now + CHECK_EVERY,
+                hidden,
+                state: PetState::Follow,
+                skipped: Vec::new(),
+            },
+        );
         pets.owners.insert(owner, id);
         if hidden.is_none() {
             Self::pet_appears(pets, players, id, true);
@@ -240,6 +278,56 @@ impl Zones {
         pets_in_view(self.pets.guard().get(&map), cell, except)
     }
 
+    /// The drop `item_id` as the pet of `owner` may take it (section 10.2): still on the ground, its monster-drop owner `owner`, within
+    /// the pick-up range (10) of the pet, and a quest item only when `quest_ok` says so. `Err` carries the `0x0205` code as `pick_up`'s.
+    pub fn pet_peek(&self, map: u16, owner: u32, item_id: u32, quest_ok: impl Fn(u8, u8) -> bool) -> Result<GroundItem, u8> {
+        let pets = self.pets.guard();
+        let ground = self.ground.guard();
+        let pet = pets.get(&map).and_then(|m| m.owners.get(&owner).and_then(|id| m.pets.get(id))).ok_or(gp::PICK_GONE)?;
+        let item = *ground.get(&map).and_then(|g| g.items.get(&item_id)).ok_or(gp::PICK_GONE)?;
+        if !item.from_mob() || item.owner != owner {
+            return Err(gp::PICK_NOT_YOURS);
+        }
+        if distance(pet.position, item.position) > PICK_RANGE {
+            return Err(gp::PICK_TOO_FAR);
+        }
+        if let Loot::Item { item_type, type_id, .. } = item.loot
+            && real_type(item_type) == QUEST_REAL_TYPE
+            && !quest_ok(item_type, type_id)
+        {
+            return Err(gp::PICK_NO_QUEST);
+        }
+        Ok(item)
+    }
+
+    /// Takes the drop off the ground for the owner of a pet standing on it (`pick_up` for a pet): the checks of [`Zones::pet_peek`], then
+    /// `0x0402` to the view, the owner's own returned.
+    pub fn pet_pick_up(&self, map: u16, owner: u32, item_id: u32, quest_ok: impl Fn(u8, u8) -> bool) -> Result<(GroundItem, Vec<u8>), u8> {
+        let item = self.pet_peek(map, owner, item_id, quest_ok)?;
+        let maps = self.maps.guard();
+        let mut ground = self.ground.guard();
+        let ground = ground.get_mut(&map).ok_or(gp::PICK_GONE)?;
+        ground.remove(item_id).ok_or(gp::PICK_GONE)?;
+        let packet = gp::item_leave(item_id);
+        for p in maps.get(&map).into_iter().flat_map(HashMap::values).filter(|p| p.occupant.id != owner && in_view(p.cell, item.cell)) {
+            p.send(&packet);
+        }
+        Ok((item, packet))
+    }
+
+    /// The pet gives a drop up (no room for it): it stays on the ground, untouched, and is not tried again.
+    pub fn pet_skip(&self, map: u16, owner: u32, item_id: u32) {
+        let mut pets = self.pets.guard();
+        if let Some(m) = pets.get_mut(&map)
+            && let Some(id) = m.owners.get(&owner).copied()
+        {
+            m.set(id, |pet| {
+                pet.skipped.push(item_id);
+                pet.state = PetState::Follow;
+            });
+        }
+    }
+
     /// A pet leaves: `0x0602` to the players in view of it, and it is forgotten.
     fn pet_gone(pets: &mut PetMap, players: &HashMap<u32, Placed>, id: u32) {
         let Some(pet) = pets.remove(id) else { return };
@@ -265,6 +353,8 @@ impl Zones {
     fn pet_hides(pets: &mut PetMap, players: &HashMap<u32, Placed>, id: u32, why: Hide) {
         let Some(pet) = pets.pets.get_mut(&id) else { return };
         pet.hidden = Some(why);
+        pet.state = PetState::Follow;
+        pet.skipped.clear();
         let Some(cell) = pet.cell else { return };
         pets.put_in_cell(id, None);
         let packet = w::mob_leave(id);
@@ -296,13 +386,28 @@ impl Zones {
     /// The pets pass (section 5.3; `server/tasks.rs` runs it with the monsters'): for each pet whose time has come, hide or show it by its
     /// owner's state and the `pet` rules (asked every 5 s), then snap it to its owner beyond 20, walk or run it to its follow spot beyond
     /// 4, or let it stay. A pet whose owner is no longer on the map is removed. Returns at once when no map has a pet.
-    pub fn pets(&self, now: Instant) {
+    ///
+    /// A pet whose egg has `loot` fetches its owner's drops while it follows (section 10): the nearest drop of its owner's within its
+    /// range of the owner, gold only with `gold`, a quest item only when `quest_ok(item type, type id, the owner's quests)` says the
+    /// owner's quests take it. The owner must be alive and in no trade or personal shop.
+    pub fn pets(&self, now: Instant, quest_ok: &dyn Fn(u8, u8, &[u16]) -> bool) {
         if !self.any_pets() {
             return;
         }
         let rules = self.rules();
         let maps = self.maps.guard();
+        // Who cannot be served a drop now: in a trade (the trades lock comes after `maps`, so it is read before `pets`), a personal shop or
+        // looking at one.
+        let busy: std::collections::HashSet<u32> = {
+            let trades = self.trades.guard();
+            maps.values()
+                .flatten()
+                .filter(|(id, p)| p.shop.is_some() || p.visiting.is_some() || trades.busy(**id))
+                .map(|(id, _)| *id)
+                .collect()
+        };
         let mut all = self.pets.guard();
+        let ground = self.ground.guard();
         for (&map, pets) in all.iter_mut() {
             if pets.pets.is_empty() {
                 continue;
@@ -336,7 +441,12 @@ impl Zones {
                         });
                     }
                     ruled = refusal.is_some();
-                    pets.set(id, |pet| pet.next_check = now + CHECK_EVERY);
+                    // The drops it gave up that are gone from the ground are forgotten.
+                    let on_ground = |item: &u32| ground.get(&map).is_some_and(|g| g.items.contains_key(item));
+                    pets.set(id, |pet| {
+                        pet.next_check = now + CHECK_EVERY;
+                        pet.skipped.retain(on_ground);
+                    });
                 }
                 let why = if owner.away {
                     Some(Hide::Owner)
@@ -368,6 +478,78 @@ impl Zones {
                     }
                     None => {}
                 }
+                // Fetching a drop (section 10.2).
+                if let Some((state, loot)) = pets.pets.get(&id).map(|pet| (pet.state, pet.look.loot)) {
+                    let items = ground.get(&map).map(|g| &g.items);
+                    let mine = |item: u32| items.and_then(|items| items.get(&item)).filter(|i| i.from_mob() && i.owner == owner_id);
+                    let range = loot.map_or(0.0, |l| l.range);
+                    match state {
+                        PetState::Fetch { item, arrive } => {
+                            let valid = loot.is_some()
+                                && !busy.contains(&owner_id)
+                                && mine(item).is_some()
+                                && distance(owner.position, position) <= range + FETCH_SLACK;
+                            if !valid {
+                                pets.set(id, |pet| pet.state = PetState::Follow);
+                            } else if now >= arrive {
+                                let _ = me.occupant.events.send(ZoneEvent::PetLoot { item });
+                                pets.set(id, |pet| {
+                                    pet.state = PetState::Waiting { item, since: now };
+                                    pet.next_step = now + WAIT_POLL;
+                                });
+                                continue;
+                            } else {
+                                pets.set(id, |pet| pet.next_step = arrive);
+                                continue;
+                            }
+                        }
+                        PetState::Waiting { item, since } => {
+                            if mine(item).is_none() {
+                                pets.set(id, |pet| pet.state = PetState::Follow);
+                            } else if now >= since + WAIT_ON_DROP {
+                                // No answer: skipped, and the pet follows again.
+                                pets.set(id, |pet| {
+                                    pet.skipped.push(item);
+                                    pet.state = PetState::Follow;
+                                });
+                            } else {
+                                pets.set(id, |pet| pet.next_step = now + WAIT_POLL);
+                                continue;
+                            }
+                        }
+                        PetState::Follow => {}
+                    }
+                    if let (Some(loot), Some(items), PetState::Follow) =
+                        (loot, items, pets.pets.get(&id).map_or(PetState::Follow, |pet| pet.state))
+                        && !busy.contains(&owner_id)
+                    {
+                        let skipped = pets.pets.get(&id).map(|pet| pet.skipped.clone()).unwrap_or_default();
+                        let wanted = items
+                            .values()
+                            .filter(|i| i.from_mob() && i.owner == owner_id && !skipped.contains(&i.id))
+                            .filter(|i| distance(owner.position, i.position) <= loot.range)
+                            .filter(|i| match i.loot {
+                                Loot::Gold(_) => loot.gold,
+                                Loot::Item { item_type, type_id, .. } => {
+                                    real_type(item_type) != QUEST_REAL_TYPE
+                                        || quest_ok(item_type, type_id, self.quests.guard().get(&owner_id).map_or(&[][..], Vec::as_slice))
+                                }
+                            })
+                            .min_by(|a, b| distance(a.position, position).total_cmp(&distance(b.position, position)).then(a.id.cmp(&b.id)))
+                            .copied();
+                        if let Some(item) = wanted {
+                            // Run to it; the item's spot is where the pet is, then.
+                            let arrive = now + travel(distance(position, item.position), PET_RUN);
+                            pets.set(id, |pet| {
+                                pet.state = PetState::Fetch { item: item.id, arrive };
+                                pet.next_step = arrive;
+                            });
+                            Self::pet_walks(pets, players, id, item.position, 1);
+                            continue;
+                        }
+                    }
+                }
+                let position = pets.pets.get(&id).map_or(position, |pet| pet.position);
                 let apart = distance(owner.position, position);
                 let spot = follow_spot(owner.position, position);
                 if apart > SNAP_ABOVE {

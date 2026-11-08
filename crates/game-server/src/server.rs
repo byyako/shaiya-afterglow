@@ -1724,6 +1724,8 @@ async fn world_loop<S: Backend>(
                     ZoneEvent::Trade => trade_exchange(ctx, character, state).await?,
                     ZoneEvent::GuildAgreed => found_guild(ctx, id, state).await,
                     ZoneEvent::PartyCalled { until } => state.party_call_due = Some(until),
+                    // The pet stands on a drop of this player's: the pick-up is this connection's (section 10.2).
+                    ZoneEvent::PetLoot { item } => pets::fetched(conn, ctx, character, state, item).await?,
                     // A `deny pet` rule started to match: the pet is hidden, the player told once (the limit of every refusal).
                     ZoneEvent::PetRuled { rule, name, text } => {
                         refused::tell_refused(conn, state, &crate::rules::Refusal { rule, name, text }).await?
@@ -4436,6 +4438,19 @@ async fn pick_up<S: Backend>(ctx: &Context<S>, character: &PlayCharacter, state:
         Err(gp::PICK_GONE) => return Ok(Vec::new()),
         Err(code) => return Ok(vec![gp::pick_up_failed(code)]),
     };
+    take_loot(ctx, character, state, item, leave).await
+}
+
+/// What a pick-up does with an item it has taken off the ground (also the pet's, `pets::fetched`): gold into the money, an item into the
+/// bags, what does not fit back on the ground. `leave` is the owner's `0x0402`.
+async fn take_loot<S: Backend>(
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    state: &mut WorldState,
+    item: crate::zone::GroundItem,
+    leave: Vec<u8>,
+) -> Result<Vec<Vec<u8>>> {
+    let (id, map, now, item_id) = (character.id, state.map, Instant::now(), item.id);
     let mut out = vec![leave];
     match item.loot {
         Loot::Gold(amount) => {

@@ -4590,11 +4590,11 @@ fn a_pet_follows_walks_runs_and_snaps() {
     let owner_at = |x: f32, z: f32| edit(&zones, 1, |p| p.occupant.position = [x, 0.0, z]);
     // Within 4: it stays.
     owner_at(104.0, 100.0);
-    zones.pets(t0);
+    zones.pets(t0, &|_, _, _| false);
     assert!(drain(&mut b_in).is_empty());
     // 4.5 to 8 away: it walks to the follow spot (2.5 from the owner on the line to the pet), motion 0.
     owner_at(108.0, 100.0);
-    zones.pets(t0 + Duration::from_secs(1));
+    zones.pets(t0 + Duration::from_secs(1), &|_, _, _| false);
     let seen = received(&mut b_in);
     assert_eq!(opcodes(&seen), [0x0603]);
     let walk = payload(&seen[0]);
@@ -4607,18 +4607,18 @@ fn a_pet_follows_walks_runs_and_snaps() {
     // Over 8 away: it runs.
     received(&mut a_in);
     owner_at(120.0, 100.0);
-    zones.pets(t0 + Duration::from_secs(3));
+    zones.pets(t0 + Duration::from_secs(3), &|_, _, _| false);
     let seen = received(&mut a_in);
     assert_eq!(opcodes(&seen), [0x0603]);
     assert_eq!(payload(&seen[0])[4], 1, "motion 1: run");
     // The pet is not asked again before its step is over: the walk of 14.5 at 9.7 a second takes 1.5 s.
-    zones.pets(t0 + Duration::from_millis(3_500));
+    zones.pets(t0 + Duration::from_millis(3_500), &|_, _, _| false);
     owner_at(60.0, 60.0);
-    zones.pets(t0 + Duration::from_millis(3_600));
+    zones.pets(t0 + Duration::from_millis(3_600), &|_, _, _| false);
     assert!(drain(&mut a_in).is_empty(), "next_step not come");
     // Over 20 away: it snaps (0x0602 then 0x0601 with new = 0 at the spot), whatever the time.
     received(&mut b_in);
-    zones.pets(t0 + Duration::from_secs(10));
+    zones.pets(t0 + Duration::from_secs(10), &|_, _, _| false);
     let seen = received(&mut b_in);
     assert_eq!(opcodes(&seen), [0x0602, 0x0601, 0x0608], "0x0602, then 0x0601 again at the spot");
     assert_eq!(payload(&seen[1])[4], 0, "new = 0: it was there");
@@ -4634,23 +4634,23 @@ fn a_pet_is_hidden_while_its_owner_is_dead_or_invisible_and_comes_back() {
     received(&mut a_in);
     received(&mut b_in);
     edit(&zones, 1, |p| p.dead = true);
-    zones.pets(t0);
+    zones.pets(t0, &|_, _, _| false);
     assert_eq!(drain(&mut b_in), [(0x0602, 1)], "hidden: 0x0602");
     assert_eq!(zones.pet_position(1, 1), None, "hidden: not in a cell, nothing to answer 0x0304 with");
     assert_eq!(zones.pet_egg(1, 1), Some(EGG), "but still out");
-    zones.pets(t0 + Duration::from_secs(1));
+    zones.pets(t0 + Duration::from_secs(1), &|_, _, _| false);
     assert!(drain(&mut b_in).is_empty(), "nothing while it stays hidden");
     edit(&zones, 1, |p| p.dead = false);
-    zones.pets(t0 + Duration::from_secs(2));
+    zones.pets(t0 + Duration::from_secs(2), &|_, _, _| false);
     let seen = received(&mut b_in);
     assert_eq!(opcodes(&seen), [0x0601, 0x0608]);
     assert_eq!(payload(&seen[0])[4], 1, "it comes out again, new = 1");
     // A staff member who goes invisible: hidden too (a pet must not give the GM away).
     edit(&zones, 1, |p| p.occupant.visible = false);
-    zones.pets(t0 + Duration::from_secs(3));
+    zones.pets(t0 + Duration::from_secs(3), &|_, _, _| false);
     assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
     edit(&zones, 1, |p| p.occupant.visible = true);
-    zones.pets(t0 + Duration::from_secs(4));
+    zones.pets(t0 + Duration::from_secs(4), &|_, _, _| false);
     assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
     // The owner dying while the pet is hidden by the rules etc. is covered by the same path; a pet that is out while its owner is dead at
     // the summon stays hidden.
@@ -4658,7 +4658,7 @@ fn a_pet_is_hidden_while_its_owner_is_dead_or_invisible_and_comes_back() {
     zones.summon_pet(1, 1, look(), EGG, t0 + Duration::from_secs(5), false);
     assert!(opcodes(&received(&mut b_in)).iter().all(|op| *op != 0x0601), "summoned while dead: nothing shown");
     edit(&zones, 1, |p| p.dead = false);
-    zones.pets(t0 + Duration::from_secs(6));
+    zones.pets(t0 + Duration::from_secs(6), &|_, _, _| false);
     assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
 }
 
@@ -4672,25 +4672,25 @@ fn a_deny_pet_rule_hides_the_pet_every_five_seconds_and_lifts() {
     received(&mut b_in);
     put_rules(&zones, &[("no-pets-in-town", json!({ "type": "deny", "point": "pet", "maps": [1] }))]);
     // The rules are asked every 5 seconds, not before.
-    zones.pets(t0 + Duration::from_secs(1));
+    zones.pets(t0 + Duration::from_secs(1), &|_, _, _| false);
     assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
-    zones.pets(t0 + Duration::from_secs(5));
+    zones.pets(t0 + Duration::from_secs(5), &|_, _, _| false);
     assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
     let Ok(ZoneEvent::PetRuled { name, text, .. }) = a_ev.try_recv() else { panic!("the owner is told") };
     assert_eq!((&*name, text.as_deref()), ("no-pets-in-town", Some("Pets cannot come out here.")));
     // Once: the next checks do not tell again.
-    zones.pets(t0 + Duration::from_secs(7));
-    zones.pets(t0 + Duration::from_secs(10));
-    zones.pets(t0 + Duration::from_secs(15));
+    zones.pets(t0 + Duration::from_secs(7), &|_, _, _| false);
+    zones.pets(t0 + Duration::from_secs(10), &|_, _, _| false);
+    zones.pets(t0 + Duration::from_secs(15), &|_, _, _| false);
     assert!(a_ev.try_recv().is_err() && drain(&mut b_in).is_empty());
     assert_eq!(zones.pet_egg(1, 1), Some(EGG), "still out");
     // The rule stops matching (a reload): the pet comes back at the next check.
     put_rules(&zones, &[]);
-    zones.pets(t0 + Duration::from_secs(20));
+    zones.pets(t0 + Duration::from_secs(20), &|_, _, _| false);
     assert_eq!(opcodes(&received(&mut b_in)), [0x0601, 0x0608]);
     // A rule scoped to other maps never matches.
     put_rules(&zones, &[("elsewhere", json!({ "type": "deny", "point": "pet", "maps": [2] }))]);
-    zones.pets(t0 + Duration::from_secs(30));
+    zones.pets(t0 + Duration::from_secs(30), &|_, _, _| false);
     assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
 }
 
@@ -4758,7 +4758,7 @@ fn a_second_summon_replaces_the_first_and_leaving_takes_the_pet() {
     assert!(seen.contains(&(0x0602, 3)) && seen.contains(&(0x0202, 1)), "the pet and the owner leave the viewer's view: {seen:x?}");
     assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 0);
     // The pass finds nothing to do.
-    zones.pets(now + Duration::from_secs(10));
+    zones.pets(now + Duration::from_secs(10), &|_, _, _| false);
 }
 
 #[test]
@@ -4768,7 +4768,7 @@ fn a_pet_whose_owner_is_gone_without_leaving_is_removed_by_the_pass() {
     zones.summon_pet(1, 1, look(), EGG, now, false);
     received(&mut b_in);
     zones.maps.guard().get_mut(&1).unwrap().remove(&1);
-    zones.pets(now);
+    zones.pets(now, &|_, _, _| false);
     assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
     assert_eq!(zones.pets.guard().get(&1).map_or(0, |m| m.pets.len()), 0);
 }
@@ -4961,4 +4961,201 @@ fn the_egg_counter_makes_two_catches_in_a_second_differ() {
         zones.next_egg_counter();
     }
     assert_eq!(zones.next_egg_counter(), 0, "it wraps");
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Auto-loot (docs/plans/ext-4-pets.md section 10)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+fn gold(amount: u32) -> Loot {
+    Loot::Gold(amount)
+}
+
+fn potion(type_id: u8) -> Loot {
+    Loot::Item { item_type: 25, type_id, count: 1, quality: 0, kept: None }
+}
+
+/// A pet with `loot` out beside the owner (1, at (100, 100)) with a viewer (2) in view; the owner's events; inboxes drained.
+fn loot_ground(range: f32, with_gold: bool) -> (Zones, [crate::outbox::OutboxInbox; 2], UnboundedReceiver<ZoneEvent>, Instant) {
+    let (zones, [mut a_in, mut b_in, _], a_ev) = pets_ground();
+    let now = Instant::now();
+    let look = PetLook { record: 3007, wild: 7, loot: Some(PetLoot { range, gold: with_gold }) };
+    zones.summon_pet(1, 1, look, EGG, now, false);
+    received(&mut a_in);
+    received(&mut b_in);
+    (zones, [a_in, b_in], a_ev, now)
+}
+
+fn drop_at(zones: &Zones, loot: Loot, x: f32, owner: u32, dropped: Dropped, now: Instant) {
+    zones.drop_on_ground(1, loot, [x, 0.0, 100.0], owner, 0, now, 1, dropped);
+}
+
+fn ground_ids(zones: &Zones) -> Vec<u32> {
+    let mut ids: Vec<u32> = zones.ground_items(1).iter().map(|i| i.id).collect();
+    ids.sort();
+    ids
+}
+
+fn nothing_to_ask(_: u8, _: u8, _: &[u16]) -> bool {
+    false
+}
+
+#[test]
+fn a_pet_fetches_only_its_owners_monster_drops_nearest_first() {
+    let (zones, [mut a_in, mut b_in], mut a_ev, t0) = loot_ground(15.0, true);
+    // Four drops on the ground: a party member's monster drop (owner 2), a drop the owner dropped itself, a drop at a death, and the
+    // owner's own monster drops, 8 and 3 units from the pet (which stands 2.5 east of the owner).
+    drop_at(&zones, potion(1), 110.0, 2, Dropped::MOB, t0);
+    drop_at(&zones, potion(2), 101.0, 1, Dropped::player(1), t0);
+    drop_at(&zones, potion(3), 102.0, 1, Dropped { kind: 3, by: 9 }, t0);
+    drop_at(&zones, potion(4), 108.0, 1, Dropped::MOB, t0);
+    drop_at(&zones, gold(50), 104.0, 1, Dropped::MOB, t0);
+    let ids = ground_ids(&zones);
+    let [_, _, _, far, near] = ids[..] else { panic!("five drops: {ids:?}") };
+    received(&mut a_in);
+    received(&mut b_in);
+    zones.pets(t0, &nothing_to_ask);
+    // It runs for the nearest of the owner's (the gold, 1.5 from the pet), not for the others.
+    let seen = received(&mut b_in);
+    assert_eq!(opcodes(&seen), [0x0603]);
+    assert_eq!(payload(&seen[0])[4], 1, "a run");
+    assert_eq!(zones.pet_position(1, 1), Some([104.0, 0.0, 100.0]), "it stands on the drop");
+    // Before it arrives nothing is asked of the owner.
+    assert!(a_ev.try_recv().is_err());
+    zones.pets(t0 + Duration::from_millis(50), &nothing_to_ask);
+    assert!(a_ev.try_recv().is_err(), "not due yet");
+    zones.pets(t0 + Duration::from_secs(1), &nothing_to_ask);
+    assert_eq!(a_ev.try_recv().ok(), Some(ZoneEvent::PetLoot { item: near }), "at arrival the owner's connection is asked to pick it up");
+    assert!(a_ev.try_recv().is_err());
+    // The connection takes it from the pet's spot: the view loses the item.
+    let (taken, _) = zones.pet_pick_up(1, 1, near, |_, _| true).expect("the pet is on it");
+    assert_eq!(taken.id, near);
+    assert_eq!(drain(&mut b_in).last(), Some(&(0x0402, near)), "the other players see the item vanish");
+    // The pet goes on to the next nearest of the owner's: the potion 4 away.
+    zones.pets(t0 + Duration::from_secs(2), &nothing_to_ask);
+    assert_eq!(zones.pet_position(1, 1), Some([108.0, 0.0, 100.0]));
+    assert_eq!(ground_ids(&zones).len(), 4);
+    let _ = (far, &mut a_in);
+}
+
+#[test]
+fn gold_follows_the_eggs_option_and_a_quest_item_the_owners_quests() {
+    let (zones, [_, mut b_in], mut a_ev, t0) = loot_ground(15.0, false);
+    let quest_item = Loot::Item { item_type: 27, type_id: 3, count: 1, quality: 0, kept: None };
+    drop_at(&zones, gold(50), 103.0, 1, Dropped::MOB, t0);
+    drop_at(&zones, quest_item, 104.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    // No gold option and no quest wants the item: nothing to fetch.
+    zones.pets(t0, &nothing_to_ask);
+    assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
+    // The owner's quests take it (the same test a pick-up asks).
+    zones.set_quests(1, vec![17]);
+    zones.pets(t0 + Duration::from_secs(1), &|item_type, type_id, quests| (item_type, type_id) == (27, 3) && quests.contains(&17));
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0603], "the quest item, not the gold");
+    assert_eq!(zones.pet_position(1, 1), Some([104.0, 0.0, 100.0]));
+    zones.pets(t0 + Duration::from_secs(3), &|_, _, _| true);
+    let Ok(ZoneEvent::PetLoot { item }) = a_ev.try_recv() else { panic!("asked to pick it up") };
+    assert!(zones.pet_peek(1, 1, item, |_, _| false).is_err_and(|code| code == gp::PICK_NO_QUEST), "the pick-up asks the same test");
+    assert!(zones.pet_peek(1, 1, item, |_, _| true).is_ok());
+    // With the gold option the gold is fetched too.
+    let (zones, [_, mut b_in], _, t0) = loot_ground(15.0, true);
+    drop_at(&zones, gold(50), 103.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    zones.pets(t0, &nothing_to_ask);
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0603]);
+}
+
+#[test]
+fn the_range_is_from_the_owner_and_a_fetch_ends_when_the_owner_leaves() {
+    let (zones, [_, mut b_in], mut a_ev, t0) = loot_ground(5.0, true);
+    drop_at(&zones, potion(1), 108.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    zones.pets(t0, &nothing_to_ask);
+    assert!(drain(&mut b_in).is_empty(), "8 from the owner, the range is 5");
+    drop_at(&zones, potion(2), 104.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    zones.pets(t0 + Duration::from_secs(1), &nothing_to_ask);
+    assert_eq!(opcodes(&received(&mut b_in)), [0x0603]);
+    // The owner runs off beyond the range and 10 more: the pet gives the fetch up and follows.
+    edit(&zones, 1, |p| p.occupant.position = [140.0, 0.0, 100.0]);
+    zones.pets(t0 + Duration::from_secs(3), &nothing_to_ask);
+    assert!(a_ev.try_recv().is_err(), "no pick-up is asked of an owner who left");
+    zones.pets(t0 + Duration::from_secs(4), &nothing_to_ask);
+    assert_eq!(zones.pet_position(1, 1).map(|p| (p[0] - 140.0).abs() < 5.0), Some(true), "back with its owner");
+}
+
+#[test]
+fn a_drop_nobody_takes_is_skipped_after_five_seconds_and_no_room_skips_it_at_once() {
+    let (zones, [mut a_in, mut b_in], mut a_ev, t0) = loot_ground(15.0, true);
+    drop_at(&zones, potion(1), 104.0, 1, Dropped::MOB, t0);
+    received(&mut a_in);
+    received(&mut b_in);
+    zones.pets(t0, &nothing_to_ask);
+    zones.pets(t0 + Duration::from_secs(1), &nothing_to_ask);
+    assert!(matches!(a_ev.try_recv(), Ok(ZoneEvent::PetLoot { .. })));
+    // The pick-up never comes: it waits, then gives the drop up and follows (not asked again).
+    for second in 2..=5 {
+        zones.pets(t0 + Duration::from_secs(second), &nothing_to_ask);
+    }
+    assert!(a_ev.try_recv().is_err(), "waiting");
+    zones.pets(t0 + Duration::from_millis(6_200), &nothing_to_ask);
+    zones.pets(t0 + Duration::from_secs(10), &nothing_to_ask);
+    zones.pets(t0 + Duration::from_secs(12), &nothing_to_ask);
+    assert!(a_ev.try_recv().is_err(), "skipped: not asked again");
+    assert_eq!(ground_ids(&zones).len(), 1, "and the drop is still on the ground, untouched");
+    // No room: the connection says so, the drop stays and is skipped at once.
+    drop_at(&zones, potion(2), 105.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    let second = *ground_ids(&zones).last().unwrap();
+    zones.pets(t0 + Duration::from_secs(13), &nothing_to_ask);
+    zones.pets(t0 + Duration::from_secs(14), &nothing_to_ask);
+    assert!(matches!(a_ev.try_recv(), Ok(ZoneEvent::PetLoot { item }) if item == second));
+    zones.pet_skip(1, 1, second);
+    for step in 15..25 {
+        zones.pets(t0 + Duration::from_secs(step), &nothing_to_ask);
+    }
+    assert!(a_ev.try_recv().is_err(), "never asked again for that drop");
+    assert_eq!(ground_ids(&zones).len(), 2, "both drops are still on the ground, untouched");
+}
+
+#[test]
+fn a_pet_fetches_nothing_while_the_owner_trades_or_is_dead() {
+    let (zones, [_, mut b_in], mut a_ev, t0) = loot_ground(15.0, true);
+    drop_at(&zones, potion(1), 104.0, 1, Dropped::MOB, t0);
+    received(&mut b_in);
+    // In a trade (the pet only follows).
+    zones.trades.guard().request(1, 2, t0);
+    zones.pets(t0, &nothing_to_ask);
+    zones.pets(t0 + Duration::from_secs(1), &nothing_to_ask);
+    assert!(drain(&mut b_in).is_empty() && a_ev.try_recv().is_err());
+    zones.trades.guard().cancel(1);
+    // Dead: the pet is hidden, so it fetches nothing.
+    edit(&zones, 1, |p| p.dead = true);
+    zones.pets(t0 + Duration::from_secs(2), &nothing_to_ask);
+    assert_eq!(drain(&mut b_in), [(0x0602, 1)]);
+    zones.pets(t0 + Duration::from_secs(3), &nothing_to_ask);
+    assert!(a_ev.try_recv().is_err());
+}
+
+#[test]
+fn the_pickup_from_the_pets_spot_is_strict() {
+    let (zones, _, _, t0) = loot_ground(15.0, true);
+    let rule = |_: u8, _: u8| true;
+    drop_at(&zones, potion(1), 130.0, 1, Dropped::MOB, t0);
+    let far = ground_ids(&zones)[0];
+    assert_eq!(zones.pet_peek(1, 1, far, rule).err(), Some(gp::PICK_TOO_FAR), "measured from the pet (2.5 from the owner), 10 at the most");
+    drop_at(&zones, potion(2), 104.0, 2, Dropped::MOB, t0);
+    let theirs = ground_ids(&zones)[1];
+    assert_eq!(zones.pet_peek(1, 1, theirs, rule).err(), Some(gp::PICK_NOT_YOURS), "a party member's item, even if its time is over");
+    drop_at(&zones, potion(3), 104.0, 1, Dropped::player(1), t0);
+    let dropped = ground_ids(&zones)[2];
+    assert_eq!(zones.pet_peek(1, 1, dropped, rule).err(), Some(gp::PICK_NOT_YOURS), "what the owner dropped is not fetched");
+    assert_eq!(zones.pet_peek(1, 1, 999, rule).err(), Some(gp::PICK_GONE));
+    assert_eq!(zones.pet_peek(1, 2, far, rule).err(), Some(gp::PICK_GONE), "a player with no pet out");
+    drop_at(&zones, potion(4), 104.0, 1, Dropped::MOB, t0);
+    let mine = ground_ids(&zones)[3];
+    assert!(zones.pet_peek(1, 1, mine, rule).is_ok());
+    assert_eq!(ground_ids(&zones).len(), 4, "peeking takes nothing");
+    assert!(zones.pet_pick_up(1, 1, mine, rule).is_ok());
+    assert_eq!(zones.pet_pick_up(1, 1, mine, rule).err(), Some(gp::PICK_GONE), "taken once");
 }

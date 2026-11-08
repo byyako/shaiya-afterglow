@@ -462,7 +462,9 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
             ctx.zones.npc_idle(now, &ctx.data.world, &live.mobs, loot, &mut rand);
         }
         // The pets follow their owners (`docs/plans/ext-4-pets.md` section 5.3); nothing happens without one out.
-        ctx.zones.pets(now);
+        ctx.zones.pets(now, &|item_type, type_id, quests| {
+            live.drops.quest_start(item_type, type_id) || live.drops.quest_ends(item_type, type_id).iter().any(|q| quests.contains(q))
+        });
         // What changed of each party member, for the others (`docs/original/party.md` section 13).
         ctx.zones.party_status();
         obelisk_events(&ctx).await;

@@ -205,6 +205,51 @@ pub(super) async fn use_capture<S: Backend>(
     }))
 }
 
+/// The pet stands on the drop `item_id` (`ZoneEvent::PetLoot`): this connection takes it into its bags as a pick-up does (section 10.2),
+/// from the pet's spot. Before the drop leaves the ground it is asked whether it fits; when it does not, it stays there untouched (not
+/// put back, so its time is not renewed), the player gets the usual "no room" answer once and the pet gives the drop up.
+pub(super) async fn fetched<S: Backend>(
+    conn: &mut Connection,
+    ctx: &Context<S>,
+    character: &PlayCharacter,
+    state: &mut WorldState,
+    item_id: u32,
+) -> Result<()> {
+    use crate::drops::Loot;
+    use shaiya_proto::ground as gp;
+    let (id, map) = (character.id, state.map);
+    let live = ctx.data.live();
+    let quest_ok = |item_type: u8, type_id: u8| {
+        live.drops.quest_start(item_type, type_id)
+            || live.drops.quest_ends(item_type, type_id).iter().any(|&q| state.quests.find(q).is_some())
+    };
+    let Ok(item) = ctx.zones.pet_peek(map, id, item_id, quest_ok) else { return Ok(()) };
+    let fits = match item.loot {
+        Loot::Gold(amount) => {
+            let amount = if item.from_mob() { state.effects.with_gold_bonus(amount) } else { amount };
+            state.money.checked_add(amount).is_some()
+        }
+        Loot::Item { item_type, type_id, count, quality, kept } => {
+            ctx.data.items.get(item_type, type_id).is_some_and(|def| state.inventory.pick_up(def, count, quality, kept).left == 0)
+        }
+    };
+    if !fits {
+        ctx.zones.pet_skip(map, id, item_id);
+        tracing::debug!(id, item_id, "pet: no room for the drop, left on the ground");
+        return conn.send(gp::pick_up_failed(gp::PICK_NO_ROOM)).await;
+    }
+    let quest_ok = |item_type: u8, type_id: u8| {
+        live.drops.quest_start(item_type, type_id)
+            || live.drops.quest_ends(item_type, type_id).iter().any(|&q| state.quests.find(q).is_some())
+    };
+    let Ok((item, leave)) = ctx.zones.pet_pick_up(map, id, item_id, quest_ok) else { return Ok(()) };
+    // A pick-up by the pet does not cancel the owner's actions.
+    for packet in super::take_loot(ctx, character, state, item, leave).await? {
+        conn.send(packet).await?;
+    }
+    Ok(())
+}
+
 /// After the player has entered a zone (a login, a map change): the pet comes out again beside it. At the first entering of a login, a
 /// stored pet whose egg is in the bags is called out first (an egg no longer there clears the row); a pet whose egg has no effect
 /// any more (the extension is disabled) stays stored and does not come out.

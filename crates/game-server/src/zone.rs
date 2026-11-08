@@ -105,6 +105,9 @@ pub enum ZoneEvent {
     /// experience at its own level (×1.2 alone; by the party's size and highest level otherwise) and a kill. `last_hit`: the
     /// player who struck the killing blow, 0 when a monster did.
     PlayerKill { victim: u32, victim_level: u16, last_hit: u32, party: Option<(u8, bool, u16)> },
+    /// The player's pet stands on the drop `item` and waits for its pick-up (`docs/plans/ext-4-pets.md` section 10.2): the player's
+    /// connection takes it into the bags as a pick-up does.
+    PetLoot { item: u32 },
     /// A `deny pet` rule started to match the player's pet (`docs/plans/ext-4-pets.md` section 5.4): the pet is hidden and the player is
     /// whispered the rule's message (`text` is `None` for a silent rule).
     PetRuled { rule: u32, name: std::sync::Arc<str>, text: Option<std::sync::Arc<str>> },

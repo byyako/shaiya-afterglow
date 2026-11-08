@@ -6392,3 +6392,119 @@ async fn a_net_is_kept_when_the_bags_are_full_or_a_rule_refuses_it() {
     let seen = use_slot(&mut client, id, [1, 2]).await;
     assert!(seen.contains(&w::mob_leave(1)), "{seen:x?}");
 }
+
+// ------------------------------------------------------------------------------------------------------- auto-loot (chunk 4, step 8)
+
+fn fetch_data() -> GameData {
+    use game_server::effects::{ItemEffects, check_effect};
+    let mut data = pet_data(true);
+    data.effects = ItemEffects::new([(
+        100228,
+        check_effect(&serde_json::json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"], "loot_range": 15 })).unwrap(),
+    )]);
+    data
+}
+
+/// The pet's pass at a clock that runs 700 ms a call (the connection's tasks do not run the zones' passes in the tests).
+fn pet_pass(ctx: &Context<Arc<MemoryBackend>>, clock: &mut std::time::Instant) {
+    *clock += Duration::from_millis(700);
+    ctx.zones.pets(*clock, &|_, _, _| false);
+}
+
+#[tokio::test]
+async fn a_pet_fetches_the_owners_drops_into_the_bags_and_the_gold_into_the_money() {
+    use game_server::drops::Loot;
+    let (backend, ctx, mut client, id) = with_items(fetch_data(), vec![egg(2, EGG_123)]).await;
+    use_slot(&mut client, id, [1, 2]).await;
+    let (x, z) = (577.98, 1762.12);
+    let now = std::time::Instant::now();
+    let mut clock = now + Duration::from_secs(1);
+    let drop =
+        |loot, dx: f32, owner| ctx.zones.drop_on_ground(1, loot, [x + dx, 78.56, z], owner, 0, now, 1, game_server::zone::Dropped::MOB);
+    // The owner's potion and gold are fetched; another player's drop stays where it is.
+    drop(Loot::Item { item_type: 25, type_id: 1, count: 2, quality: 1200, kept: None }, 4.0, id);
+    drop(Loot::Gold(300), 5.0, id);
+    drop(Loot::Item { item_type: 25, type_id: 1, count: 1, quality: 1200, kept: None }, 6.0, id + 50);
+    let mut seen = Vec::new();
+    for _ in 0..40 {
+        pet_pass(&ctx, &mut clock);
+        client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+        loop {
+            let packet = client.read().await.unwrap();
+            if packet == w::motion(id, 0) {
+                break;
+            }
+            seen.push(packet);
+        }
+        if backend.stored(id).unwrap().0 >= 300 && backend.stored(id).unwrap().1.iter().any(|i| (i.bag, i.slot) == (1, 0) && i.count == 12)
+        {
+            break;
+        }
+    }
+    let (money, items) = backend.stored(id).unwrap();
+    assert_eq!(money, 300, "the gold line: {seen:x?}");
+    assert_eq!(items.iter().find(|i| (i.bag, i.slot) == (1, 0)).map(|i| i.count), Some(12), "two potions onto the ten");
+    assert!(seen.iter().filter(|p| frame::opcode(p) == gp::OP_PICK_UP).count() >= 2, "an 'Attained' line and a gold line: {seen:x?}");
+    assert!(seen.contains(&gp::picked_up_gold(0, 1, 300)), "the gold line");
+    assert_eq!(ctx.zones.ground_items(1).len(), 1, "the other player's drop is still there");
+    // The game log has what a pick-up gives: the item's record (action 0x0401) and the gold's (0x0801).
+    assert_eq!(logged(&ctx, game_server::game_log::action::ITEM_GET).len(), 1, "one item picked up");
+    let gold = logged(&ctx, game_server::game_log::action::MONEY_GET);
+    assert_eq!(gold.len(), 1);
+    assert_eq!(set_values(&gold[0]), [(1, 300), (2, 300)]);
+}
+
+#[tokio::test]
+async fn a_pet_leaves_a_drop_that_does_not_fit_on_the_ground_and_the_owner_hears_once() {
+    use game_server::drops::Loot;
+    // Every slot of the two bags taken (swords do not stack), a pet out, and a sword of the owner's on the ground.
+    let sword = |bag, slot| game_server::backend::ItemUnit {
+        bag,
+        slot,
+        item_type: 5,
+        type_id: 1,
+        count: 1,
+        quality: 1200,
+        gems: [0; 6],
+        craft_name: Vec::new(),
+    };
+    let mut items = vec![egg(2, EGG_123)];
+    for slot in 1..24u8 {
+        if slot != 2 {
+            items.push(sword(1, slot));
+        }
+    }
+    items.extend((0..24u8).map(|slot| sword(2, slot)));
+    let (backend, ctx, mut client, id) = with_items(fetch_data(), items).await;
+    use_slot(&mut client, id, [1, 2]).await;
+    let now = std::time::Instant::now();
+    ctx.zones.drop_on_ground(
+        1,
+        Loot::Item { item_type: 5, type_id: 2, count: 1, quality: 1200, kept: None },
+        [581.98, 78.56, 1762.12],
+        id,
+        0,
+        now,
+        1,
+        game_server::zone::Dropped::MOB,
+    );
+    let before = ctx.zones.ground_items(1);
+    let mut clock = now + Duration::from_secs(1);
+    let mut seen = Vec::new();
+    for _ in 0..12 {
+        pet_pass(&ctx, &mut clock);
+        client.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+        loop {
+            let packet = client.read().await.unwrap();
+            if packet == w::motion(id, 0) {
+                break;
+            }
+            seen.push(packet);
+        }
+    }
+    assert_eq!(seen.iter().filter(|p| **p == gp::pick_up_failed(gp::PICK_NO_ROOM)).count(), 1, "'no room' once for that drop: {seen:x?}");
+    let after = ctx.zones.ground_items(1);
+    assert_eq!(after.len(), 1, "the drop stays on the ground");
+    assert_eq!(after[0].expires, before[0].expires, "untouched: its lifetime is not renewed (no put-back)");
+    assert!(backend.stored(id).unwrap().1.iter().all(|i| !(i.item_type == 5 && i.type_id == 2)));
+}
