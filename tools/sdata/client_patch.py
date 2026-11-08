@@ -1,4 +1,5 @@
-"""Generate the client's Item.SData and Skill.SData from the database, check them, and write a client data patch's hand-over folder
+"""Generate the client's Item.SData, Skill.SData and (when extensions add monster records) Monster.SData from the database, check them,
+and write a client data patch's hand-over folder
 (docs/plans/done/client-patches.md, docs/plans/ext-1-foundation.md section 4).
 
 usage: client_patch.py restore <out dir>
@@ -7,6 +8,10 @@ usage: client_patch.py restore <out dir>
        client_patch.py adopt --patch N [--patch-sha256 H --sig-sha256 H --status S]
        client_patch.py rebuild --patch N --out DIR
        client_patch.py record --patch N [--patch-sha256 H] [--sig-sha256 H] [--status S]
+
+Monster.SData is generated only when content.client_monsters has rows (docs/plans/ext-4-pets.md section 6.3): the original records, fillers
+(an empty name, model -1, zeros) for the ids between, then each row's record, a copy of the original record `copy_of` with the row's fields
+(`day` may be a map from the copied record's day to the new one). With no rows the file is left out of the patch.
 
 Reads the database only: a generated record is the client's original (client.items / client.skills, imported by tools/sdata/load_client.py)
 unless it has a client row in content.client_items / content.client_skills (written by `data-editor ext install` from an extension's
@@ -53,7 +58,9 @@ ADOPTED = {109: {"patch_sha256": "9478d66a773db74ac132d8af13a40fb727e6564a9abdf3
 ITEM_CLIENT_ONLY = ("model", "icon", "type2", "type3")
 SKILL_CLIENT_ONLY = ("icon", "animation", "toggle_type", "sound")
 SKILL_COLUMN_NAMES = {"level": "skilllevel", "prev_skill": "prevskillid", "defense_type": "defencetype", "defense_value": "defencevalue"}
-WIDTHS = {"B": (0, 255, 0xFF), "H": (-32768, 65535, 0xFFFF), "I": (0, 4294967295, 0xFFFFFFFF)}
+WIDTHS = {"B": (0, 255, 0xFF), "H": (-32768, 65535, 0xFFFF), "I": (0, 4294967295, 0xFFFFFFFF),
+          # the signed fields of Monster.SData are kept as they are
+          "h": (-32768, 32767, None), "i": (-2147483648, 2147483647, None)}
 MEMBERS = {
     "item": {"member": "Item/Item.SData", "us_path": "data/item/item.sdata", "original": "Item.SData"},
     "skill": {"member": "Character/Skill.SData", "us_path": "data/character/skill.sdata", "original": "Skill.SData"},
@@ -61,6 +68,8 @@ MEMBERS = {
 }
 ITEM_GROUPS = 100
 SKILLS = 326
+MONSTER_ORIGINALS = load_client.MONSTER_RECORDS  # the records of the shipped Monster.SData; an added record's id is at least this
+MONSTER_MAX_ID = 65535  # the u16 of 0x0601 (docs/plans/ext-4-pets.md section 6.3)
 SKILL_LEVELS = client_sdata.SKILL_LEVELS
 
 
@@ -186,6 +195,19 @@ def parse_skills(plain):
     return records
 
 
+def parse_monsters(plain):
+    """Monster.SData -> records as read_client_monsters makes them (name without its NUL); every byte must be explained."""
+    parsed, end, rebuilt, _ = client_sdata.read_monsters(plain)
+    if end != len(plain) or rebuilt != plain:
+        raise CheckError("Monster.SData: the records do not explain the whole file")
+    records = []
+    for r in parsed:
+        if r["name"][-1:] != b"\0" or b"\0" in r["name"][:-1]:
+            raise CheckError(f"Monster.SData record {r['mob_id']}: name is not text and one NUL")
+        records.append({**r, "name": r["name"][:-1]})
+    return records
+
+
 def parse_items(plain):
     groups = parse_item.read_items(plain)
     if parse_item.write_items(groups) != plain:
@@ -246,7 +268,7 @@ def width_value(fmt, value, what):
     low, high, mask = WIDTHS[fmt]
     if value is None or not low <= value <= high:
         raise CheckError(f"{what}: value {value} does not fit the client's {fmt} field ({low} to {high})")
-    return value & mask
+    return value if mask is None else value & mask
 
 
 def printable(text, what, longest):
@@ -312,6 +334,19 @@ def client_rows(kind):
     return out
 
 
+def client_monster_rows():
+    """content.client_monsters as {id: (copy_of, fields, since_patch, note)}; fields is the row's jsonb as a dict."""
+    if query("SELECT to_regclass('content.client_monsters') IS NULL")[0][0] == "t":
+        return {}
+    return {int(i): (int(copy_of), json.loads(fields), nullable_int(since), note)
+            for i, copy_of, fields, since, note in query("SELECT id, copy_of, fields, since_patch, note FROM content.client_monsters ORDER BY id")}
+
+
+def monster_patch_limit(rows, limit):
+    """As patch_limit, for the monster rows (since_patch is the third field)."""
+    return rows if limit is None else {k: r for k, r in rows.items() if r[2] is not None and int(r[2]) <= limit}
+
+
 def patch_limit(rows, limit):
     """The client rows of patches up to `limit` (rebuild): a row with since_patch NULL belongs to no patch yet."""
     if limit is None:
@@ -333,12 +368,15 @@ class Data:
         self.originals = {kind: plain for kind, (plain, _) in self.restored.items()}
         self.item_rows = patch_limit(client_rows("item"), max_patch)
         self.skill_rows = patch_limit(client_rows("skill"), max_patch)
+        self.monster_rows = monster_patch_limit(client_monster_rows(), max_patch)
         self.server_only = {(r[0], int(r[1]), int(r[2])): r[3] for r in query("SELECT kind, id, level, reason FROM content.server_only")}
         longest = lambda sql: int(query(sql)[0][0])
         self.longest = {"item name": longest("SELECT max(octet_length(name)) FROM client.items"),
                         "item description": longest("SELECT max(octet_length(description)) FROM client.items"),
                         "skill name": longest("SELECT max(octet_length(name)) FROM client.skills"),
                         "skill description": longest("SELECT max(octet_length(description)) FROM client.skills")}
+        if self.monster_rows:
+            self.longest["monster name"] = longest("SELECT max(octet_length(name)) FROM client.monsters")
         self.item_columns, self.skill_columns = table_columns("items"), table_columns("skills")
         # A typo in a field name must not silently drop a field.
         for n in fix_names():
@@ -372,8 +410,62 @@ class Data:
         return rec
 
 
+def monster_filler(mob_id):
+    """A record that draws nothing: an empty name, model -1 (no model), zeros (docs/plans/ext-4-pets.md section 6.2)."""
+    return {"mob_id": mob_id, "name": b"", **{n: 0 for n in monster_names()}, "model": -1}
+
+
+def monster_field(name, value, what, longest):
+    """One field of a client_monsters row as the record holds it: the name as printable ASCII bytes, a number inside its width."""
+    if name == "name":
+        if not isinstance(value, str):
+            raise CheckError(f"{what}: name {value!r} is not text")
+        return printable(value, f"{what} name", longest)
+    fmt = dict(client_sdata.MONSTER_FIELDS).get(name)
+    if fmt is None:
+        raise CheckError(f"{what}: {name!r} is not a field of Monster.SData ({', '.join(monster_names())}, name)")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise CheckError(f"{what} field {name}: {value!r} is not a whole number")
+    return width_value(fmt, value, f"{what} field {name}")
+
+
+def build_monster(mob_id, row, original, longest):
+    """The record for a client_monsters row: the original record `copy_of`, then the row's fields. `day` may be a map {copied day: new day}
+    (keys as text); a day the map does not name is kept."""
+    copy_of, fields, _, _ = row
+    what = f"Monster {mob_id}"
+    if not MONSTER_ORIGINALS <= mob_id <= MONSTER_MAX_ID:
+        raise CheckError(f"{what}: an added record's id is {MONSTER_ORIGINALS} to {MONSTER_MAX_ID} (below that it would change an original record)")
+    if not 0 <= copy_of < MONSTER_ORIGINALS:
+        raise CheckError(f"{what}: copy_of {copy_of} is not a record of the original Monster.SData (0 to {MONSTER_ORIGINALS - 1})")
+    rec = {**original[copy_of], "mob_id": mob_id}
+    for name, value in fields.items():
+        if name == "day" and isinstance(value, dict):
+            mapped = value.get(str(rec["day"]))
+            if mapped is not None:
+                rec["day"] = monster_field("day", mapped, what, longest)
+            continue
+        rec[name] = monster_field(name, value, what, longest)
+    return rec
+
+
+def generate_monsters(records, rows, longest):
+    """Monster.SData from the original records (read_client_monsters) and the client_monsters rows: (records, plain). The ids between the
+    originals and the first row, and between rows, are fillers; the count is the highest id plus one."""
+    records = list(records)
+    if len(records) != MONSTER_ORIGINALS:
+        raise CheckError(f"client.monsters holds {len(records)} records, the shipped file has {MONSTER_ORIGINALS}")
+    originals = list(records)
+    for mob_id in range(MONSTER_ORIGINALS, max(rows) + 1):
+        records.append(monster_filler(mob_id))
+    for mob_id, row in rows.items():
+        records[mob_id] = build_monster(mob_id, row, originals, longest)
+    return records, write_monsters(records)
+
+
 def generate(data):
-    """{'item': (groups, plain), 'skill': (records, plain)} from client.* and the rows (the files, before encryption)."""
+    """{'item': (groups, plain), 'skill': (records, plain), 'monster': (records, plain) when there are monster rows} from client.* and the
+    rows (the files, before encryption)."""
     groups = read_client_items()
     for (grp, idx), row in data.item_rows.items():
         # Check 6, keys inside the tables.
@@ -398,7 +490,10 @@ def generate(data):
         for field, value in zip(SKILL_CLIENT_ONLY, (icon, animation, toggle_type, sound)):
             rec[field] = width_value(dict(client_sdata.SKILL_FIELDS)[field], int(value), f"Skill {skill_id}/{level} field {field}")
         records[(skill_id - 1) * SKILL_LEVELS + level - 1] = rec
-    return {"item": (groups, parse_item.write_items(groups)), "skill": (records, write_skills(records))}
+    files = {"item": (groups, parse_item.write_items(groups)), "skill": (records, write_skills(records))}
+    if data.monster_rows:
+        files["monster"] = generate_monsters(read_client_monsters(), data.monster_rows, data.longest["monster name"])
+    return files
 
 
 def describe(value):
@@ -428,6 +523,22 @@ def skill_changes(old_records, new_records):
         changes = record_changes(old, new, names)
         if changes:
             out.append((f"{old['skill_id']}/{old['slot']}", old["name"], new["name"], changes))
+    return out
+
+
+def monster_changes(old_records, new_records):
+    """The records that differ: an original changed, field by field (this chunk changes none), and every record past the old file's end as
+    one line (a filler is not listed): (key, old name, new name, [(field, old, new)])."""
+    names = ["name", *monster_names()]
+    out = []
+    for old, new in zip(old_records, new_records):
+        changes = record_changes(old, new, names)
+        if changes:
+            out.append((str(old["mob_id"]), old["name"], new["name"], changes))
+    for new in new_records[len(old_records):]:
+        if new["name"] or new["model"] != -1:
+            out.append((str(new["mob_id"]), b"", new["name"],
+                        [("record", "(none)", f"added: model {new['model']}, level {new['level']}, day {new['day']}, size {new['size']}, hp {new['hp']}")]))
     return out
 
 
@@ -469,7 +580,7 @@ def grade_only_item_edits():
 
 
 def run_checks(data, patch=None, report=print):
-    """The eight checks of section 3. Returns (generated files, item changes, skill changes) against the originals."""
+    """The eight checks of section 3. Returns (generated files, item changes, skill changes, monster changes) against the originals."""
     # 1. Originals: the files the import recorded (content.imports 'client') are the shipped ones; the sizes and counts of what was imported.
     shipped = {name: sha for name, sha in load_client.SHA256.items() if name in data.shipped or name in load_client.PAIR}
     if data.shipped != shipped:
@@ -477,11 +588,16 @@ def run_checks(data, patch=None, report=print):
     counts = (int(query("SELECT count(*) FROM client.items")[0][0]), int(query("SELECT count(*) FROM client.skills")[0][0]))
     if counts != (16045, 978):
         raise CheckError(f"client.items / client.skills hold {counts} rows, the shipped files have (16045, 978)")
+    monsters = f", client.monsters {MONSTER_ORIGINALS} rows" if has_monsters() else ""
+    if data.monster_rows and not monsters:
+        raise CheckError("content.client_monsters has rows but client.monsters is empty: run tools/sdata/load_client.py")
+    if monsters and int(query("SELECT count(*) FROM client.monsters")[0][0]) != MONSTER_ORIGINALS:
+        raise CheckError(f"client.monsters does not hold the shipped file's {MONSTER_ORIGINALS} rows")
     report(f"1 originals: Item.SData {load_client.SHA256['Item.SData'][:8]}…, Skill.SData {load_client.SHA256['Skill.SData'][:8]}… "
-           f"as recorded by the import; client.items {counts[0]} rows, client.skills {counts[1]} rows")
+           f"as recorded by the import; client.items {counts[0]} rows, client.skills {counts[1]} rows{monsters}")
     # 2. Restore.
     check_restore(data.restored)
-    report("2 restore: client.* alone rebuild both files and their encrypted forms byte for byte")
+    report(f"2 restore: client.* alone rebuild {'all three files' if has_monsters() else 'both files'} and their encrypted forms byte for byte")
     # 3. Only the listed records change (and their fields are the database's and the rows').
     files = generate(data)
     original_items, original_skills = parse_items(data.originals["item"]), parse_skills(data.originals["skill"])
@@ -493,6 +609,16 @@ def run_checks(data, patch=None, report=print):
         if extra:
             raise CheckError(f"{kind} {extra[0]} differs from the original but has no client row")
     expected = {"item": parse_item.write_items(new_items), "skill": write_skills(new_skills)}
+    monster_changed = []
+    if "monster" in files:
+        original_monsters, new_monsters = parse_monsters(data.originals["monster"]), parse_monsters(files["monster"][1])
+        monster_changed = monster_changes(original_monsters, new_monsters)
+        expected["monster"] = write_monsters(new_monsters)
+        if new_monsters[:MONSTER_ORIGINALS] != original_monsters:
+            raise CheckError("an original Monster.SData record differs from the shipped one")
+        for mob_id in data.monster_rows:
+            if mob_id < MONSTER_ORIGINALS or mob_id >= len(new_monsters):
+                raise CheckError(f"Monster {mob_id}: not a record of the generated file")
     if any(expected[k] != files[k][1] for k in expected):
         raise CheckError("a generated file does not rebuild from its parsed records")
     for (grp, idx), row in data.item_rows.items():
@@ -517,8 +643,9 @@ def run_checks(data, patch=None, report=print):
                 raise CheckError(f"Skill {skill_id}/{level} field {n}: the file has {rec[n]}, the client row has {v}")
         if rec["name"] != row[2].encode("ascii") or rec["description"] != row[3].encode("ascii"):
             raise CheckError(f"Skill {skill_id}/{level}: name or description is not the client row's")
+    monster_note = f"; {len(data.monster_rows)} monster records are added past the original {MONSTER_ORIGINALS}, none changed" if data.monster_rows else ""
     report(f"3 only the listed records change: {len(item_changed)} items and {len(skill_changed)} skills differ from the originals, "
-           "each with a client row; the files parse back to exactly their bytes")
+           f"each with a client row{monster_note}; the files parse back to exactly their bytes")
     # 4. Nothing forgotten.
     item_diff = defs_differences("items", ["itemid"])
     skill_diff = defs_differences("skills", ["skillid", "skilllevel"])
@@ -537,7 +664,7 @@ def run_checks(data, patch=None, report=print):
     report(f"4 nothing forgotten: {len(item_diff)} defs.items and {len(skill_diff)} defs.skills rows differ from the original, "
            f"each with a client row or a server_only reason ({len(grade_edits)} items differ in their drop grade alone, by the data editor)")
     # 5. Widths: checked while generating (every listed record's server values and client-only values).
-    report(f"5 widths: all {len(data.item_rows) + len(data.skill_rows)} listed records' values fit their client fields")
+    report(f"5 widths: all {len(data.item_rows) + len(data.skill_rows) + len(data.monster_rows)} listed records' values fit their client fields")
     # 6. Keys inside the tables: checked while generating.
     report("6 keys: every client row names an existing place and has a defs row; no table grows")
     # 7. Text: checked while generating.
@@ -549,9 +676,10 @@ def run_checks(data, patch=None, report=print):
     report("8 deterministic: generating twice gives the same bytes")
     if patch is not None:
         late = [k for rows in (data.item_rows, data.skill_rows) for k, r in rows.items() if r[8] is not None and int(r[8]) > patch]
+        late += [k for k, r in data.monster_rows.items() if r[2] is not None and int(r[2]) > patch]
         if late:
             raise CheckError(f"client row {late[0]} is for a later patch than {patch}")
-    return files, item_changed, skill_changed
+    return files, item_changed, skill_changed, monster_changed
 
 
 def cmd_check():
@@ -598,9 +726,9 @@ def installed_extensions():
     return {name: version for name, version in query("SELECT name, version FROM content.extensions ORDER BY install_seq")}
 
 
-def changes_text(patch, item_changed, skill_changed):
+def changes_text(patch, item_changed, skill_changed, monster_changed=()):
     lines = [f"Client data patch {patch}: the records that differ from the previous version (old -> new)", ""]
-    for label, changed in (("Item", item_changed), ("Skill", skill_changed)):
+    for label, changed in (("Item", item_changed), ("Skill", skill_changed), ("Monster", monster_changed)):
         for key, old_name, new_name, fields in changed:
             lines.append(f"{label} {key} {old_name.decode('cp1252')} -> {new_name.decode('cp1252')}")
             lines += [f"    {n}: {describe(a)} -> {describe(b)}" for n, a, b in fields]
@@ -647,10 +775,10 @@ def cmd_generate(patch, dirty):
     if query(f"SELECT 1 FROM content.client_patches WHERE patch = {patch}"):
         sys.exit(f"patch {patch} is in the ledger already; refusing to overwrite a patch")
     data = Data()
-    files, _, _ = run_checks(data, patch)
-    manifest_files, all_item_changes, all_skill_changes = [], [], []
+    files, _, _, _ = run_checks(data, patch)
+    manifest_files, all_item_changes, all_skill_changes, all_monster_changes = [], [], [], []
     previous_numbers = ledger_numbers(patch)
-    for kind in ("item", "skill"):
+    for kind in files:
         info = MEMBERS[kind]
         plain = files[kind][1]
         encrypted = encrypt(plain)
@@ -660,9 +788,12 @@ def cmd_generate(patch, dirty):
         if kind == "item":
             changed = item_changes(parse_items(previous_plain), parse_items(plain))
             all_item_changes = changed
-        else:
+        elif kind == "skill":
             changed = skill_changes(parse_skills(previous_plain), parse_skills(plain))
             all_skill_changes = changed
+        else:
+            changed = monster_changes(parse_monsters(previous_plain), parse_monsters(plain))
+            all_monster_changes = changed
         manifest_files.append({
             "member": info["member"], "us_path": info["us_path"], "size": len(encrypted), "sha256": sha(encrypted),
             "plain_sha256": sha(plain), "plain_size": len(plain), "replaces_sha256": sha(previous_encrypted),
@@ -677,7 +808,8 @@ def cmd_generate(patch, dirty):
         # The ledger and since_patch in one transaction; a trial (--dirty) run is not recorded.
         script = ["BEGIN;", *ledger_sql(patch, previous, commit, extensions, False, manifest_files),
                   f"UPDATE content.client_items SET since_patch = {patch} WHERE since_patch IS NULL;",
-                  f"UPDATE content.client_skills SET since_patch = {patch} WHERE since_patch IS NULL;", "COMMIT;"]
+                  f"UPDATE content.client_skills SET since_patch = {patch} WHERE since_patch IS NULL;",
+                  *([f"UPDATE content.client_monsters SET since_patch = {patch} WHERE since_patch IS NULL;"] if data.monster_rows else []), "COMMIT;"]
         psql_run(stdin=("\n".join(script) + "\n").encode("utf-8"))
     out_dir.mkdir(parents=True)
     for f in manifest_files:
@@ -685,7 +817,7 @@ def cmd_generate(patch, dirty):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f["_encrypted"])
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    (out_dir / "changes.txt").write_text(changes_text(patch, all_item_changes, all_skill_changes))
+    (out_dir / "changes.txt").write_text(changes_text(patch, all_item_changes, all_skill_changes, all_monster_changes))
     print(f"wrote {out_dir}")
     for f in manifest["files"]:
         print(f"  {f['member']}: {f['size']} bytes, sha256 {f['sha256']}, changed {', '.join(f['changed'])}")
@@ -746,9 +878,13 @@ def cmd_rebuild(patch, out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     differs = 0
-    for kind in ("item", "skill"):
+    for kind in ("item", "skill", "monster"):
         info = MEMBERS[kind]
         if info["member"] not in ledger:
+            continue
+        if kind not in files:
+            differs += 1
+            print(f"{info['member']}: DIFFERS (the ledger has it, the database has no rows for it up to patch {patch})")
             continue
         plain = files[kind][1]
         encrypted = encrypt(plain)
@@ -762,7 +898,9 @@ def cmd_rebuild(patch, out_dir):
         print(f"{info['member']}: DIFFERS (rebuilt {sha(encrypted)}, ledger {ledger[info['member']]})")
         carried, _ = ledger_member(patch, info["member"])
         old = seed_sdata.decrypt(carried, seed_sdata.load_consts(load_client.SEED_CONSTANTS))
-        changed = item_changes(parse_items(old), parse_items(plain)) if kind == "item" else skill_changes(parse_skills(old), parse_skills(plain))
+        changed = {"item": lambda: item_changes(parse_items(old), parse_items(plain)),
+                   "skill": lambda: skill_changes(parse_skills(old), parse_skills(plain)),
+                   "monster": lambda: monster_changes(parse_monsters(old), parse_monsters(plain))}[kind]()
         for key, old_name, new_name, fields in changed:
             print(f"  {key} {old_name.decode('cp1252')} -> {new_name.decode('cp1252')}: " + ", ".join(f"{n} {describe(a)} -> {describe(b)}" for n, a, b in fields))
     if differs:

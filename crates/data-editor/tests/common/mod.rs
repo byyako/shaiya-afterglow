@@ -16,6 +16,7 @@ const CONTENT_MIGRATION: &str = include_str!("../../../../db/migrations/0031_con
 const RULES_MIGRATION: &str = include_str!("../../../../db/migrations/0032_rules.sql");
 const SCRIPTS_MIGRATION: &str = include_str!("../../../../db/migrations/0033_scripts.sql");
 const EFFECTS_MIGRATION: &str = include_str!("../../../../db/migrations/0034_effects.sql");
+const PETS_MIGRATION: &str = include_str!("../../../../db/migrations/0036_pets.sql");
 
 pub struct Db {
     pub pool: PgPool,
@@ -126,6 +127,9 @@ impl Db {
         };
         run(&pool, scripts.replace("content.", &format!("{}.", s.content))).await;
         run(&pool, EFFECTS_MIGRATION.replace("content.", &format!("{}.", s.content))).await;
+        // The pets' migration without its game table (`character_pets` is the game's, and made by the full migrations when they run).
+        let pets = PETS_MIGRATION.split("CREATE TABLE IF NOT EXISTS character_pets").next().unwrap_or_default();
+        run(&pool, pets.replace("content.", &format!("{}.", s.content))).await;
         let db = Self { editor: Editor::new(pool.clone(), s.clone()), pool, s, pub_schema: full.then_some(pub_schema) };
         db.load(Files::default()).await;
         Some(db)

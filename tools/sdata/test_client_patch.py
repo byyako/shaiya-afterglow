@@ -120,5 +120,89 @@ class MonsterFile(unittest.TestCase):
         self.assertEqual(client_patch.sha(client_patch.encrypt(plain)), load_client.SHA256["Monster.SData"])
 
 
+class MonsterGeneration(unittest.TestCase):
+    """docs/plans/ext-4-pets.md section 6.3: fillers, copies with a day map and fields, the width and name checks, the record count."""
+
+    @staticmethod
+    def originals(count=client_patch.MONSTER_ORIGINALS):
+        out = []
+        for mob_id in range(count):
+            rec = {"mob_id": mob_id, "name": f"Beast {mob_id}".encode(), **{n: 1 for n in client_patch.monster_names()}}
+            rec.update(model=10 + mob_id % 50, day=mob_id % 8, size=1 + mob_id % 3, hp=500 + mob_id)
+            out.append(rec)
+        return out
+
+    PET = {"day": {"0": 6, "1": 6, "2": 0, "3": 0, "4": 1, "5": 4, "6": 6, "7": 6}, "size": 0, "hp": 1, "quest_item": 0,
+           "normal_time": 1000, "normal_step": 4, "chase_time": 1000, "chase_step": 10}
+
+    def generate(self, rows, count=client_patch.MONSTER_ORIGINALS):
+        return client_patch.generate_monsters(self.originals(count), rows, 29)
+
+    def test_fillers_come_between_the_originals_and_the_first_row(self):
+        records, plain = self.generate({3001: (5, {"size": 0}, None, "n")})
+        self.assertEqual(len(records), 3002)
+        self.assertEqual(records[client_patch.MONSTER_ORIGINALS:3001], [client_patch.monster_filler(i) for i in range(client_patch.MONSTER_ORIGINALS, 3001)])
+        filler = records[2474]
+        self.assertEqual((filler["name"], filler["model"], filler["hp"], filler["day"], filler["size"]), (b"", -1, 0, 0, 0))
+        parsed = client_patch.parse_monsters(plain)
+        self.assertEqual(len(parsed), 3002, "the file's count is the highest id plus one")
+        self.assertEqual(parsed[:client_patch.MONSTER_ORIGINALS], client_patch.parse_monsters(client_patch.write_monsters(self.originals())))
+
+    def test_a_copy_keeps_the_originals_name_and_model_and_takes_the_rows_fields(self):
+        records, _ = self.generate({3000 + m: (m, self.PET, None, "n") for m in (1, 2, 3, 4, 5, 6, 7)})
+        for m in range(1, 8):
+            wild, pet = records[m], records[3000 + m]
+            self.assertEqual((pet["mob_id"], pet["name"], pet["model"], pet["level"]), (3000 + m, wild["name"], wild["model"], wild["level"]))
+            self.assertEqual((pet["size"], pet["hp"], pet["normal_time"], pet["normal_step"], pet["chase_step"]), (0, 1, 1000, 4, 10))
+        self.assertEqual([records[3000 + m]["day"] for m in range(0, 8) if m], [6, 0, 0, 1, 4, 6, 6], "the day by the copied record's day")
+        self.assertEqual(records[1], self.originals()[1], "the original stays as it was")
+
+    def test_a_day_the_map_does_not_name_is_kept_and_a_plain_number_sets_it(self):
+        records, _ = self.generate({3001: (1, {"day": {"7": 6}}, None, "n"), 3002: (2, {"day": 3}, None, "n")})
+        self.assertEqual((records[3001]["day"], records[3002]["day"]), (self.originals()[1]["day"], 3))
+
+    def test_the_name_can_be_set(self):
+        records, _ = self.generate({3001: (1, {"name": "Small Wolf"}, None, "n")})
+        self.assertEqual(records[3001]["name"], b"Small Wolf")
+
+    def test_checks(self):
+        for row, needle in [
+            ((1, {"size": 256}, None, "n"), "does not fit"),
+            ((1, {"hp": -5000000000}, None, "n"), "does not fit"),
+            ((1, {"level": 40000}, None, "n"), "does not fit"),
+            ((1, {"size": -1}, None, "n"), "does not fit"),
+            ((1, {"name": "x" * 30}, None, "n"), "longer than the longest"),
+            ((1, {"name": "Naïve"}, None, "n"), "not printable ASCII"),
+            ((1, {"colour": 1}, None, "n"), "not a field of Monster.SData"),
+            ((1, {"size": "big"}, None, "n"), "not a whole number"),
+            ((1, {"size": True}, None, "n"), "not a whole number"),
+            ((2474, {}, None, "n"), "not a record of the original"),
+            ((-1, {}, None, "n"), "not a record of the original"),
+        ]:
+            with self.assertRaises(client_patch.CheckError, msg=str(row)) as raised:
+                self.generate({3001: row})
+            self.assertIn(needle, str(raised.exception))
+        for mob_id in (100, 2473, 65536):
+            with self.assertRaises(client_patch.CheckError) as raised:
+                self.generate({mob_id: (1, {}, None, "n")})
+            self.assertIn("an added record's id is", str(raised.exception))
+        with self.assertRaises(client_patch.CheckError):
+            self.generate({3001: (1, {}, None, "n")}, count=100)
+
+    def test_changes_list_each_added_record_as_one_line(self):
+        old = client_patch.parse_monsters(client_patch.write_monsters(self.originals(3)))
+        new_records = [dict(r) for r in old] + [client_patch.monster_filler(3), client_patch.monster_filler(4), {**old[1], "mob_id": 5, "size": 0}]
+        changes = client_patch.monster_changes(old, new_records)
+        self.assertEqual([c[0] for c in changes], ["5"], "a filler is not listed")
+        self.assertIn("added", changes[0][3][0][2])
+        new_records[1] = {**new_records[1], "hp": 9}
+        self.assertEqual([c[0] for c in client_patch.monster_changes(old, new_records)], ["1", "5"])
+
+    def test_monster_rows_of_a_patch(self):
+        rows = {3001: (1, {}, 111, "a"), 3002: (2, {}, None, "b"), 3003: (3, {}, 109, "c")}
+        self.assertEqual(sorted(client_patch.monster_patch_limit(rows, 110)), [3003])
+        self.assertEqual(sorted(client_patch.monster_patch_limit(rows, None)), sorted(rows))
+
+
 if __name__ == "__main__":
     unittest.main()

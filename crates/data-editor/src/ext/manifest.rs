@@ -29,6 +29,8 @@ pub struct Manifest {
     pub description: String,
     pub items: Vec<IdRange>,
     pub skills: Vec<IdRange>,
+    /// The `Monster.SData` record ids the extension adds (`major` is 0), `docs/plans/ext-4-pets.md` section 6.4.
+    pub monsters: Vec<IdRange>,
     /// Defaults for game settings, as the text the server's parsers read.
     pub settings: BTreeMap<String, String>,
     /// The extension's rules (`docs/plans/ext-2-rules.md` section 4.4), by name without the extension's prefix, each as the JSON of its
@@ -162,18 +164,22 @@ impl Manifest {
         let _ = strings(&table, "authors")?;
         let _ = string(&table, "license", false)?;
 
-        let (mut items, mut skills) = (Vec::new(), Vec::new());
+        let (mut items, mut skills, mut monsters) = (Vec::new(), Vec::new(), Vec::new());
         if let Some(ids_value) = table.get("ids") {
             let ids_table = ids_value.as_table().ok_or("`ids` must be a table")?;
-            only_keys(ids_table, &["items", "skills"], "[ids]")?;
+            only_keys(ids_table, &["items", "skills", "monsters"], "[ids]")?;
             for text in strings(ids_table, "items")? {
                 items.push(ids::parse_range(&text, false).map_err(|e| format!("[ids] items: {e}"))?);
             }
             for text in strings(ids_table, "skills")? {
                 skills.push(ids::parse_range(&text, true).map_err(|e| format!("[ids] skills: {e}"))?);
             }
+            for text in strings(ids_table, "monsters")? {
+                monsters.push(ids::parse_monster_range(&text).map_err(|e| format!("[ids] monsters: {e}"))?);
+            }
             check_own_overlaps(&items, "items")?;
             check_own_overlaps(&skills, "skills")?;
+            check_own_overlaps(&monsters, "monsters")?;
         }
 
         let mut settings = BTreeMap::new();
@@ -215,7 +221,23 @@ impl Manifest {
             }
         }
         let json = serde_json::to_value(&table).map_err(|e| e.to_string())?;
-        Ok(Manifest { name, version, title, description, items, skills, settings, rules, api, scripts, options, features, art, json })
+        Ok(Manifest {
+            name,
+            version,
+            title,
+            description,
+            items,
+            skills,
+            monsters,
+            settings,
+            rules,
+            api,
+            scripts,
+            options,
+            features,
+            art,
+            json,
+        })
     }
 }
 
@@ -323,6 +345,13 @@ exp = 0
 features = ["a"]
 art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
 "#;
+
+    #[test]
+    fn monster_records_are_declared_in_ids() {
+        let m = Manifest::parse(&GOOD.replace("items = [", "monsters = [\"3001-5473\"]\nitems = [")).unwrap();
+        assert_eq!(m.monsters, [IdRange { major: 0, low: 3001, high: 5473 }]);
+        assert!(Manifest::parse(GOOD).unwrap().monsters.is_empty());
+    }
 
     #[test]
     fn a_good_manifest_parses() {
@@ -448,7 +477,13 @@ doc = "Gold."
             (no_rules().replace("[ids]", "[rules]\nx = 1\n[ids]"), "[rules.x] must be a table"),
             (GOOD.replace("[ids]", "scripts = 1\n[ids]"), "`scripts` must be a list"),
             (GOOD.replace("[ids]", "api = 1\n[ids]"), "`api` without `scripts`"),
-            (GOOD.replace("items = [", "monsters = [\"1\"]\nitems = ["), "unknown key `monsters` in [ids]"),
+            (GOOD.replace("items = [", "monsters = [\"1\"]\nitems = ["), "[ids] monsters: monster records 1-1"),
+            (
+                GOOD.replace("items = [", "monsters = [\"3001-5473\", \"5000-5500\"]\nitems = ["),
+                "[ids] monsters: 0/3001-5473 and 0/5000-5500 overlap",
+            ),
+            (GOOD.replace("items = [", "monsters = [\"x\"]\nitems = ["), "not a monster record range"),
+            (GOOD.replace("items = [", "tables = [\"x\"]\nitems = ["), "unknown key `tables` in [ids]"),
             (GOOD.replace("100/212-214", "101/5"), "[ids] items: item type 101"),
             (GOOD.replace("200/1-3", "327"), "[ids] skills: skill 327"),
             (GOOD.replace("[\"100/212-214\"]", "[\"100/212-214\", \"100/214-215\"]"), "overlap"),

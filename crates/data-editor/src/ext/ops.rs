@@ -12,7 +12,7 @@ use sqlx::{AssertSqlSafe, PgConnection};
 use super::ids::{self, IdRange};
 use super::manifest::Manifest;
 use super::refs;
-use super::rows::{ClientSpec, Entry, Kind};
+use super::rows::{ClientSpec, Entry, Kind, MonsterLook};
 use super::tables::ExtTable;
 use crate::apply;
 use crate::content::{columns_of, schema_exists, table_hash, tables_of, write_ext_row};
@@ -58,6 +58,8 @@ pub struct Plan {
     pub dir: PathBuf,
     pub manifest: Manifest,
     pub entries: Vec<Entry>,
+    /// The `[[monster_look]]` entries (`docs/plans/ext-4-pets.md` section 6.4): client-only, no `defs` row.
+    pub monster_looks: Vec<MonsterLook>,
     pub migrations: Vec<Migration>,
     pub art: Vec<ArtFile>,
     /// The manifest's `scripts` in order, read and compiled.
@@ -102,6 +104,19 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
                 e.kind.word(),
                 range_texts(list)
             ));
+        }
+    }
+    let monster_looks = super::rows::load_monster_looks(dir)?;
+    for look in &monster_looks {
+        for m in look.ids() {
+            let id = look.base + m;
+            if !manifest.monsters.iter().any(|r| r.contains(0, id)) {
+                return Err(format!(
+                    "{}: record {id} (a copy of {m}) lies outside the ids [ids] declares for monsters ({})",
+                    look.label(),
+                    range_texts_plain(&manifest.monsters)
+                ));
+            }
         }
     }
     let mut migrations = Vec::new();
@@ -167,7 +182,19 @@ pub fn read_folder(dir: &Path) -> Result<Plan, String> {
                 .map_err(|e| format!("scripts: {e:#}"))?,
         )
     };
-    Ok(Plan { dir: dir.to_owned(), manifest, entries, migrations, art, scripts, summary })
+    Ok(Plan { dir: dir.to_owned(), manifest, entries, monster_looks, migrations, art, scripts, summary })
+}
+
+/// The monster record ranges as written in a manifest (`3001-5473`, without the major 0).
+fn range_texts_plain(list: &[IdRange]) -> String {
+    if list.is_empty() {
+        "none".to_owned()
+    } else {
+        list.iter()
+            .map(|r| if r.low == r.high { r.low.to_string() } else { format!("{}-{}", r.low, r.high) })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 fn range_texts(list: &[IdRange]) -> String {
@@ -679,6 +706,8 @@ struct Prior {
     rows: Vec<(String, String, String, Value)>,
     /// `since_patch` and a description of the content, per client row (`item type/typeid`, `skill id/level`).
     client: BTreeMap<String, (Option<i32>, String)>,
+    /// The monster records it wrote, by id: `since_patch`, the record copied, the fields, the note.
+    monsters: BTreeMap<i32, (Option<i32>, i32, Value, String)>,
     migrations: BTreeMap<i32, String>,
 }
 
@@ -712,7 +741,13 @@ async fn read_prior(conn: &mut PgConnection, s: &Schemas, name: &str) -> Result<
             .bind(name)
             .fetch_all(&mut *conn)
             .await?;
-    Ok(Prior { rows, client, migrations: migrations.into_iter().collect() })
+    let monsters: Vec<(i32, Option<i32>, i32, Value, String)> =
+        sqlx::query_as(sql(format!("SELECT id, since_patch, copy_of, fields, note FROM {c}.client_monsters WHERE extension = $1")))
+            .bind(name)
+            .fetch_all(&mut *conn)
+            .await?;
+    let monsters = monsters.into_iter().map(|(id, since, copy_of, fields, note)| (id, (since, copy_of, fields, note))).collect();
+    Ok(Prior { rows, client, monsters, migrations: migrations.into_iter().collect() })
 }
 
 /// The install and the upgrade, inside the caller's transaction (the caller holds the lock). Returns the lines to print.
@@ -750,7 +785,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         game_server::rules::check_whole_rule(rule_name, rule).map_err(|e| crate::store::Refused(format!("extension.toml {e:#}")))?;
     }
     // Ranges against the other installed extensions, enabled or not.
-    for (kind, list) in [("item", &m.items), ("skill", &m.skills)] {
+    for (kind, list) in [("item", &m.items), ("skill", &m.skills), ("monster", &m.monsters)] {
         for r in list {
             let clash: Option<(String, i32, i32, i32)> = sqlx::query_as(sql(format!(
                 "SELECT extension, major, minor_low, minor_high FROM {c}.ext_ranges
@@ -764,7 +799,12 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .fetch_optional(&mut *conn)
             .await?;
             if let Some((other, major, low, high)) = clash {
-                return refuse(format!("the {kind} ids {} overlap {major}/{low}-{high} of the extension {other}", r.text()));
+                let (mine, theirs) = if kind == "monster" {
+                    (range_texts_plain(std::slice::from_ref(r)), format!("{low}-{high}"))
+                } else {
+                    (r.text(), format!("{major}/{low}-{high}"))
+                };
+                return refuse(format!("the {kind} ids {mine} overlap {theirs} of the extension {other}"));
             }
         }
     }
@@ -849,7 +889,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
             .execute(&mut *conn)
             .await?;
     }
-    for (kind, list) in [("item", &m.items), ("skill", &m.skills)] {
+    for (kind, list) in [("item", &m.items), ("skill", &m.skills), ("monster", &m.monsters)] {
         for r in list {
             sqlx::query(sql(format!(
                 "INSERT INTO {c}.ext_ranges (extension, kind, major, minor_low, minor_high) VALUES ($1, $2, $3, $4, $5)"
@@ -929,7 +969,7 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     let (mut changed, mut added, mut client_rows, mut effects) = (0, 0, 0, 0);
     let mut shown = Vec::new();
     // Client rows are rewritten wholesale; the old ones' since_patch is looked up first.
-    for table in ["client_items", "client_skills"] {
+    for table in ["client_items", "client_skills", "client_monsters"] {
         sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
     }
     sqlx::query(sql(format!("DELETE FROM {c}.server_only WHERE extension = $1"))).bind(name).execute(&mut *conn).await?;
@@ -1035,6 +1075,10 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
         }
     }
 
+    // The monster records (client-only): `[[monster_look]]` expands into rows of content.client_monsters.
+    let monster_records = write_monster_looks(conn, s, plan, prior.as_ref(), &mut shown, &mut warnings).await?;
+    client_rows += monster_records;
+
     // The items the scripts take over exist now (the extension's own rows are in the live table).
     if let Some(summary) = &plan.summary {
         for text in &summary.items {
@@ -1065,6 +1109,110 @@ async fn apply_plan(conn: &mut PgConnection, s: &Schemas, plan: &Plan, prior: Op
     out.extend(warnings.into_iter().map(|w| format!("warning: {w}")));
     out.extend(problems);
     Ok(out)
+}
+
+/// Writes the `[[monster_look]]` entries as rows of `content.client_monsters` (since_patch NULL, kept for a row that did not change) after
+/// the checks that need the database: the copied records exist in the client's file (when `client.monsters` is imported here), no record is a
+/// server monster of `defs.mobs`, a name fits the longest of the original. Returns the number of records.
+async fn write_monster_looks(
+    conn: &mut PgConnection,
+    s: &Schemas,
+    plan: &Plan,
+    prior: Option<&Prior>,
+    shown: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<usize> {
+    if plan.monster_looks.is_empty() {
+        return Ok(0);
+    }
+    let (c, name) = (&s.content, plan.manifest.name.as_str());
+    let imported = schema_exists(conn, &s.client).await? && tables_of(conn, &s.client).await?.iter().any(|t| t == "monsters");
+    let longest: Option<i64> = if imported {
+        sqlx::query_scalar(sql(format!("SELECT max(octet_length(name))::bigint FROM {}.monsters", s.client))).fetch_one(&mut *conn).await?
+    } else {
+        warnings.push(
+            "the client's Monster.SData is not imported here (client.monsters): the [[monster_look]] records are checked against the constant 0 to 2,473 only, and the generator checks the rest"
+                .to_owned(),
+        );
+        None
+    };
+    let mut total = 0;
+    let mut new_rows: BTreeMap<i32, (i32, Value, String)> = BTreeMap::new();
+    for look in &plan.monster_looks {
+        let fail = |text: String| anyhow::Error::from(crate::store::Refused(format!("{}: {text}", look.label())));
+        let ids: Vec<i32> = look.ids().into_iter().map(|m| m as i32).collect();
+        if imported {
+            let found: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {}.monsters WHERE mob_id = ANY($1)", s.client)))
+                .bind(&ids)
+                .fetch_one(&mut *conn)
+                .await?;
+            if found != ids.len() as i64 {
+                return Err(fail(format!(
+                    "of: {} of the {} records are not in the client's Monster.SData",
+                    ids.len() as i64 - found,
+                    ids.len()
+                )));
+            }
+        }
+        if let (Some(longest), Some(Value::String(text))) = (longest, look.set.get("name"))
+            && text.len() as i64 > longest - 1
+        {
+            return Err(fail(format!(
+                "set name: {} bytes is longer than the longest monster name in the original ({})",
+                text.len(),
+                longest - 1
+            )));
+        }
+        let made: Vec<i32> = ids.iter().map(|m| look.base as i32 + m).collect();
+        let server: Option<i32> =
+            sqlx::query_scalar(sql(format!("SELECT mobid::int FROM {}.mobs WHERE mobid::int = ANY($1) LIMIT 1", s.defs)))
+                .bind(&made)
+                .fetch_optional(&mut *conn)
+                .await?;
+        if let Some(mobid) = server {
+            return Err(fail(format!(
+                "record {mobid} is a monster of the server (defs.mobs): a record there would change how that monster looks"
+            )));
+        }
+        let fields = look.fields();
+        sqlx::query(sql(format!(
+            "INSERT INTO {c}.client_monsters (id, extension, copy_of, fields, since_patch, note)
+             SELECT $1 + m, $2, m, $3, NULL, $4 FROM unnest($5::int[]) AS m"
+        )))
+        .bind(look.base as i32)
+        .bind(name)
+        .bind(&fields)
+        .bind(&look.note)
+        .bind(&ids)
+        .execute(&mut *conn)
+        .await?;
+        for m in &ids {
+            new_rows.insert(look.base as i32 + m, (*m, fields.clone(), look.note.clone()));
+        }
+        total += ids.len();
+        shown.push(format!("  {}", look.summary()));
+    }
+    // since_patch survives for a record whose content did not change.
+    if let Some(prior) = prior {
+        let mut kept: BTreeMap<i32, Vec<i32>> = BTreeMap::new();
+        for (id, (since, copy_of, fields, note)) in &prior.monsters {
+            if let (Some(since), Some((new_copy, new_fields, new_note))) = (since, new_rows.get(id))
+                && new_copy == copy_of
+                && new_fields == fields
+                && new_note == note
+            {
+                kept.entry(*since).or_default().push(*id);
+            }
+        }
+        for (since, ids) in kept {
+            sqlx::query(sql(format!("UPDATE {c}.client_monsters SET since_patch = $1 WHERE id = ANY($2)")))
+                .bind(since)
+                .bind(&ids)
+                .execute(&mut *conn)
+                .await?;
+        }
+    }
+    Ok(total)
 }
 
 /// Stores the extension's scripts (in order) and option specs (replacing the old ones when the caller deleted them first).
@@ -1210,7 +1358,7 @@ async fn ext_snapshot(conn: &mut PgConnection, s: &Schemas, name: &str) -> Resul
     out.push(("the manifest, title or description".to_owned(), manifest));
     for (label, table, drop, order) in [
         ("rows", "ext_rows", "", "t.seq"),
-        ("item and skill ids", "ext_ranges", "", "to_jsonb(t)::text"),
+        ("item, skill and monster ids", "ext_ranges", "", "to_jsonb(t)::text"),
         ("settings", "ext_settings", "", "to_jsonb(t)::text"),
         ("rules", "ext_rules", "", "to_jsonb(t)::text"),
         ("item effects", "ext_item_effects", "", "to_jsonb(t)::text"),
@@ -1219,6 +1367,7 @@ async fn ext_snapshot(conn: &mut PgConnection, s: &Schemas, name: &str) -> Resul
         ("migrations", "ext_migrations", " - 'applied_at'", "t.version"),
         ("client item rows", "client_items", "", "to_jsonb(t)::text"),
         ("client skill rows", "client_skills", "", "to_jsonb(t)::text"),
+        ("client monster rows", "client_monsters", "", "t.id"),
         ("server-only rows", "server_only", "", "to_jsonb(t)::text"),
     ] {
         let rows: Value = sqlx::query_scalar(sql(format!(
@@ -1257,6 +1406,10 @@ fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Op
     None
 }
 
+/// A group of monster records made alike, for `ext show`: first and last record copied, how many, the id offset, the fields, the lowest and
+/// highest `since_patch`.
+type MonsterLookGroup = (i32, i32, i32, i64, Value, Option<i32>, Option<i32>);
+
 /// One line of `ext list`: name, version, enabled and the counts of rows, client rows, effects, settings, rules and scripts.
 type ListRow = (String, String, bool, i64, i64, i64, i64, i64, i64);
 
@@ -1275,7 +1428,7 @@ impl Editor {
     fn report_lines(plan: &Plan, mut lines: Vec<String>) -> Vec<String> {
         let wrote = plan.entries.iter().any(|e| matches!(e.kind, Kind::Item | Kind::Skill));
         let drops = plan.entries.iter().any(|e| e.kind == Kind::Drop);
-        let client = plan.entries.iter().any(|e| e.client.is_some() || e.server_only.is_some());
+        let client = plan.entries.iter().any(|e| e.client.is_some() || e.server_only.is_some()) || !plan.monster_looks.is_empty();
         lines.extend(script_lines(plan));
         lines.extend(next_steps(plan, wrote, drops, client));
         lines
@@ -1472,7 +1625,7 @@ impl Editor {
             lines.push(format!("deleted {} held rows (logged)", deleted.len()));
         }
         let shipped: i64 = sqlx::query_scalar(sql(format!(
-            "SELECT (SELECT count(*) FROM {c}.client_items WHERE extension = $1 AND since_patch IS NOT NULL) + (SELECT count(*) FROM {c}.client_skills WHERE extension = $1 AND since_patch IS NOT NULL)"
+            "SELECT (SELECT count(*) FROM {c}.client_items WHERE extension = $1 AND since_patch IS NOT NULL) + (SELECT count(*) FROM {c}.client_skills WHERE extension = $1 AND since_patch IS NOT NULL) + (SELECT count(*) FROM {c}.client_monsters WHERE extension = $1 AND since_patch IS NOT NULL)"
         )))
         .bind(name)
         .fetch_one(&mut *tx)
@@ -1481,7 +1634,7 @@ impl Editor {
             sqlx::query_scalar(sql(format!("SELECT version FROM {c}.extensions WHERE name = $1"))).bind(name).fetch_one(&mut *tx).await?;
         // Restore in reverse order of writing, then take the extension's records out.
         restore_rows(&mut tx, s, name, &rows).await?;
-        for table in ["client_items", "client_skills", "server_only"] {
+        for table in ["client_items", "client_skills", "client_monsters", "server_only"] {
             sqlx::query(sql(format!("DELETE FROM {c}.{table} WHERE extension = $1"))).bind(name).execute(&mut *tx).await?;
         }
         let migrations: i64 = sqlx::query_scalar(sql(format!("SELECT count(*) FROM {c}.ext_migrations WHERE extension = $1")))
@@ -1587,7 +1740,7 @@ impl Editor {
         let c = &self.s.content;
         let rows: Vec<ListRow> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled, (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
-                    (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
+                    (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name) + (SELECT count(*) FROM {c}.client_monsters mo WHERE mo.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_item_effects f WHERE f.extension = e.name) + (SELECT count(*) FROM {c}.ext_skill_abilities a WHERE a.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name),
@@ -1633,7 +1786,8 @@ impl Editor {
         .fetch_all(&mut *conn)
         .await?;
         for (kind, major, low, high) in ranges {
-            out.push(format!("  ids: {kind} {}", IdRange { major: major.into(), low: low.into(), high: high.into() }.text()));
+            let range = IdRange { major: major.into(), low: low.into(), high: high.into() };
+            out.push(format!("  ids: {kind} {}", if kind == "monster" { range_texts_plain(&[range]) } else { range.text() }));
         }
         let settings: Vec<(String, String)> =
             sqlx::query_as(sql(format!("SELECT name, value FROM {c}.ext_settings WHERE extension = $1 ORDER BY name")))
@@ -1708,6 +1862,27 @@ impl Editor {
         .await?;
         for (what, text) in client {
             out.push(format!("  client {what}: {text}"));
+        }
+        // The monster records, one line per group of records made alike (not 2,473 lines).
+        let looks: Vec<MonsterLookGroup> = sqlx::query_as(sql(format!(
+            "SELECT min(copy_of), max(copy_of), count(*)::int, (id - copy_of)::bigint, fields, min(since_patch), max(since_patch)
+             FROM {c}.client_monsters WHERE extension = $1 GROUP BY fields, id - copy_of, note ORDER BY min(copy_of), 4"
+        )))
+        .bind(name)
+        .fetch_all(&mut *conn)
+        .await?;
+        for (first, last, count, base, fields, since_low, since_high) in looks {
+            let day = fields.get("day").is_some_and(Value::is_object);
+            let set = fields.as_object().map_or(0, |f| f.len() - usize::from(day));
+            let since = match (since_low, since_high) {
+                (Some(a), Some(b)) if a == b => format!("since patch {a}"),
+                (None, None) => "since patch -".to_owned(),
+                _ => "in several patches".to_owned(),
+            };
+            out.push(format!(
+                "  client {} ({since})",
+                super::rows::monster_look_line(Some(first.into()), Some(last.into()), count as usize, base, day, set)
+            ));
         }
         out.push(format!("  manifest: {}", manifest));
         Ok(out)

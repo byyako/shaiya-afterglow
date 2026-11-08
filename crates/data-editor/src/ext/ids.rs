@@ -19,6 +19,15 @@ pub const ITEM_GROUP_RECORDS: [u16; 100] = [
     0, 0, 6, 8, 0, 0, 0, 0, 255,
 ];
 
+/// The records of the shipped `Monster.SData` (ids 0 to 2,473): what a `[[monster_look]]` entry may copy when the `client` schema is not
+/// there to ask (`tools/sdata/load_client.py` asserts the same number; `docs/plans/ext-4-pets.md` section 6.4).
+pub const MONSTER_ORIGINALS: i64 = 2474;
+/// The monsters of the server's `defs.mobs` (ids 0 to 2,746, of which 2,474 to 2,746 are the original's placeholders with no client record):
+/// a record an extension adds starts after them, so it never changes how a server monster looks (section 6.4).
+pub const SERVER_MONSTERS: i64 = 2747;
+/// The id of a monster record is the u16 of `0x0601` and the file's count (client research entry 11 a; section 6.4).
+pub const MONSTER_ID_MAX: i64 = 65535;
+
 /// One declared range of ids: items `major` = type, `low..=high` type ids; skills `major` = skill id, levels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IdRange {
@@ -68,6 +77,25 @@ pub fn parse_range(text: &str, skill: bool) -> Result<IdRange, String> {
     let range = IdRange { major, low, high };
     check_ceilings(&range, skill)?;
     Ok(range)
+}
+
+/// `"3001-5473"` or `"3001"`: monster records (`major` is 0), from the server's monster count to 65,535.
+pub fn parse_monster_range(text: &str) -> Result<IdRange, String> {
+    let bad = || format!("{text:?} is not a monster record range (\"3001\" or \"3001-5473\")");
+    let number = |t: &str| t.trim().parse::<i64>().map_err(|_| bad());
+    let (low, high) = match text.split_once('-') {
+        Some((low, high)) => (number(low)?, number(high)?),
+        None => (number(text)?, number(text)?),
+    };
+    if low > high {
+        return Err(format!("{text:?}: the range runs backwards"));
+    }
+    if low < SERVER_MONSTERS || high > MONSTER_ID_MAX {
+        return Err(format!(
+            "monster records {low}-{high}: an extension's records are {SERVER_MONSTERS} (after the server's monsters, defs.mobs) to {MONSTER_ID_MAX} (the client's u16)"
+        ));
+    }
+    Ok(IdRange { major: 0, low, high })
 }
 
 /// A range inside the ceilings; the message says which and why.
@@ -135,6 +163,29 @@ mod tests {
             let error = parse_range(text, skill).unwrap_err();
             assert!(error.contains(needle), "{text}: {error}");
         }
+    }
+
+    #[test]
+    fn monster_ranges_stay_between_the_servers_monsters_and_the_u16() {
+        assert_eq!(parse_monster_range("3001-5473").unwrap(), IdRange { major: 0, low: 3001, high: 5473 });
+        assert_eq!(parse_monster_range("2747").unwrap(), IdRange { major: 0, low: 2747, high: 2747 });
+        assert_eq!(parse_monster_range("60000-65535").unwrap().high, 65535);
+        for (text, needle) in [
+            ("2746", "2747 (after the server's monsters"),
+            ("2000-3000", "2747 (after the server's monsters"),
+            ("65536", "65535 (the client's u16)"),
+            ("5-3", "backwards"),
+            ("x", "not a monster record range"),
+            ("3001-", "not a monster record range"),
+        ] {
+            let error = parse_monster_range(text).unwrap_err();
+            assert!(error.contains(needle), "{text}: {error}");
+        }
+        assert_eq!(
+            IdRange { major: 0, low: 3001, high: 5473 }.text(),
+            "0/3001-5473",
+            "the generic text; show prints monsters without the 0"
+        );
     }
 
     #[test]

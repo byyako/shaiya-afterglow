@@ -527,7 +527,7 @@ impl Editor {
         let extensions: Vec<(String, String, bool, i64, i64, i64)> = sqlx::query_as(sql(format!(
             "SELECT e.name, e.version, e.enabled,
                     (SELECT count(*) FROM {c}.ext_rows r WHERE r.extension = e.name),
-                    (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name),
+                    (SELECT count(*) FROM {c}.client_items i WHERE i.extension = e.name) + (SELECT count(*) FROM {c}.client_skills k WHERE k.extension = e.name) + (SELECT count(*) FROM {c}.client_monsters mo WHERE mo.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name)
              FROM {c}.extensions e ORDER BY e.install_seq"
         )))
@@ -543,7 +543,7 @@ impl Editor {
             ));
         }
         let unshipped: i64 = sqlx::query_scalar(sql(format!(
-            "SELECT (SELECT count(*) FROM {c}.client_items WHERE since_patch IS NULL) + (SELECT count(*) FROM {c}.client_skills WHERE since_patch IS NULL)"
+            "SELECT (SELECT count(*) FROM {c}.client_items WHERE since_patch IS NULL) + (SELECT count(*) FROM {c}.client_skills WHERE since_patch IS NULL) + (SELECT count(*) FROM {c}.client_monsters WHERE since_patch IS NULL)"
         )))
         .fetch_one(&mut *conn)
         .await?;
