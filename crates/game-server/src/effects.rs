@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use crate::inventory::real_type;
 
 /// The item effect types, in the order the documentation lists them.
-pub const EFFECT_TYPES: &[&str] = &["level_up", "enchant", "recreate"];
+pub const EFFECT_TYPES: &[&str] = &["level_up", "enchant", "recreate", "capture", "pet_egg"];
 /// The skill ability types.
 pub const ABILITY_TYPES: &[&str] = &["kill_boost"];
 /// How many abilities one skill level holds.
@@ -96,12 +96,53 @@ pub struct Recreate {
     pub value: RecreateValue,
 }
 
+/// Monster ids and ranges (`[1234, "600-620"]`): inclusive `(low, high)` pairs, sorted.
+pub type MonsterRanges = Vec<(u16, u16)>;
+
+/// Whether `id` lies in one of the ranges.
+pub fn in_ranges(list: &[(u16, u16)], id: u16) -> bool {
+    list.iter().any(|&(low, high)| (low..=high).contains(&id))
+}
+
+/// A capture item (`docs/plans/ext-4-pets.md` section 7.1): used on the weakest monster that is fighting the user.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Capture {
+    /// The item (type, type id) the catch becomes; it has a `pet_egg` effect of the same extension (checked at load).
+    pub egg: (u8, u8),
+    /// A catch can be tried at this HP percent or below.
+    pub below: u8,
+    /// The chance in percent at `below` and near death.
+    pub chance: [u8; 2],
+    /// How far the monster may be from the user.
+    pub range: u8,
+    /// The monster's level may be at most the user's plus this.
+    pub levels_above: Option<u8>,
+    /// Monsters never caught.
+    pub except: MonsterRanges,
+}
+
+/// A Pet Egg (section 7.2): used, it calls the pet of the monster its craft name holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PetEgg {
+    /// The pet of monster `m` is the client's record `base + m`; 0 is the wild record itself.
+    pub base: u16,
+    /// The monsters that have a pet record.
+    pub monsters: MonsterRanges,
+    /// The pet fetches its owner's drops.
+    pub loot: bool,
+    pub loot_range: u8,
+    /// Gold too.
+    pub gold: bool,
+}
+
 /// An item effect (section 3.1).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ItemEffect {
     LevelUp(LevelUp),
     Enchant(EnchantEffect),
     Recreate(Recreate),
+    Capture(Capture),
+    PetEgg(PetEgg),
 }
 
 impl ItemEffect {
@@ -111,6 +152,8 @@ impl ItemEffect {
             ItemEffect::LevelUp(_) => "level_up",
             ItemEffect::Enchant(_) => "enchant",
             ItemEffect::Recreate(_) => "recreate",
+            ItemEffect::Capture(_) => "capture",
+            ItemEffect::PetEgg(_) => "pet_egg",
         }
     }
 
@@ -121,7 +164,7 @@ impl ItemEffect {
 
     pub fn request(&self) -> Request {
         match self {
-            ItemEffect::LevelUp(_) => Request::Use,
+            ItemEffect::LevelUp(_) | ItemEffect::Capture(_) | ItemEffect::PetEgg(_) => Request::Use,
             ItemEffect::Enchant(_) => Request::Enchant,
             ItemEffect::Recreate(_) => Request::Recreate,
         }
@@ -152,8 +195,34 @@ impl ItemEffect {
                 };
                 format!("recreate stats = [{}], value = \"{value}\"", stats.join(", "))
             }
+            ItemEffect::Capture(c) => format!(
+                "capture egg = \"{}/{}\", below = {}, chance = [{}, {}], range = {}{}{}",
+                c.egg.0,
+                c.egg.1,
+                c.below,
+                c.chance[0],
+                c.chance[1],
+                c.range,
+                c.levels_above.map_or(String::new(), |n| format!(", levels_above = {n}")),
+                if c.except.is_empty() { String::new() } else { format!(", except = {}", ranges_text(&c.except)) }
+            ),
+            ItemEffect::PetEgg(e) => format!(
+                "pet_egg base = {}, monsters = {}, loot = {}, loot_range = {}, gold = {}",
+                e.base,
+                ranges_text(&e.monsters),
+                e.loot,
+                e.loot_range,
+                e.gold
+            ),
         }
     }
+}
+
+/// Monster ranges as they are written: `[1234, "600-620"]`.
+fn ranges_text(list: &[(u16, u16)]) -> String {
+    let parts: Vec<String> =
+        list.iter().map(|&(low, high)| if low == high { low.to_string() } else { format!("\"{low}-{high}\"") }).collect();
+    format!("[{}]", parts.join(", "))
 }
 
 /// A skill ability (section 3.2).
@@ -295,7 +364,75 @@ fn take_flag(obj: &mut Map<String, Value>, key: &str) -> Result<Option<bool>> {
 }
 
 /// The keys that belong to one type or another, to say "not a key of this type" instead of only "unknown".
-const OWN_EFFECT_KEYS: &[&str] = &["levels", "to", "max", "rate", "jumps", "safe", "stats", "value"];
+const OWN_EFFECT_KEYS: &[&str] = &[
+    "levels",
+    "to",
+    "max",
+    "rate",
+    "jumps",
+    "safe",
+    "stats",
+    "value",
+    "egg",
+    "below",
+    "chance",
+    "range",
+    "levels_above",
+    "except",
+    "base",
+    "monsters",
+    "loot",
+    "loot_range",
+    "gold",
+];
+
+/// A monster id (a number) or a range (`"600-620"`), or a list of both: sorted `(low, high)` pairs, each id 0 to 65,535. An empty list
+/// and ranges that overlap are errors.
+fn take_monsters(obj: &mut Map<String, Value>, key: &str) -> Result<Option<MonsterRanges>> {
+    let Some(value) = obj.remove(key) else { return Ok(None) };
+    let one = |v: &Value| -> Result<(u16, u16)> {
+        let bad = || anyhow!("{key}: {v} is not a monster id or range (a number, or \"600-620\")");
+        let number = |t: &str| t.trim().parse::<u16>().map_err(|_| anyhow!("{key}: {v} has ids 0 to 65535 only"));
+        let (low, high) = match v {
+            Value::Number(n) => {
+                let id = n.as_u64().ok_or_else(bad)?;
+                let id = u16::try_from(id).map_err(|_| anyhow!("{key}: {v} is not 0 to 65535"))?;
+                (id, id)
+            }
+            Value::String(text) => match text.split_once('-') {
+                Some((a, b)) => (number(a)?, number(b)?),
+                None => (number(text)?, number(text)?),
+            },
+            _ => return Err(bad()),
+        };
+        if low > high {
+            bail!("{key}: {v}: {low} is above {high}");
+        }
+        Ok((low, high))
+    };
+    let mut list = match &value {
+        Value::Array(items) => items.iter().map(one).collect::<Result<Vec<_>>>()?,
+        other => vec![one(other)?],
+    };
+    if list.is_empty() {
+        bail!("{key}: an empty list");
+    }
+    list.sort_unstable();
+    if let Some(pair) = list.windows(2).find(|w| w[1].0 <= w[0].1) {
+        bail!("{key}: {}-{} and {}-{} overlap", pair[0].0, pair[0].1, pair[1].0, pair[1].1);
+    }
+    Ok(Some(list))
+}
+
+/// An item id written `"100/228"`: type and type id, each 1 to 255.
+fn take_item(obj: &mut Map<String, Value>, key: &str) -> Result<Option<(u8, u8)>> {
+    let Some(value) = obj.remove(key) else { return Ok(None) };
+    let bad = || anyhow!("{key}: {value} is not an item like \"100/228\"");
+    let text = value.as_str().ok_or_else(bad)?;
+    let (a, b) = text.split_once('/').ok_or_else(bad)?;
+    let part = |t: &str| t.trim().parse::<u8>().ok().filter(|n| *n >= 1).ok_or_else(bad);
+    Ok(Some((part(a)?, part(b)?)))
+}
 
 fn leftover(obj: &Map<String, Value>, ty: &str, own: &[&str]) -> Result<()> {
     if let Some(key) = obj.keys().next() {
@@ -370,6 +507,44 @@ pub fn check_effect(value: &Value) -> Result<ItemEffect> {
             leftover(&obj, &ty, OWN_EFFECT_KEYS)?;
             Ok(ItemEffect::Recreate(Recreate { stats, value }))
         }
+        "capture" => {
+            let Some(egg) = take_item(&mut obj, "egg")? else {
+                bail!("a capture effect needs egg, the item the catch becomes (\"100/228\")")
+            };
+            let below = take_whole(&mut obj, "below", 1, 100)?.map_or(30, |n| n as u8);
+            let chance = match obj.remove("chance") {
+                None => [10, 60],
+                Some(Value::Array(list)) if list.len() == 2 => {
+                    let mut out = [0u8; 2];
+                    for (place, v) in out.iter_mut().zip(&list) {
+                        *place = v.as_u64().filter(|n| *n <= 100).ok_or_else(|| anyhow!("chance: {v} is not 0 to 100"))? as u8;
+                    }
+                    out
+                }
+                Some(other) => bail!("chance: {other} is not a list of two numbers [at the threshold, near death], each 0 to 100"),
+            };
+            let range = take_whole(&mut obj, "range", 1, 60)?.map_or(15, |n| n as u8);
+            let levels_above = take_whole(&mut obj, "levels_above", 0, 255)?.map(|n| n as u8);
+            let except = take_monsters(&mut obj, "except")?.unwrap_or_default();
+            leftover(&obj, &ty, OWN_EFFECT_KEYS)?;
+            Ok(ItemEffect::Capture(Capture { egg, below, chance, range, levels_above, except }))
+        }
+        "pet_egg" => {
+            let Some(base) = take_whole(&mut obj, "base", 0, u64::from(u16::MAX))? else {
+                bail!("a pet_egg effect needs base: the pet of monster m is the client's record base + m (0: the wild record)")
+            };
+            let Some(monsters) = take_monsters(&mut obj, "monsters")? else {
+                bail!("a pet_egg effect needs monsters, the ids that have a pet record")
+            };
+            if let Some(&(_, high)) = monsters.last().filter(|&&(_, high)| base + u64::from(high) > u64::from(u16::MAX)) {
+                bail!("base: {base} + monster {high} is {}, over 65535 (the client's u16)", base + u64::from(high));
+            }
+            let loot = take_flag(&mut obj, "loot")?.unwrap_or(true);
+            let loot_range = take_whole(&mut obj, "loot_range", 5, 30)?.map_or(15, |n| n as u8);
+            let gold = take_flag(&mut obj, "gold")?.unwrap_or(true);
+            leftover(&obj, &ty, OWN_EFFECT_KEYS)?;
+            Ok(ItemEffect::PetEgg(PetEgg { base: base as u16, monsters, loot, loot_range, gold }))
+        }
         other => bail!("type: unknown type {other:?}; the types are {}", EFFECT_TYPES.join(", ")),
     }
 }
@@ -382,9 +557,9 @@ fn quoted_stats() -> String {
 /// `special` are the computed row's, after `copy` and `set`.
 pub fn fits_row(effect: &ItemEffect, item_type: u8, special: u8) -> Result<(), String> {
     match effect {
-        ItemEffect::LevelUp(_) if real_type(item_type) != REAL_TYPE_USABLE => {
-            Err(format!("effect level_up needs an item the core uses (item type 25, 44 or 100); this item is type {item_type}"))
-        }
+        ItemEffect::LevelUp(_) | ItemEffect::Capture(_) | ItemEffect::PetEgg(_) if real_type(item_type) != REAL_TYPE_USABLE => Err(
+            format!("effect {} needs an item the core uses (item type 25, 44 or 100); this item is type {item_type}", effect.type_name()),
+        ),
         ItemEffect::Enchant(_) if item_type != LAPISIA_TYPE => {
             Err(format!("effect enchant needs a Lapisia (item type {LAPISIA_TYPE}); this item is type {item_type}"))
         }
@@ -393,6 +568,76 @@ pub fn fits_row(effect: &ItemEffect, item_type: u8, special: u8) -> Result<(), S
         }
         _ => Ok(()),
     }
+}
+
+/// An effect skipped at load: `(extension, item id, why)`.
+pub type Skipped = (String, u32, String);
+
+/// An effect read from `content.ext_item_effects` that passed its parser and `fits_row`, before the links between items are checked.
+#[derive(Clone, Debug)]
+pub struct Candidate {
+    pub extension: String,
+    pub item_id: u32,
+    pub effect: ItemEffect,
+    /// The row's `count` (`ItemDef::max_count`).
+    pub max_count: u8,
+}
+
+/// The links between the effects of one extension (`docs/plans/ext-4-pets.md` sections 7.1 and 7.2), checked when the server loads them:
+/// a `pet_egg` row must not stack (`count` 1) and, with `base` above 0, every `base + m` must lie in the extension's monster records
+/// (`ranges`: extension to `(low, high)` of `content.ext_ranges`); a `capture`'s `egg` must be a `pet_egg` item of the same extension.
+/// Returns the effects that stay and, for each one skipped, `(extension, item id, why)`: the item then does what its own columns say.
+pub fn check_links(candidates: Vec<Candidate>, ranges: &HashMap<String, Vec<(u32, u32)>>) -> (Vec<(u32, ItemEffect)>, Vec<Skipped>) {
+    let (mut kept, mut skipped) = (Vec::new(), Vec::new());
+    let mut eggs: Vec<(String, u32)> = Vec::new();
+    for c in candidates.iter().filter(|c| matches!(c.effect, ItemEffect::PetEgg(_))) {
+        let ItemEffect::PetEgg(egg) = &c.effect else { continue };
+        let why = if c.max_count != 1 {
+            Some(format!("a pet_egg item must not stack: its count is {}, not 1", c.max_count))
+        } else if egg.base > 0 {
+            let own = ranges.get(&c.extension).map_or(&[][..], Vec::as_slice);
+            egg.monsters
+                .iter()
+                .find_map(|&(low, high)| {
+                    (low..=high).find(|&m| {
+                        let record = u32::from(egg.base) + u32::from(m);
+                        !own.iter().any(|&(a, b)| (a..=b).contains(&record))
+                    })
+                })
+                .map(|m| {
+                    format!(
+                        "the pet record {} (base {} + monster {m}) is not in the monster records of the extension's [ids]",
+                        u32::from(egg.base) + u32::from(m),
+                        egg.base
+                    )
+                })
+        } else {
+            None
+        };
+        match why {
+            Some(why) => skipped.push((c.extension.clone(), c.item_id, why)),
+            None => eggs.push((c.extension.clone(), c.item_id)),
+        }
+    }
+    for c in candidates {
+        match &c.effect {
+            ItemEffect::PetEgg(_) if !eggs.contains(&(c.extension.clone(), c.item_id)) => {}
+            ItemEffect::Capture(capture) => {
+                let egg_id = item_id(capture.egg.0, capture.egg.1);
+                if eggs.contains(&(c.extension.clone(), egg_id)) {
+                    kept.push((c.item_id, c.effect));
+                } else {
+                    let why = format!(
+                        "its egg {}/{} is not a pet_egg item of the extension {} (or that effect was skipped)",
+                        capture.egg.0, capture.egg.1, c.extension
+                    );
+                    skipped.push((c.extension, c.item_id, why));
+                }
+            }
+            _ => kept.push((c.item_id, c.effect)),
+        }
+    }
+    (kept, skipped)
 }
 
 /// Parses a skill level's abilities (`abilities = [{ type = "kill_boost", times = 2 }]`): 1 to 4 tables. Errors name the key as
@@ -565,7 +810,8 @@ mod tests {
         assert_eq!(error(json!({ "type": "recreate", "stats": ["str"], "value": "high" })), "value: \"high\" is not \"random\" or \"max\"");
         assert!(error(json!({ "type": "recreate", "stats": ["str"], "rate": 1 })).contains("not a key of the recreate effect"));
         assert!(
-            error(json!({ "type": "nothing" })).starts_with("type: unknown type \"nothing\"; the types are level_up, enchant, recreate")
+            error(json!({ "type": "nothing" }))
+                .starts_with("type: unknown type \"nothing\"; the types are level_up, enchant, recreate, capture, pet_egg")
         );
         assert!(error(json!({ "levels": 1 })).contains("needs a type"));
         assert!(error(json!({ "type": 3 })).starts_with("type: "));
@@ -591,6 +837,167 @@ mod tests {
         assert_eq!(fits_row(&rune, 100, 62), Ok(()));
         assert!(fits_row(&rune, 100, 61).unwrap_err().contains("special 62"));
         assert!(fits_row(&rune, 95, 0).is_err());
+    }
+
+    #[test]
+    fn capture_and_pet_egg_parse_with_their_defaults() {
+        let ItemEffect::Capture(c) = effect(json!({ "type": "capture", "egg": "100/228" })) else { panic!() };
+        assert_eq!(
+            c,
+            Capture { egg: (100, 228), below: 30, chance: [10, 60], range: 15, levels_above: None, except: vec![] },
+            "section 7.1's defaults"
+        );
+        let ItemEffect::Capture(c) = effect(json!({
+            "type": "capture", "egg": "100/228", "below": 50, "chance": [20, 100], "range": 60, "levels_above": 5,
+            "except": [1234, "600-620", "7"]
+        })) else {
+            panic!()
+        };
+        assert_eq!((c.below, c.chance, c.range, c.levels_above), (50, [20, 100], 60, Some(5)));
+        assert_eq!(c.except, vec![(7, 7), (600, 620), (1234, 1234)], "sorted, a text id is an id");
+        assert!(in_ranges(&c.except, 610) && in_ranges(&c.except, 7) && !in_ranges(&c.except, 621));
+        let edge = effect(json!({ "type": "capture", "egg": "1/1", "below": 1, "chance": [0, 0], "range": 1, "levels_above": 0 }));
+        assert!(matches!(edge, ItemEffect::Capture(Capture { below: 1, chance: [0, 0], range: 1, levels_above: Some(0), .. })));
+        let ItemEffect::PetEgg(e) = effect(json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"] })) else { panic!() };
+        assert_eq!(e, PetEgg { base: 3000, monsters: vec![(1, 2473)], loot: true, loot_range: 15, gold: true }, "section 7.2's defaults");
+        let ItemEffect::PetEgg(e) =
+            effect(json!({ "type": "pet_egg", "base": 0, "monsters": 5, "loot": false, "loot_range": 30, "gold": false }))
+        else {
+            panic!()
+        };
+        assert_eq!((e.base, e.monsters, e.loot, e.loot_range, e.gold), (0, vec![(5, 5)], false, 30, false));
+        assert!(check_effect(&json!({ "type": "pet_egg", "base": 63062, "monsters": ["1-2473"] })).is_ok(), "63062 + 2473 is 65535");
+        assert!(check_effect(&json!({ "type": "pet_egg", "base": 5, "monsters": [5], "loot_range": 5 })).is_ok());
+        assert_eq!(effect(json!({ "type": "capture", "egg": "100/228" })).request(), Request::Use);
+        assert_eq!(effect(json!({ "type": "pet_egg", "base": 0, "monsters": [1] })).request(), Request::Use);
+        assert_eq!(effect(json!({ "type": "capture", "egg": "100/228" })).refusal_id(), REFUSAL_BASE + 3);
+        assert_eq!(effect(json!({ "type": "pet_egg", "base": 0, "monsters": [1] })).refusal_id(), REFUSAL_BASE + 4);
+    }
+
+    #[test]
+    fn capture_and_pet_egg_errors_name_the_key() {
+        let capture = |extra: Value| {
+            let mut v = json!({ "type": "capture", "egg": "100/228" });
+            v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            error(v)
+        };
+        assert!(error(json!({ "type": "capture" })).contains("needs egg"));
+        for bad in [json!("100"), json!("a/b"), json!("0/5"), json!("256/1"), json!(100228), json!("100/0")] {
+            assert!(error(json!({ "type": "capture", "egg": bad })).starts_with("egg: "), "{bad}");
+        }
+        assert_eq!(capture(json!({ "below": 0 })), "below: 0 is not 1 to 100");
+        assert_eq!(capture(json!({ "below": 101 })), "below: 101 is not 1 to 100");
+        assert_eq!(capture(json!({ "range": 0 })), "range: 0 is not 1 to 60");
+        assert_eq!(capture(json!({ "range": 61 })), "range: 61 is not 1 to 60");
+        assert_eq!(capture(json!({ "levels_above": 256 })), "levels_above: 256 is not 0 to 255");
+        assert_eq!(capture(json!({ "chance": [10, 101] })), "chance: 101 is not 0 to 100");
+        assert_eq!(capture(json!({ "chance": [-1, 5] })), "chance: -1 is not 0 to 100");
+        assert!(capture(json!({ "chance": [10] })).starts_with("chance: [10] is not a list of two numbers"));
+        assert!(capture(json!({ "chance": 10 })).starts_with("chance: 10 is not a list of two numbers"));
+        assert!(capture(json!({ "except": [] })).contains("except: an empty list"));
+        assert!(capture(json!({ "except": ["x"] })).starts_with("except: \"x\" has ids 0 to 65535 only"));
+        assert!(capture(json!({ "except": [70000] })).starts_with("except: 70000 is not 0 to 65535"));
+        assert!(capture(json!({ "except": [true] })).contains("is not a monster id or range"));
+        assert!(capture(json!({ "except": ["9-3"] })).contains("9 is above 3"));
+        assert!(capture(json!({ "except": [5, "1-9"] })).contains("overlap"));
+        assert!(capture(json!({ "base": 3000 })).contains("unknown key \"base\" (not a key of the capture effect)"));
+        assert_eq!(capture(json!({ "colour": 1 })), "unknown key \"colour\"");
+        let egg = |extra: Value| {
+            let mut v = json!({ "type": "pet_egg", "base": 3000, "monsters": [1] });
+            v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            error(v)
+        };
+        assert!(error(json!({ "type": "pet_egg", "monsters": [1] })).contains("needs base"));
+        assert!(error(json!({ "type": "pet_egg", "base": 0 })).contains("needs monsters"));
+        assert_eq!(error(json!({ "type": "pet_egg", "base": 65536, "monsters": [1] })), "base: 65536 is not 0 to 65535");
+        assert_eq!(error(json!({ "type": "pet_egg", "base": -1, "monsters": [1] })), "base: -1 is not 0 to 65535");
+        assert_eq!(
+            error(json!({ "type": "pet_egg", "base": 63063, "monsters": ["1-2473"] })),
+            "base: 63063 + monster 2473 is 65536, over 65535 (the client's u16)"
+        );
+        assert_eq!(egg(json!({ "loot_range": 4 })), "loot_range: 4 is not 5 to 30");
+        assert_eq!(egg(json!({ "loot_range": 31 })), "loot_range: 31 is not 5 to 30");
+        assert!(egg(json!({ "loot": "yes" })).starts_with("loot: "));
+        assert!(egg(json!({ "gold": 1 })).starts_with("gold: "));
+        assert!(egg(json!({ "egg": "100/1" })).contains("not a key of the pet_egg effect"));
+        assert!(egg(json!({ "below": 5 })).contains("not a key of the pet_egg effect"));
+    }
+
+    #[test]
+    fn capture_and_pet_egg_describe_themselves_and_fit_the_core_items_only() {
+        let capture = effect(json!({ "type": "capture", "egg": "100/228", "levels_above": 5, "except": [7, "600-620"] }));
+        assert_eq!(
+            capture.describe(),
+            "capture egg = \"100/228\", below = 30, chance = [10, 60], range = 15, levels_above = 5, except = [7, \"600-620\"]"
+        );
+        let egg = effect(json!({ "type": "pet_egg", "base": 3000, "monsters": ["1-2473"] }));
+        assert_eq!(egg.describe(), "pet_egg base = 3000, monsters = [\"1-2473\"], loot = true, loot_range = 15, gold = true");
+        // what describe prints parses back to the same effect
+        for original in [&capture, &egg] {
+            let text = original.describe();
+            assert!(text.starts_with(original.type_name()));
+        }
+        for item in [&capture, &egg] {
+            for item_type in [25, 44, 100] {
+                assert_eq!(fits_row(item, item_type, 0), Ok(()), "type {item_type}");
+            }
+            let wrong = fits_row(item, 95, 0).unwrap_err();
+            assert!(wrong.starts_with(&format!("effect {} needs an item the core uses", item.type_name())), "{wrong}");
+            assert!(fits_row(item, 16, 0).is_err());
+        }
+    }
+
+    fn candidate(extension: &str, item_id: u32, value: Value, max_count: u8) -> Candidate {
+        Candidate { extension: extension.to_owned(), item_id, effect: effect(value), max_count }
+    }
+
+    #[test]
+    fn the_links_between_the_effects_of_an_extension_are_checked_at_load() {
+        let egg = |base: u64, monsters: Value| json!({ "type": "pet_egg", "base": base, "monsters": monsters });
+        let net = json!({ "type": "capture", "egg": "100/228" });
+        let ranges: HashMap<String, Vec<(u32, u32)>> = [("pets".to_owned(), vec![(3001, 5473)])].into();
+        let ids = |kept: &[(u32, ItemEffect)]| kept.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        // The whole set: kept.
+        let (kept, skipped) = check_links(
+            vec![candidate("pets", 100227, net.clone(), 10), candidate("pets", 100228, egg(3000, json!(["1-2473"])), 1)],
+            &ranges,
+        );
+        assert_eq!((ids(&kept), skipped.len()), (vec![100227, 100228], 0));
+        // An egg that stacks is skipped, and with it the net that names it.
+        let (kept, skipped) =
+            check_links(vec![candidate("pets", 100227, net.clone(), 10), candidate("pets", 100228, egg(3000, json!([1])), 2)], &ranges);
+        assert!(kept.is_empty(), "{kept:?}");
+        assert_eq!(skipped.len(), 2);
+        assert!(skipped[0].2.contains("must not stack") && skipped[0].1 == 100228, "{skipped:?}");
+        assert!(skipped[1].2.contains("its egg 100/228 is not a pet_egg item of the extension pets") && skipped[1].1 == 100227);
+        // A base whose records are not the extension's own: the last monster falls outside (3000 + 2474 = 5474).
+        let (kept, skipped) = check_links(vec![candidate("pets", 100228, egg(3000, json!(["1-2474"])), 1)], &ranges);
+        assert!(kept.is_empty() && skipped[0].2.contains("pet record 5474 (base 3000 + monster 2474)"), "{skipped:?}");
+        let (kept, skipped) = check_links(vec![candidate("pets", 100228, egg(2000, json!([1])), 1)], &ranges);
+        assert!(kept.is_empty() && skipped[0].2.contains("pet record 2001"), "{skipped:?}");
+        // An extension with no monster records at all.
+        let (kept, skipped) = check_links(vec![candidate("pets", 100228, egg(3000, json!([1])), 1)], &HashMap::new());
+        assert!(kept.is_empty() && skipped.len() == 1);
+        // base 0 is the wild record: nothing to hold it to.
+        let (kept, _) = check_links(vec![candidate("wild", 100228, egg(0, json!(["1-2473"])), 1)], &HashMap::new());
+        assert_eq!(ids(&kept), [100228]);
+        // The egg must be of the same extension.
+        let (kept, skipped) =
+            check_links(vec![candidate("pets", 100227, net.clone(), 10), candidate("other", 100228, egg(0, json!([1])), 1)], &ranges);
+        assert_eq!(ids(&kept), [100228]);
+        assert!(skipped.len() == 1 && skipped[0].0 == "pets" && skipped[0].1 == 100227, "{skipped:?}");
+        // A net that names an item with no effect, or a level stone, is skipped.
+        let (kept, skipped) = check_links(
+            vec![
+                candidate("pets", 100227, json!({ "type": "capture", "egg": "100/229" }), 10),
+                candidate("pets", 100228, egg(0, json!([1])), 1),
+            ],
+            &ranges,
+        );
+        assert_eq!((ids(&kept), skipped.len()), (vec![100228], 1));
+        // Other effects pass untouched.
+        let (kept, _) = check_links(vec![candidate("pets", 100215, json!({ "type": "level_up", "levels": 1 }), 1)], &ranges);
+        assert_eq!(ids(&kept), [100215]);
     }
 
     #[test]
@@ -640,7 +1047,7 @@ mod tests {
             (95003, effect(json!({ "type": "enchant", "safe": true }))),
         ]);
         assert_eq!(table.len(), 3);
-        assert_eq!(table.counts(), [("level_up", 2), ("enchant", 1), ("recreate", 0)]);
+        assert_eq!(table.counts(), [("level_up", 2), ("enchant", 1), ("recreate", 0), ("capture", 0), ("pet_egg", 0)]);
         assert!(table.get(100216).is_some() && table.get(100217).is_none());
         assert!(table.for_use(100216).is_some() && table.for_use(95003).is_none(), "an enchant effect is not a use");
         assert!(ItemEffects::default().is_empty());

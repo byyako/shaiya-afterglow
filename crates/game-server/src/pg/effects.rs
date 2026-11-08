@@ -28,7 +28,7 @@ pub async fn load_item_effects_in(pool: &PgPool, items: &ItemDefs, content: &str
     )))
     .fetch_all(pool)
     .await?;
-    let mut out = Vec::new();
+    let mut candidates = Vec::new();
     for (extension, item_id, text) in rows {
         let (item_type, type_id) = (u8::try_from(item_id / 1000)?, u8::try_from(item_id % 1000)?);
         let at = || format!("extension {extension}: item {item_type}/{type_id}: effect");
@@ -39,9 +39,31 @@ pub async fn load_item_effects_in(pool: &PgPool, items: &ItemDefs, content: &str
             tracing::warn!(extension, item = item_id, %why, "item effect skipped: it no longer suits the item");
             continue;
         }
-        out.push((u32::try_from(item_id)?, effect));
+        candidates.push(effects::Candidate { extension, item_id: u32::try_from(item_id)?, effect, max_count: def.max_count });
     }
-    Ok(ItemEffects::new(out))
+    let (kept, skipped) = effects::check_links(candidates, &monster_ranges(pool, content).await?);
+    for (extension, item, why) in skipped {
+        tracing::warn!(extension, item, %why, "item effect skipped: its links do not hold");
+    }
+    Ok(ItemEffects::new(kept))
+}
+
+/// The monster records each enabled extension declares in its `[ids]` (`content.ext_ranges`, kind `monster`), as `(low, high)`.
+async fn monster_ranges(pool: &PgPool, content: &str) -> Result<std::collections::HashMap<String, Vec<(u32, u32)>>> {
+    use sqlx::AssertSqlSafe;
+    let mut out: std::collections::HashMap<String, Vec<(u32, u32)>> = std::collections::HashMap::new();
+    if !present(pool, content, "ext_ranges").await? {
+        return Ok(out);
+    }
+    let rows: Vec<(String, i32, i32)> = sqlx::query_as(AssertSqlSafe(format!(
+        "SELECT r.extension, r.minor_low, r.minor_high FROM {content}.ext_ranges r WHERE r.kind = 'monster' ORDER BY r.extension, r.minor_low"
+    )))
+    .fetch_all(pool)
+    .await?;
+    for (extension, low, high) in rows {
+        out.entry(extension).or_default().push((u32::try_from(low)?, u32::try_from(high)?));
+    }
+    Ok(out)
 }
 
 /// The abilities of enabled extensions' skill levels, as `(skill id, level, abilities)`. A list that does not parse stops the start,

@@ -59,6 +59,10 @@ pub(super) enum Done {
     UsedUpFor(NewItem),
     /// The item was used up and saved before the effect saved something lasting (see `consume`): `0x050A` left to send.
     Consumed(ItemUnit),
+    #[allow(dead_code)] // the pet_egg handler (pets step 6) answers with it
+    /// The item stays as it is (a Pet Egg called or sent back): `0x050A` with the unchanged count, nothing saved
+    /// (`docs/plans/ext-4-pets.md` section 4.3).
+    Kept(ItemUnit),
     /// A move by item is under way: the item goes when it happens.
     Pending,
     /// The error answer, the reuse time put back.
@@ -327,6 +331,10 @@ pub(super) async fn use_item<S: Backend>(
             tracing::info!(id, bag, slot, item = def.item_id, special = def.special, "item used");
             send_used(conn, ctx, id, state, &item).await?;
         }
+        Done::Kept(item) => {
+            tracing::info!(id, bag, slot, item = def.item_id, "item used, kept");
+            send_kept(conn, ctx, id, state, &item).await?;
+        }
         Done::Pending => tracing::info!(id, bag, slot, item = def.item_id, special = def.special, "move by item cast"),
         Done::Failed => {
             state.reuse.restore(armed);
@@ -438,6 +446,12 @@ async fn send_used<S: Backend>(conn: &mut Connection, ctx: &Context<S>, id: u32,
     let left = item.count.saturating_sub(1);
     let (bag, slot) = (item.bag, item.slot);
     let packet = it::used(id, bag, slot, item.item_type, item.type_id, left);
+    if state.entered { conn.send(ctx.zones.send_near(state.map, id, packet, ITEM_RANGE)).await } else { conn.send(packet).await }
+}
+
+/// `0x050A` for an item that stays: the same packet as [`send_used`], with the slot's count unchanged.
+async fn send_kept<S: Backend>(conn: &mut Connection, ctx: &Context<S>, id: u32, state: &WorldState, item: &ItemUnit) -> Result<()> {
+    let packet = it::used(id, item.bag, item.slot, item.item_type, item.type_id, item.count);
     if state.entered { conn.send(ctx.zones.send_near(state.map, id, packet, ITEM_RANGE)).await } else { conn.send(packet).await }
 }
 

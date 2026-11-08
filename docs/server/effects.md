@@ -104,6 +104,8 @@ an effect or abilities only to the ids it owns.
 | `level_up` | exactly one of `levels` (1 to 59) and `to` (2 to 60); optionally `max` (2 to 60) | an item the core uses (type 25, 44 or 100) | raises the user's level |
 | `enchant` | `rate` (1 to 1,000,000, default 1,000,000), `jumps` (`[[steps, weight], …]`, steps 1 to 19, weights 1 to 1,000,000, at most 19), `safe` (`true`/`false`, default `false`); at least one | a Lapisia (item type 95) | the enchant's success rate, its jump and its danger |
 | `recreate` | `stats` (1 to 9 of `"str"`, `"dex"`, `"rec"`, `"int"`, `"wis"`, `"luc"`, `"hp"`, `"mp"`, `"sp"`, no repeat), `value` (`"random"` or `"max"`, default `"random"`) | a Recreation Rune (`special` 62) | redraws the named numbers only |
+| `capture` | `egg` (`"type/type_id"`, required), `below` (1 to 100, default 30), `chance` (`[c0, c1]`, each 0 to 100, default `[10, 60]`), `range` (1 to 60, default 15), `levels_above` (0 to 255), `except` (monster ids and ranges, `[1234, "600-620"]`) | an item the core uses (type 25, 44 or 100) | catches the weakest monster that is fighting the user, at `below` percent HP or less, into the Pet Egg `egg` (`docs/server/pets.md`) |
+| `pet_egg` | `base` (0 to 65,535, required), `monsters` (monster ids and ranges, required), `loot` (`true`/`false`, default `true`), `loot_range` (5 to 30, default 15), `gold` (`true`/`false`, default `true`) | an item the core uses whose `count` is 1 | calls the pet of the monster the egg holds, or sends it back (`docs/server/pets.md`) |
 
 **`level_up`.** The target is the user's level plus `levels`, or `to`, cut at `max` and at the mode's cap (30 in easy mode, 60
 otherwise). A target that is not above the user's level refuses the use (`use_failed`, a whisper `This item cannot raise your level any
@@ -120,6 +122,12 @@ after either); the step stays at most 20. `safe = true` means a failure never de
 **`recreate`.** Only the named numbers the item already has (not 0 in its craft name) change; every other number and the enchant step
 stay. `"random"` draws each as the smaller of two draws from 0 to the item's top, as the core's rune does; `"max"` makes it the item's top.
 An item with none of the named numbers is refused as the core's rune refuses one (the window's failure, result 1), and the rune stays.
+
+**`capture` and `pet_egg`** (0.4.0, `docs/server/pets.md`) are two halves of one thing. The server checks the links between them when it
+starts: a `capture`'s `egg` must be a `pet_egg` item of the same extension; a `pet_egg` row must have `count` 1 (eggs never stack) and, with
+`base` above 0, every `base + m` must lie in the extension's `[ids] monsters`. An effect that fails a link is skipped with a warning naming
+the item and the reason (the item then does what its own columns say, as when an effect no longer suits its row); a `capture` whose egg was
+skipped is skipped with it. `base + m` above 65,535 is a parse error.
 
 ### Skill abilities
 
