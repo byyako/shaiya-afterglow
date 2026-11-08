@@ -72,7 +72,7 @@ All of these only read; none runs anything from the original files.
 
 | script | what it does | reads, writes |
 |---|---|---|
-| `load_client.py` | imports the shipped `Item.SData` and `Skill.SData` into the `client` schema once, refusing any other file and recording the import (`--reset`, `--adopt`) | the originals (`CLIENT_ORIGINALS`); PostgreSQL |
+| `load_client.py` | imports the shipped `Item.SData`, `Skill.SData` and `Monster.SData` into the `client` schema once (an older import gets `client.monsters` added), refusing any other file and recording the import (`--reset`, `--adopt`) | the originals (`CLIENT_ORIGINALS`); PostgreSQL |
 | `client_patch.py` | generates the two files from the database alone (the client rows come from the extensions: `content.client_items`, `content.client_skills`), runs the checks of the plan's section 3, writes a patch's hand-over folder and the patch ledger (`restore`, `check`, `generate`, `adopt`, `rebuild`, `record`) | PostgreSQL; `data/client-patches/` |
 | `seed_sdata.py`, `parse_item.py`, `client_sdata.py` | the SEED cipher of the files (the tables come from Parsec, github.com/matigramirez/Parsec: `PARSEC_SEEDCONSTANTS`) and the readers of their records | |
 | `compare_items.py`, `compare_defs.py`, `compare_cash.py`, `compare_npcquest.py` | made the `docs/client/*-vs-*.md` comparisons of the client's files with `defs` and `world` | TSV files; one report |

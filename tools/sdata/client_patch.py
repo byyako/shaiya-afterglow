@@ -57,6 +57,7 @@ WIDTHS = {"B": (0, 255, 0xFF), "H": (-32768, 65535, 0xFFFF), "I": (0, 4294967295
 MEMBERS = {
     "item": {"member": "Item/Item.SData", "us_path": "data/item/item.sdata", "original": "Item.SData"},
     "skill": {"member": "Character/Skill.SData", "us_path": "data/character/skill.sdata", "original": "Skill.SData"},
+    "monster": {"member": "Monster/Monster.SData", "us_path": "data/monster/monster.sdata", "original": "Monster.SData"},
 }
 ITEM_GROUPS = 100
 SKILLS = 326
@@ -139,6 +140,30 @@ def read_client_skills():
     return records
 
 
+def monster_names():
+    return [n for n, _ in client_sdata.MONSTER_FIELDS]
+
+
+def read_client_monsters():
+    """client.monsters as a list of record dicts in file order (mob_id from 0; the name as cp1252 bytes without its NUL)."""
+    rows = query(f"SELECT mob_id, name, {', '.join(monster_names())} FROM client.monsters ORDER BY mob_id")
+    records = []
+    for n, (mob_id, name, *values) in enumerate(rows):
+        if int(mob_id) != n:
+            raise CheckError(f"client.monsters {mob_id}: not the next place")
+        rec = {"mob_id": n, "name": name.encode(load_client.ENCODING)}
+        rec.update({k: int(v) for k, v in zip(monster_names(), values)})
+        records.append(rec)
+    return records
+
+
+def write_monsters(records):
+    """Monster.SData from records (name without its NUL): u32 count, then per record the name as u32 length + text + NUL and the fields."""
+    text = client_sdata.pack_text
+    return struct.pack("<I", len(records)) + b"".join(
+        text(r["name"] + b"\0") + client_sdata.pack_fields(client_sdata.MONSTER_FIELDS, r) for r in records)
+
+
 def write_skills(records):
     text = client_sdata.pack_text
     return struct.pack("<I", len(records) // SKILL_LEVELS) + b"".join(
@@ -178,9 +203,17 @@ def sha(data):
 
 # ------------------------------------------------------------------------------------------------------------------- restore
 
+def has_monsters():
+    """Whether client.monsters holds the imported Monster.SData (an import from before the pets has no such table)."""
+    return query("SELECT to_regclass('client.monsters') IS NOT NULL AND EXISTS (SELECT 1 FROM client.monsters)")[0][0] == "t"
+
+
 def restored():
-    """{'item': (plain, encrypted), 'skill': (plain, encrypted)} from client.items / client.skills alone."""
+    """{'item': (plain, encrypted), 'skill': (plain, encrypted)} from client.items / client.skills alone, and 'monster' from
+    client.monsters when it is there."""
     out = {"item": parse_item.write_items(read_client_items()), "skill": write_skills(read_client_skills())}
+    if has_monsters():
+        out["monster"] = write_monsters(read_client_monsters())
     return {kind: (plain, encrypt(plain)) for kind, plain in out.items()}
 
 
@@ -438,8 +471,9 @@ def grade_only_item_edits():
 def run_checks(data, patch=None, report=print):
     """The eight checks of section 3. Returns (generated files, item changes, skill changes) against the originals."""
     # 1. Originals: the files the import recorded (content.imports 'client') are the shipped ones; the sizes and counts of what was imported.
-    if data.shipped != load_client.SHA256:
-        raise CheckError(f"the import recorded other files than the shipped ones: {data.shipped} (shipped: {load_client.SHA256})")
+    shipped = {name: sha for name, sha in load_client.SHA256.items() if name in data.shipped or name in load_client.PAIR}
+    if data.shipped != shipped:
+        raise CheckError(f"the import recorded other files than the shipped ones: {data.shipped} (shipped: {shipped})")
     counts = (int(query("SELECT count(*) FROM client.items")[0][0]), int(query("SELECT count(*) FROM client.skills")[0][0]))
     if counts != (16045, 978):
         raise CheckError(f"client.items / client.skills hold {counts} rows, the shipped files have (16045, 978)")

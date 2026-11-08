@@ -6,6 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import client_patch
+import client_sdata
+import load_client
+import seed_sdata
 
 NAMES = ["rowid", "itemid", "itemname", "grade", "drop", "updatedate"]
 
@@ -80,6 +83,41 @@ class PreviousVersionAndManifest(unittest.TestCase):
         self.assertEqual((m["commit"], m["extensions"], m["dirty"]), ("abc123", {"kill-boost": "1.0.0"}, False))
         self.assertNotIn("newshaiya_commit", m)
         self.assertNotIn("_encrypted", m["files"][0], "the encrypted bytes are files of the folder, not manifest fields")
+
+
+class MonsterFile(unittest.TestCase):
+    """Monster.SData (docs/plans/ext-4-pets.md section 6.3): the writer is the reader's inverse."""
+
+    @staticmethod
+    def record(mob_id, name):
+        rec = {"mob_id": mob_id, "name": name}
+        rec.update({n: (mob_id * 7 + i) % 100 for i, (n, _) in enumerate(client_sdata.MONSTER_FIELDS)})
+        rec["hp"] = 100000 + mob_id
+        rec["model"] = -1 if mob_id == 2 else mob_id
+        return rec
+
+    def test_write_monsters_parses_back_to_the_same_records(self):
+        records = [self.record(0, b"Error Monster"), self.record(1, b"Small Ruined Wolf"), self.record(2, b"")]
+        data = client_patch.write_monsters(records)
+        parsed, end, rebuilt, _ = client_sdata.read_monsters(data)
+        self.assertEqual((end, rebuilt), (len(data), data))
+        self.assertEqual([r["name"] for r in parsed], [b"Error Monster\0", b"Small Ruined Wolf\0", b"\0"], "each name carries its NUL in the file")
+        self.assertEqual([{k: v for k, v in r.items() if k != "name"} for r in parsed],
+                         [{k: v for k, v in r.items() if k != "name"} for r in records])
+
+    def test_the_shipped_file_rebuilds_from_its_rows_when_the_originals_are_there(self):
+        path = load_client.ORIGINALS / "Monster.SData"
+        if not path.exists() or not load_client.SEED_CONSTANTS.exists():
+            self.skipTest("the client originals are not in this checkout")
+        plain = seed_sdata.decrypt(path.read_bytes(), seed_sdata.load_consts(load_client.SEED_CONSTANTS))
+        self.assertEqual(client_patch.sha(plain), load_client.PLAIN_SHA256["Monster.SData"])
+        rows = load_client.monster_rows(plain)
+        self.assertEqual(len(rows), load_client.MONSTER_RECORDS)
+        records = [dict(zip(load_client.monster_columns(), row)) for row in rows]
+        for r in records:
+            r["name"] = r["name"].encode(load_client.ENCODING)
+        self.assertEqual(client_patch.write_monsters(records), plain)
+        self.assertEqual(client_patch.sha(client_patch.encrypt(plain)), load_client.SHA256["Monster.SData"])
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 -- SKILL_FIELDS (the load asserts they match this file); every unsigned field fits its column.
 CREATE SCHEMA client;
 
-COMMENT ON SCHEMA client IS 'The client''s Item.SData and Skill.SData as shipped (client.items, client.skills: imported once by tools/sdata/load_client.py, recorded in content.imports; with --reset replaced). What a data patch changes lives in the content schema: content.client_items, content.client_skills and content.server_only, written by the extensions that change client-visible rows (docs/plans/ext-1-foundation.md section 4).';
+COMMENT ON SCHEMA client IS 'The client''s Item.SData, Skill.SData and Monster.SData as shipped (client.items, client.skills, client.monsters: imported once by tools/sdata/load_client.py, recorded in content.imports; with --reset replaced). What a data patch changes lives in the content schema: content.client_items, content.client_skills, content.client_monsters and content.server_only, written by the extensions that change client-visible rows (docs/plans/ext-1-foundation.md section 4).';
 
 CREATE TABLE client.items (
     grp smallint NOT NULL,
@@ -158,3 +158,29 @@ CREATE TABLE client.skills (
     PRIMARY KEY (skill_id, slot)
 );
 COMMENT ON TABLE client.skills IS 'The client''s Skill.SData record by record, as shipped: skill_id from 1, slot 1 to 3 (the record''s place; its level field is a column too). Filled by tools/sdata/load_client.py from the original file; nothing else writes it.';
+
+CREATE TABLE client.monsters (
+    mob_id smallint NOT NULL,
+    name text NOT NULL,
+    model smallint NOT NULL,
+    level smallint NOT NULL,
+    ai smallint NOT NULL,
+    hp integer NOT NULL,
+    day smallint NOT NULL,
+    size smallint NOT NULL,
+    element smallint NOT NULL,
+    normal_time integer NOT NULL,
+    normal_step smallint NOT NULL,
+    chase_time integer NOT NULL,
+    chase_step smallint NOT NULL,
+    attack_type1 smallint NOT NULL,
+    attack_ani1 smallint NOT NULL,
+    attack_type2 smallint NOT NULL,
+    attack_ani2 smallint NOT NULL,
+    attack_type3 smallint NOT NULL,
+    attack_ani3 smallint NOT NULL,
+    attack_plus3 smallint NOT NULL,
+    quest_item smallint NOT NULL,
+    PRIMARY KEY (mob_id)
+);
+COMMENT ON TABLE client.monsters IS 'The client''s Monster.SData record by record, as shipped: mob_id from 0 (2,474 records; the server''s defs.mobs ids are the same numbers), name without its NUL. Filled by tools/sdata/load_client.py from the original file; nothing else writes it. The records an extension adds are content.client_monsters (docs/plans/ext-4-pets.md section 6.3).';
