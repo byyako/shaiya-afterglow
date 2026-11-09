@@ -114,3 +114,24 @@ itself (`WM_CLOSE` to its own window). Whether any original server sends it is n
 
 - Whether `0x0004` on the **login** connection shows the same box (not used: the login server sends nothing, 3.1).
 - *Live*: the box's text in this client's language file, and that the client indeed quits after it.
+
+## 4. Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 2008-01-17; EP5.4 2011-09-14, modified after linking) and `ps_session` (EP3 2007-12-07;
+EP5.4 2011-09-14) were compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The session server pushes the older login out in the same way (`0x702` to the old login server, `0x802` to its game server; EP3
+ps_session 0x407233, 0x4072a1; confirmed). The game side of the kick and `0x0608` were not compared in EP3.
+
+### EP5.4
+
+- `0x0608` is still never sent: no function of EP5.4 `ps_game` uses the value (confirmed, operand search). The health bar still comes
+  from the client's `Monster.SData`.
+- The duplicate-login kick stays silent: `0x802` reaches `CWorld::LeaveUserBill` (EP5.4 ps_game 0x414b20, matched by its call sites and
+  body), which closes the connection with reason 0x67 and sends nothing; `0x0004` is never sent (confirmed). The session side is unchanged
+  (EP5.4 ps_session 0x409215, 0x409290).
+- New: the target subscription (`0x0308`–`0x030D`) gives the client the selected target's buffs, not its HP (confirmed from the opcode
+  constants in EP5.4 ps_game and the EP5.4 client's handler).

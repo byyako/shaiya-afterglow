@@ -423,3 +423,31 @@ maps are party instances (`Map.ini` create type 3). **Analysed in `docs/original
 | 29 | 바람이여~ 나를 감싸라 | Wind~ wrap yourself around me. |
 | 30 | 모든 것은 무로 돌아갈 것이다. | All shall return to nothing. |
 | 31 | 너희들은 넘지말아야할 선을 넘어섰다. 보아라! 너희들의 하찮은 힘을... | You have crossed a line that must not be crossed. Behold! Your feeble power... |
+
+## 13. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `AI/`, `mob_ai.ini` and `Lua/` files, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md). Function names in those builds are carried over from EP4.5 (matched by strings, the call graph or switch
+tables, as those pages list).
+
+### EP3
+
+- **No Lua monsters** (confirmed): no Lua library strings, no `Lua*` methods, no `OnAttacked`/`OnDeath`/`OnMoveEnd`, no `/aiset`.
+- **The state machine is there**: the same handler names, and `CKFSM<CMob>::TravelCondition` (EP3 ps_game 0x47a5a0) has the same three
+  switches of 8, 11 and 6 cases (confirmed). But `CMob::SetTarget` (EP3 ps_game 0x4810f0) has no state-100 branch and no `SetTargetEx`
+  call (confirmed), so the hook of section 7 is not there in that form; how an EP3 scripted monster takes a target was not read.
+- **Files** (confirmed): 152 AI files and a `mob_ai.ini` without lines 35 and 36. EP3 lacks the Haruhion, Freezing, `scorlp1` and
+  `testshaiya` sets; its `CrypticOne.ai` has 10 states (EP4.5 11), its `Belizabeth.ai` 8 (EP4.5 9, one threshold 0.6 → 0.35), and EP4.5's
+  `helltouthnamed1_AI_FUNCTION.H` adds functions EP3 lacks (`BEGINCHECKATTACKCOUNT`, `ADDENERGY`, `SETHPCHAGE`, `SAY2`, …).
+
+### EP5.4
+
+- `TravelCondition` (EP5.4 ps_game 0x4ac2f0) and `CalculateParam` (0x4b0f50) have the same switch sizes, and `CMob::ConnectToFSM`
+  (0x4a29b0) registers the same seven handlers (confirmed), so the catalogue of sections 4 to 6 holds (inferred: the case bodies were not
+  compared one by one).
+- The 180 AI files are EP4.5's; `mob_ai.ini` drops lines 35 (Haruhion) and 36 (Freezing), which no monster uses in either episode, so
+  nothing changes (confirmed).
+- The `LuaMob` table (EP5.4 ps_game 0x581ea8) keeps the 23 methods and adds three (`LuaGetMobUID`, `LuaUseSkillAtMob`, `LuaMobCommand`
+  with an `OnCommand` callback; [`instances.md`](instances.md)). 27 new monsters have Lua AI numbers 121 to 185 with no script shipped
+  (confirmed, data).

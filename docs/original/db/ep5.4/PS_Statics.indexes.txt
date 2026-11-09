@@ -1,0 +1,6 @@
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+PK_UserLocal|UserLocal|1|1|CLUSTERED
+users_detail_userid_pk|Users_Detail|1|1|CLUSTERED
+users_detail_UserUID_uq|Users_Detail|0|1|NONCLUSTERED
+users_master_userid_pk|Users_Master|1|1|CLUSTERED
+users_master_UserUID_uq|Users_Master|0|1|NONCLUSTERED

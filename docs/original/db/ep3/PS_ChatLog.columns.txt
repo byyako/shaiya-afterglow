@@ -1,0 +1,8 @@
+ChatLog|1|row|int|NOT NULL|IDENTITY||1
+ChatLog|2|UserUID|char(10)|NULL|||1
+ChatLog|3|CharID|char(10)|NULL|||1
+ChatLog|4|ChatType|char(10)|NULL|||1
+ChatLog|5|TargetName|char(10)|NULL|||1
+ChatLog|6|ChatData|char(10)|NULL|||1
+ChatLog|7|MapID|char(10)|NULL|||1
+ChatLog|8|ChatTime|char(10)|NULL|||1

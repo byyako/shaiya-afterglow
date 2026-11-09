@@ -494,3 +494,28 @@ Built as above (`docs/plans/done/small-items.md`): `crates/shaiya-proto` (`world
 - **The migrations** are compiled into both servers: a `build.rs` in each now rebuilds them when `db/migrations` changes (before, a new
   migration file alone did not rebuild them, and a stale login server would refuse to start against a database that has 0026).
 
+## 16. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **No looking at another player's equipment** (confirmed): `0x0307` is not in the EP3 dispatch.
+- **No snowball** (confirmed): EP3 has no `0x0559` and its item skills are self buffs only ([`item-use.md`](item-use.md)).
+- `/town` (`0x0556`), the VG query (`0x0555`), the Priest (`PacketPriest`, EP3 ps_game 0x44ebf0) and `0x021B` in the enter burst exist;
+  they were not compared.
+
+### EP5.4
+
+- **Unchanged** (confirmed: the same calls and constants): the Message To Server item (special 38), the Name Change Stone (special 51:
+  once per login, `0x0616` to ps_dbAgent, used up at once) and the VG query `0x0555`.
+- **`/town`** (`0x0556`, EP5.4 ps_game 0x4790f3) keeps the 10-second timer, now through a shared move helper (EP5.4 ps_game 0x49dd00), and
+  is refused under the lock of the new debuff kinds 74 to 76 (`CUser+0x1358`) (confirmed).
+- **`0x0214`/`0x0215` and `0x021B` change behaviour** (confirmed): free stat and skill resets are counted per character, 3 each by
+  default, and `0x021B` carries the real `limit − used` counts (EP5.4 ps_game 0x47bcf8 to 0x47bd1f); EP4.5 always sends `00 01` or
+  `00 00` (section 2).
+- **The rename procedure** (confirmed, procedure text): EP5.4's `usp_Save_Char_Name_E` has both `BEGIN TRANSACTION` and `COMMIT`
+  commented out, so the rename runs without a transaction; EP4.5's has an active `COMMIT` with no `BEGIN`, which fails unless the caller
+  holds a transaction (inferred).
+- `0x0307` and `0x0559` are kept; the Priest was not compared.

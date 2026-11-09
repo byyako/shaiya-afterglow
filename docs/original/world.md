@@ -261,3 +261,29 @@ whispers are matched ignoring case (character names are unique ignoring case).
 ## 8. Open items
 
 - `0x0209` and the rest of `PacketMaininterface`; the friends (`0x22xx`) and points (`0x26xx`) requests the client sends; `0xB106`.
+
+## 9. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- Moving, the move check, zone entry and the map code are the same: `stUserMoveChk::Update` (EP3 ps_game 0x450b10), `CZone::EnterUser`
+  (0x412db0) with the same calls, `CMap::IsSafePos` (0x412190) identical (confirmed). The map object is 0x1c4 bytes against 0x1f0, and the
+  data has maps 0 to 44 (confirmed).
+- The dispatch groups of this note are the same, with the same opcodes (confirmed, dispatch tables).
+
+### EP5.4
+
+- `0x0501` keeps its 17-byte request and the same accepted tail (view, party, trade distance, PvP leave checks) (EP5.4 ps_game
+  0x4784f4; confirmed). Sitting and the logout requests keep their cases.
+- **Non-finite positions are refused:** x, y and z must pass `_finite` and not be NaN, else the step is dropped without an answer
+  (EP5.4 ps_game 0x478514–0x4785a4); the same test guards `0x0220` (confirmed).
+- **The step check is new**: one function replaces the 35-unit step check and `stUserMoveChk`; see [`move-check.md`](move-check.md).
+- **Target subscription:** `0x0308`/`0x0309` select a player or monster target and `0x030A` clears it; the server keeps a watcher list
+  per player and monster and pushes the target's buffs (`0x030B`–`0x030D`) to those watching. Leaving a zone takes the player off every
+  list (EP5.4 ps_game 0x455f20, 0x41c980) (confirmed).
+- New `Map.ini` key `MapCurse`: a skill put on one faction entering the zone, no save point, no login inside (EP5.4 ps_game 0x41c899,
+  0x477524; confirmed). No shipped file sets it.
+- The chat opcodes (`0x11xx`) are the same set (confirmed, dispatch tables).

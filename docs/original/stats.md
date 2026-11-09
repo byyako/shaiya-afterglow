@@ -119,3 +119,38 @@ not raised, only the maxima. A stat reset item (`CUser::StatResetStatus` 0x48066
 (HP, SP, MP in that order, as above) before the answer; the stat points and base stats are saved with the level and experience (one `UPDATE`).
 A stat reset is saved before anything else is handled, so nothing waits for one (`docs/original/item-use.md`). **Deviation** (one): a request that would take a base stat above **32767** (the
 `smallint` columns) is refused like one asking for too many points; the original's `u16` would wrap at 65536, out of reach in normal play.
+
+## 6. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The same level-up numbers** (confirmed): `CUser::LevelUpStatus` (EP3 ps_game 0x46e630, matched by call graph) has the same per-mode
+  stat and skill point jump tables, and `CGameData::LoadStatus` (EP3 ps_game 0x497650, matched by call graph) the same constants. The
+  level cap is 60, 30 in easy mode (EP3 ps_game 0x44209a, 0x4420a0).
+- **No crafted stats** (confirmed): `CUser::ItemEquipmentAdd` (EP3 ps_game 0x43f590, matched by call graph and checked by its
+  `GemEquipmentAdd`, `SetAttrDef` and `SendMax*` calls) has no loop over crafted values, where EP4.5 adds the eleven crafted numbers at
+  0x455102 to 0x455223, and EP3 has no craft-name parser like `CItem::CopyCraftExpassion`. The crafted stats of section 2 do not exist in
+  EP3.
+- **The lapis column `exp` is an experience bonus** (confirmed): `GemEquipmentAdd` adds the lapis' byte `+0x49` to `CUser+0x11e0` (EP3
+  ps_game 0x44018b) and `AddExpFromUser` multiplies experience gained by `1 + value / 100` (EP3 ps_game 0x442133 to 0x44218d). EP4.5 adds
+  the same byte to absorption instead ([`lapis.md`](lapis.md)).
+- Spending stat points (`0x0208`) and `InitEquipment` were not compared.
+
+### EP5.4
+
+- **The same level-up numbers** (confirmed): `LevelUpStatus` (EP5.4 ps_game 0x49b3b0, matched by call graph) has the same jump tables and
+  the × 1.1 / × 1.5 mode factors; `LoadStatus` (EP5.4 ps_game 0x4d8210) reads the same five columns; `StatusDefs` is identical (360 rows,
+  levels 1 to 60).
+- **The status table is 6 × 71** for the level cap of 70 (EP5.4 ps_game 0x4d83b2), but the shipped `StatusDefs` stops at level 60, so
+  levels 61 to 70 get 0 from it and max HP, SP and MP drop at the step to 61 (inferred). `InitEquipment` (EP5.4 ps_game 0x461010) uses
+  the level bounds 70 and 80 (confirmed).
+- **Shapes no longer hide equipment** (confirmed): `ItemEquipmentAdd`/`ItemEquipmentRem` (EP5.4 ps_game 0x461640, 0x461d10, matched by
+  call graph) never read the shape byte; EP4.5 skips the item's attack and defence while a shape is set (0x454d1d to 0x455200). This
+  removes the cause of [`stealth-equip`](community-fixes.md#stealth-equip).
+- **New skill abilities that change the numbers** (confirmed): 49 adds its value to all six stat totals and 5 × value to max HP, SP and
+  MP (EP5.4 ps_game 0x495952); 48 is a damage reduction.
+- `CUser` offsets: base stats `+0x16c`, stat totals `+0x121c`, speeds from `+0x12f4` (confirmed by matched accesses). `0x0208` was not
+  compared.

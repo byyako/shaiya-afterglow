@@ -1,0 +1,532 @@
+_CreatedChars|1|RowID|int|NOT NULL|IDENTITY||1
+_CreatedChars|2|ServerID|tinyint|NOT NULL|||1
+_CreatedChars|3|UserID|varchar(12)|NOT NULL|||1
+_CreatedChars|4|CharID|int|NOT NULL|||1
+_CreatedChars|5|CharName|varchar(50)|NOT NULL|||1
+_CreatedChars|6|Family|tinyint|NOT NULL|||1
+_CreatedChars|7|CreateDate|datetime|NOT NULL|||1
+_CreatedChars|8|UserUID|int|NULL|||1
+_DeletedChars|1|RowID|int|NOT NULL|IDENTITY||0
+_DeletedChars|2|ServerID|tinyint|NOT NULL|||0
+_DeletedChars|4|CharID|int|NOT NULL|||0
+_DeletedChars|5|DeleteDate|datetime|NOT NULL|||0
+_GuildDetailsBack|1|GuildID|int|NOT NULL|||0
+_GuildDetailsBack|2|UseHouse|tinyint|NOT NULL|||0
+_GuildDetailsBack|3|BuyHouse|tinyint|NOT NULL|||0
+_GuildDetailsBack|4|Rank|tinyint|NOT NULL|||0
+_GuildDetailsBack|5|Etin|int|NOT NULL|||0
+_GuildDetailsBack|6|EtinReturnCnt|int|NOT NULL|||0
+_GuildDetailsBack|7|KeepEtin|int|NOT NULL|||0
+_GuildDetailsBack|8|Remark|varchar(64)|NULL|||0
+_GuildRankPoint|1|GuildID|int|NOT NULL|||0
+_GuildRankPoint|2|GuildPoint|int|NOT NULL|||0
+_GuildsBack|1|RowID|int|NOT NULL|IDENTITY||0
+_GuildsBack|2|GuildID|int|NOT NULL|||0
+_GuildsBack|3|GuildName|varchar(30)|NOT NULL|||0
+_GuildsBack|4|MasterUserID|varchar(12)|NOT NULL|||0
+_GuildsBack|5|MasterCharID|int|NOT NULL|||0
+_GuildsBack|6|MasterName|varchar(30)|NOT NULL|||0
+_GuildsBack|7|Country|tinyint|NOT NULL|||0
+_GuildsBack|8|TotalCount|smallint|NOT NULL|||0
+_GuildsBack|9|GuildPoint|int|NOT NULL|||0
+_GuildsBack|10|Del|tinyint|NOT NULL|||0
+_GuildsBack|11|CreateDate|datetime|NOT NULL|||0
+_GuildsBack|12|DeleteDate|datetime|NULL|||0
+BanChars|1|RowID|int|NOT NULL|IDENTITY||0
+BanChars|2|CharID|int|NOT NULL|||0
+BanChars|3|BanID|int|NOT NULL|||0
+BanChars|4|BanName|varchar(30)|NOT NULL|||0
+BanChars|5|Memo|varchar(50)|NULL|||0
+BanChars|6|BanDate|datetime|NULL|||0
+CharApplySkills|1|RowID|int|NOT NULL|IDENTITY||1
+CharApplySkills|2|CharID|int|NOT NULL|||1
+CharApplySkills|3|SkillID|smallint|NOT NULL|||1
+CharApplySkills|4|SkillLevel|tinyint|NOT NULL|||1
+CharApplySkills|5|LeftResetTime|int|NOT NULL|||1
+CharBacks|1|ServerID|tinyint|NOT NULL|||0
+CharBacks|2|UserID|varchar(12)|NOT NULL|||0
+CharBacks|3|UserUID|int|NOT NULL|||0
+CharBacks|4|CharID|int|NOT NULL|IDENTITY||0
+CharBacks|5|CharName|varchar(30)|NOT NULL|||0
+CharBacks|6|New|tinyint|NOT NULL|||0
+CharBacks|7|Del|tinyint|NOT NULL|||0
+CharBacks|8|Slot|tinyint|NOT NULL|||0
+CharBacks|9|Family|tinyint|NOT NULL|||0
+CharBacks|10|Grow|tinyint|NOT NULL|||0
+CharBacks|11|Hair|tinyint|NOT NULL|||0
+CharBacks|12|Face|tinyint|NOT NULL|||0
+CharBacks|13|Size|tinyint|NOT NULL|||0
+CharBacks|14|Job|tinyint|NOT NULL|||0
+CharBacks|15|Sex|tinyint|NOT NULL|||0
+CharBacks|16|Level|smallint|NOT NULL|||0
+CharBacks|17|StatPoint|smallint|NOT NULL|||0
+CharBacks|18|SkillPoint|smallint|NOT NULL|||0
+CharBacks|19|Str|smallint|NOT NULL|||0
+CharBacks|20|Dex|smallint|NOT NULL|||0
+CharBacks|21|Rec|smallint|NOT NULL|||0
+CharBacks|22|Int|smallint|NOT NULL|||0
+CharBacks|23|Luc|smallint|NOT NULL|||0
+CharBacks|24|Wis|smallint|NOT NULL|||0
+CharBacks|25|HP|smallint|NOT NULL|||0
+CharBacks|26|MP|smallint|NOT NULL|||0
+CharBacks|27|SP|smallint|NOT NULL|||0
+CharBacks|28|Map|smallint|NOT NULL|||0
+CharBacks|29|Dir|smallint|NOT NULL|||0
+CharBacks|30|Exp|int|NOT NULL|||0
+CharBacks|31|Money|int|NOT NULL|||0
+CharBacks|32|PosX|real|NOT NULL|||0
+CharBacks|33|PosY|real|NOT NULL|||0
+CharBacks|34|Posz|real|NOT NULL|||0
+CharBacks|35|Hg|smallint|NOT NULL|||0
+CharBacks|36|Vg|smallint|NOT NULL|||0
+CharBacks|37|Cg|tinyint|NOT NULL|||0
+CharBacks|38|Og|tinyint|NOT NULL|||0
+CharBacks|39|Ig|tinyint|NOT NULL|||0
+CharBacks|40|K1|int|NOT NULL|||0
+CharBacks|41|K2|int|NOT NULL|||0
+CharBacks|42|K3|int|NOT NULL|||0
+CharBacks|43|K4|int|NOT NULL|||0
+CharBacks|44|KillLevel|tinyint|NOT NULL|||0
+CharBacks|45|DeadLevel|tinyint|NOT NULL|||0
+CharBacks|46|RegDate|datetime|NOT NULL|||0
+CharBacks|47|DeleteDate|datetime|NULL|||0
+CharBacks|48|JoinDate|datetime|NULL|||0
+CharBacks|49|LeaveDate|datetime|NULL|||0
+CharBacks|50|RenameCnt|tinyint|NOT NULL|||0
+CharBacks|51|OldCharName|varchar(30)|NULL|||0
+CharBacks|52|RemainTime|int|NOT NULL|||0
+CharEvents|1|RowID|int|NOT NULL|IDENTITY||0
+CharEvents|2|CharID|int|NOT NULL|||0
+CharEvents|3|Event1|tinyint|NOT NULL||(0)|0
+CharEvents|4|Event2|tinyint|NOT NULL||(0)|0
+CharEvents|5|Event3|tinyint|NULL|||0
+CharEvents|6|Event4|tinyint|NULL|||0
+CharEvents|7|Event5|tinyint|NULL|||0
+CharEvents|8|Event6|tinyint|NULL|||0
+CharEvents|9|Event7|tinyint|NULL|||0
+CharEvents|10|Event8|tinyint|NULL|||0
+CharEvents|11|Event9|tinyint|NULL|||0
+CharEvents|12|Event10|tinyint|NULL|||0
+CharItems|1|RowID|int|NOT NULL|IDENTITY||49
+CharItems|2|CharID|int|NOT NULL|||49
+CharItems|3|ItemID|int|NOT NULL|||49
+CharItems|4|ItemUID|bigint|NOT NULL|||49
+CharItems|5|Type|tinyint|NOT NULL|||49
+CharItems|6|TypeID|tinyint|NOT NULL|||49
+CharItems|7|Bag|tinyint|NOT NULL|||49
+CharItems|8|Slot|tinyint|NOT NULL|||49
+CharItems|9|Quality|smallint|NOT NULL|||49
+CharItems|10|Gem1|tinyint|NOT NULL|||49
+CharItems|11|Gem2|tinyint|NOT NULL|||49
+CharItems|12|Gem3|tinyint|NOT NULL|||49
+CharItems|13|Gem4|tinyint|NOT NULL|||49
+CharItems|14|Gem5|tinyint|NOT NULL|||49
+CharItems|15|Gem6|tinyint|NOT NULL|||49
+CharItems|16|Craftname|varchar(20)|NULL|||49
+CharItems|17|Count|tinyint|NOT NULL|||49
+CharItems|18|Maketime|datetime|NOT NULL|||49
+CharItems|19|Maketype|varchar(1)|NOT NULL|||49
+CharItems|20|Del|bit|NOT NULL||(0)|49
+CharQuests|1|RowID|int|NOT NULL|IDENTITY||0
+CharQuests|2|CharID|int|NOT NULL|||0
+CharQuests|3|QuestID|smallint|NOT NULL|||0
+CharQuests|4|Delay|smallint|NOT NULL|||0
+CharQuests|5|Count1|tinyint|NOT NULL||(0)|0
+CharQuests|6|Count2|tinyint|NOT NULL||(0)|0
+CharQuests|7|Count3|tinyint|NOT NULL||(0)|0
+CharQuests|8|Success|tinyint|NOT NULL||(0)|0
+CharQuests|9|Finish|tinyint|NOT NULL||(0)|0
+CharQuests|10|Del|bit|NOT NULL||(0)|0
+CharQuickSlotBacks|1|RowID|int|NOT NULL|IDENTITY||0
+CharQuickSlotBacks|2|CharID|int|NOT NULL|||0
+CharQuickSlotBacks|3|QuickBar|tinyint|NOT NULL|||0
+CharQuickSlotBacks|4|QuickSlot|tinyint|NOT NULL|||0
+CharQuickSlotBacks|5|Bag|tinyint|NOT NULL|||0
+CharQuickSlotBacks|6|Number|tinyint|NOT NULL|||0
+CharQuickSlots|1|RowID|int|NOT NULL|IDENTITY||17
+CharQuickSlots|2|CharID|int|NOT NULL|||17
+CharQuickSlots|3|QuickBar|tinyint|NOT NULL|||17
+CharQuickSlots|4|QuickSlot|tinyint|NOT NULL|||17
+CharQuickSlots|5|Bag|tinyint|NOT NULL|||17
+CharQuickSlots|6|Number|smallint|NOT NULL|||17
+CharRenameLog|1|ServerID|tinyint|NULL|||0
+CharRenameLog|2|CharID|int|NULL|||0
+CharRenameLog|3|CharName|varchar(30)|NULL|||0
+CharRenameLog|4|UpdateTime|datetime|NULL||(getdate())|0
+Chars|1|ServerID|tinyint|NOT NULL|||1
+Chars|2|UserID|varchar(12)|NOT NULL|||1
+Chars|3|UserUID|int|NOT NULL|||1
+Chars|4|CharID|int|NOT NULL|IDENTITY||1
+Chars|5|CharName|varchar(30)|NOT NULL|||1
+Chars|6|New|tinyint|NOT NULL||(1)|1
+Chars|7|Del|tinyint|NOT NULL||(0)|1
+Chars|8|Slot|tinyint|NOT NULL|||1
+Chars|9|Family|tinyint|NOT NULL|||1
+Chars|10|Grow|tinyint|NOT NULL|||1
+Chars|11|Hair|tinyint|NOT NULL|||1
+Chars|12|Face|tinyint|NOT NULL|||1
+Chars|13|Size|tinyint|NOT NULL|||1
+Chars|14|Job|tinyint|NOT NULL|||1
+Chars|15|Sex|tinyint|NOT NULL|||1
+Chars|16|Level|smallint|NOT NULL||(0)|1
+Chars|17|StatPoint|smallint|NOT NULL||(0)|1
+Chars|18|SkillPoint|smallint|NOT NULL||(0)|1
+Chars|19|Str|smallint|NOT NULL|||1
+Chars|20|Dex|smallint|NOT NULL|||1
+Chars|21|Rec|smallint|NOT NULL|||1
+Chars|22|Int|smallint|NOT NULL|||1
+Chars|23|Luc|smallint|NOT NULL|||1
+Chars|24|Wis|smallint|NOT NULL|||1
+Chars|25|HP|smallint|NOT NULL|||1
+Chars|26|MP|smallint|NOT NULL|||1
+Chars|27|SP|smallint|NOT NULL|||1
+Chars|28|Map|smallint|NOT NULL||(0)|1
+Chars|29|Dir|smallint|NOT NULL||(0)|1
+Chars|30|Exp|int|NOT NULL||(0)|1
+Chars|31|Money|int|NOT NULL||(0)|1
+Chars|32|PosX|real|NOT NULL||(674.442)|1
+Chars|33|PosY|real|NOT NULL||(3.640)|1
+Chars|34|Posz|real|NOT NULL||(1000.924)|1
+Chars|35|Hg|smallint|NOT NULL|||1
+Chars|36|Vg|smallint|NOT NULL|||1
+Chars|37|Cg|tinyint|NOT NULL|||1
+Chars|38|Og|tinyint|NOT NULL|||1
+Chars|39|Ig|tinyint|NOT NULL|||1
+Chars|40|K1|int|NOT NULL||(0)|1
+Chars|41|K2|int|NOT NULL||(0)|1
+Chars|42|K3|int|NOT NULL||(0)|1
+Chars|43|K4|int|NOT NULL||(0)|1
+Chars|44|KillLevel|tinyint|NOT NULL||(0)|1
+Chars|45|DeadLevel|tinyint|NOT NULL||(0)|1
+Chars|46|RegDate|datetime|NOT NULL||(getdate())|1
+Chars|47|DeleteDate|datetime|NULL|||1
+Chars|48|JoinDate|datetime|NULL|||1
+Chars|49|LeaveDate|datetime|NULL|||1
+Chars|50|RenameCnt|tinyint|NOT NULL|||1
+Chars|51|OldCharName|varchar(30)|NULL|||1
+Chars|52|RemainTime|int|NOT NULL||(0)|1
+CharSavePoint|1|RowID|int|NOT NULL|IDENTITY||1
+CharSavePoint|2|CharID|int|NOT NULL|||1
+CharSavePoint|3|Slot|tinyint|NOT NULL|||1
+CharSavePoint|4|MapID|smallint|NOT NULL|||1
+CharSavePoint|5|PosX|real|NOT NULL|||1
+CharSavePoint|6|PosY|real|NOT NULL|||1
+CharSavePoint|7|PosZ|real|NOT NULL|||1
+CharSavePointBack|1|RowID|int|NOT NULL|IDENTITY||0
+CharSavePointBack|2|CharID|int|NOT NULL|||0
+CharSavePointBack|3|Slot|tinyint|NOT NULL|||0
+CharSavePointBack|4|MapID|smallint|NOT NULL|||0
+CharSavePointBack|5|PosX|real|NOT NULL|||0
+CharSavePointBack|6|PosY|real|NOT NULL|||0
+CharSavePointBack|7|PosZ|real|NOT NULL|||0
+CharSkillBacks|1|RowID|int|NOT NULL|IDENTITY||0
+CharSkillBacks|2|CharID|int|NOT NULL|||0
+CharSkillBacks|3|SkillID|smallint|NOT NULL|||0
+CharSkillBacks|4|SkillLevel|tinyint|NOT NULL|||0
+CharSkillBacks|5|Number|tinyint|NOT NULL|||0
+CharSkillBacks|6|Delay|smallint|NOT NULL|||0
+CharSkillBacks|7|CreateTime|smalldatetime|NOT NULL|||0
+CharSkillBacks|8|Del|bit|NOT NULL|||0
+CharSkills|1|RowID|int|NOT NULL|IDENTITY||47
+CharSkills|2|CharID|int|NOT NULL|||47
+CharSkills|3|SkillID|smallint|NOT NULL|||47
+CharSkills|4|SkillLevel|tinyint|NOT NULL|||47
+CharSkills|5|Number|tinyint|NOT NULL|||47
+CharSkills|6|Delay|smallint|NOT NULL|||47
+CharSkills|7|CreateTime|smalldatetime|NOT NULL||(getdate())|47
+CharSkills|8|Del|bit|NOT NULL||(0)|47
+ConsiderBank|1|UserUID|int|NULL|||0
+ConsiderBank|2|ItemUID|bigint|NULL|||0
+ConsiderInven|1|CharID|int|NULL|||0
+ConsiderInven|2|ItemUID|bigint|NULL|||0
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+EventLog_CharSkill1|1|RowID|int|NOT NULL|IDENTITY||0
+EventLog_CharSkill1|2|CharID|int|NOT NULL|||0
+EventLog_CharSkill1|3|UseCount|tinyint|NOT NULL|||0
+EventLog_CharSkill1|4|GetPoint|smallint|NOT NULL|||0
+EventLog_CharSkill1|5|SkillPoint|smallint|NOT NULL|||0
+EventLog_CharSkill1|6|UseDate|datetime|NOT NULL|||0
+EventLog_CharSkill2|1|RowID|int|NOT NULL|IDENTITY||0
+EventLog_CharSkill2|2|CharID|int|NOT NULL|||0
+EventLog_CharSkill2|3|UseCount|tinyint|NOT NULL|||0
+EventLog_CharSkill2|4|SkillID|smallint|NOT NULL|||0
+EventLog_CharSkill2|5|SkillLevel|tinyint|NOT NULL|||0
+EventLog_CharSkill2|6|Number|tinyint|NOT NULL|||0
+EventLog_CharSkill2|7|CreateTime|datetime|NOT NULL|||0
+EventLog_CharStat|1|RowID|int|NOT NULL|IDENTITY||0
+EventLog_CharStat|2|CharID|int|NOT NULL|||0
+EventLog_CharStat|3|UseCount|tinyint|NOT NULL|||0
+EventLog_CharStat|4|GetPoint|smallint|NOT NULL|||0
+EventLog_CharStat|5|StatPoint|smallint|NOT NULL|||0
+EventLog_CharStat|6|Str|smallint|NOT NULL|||0
+EventLog_CharStat|7|Dex|smallint|NOT NULL|||0
+EventLog_CharStat|8|Rec|smallint|NOT NULL|||0
+EventLog_CharStat|9|Int|smallint|NOT NULL|||0
+EventLog_CharStat|10|Luc|smallint|NOT NULL|||0
+EventLog_CharStat|11|Wis|smallint|NOT NULL|||0
+EventLog_CharStat|12|UseDate|datetime|NOT NULL|||0
+FriendChars|1|RowID|int|NOT NULL|IDENTITY||0
+FriendChars|2|CharID|int|NOT NULL|||0
+FriendChars|3|FriendID|int|NOT NULL|||0
+FriendChars|4|FriendName|varchar(30)|NOT NULL|||0
+FriendChars|5|Family|tinyint|NOT NULL|||0
+FriendChars|6|Grow|tinyint|NOT NULL|||0
+FriendChars|7|Job|tinyint|NOT NULL|||0
+FriendChars|8|Memo|varchar(50)|NULL|||0
+FriendChars|9|Refuse|tinyint|NOT NULL||(0)|0
+FriendChars|10|CreateDate|datetime|NULL|||0
+FriendChars|11|RefuseDate|datetime|NULL|||0
+GuildChars|1|RowID|int|NOT NULL|IDENTITY||1
+GuildChars|2|GuildID|int|NOT NULL|||1
+GuildChars|3|CharID|int|NOT NULL|||1
+GuildChars|4|GuildLevel|tinyint|NOT NULL|||1
+GuildChars|5|Del|tinyint|NOT NULL||(0)|1
+GuildChars|6|JoinDate|datetime|NOT NULL|||1
+GuildChars|7|LeaveDate|datetime|NULL|||1
+GuildDetails|1|GuildID|int|NOT NULL|||0
+GuildDetails|2|UseHouse|tinyint|NOT NULL||(0)|0
+GuildDetails|3|BuyHouse|tinyint|NOT NULL||(0)|0
+GuildDetails|4|Rank|tinyint|NOT NULL||(31)|0
+GuildDetails|5|Etin|int|NOT NULL||(0)|0
+GuildDetails|6|EtinReturnCnt|int|NOT NULL||(0)|0
+GuildDetails|7|KeepEtin|int|NOT NULL||(2000)|0
+GuildDetails|8|Remark|varchar(64)|NULL|||0
+GuildNpcLv|1|GuildID|int|NOT NULL|||0
+GuildNpcLv|2|GNpcType|smallint|NOT NULL|||0
+GuildNpcLv|3|NpcLevel|tinyint|NOT NULL|||0
+GuildNpcLv|4|Number|tinyint|NOT NULL|||0
+GuildNpcLv|5|CreateTime|datetime|NOT NULL||(getdate())|0
+GuildNpcLv|6|Del|tinyint|NOT NULL||(0)|0
+GuildRankLog|1|GuildID|int|NOT NULL|||0
+GuildRankLog|2|GuildValue|int|NOT NULL|||0
+GuildRankLog|3|Rank|int|NOT NULL|||0
+GuildRankLog|4|TotalRank|int|NOT NULL||(0)|0
+GuildRankLog|5|Change|int|NULL|||0
+GuildRankLog|6|TotalChange|int|NULL|||0
+GuildRankLog|7|RankTime|datetime|NOT NULL||(getdate())|0
+GuildRankLog2|1|GuildID|int|NOT NULL|||0
+GuildRankLog2|2|GuildValue|int|NOT NULL|||0
+GuildRankLog2|3|Rank|int|NOT NULL|||0
+GuildRankLog2|4|TotalRank|int|NOT NULL||(0)|0
+GuildRankLog2|5|Change|int|NULL|||0
+GuildRankLog2|6|TotalChange|int|NULL|||0
+GuildRankLog2|7|RankTime|datetime|NOT NULL||(getdate())|0
+Guilds|1|RowID|int|NOT NULL|IDENTITY||1
+Guilds|2|GuildID|int|NOT NULL|||1
+Guilds|3|GuildName|varchar(30)|NOT NULL|||1
+Guilds|4|MasterUserID|varchar(12)|NOT NULL|||1
+Guilds|5|MasterCharID|int|NOT NULL|||1
+Guilds|6|MasterName|varchar(30)|NOT NULL|||1
+Guilds|7|Country|tinyint|NOT NULL|||1
+Guilds|8|TotalCount|smallint|NOT NULL|||1
+Guilds|9|GuildPoint|int|NOT NULL|||1
+Guilds|10|Del|tinyint|NOT NULL||(0)|1
+Guilds|11|CreateDate|datetime|NOT NULL|||1
+Guilds|12|DeleteDate|datetime|NULL|||1
+GuildStoredItems|1|RowID|int|NOT NULL|IDENTITY||0
+GuildStoredItems|2|GuildID|int|NOT NULL|||0
+GuildStoredItems|3|ItemID|int|NOT NULL|||0
+GuildStoredItems|4|Type|tinyint|NOT NULL|||0
+GuildStoredItems|5|TypeID|tinyint|NOT NULL|||0
+GuildStoredItems|6|ItemUID|bigint|NOT NULL|||0
+GuildStoredItems|7|Slot|int|NOT NULL|||0
+GuildStoredItems|8|Quality|smallint|NOT NULL|||0
+GuildStoredItems|9|Gem1|tinyint|NOT NULL|||0
+GuildStoredItems|10|Gem2|tinyint|NOT NULL|||0
+GuildStoredItems|11|Gem3|tinyint|NOT NULL|||0
+GuildStoredItems|12|Gem4|tinyint|NOT NULL|||0
+GuildStoredItems|13|Gem5|tinyint|NOT NULL|||0
+GuildStoredItems|14|Gem6|tinyint|NOT NULL|||0
+GuildStoredItems|15|Craftname|varchar(20)|NULL|||0
+GuildStoredItems|16|Count|tinyint|NOT NULL|||0
+GuildStoredItems|17|Maketime|datetime|NOT NULL|||0
+GuildStoredItems|18|Maketype|char(1)|NOT NULL|||0
+GuildStoredItems|19|Del|bit|NOT NULL||(0)|0
+HackLog|1|CharID|int|NULL|||0
+HackLog|2|Money|int|NULL|||0
+HackLog|3|CurDate|datetime|NULL||(getdate())|0
+Keeps|1|RowID|int|NOT NULL|IDENTITY||12
+Keeps|2|KeepID|int|NOT NULL|||12
+Keeps|3|OwnCountry|tinyint|NOT NULL|||12
+Keeps|4|ResetTime|int|NOT NULL|||12
+Market|1|RowID|int|NOT NULL|IDENTITY||0
+Market|2|MarketID|int|NOT NULL|||0
+Market|3|CharID|int|NOT NULL|||0
+Market|4|MinMoney|int|NOT NULL|||0
+Market|5|DirectMoney|int|NOT NULL|||0
+Market|6|MarketType|tinyint|NOT NULL|||0
+Market|7|GuaranteeMoney|int|NOT NULL|||0
+Market|8|TenderCharID|int|NOT NULL|||0
+Market|9|TenderCharName|varchar(21)|NULL|||0
+Market|10|TenderMoney|int|NOT NULL|||0
+Market|11|EndDate|datetime|NOT NULL|||0
+Market|12|Del|int|NOT NULL||(0)|0
+MarketCharConcern|1|RowID|int|NOT NULL|IDENTITY||0
+MarketCharConcern|2|CharID|int|NOT NULL|||0
+MarketCharConcern|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems|1|RowID|int|NOT NULL|IDENTITY||0
+MarketCharResultItems|2|CharID|int|NOT NULL|||0
+MarketCharResultItems|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems|4|Result|tinyint|NOT NULL|||0
+MarketCharResultItems|5|EndDate|datetime|NOT NULL|||0
+MarketCharResultItems_DelLog|1|RowID|int|NOT NULL|IDENTITY||0
+MarketCharResultItems_DelLog|2|CharID|int|NOT NULL|||0
+MarketCharResultItems_DelLog|3|MarketID|int|NOT NULL|||0
+MarketCharResultItems_DelLog|4|Result|tinyint|NOT NULL|||0
+MarketCharResultItems_DelLog|5|EndDate|datetime|NOT NULL|||0
+MarketCharResultItems_DelLog|6|DelDate|datetime|NOT NULL|||0
+MarketCharResultMoney|1|RowID|int|NOT NULL|IDENTITY||0
+MarketCharResultMoney|2|MoneyID|int|NOT NULL|||0
+MarketCharResultMoney|3|CharID|int|NOT NULL|||0
+MarketCharResultMoney|4|MarketID|int|NOT NULL|||0
+MarketCharResultMoney|5|Result|tinyint|NOT NULL|||0
+MarketCharResultMoney|6|Money|int|NOT NULL|||0
+MarketCharResultMoney|7|GuaranteeMoney|int|NOT NULL|||0
+MarketCharResultMoney|8|ReturnMoney|int|NOT NULL|||0
+MarketCharResultMoney|9|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney|10|Type|tinyint|NOT NULL|||0
+MarketCharResultMoney|11|TypeID|tinyint|NOT NULL|||0
+MarketCharResultMoney|12|Quality|smallint|NOT NULL|||0
+MarketCharResultMoney|13|Gem1|tinyint|NOT NULL|||0
+MarketCharResultMoney|14|Gem2|tinyint|NOT NULL|||0
+MarketCharResultMoney|15|Gem3|tinyint|NOT NULL|||0
+MarketCharResultMoney|16|Gem4|tinyint|NOT NULL|||0
+MarketCharResultMoney|17|Gem5|tinyint|NOT NULL|||0
+MarketCharResultMoney|18|Gem6|tinyint|NOT NULL|||0
+MarketCharResultMoney|19|Craftname|varchar(20)|NOT NULL|||0
+MarketCharResultMoney|20|Count|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|1|RowID|int|NOT NULL|IDENTITY||0
+MarketCharResultMoney_DelLog|2|MoneyID|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|3|CharID|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|4|MarketID|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|5|Result|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|6|Money|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|7|GuaranteeMoney|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|8|ReturnMoney|int|NOT NULL|||0
+MarketCharResultMoney_DelLog|9|EndDate|datetime|NOT NULL|||0
+MarketCharResultMoney_DelLog|10|Type|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|11|TypeID|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|12|Quality|smallint|NOT NULL|||0
+MarketCharResultMoney_DelLog|13|Gem1|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|14|Gem2|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|15|Gem3|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|16|Gem4|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|17|Gem5|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|18|Gem6|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|19|Craftname|varchar(20)|NOT NULL|||0
+MarketCharResultMoney_DelLog|20|Count|tinyint|NOT NULL|||0
+MarketCharResultMoney_DelLog|21|DelDate|datetime|NOT NULL|||0
+MarketItems|1|MarketID|int|NOT NULL|||0
+MarketItems|2|ItemID|int|NOT NULL|||0
+MarketItems|3|ItemUID|bigint|NOT NULL|||0
+MarketItems|4|Type|tinyint|NOT NULL|||0
+MarketItems|5|TypeID|tinyint|NOT NULL|||0
+MarketItems|6|Quality|smallint|NOT NULL|||0
+MarketItems|7|Gem1|tinyint|NOT NULL|||0
+MarketItems|8|Gem2|tinyint|NOT NULL|||0
+MarketItems|9|Gem3|tinyint|NOT NULL|||0
+MarketItems|10|Gem4|tinyint|NOT NULL|||0
+MarketItems|11|Gem5|tinyint|NOT NULL|||0
+MarketItems|12|Gem6|tinyint|NOT NULL|||0
+MarketItems|13|Craftname|varchar(20)|NULL|||0
+MarketItems|14|Count|tinyint|NOT NULL|||0
+MarketItems|15|Maketime|datetime|NOT NULL|||0
+MarketItems|16|Maketype|varchar(1)|NOT NULL|||0
+MarketItems_DelLog|1|MarketID|int|NOT NULL|||0
+MarketItems_DelLog|2|ItemID|int|NOT NULL|||0
+MarketItems_DelLog|3|ItemUID|bigint|NOT NULL|||0
+MarketItems_DelLog|4|Type|tinyint|NOT NULL|||0
+MarketItems_DelLog|5|TypeID|tinyint|NOT NULL|||0
+MarketItems_DelLog|6|Quality|smallint|NOT NULL|||0
+MarketItems_DelLog|7|Gem1|tinyint|NOT NULL|||0
+MarketItems_DelLog|8|Gem2|tinyint|NOT NULL|||0
+MarketItems_DelLog|9|Gem3|tinyint|NOT NULL|||0
+MarketItems_DelLog|10|Gem4|tinyint|NOT NULL|||0
+MarketItems_DelLog|11|Gem5|tinyint|NOT NULL|||0
+MarketItems_DelLog|12|Gem6|tinyint|NOT NULL|||0
+MarketItems_DelLog|13|Craftname|varchar(20)|NULL|||0
+MarketItems_DelLog|14|Count|tinyint|NOT NULL|||0
+MarketItems_DelLog|15|Maketime|datetime|NOT NULL|||0
+MarketItems_DelLog|16|Maketype|varchar(1)|NOT NULL|||0
+PointErrorLog|1|UserUID|int|NOT NULL|||0
+PointErrorLog|2|CharID|int|NULL|||0
+PointErrorLog|3|ProductCode|varchar(20)|NOT NULL|||0
+PointErrorLog|4|Ret|int|NOT NULL|||0
+PointErrorLog|5|ErrDate|datetime|NULL||(getdate())|0
+PointGiftNotify|1|UserUID|int|NOT NULL|||0
+PointGiftNotify|2|ProductCode|varchar(20)|NOT NULL|||0
+PointGiftNotify|3|SendCharName|varchar(30)|NOT NULL|||0
+PointGiftNotify|4|RecvDate|datetime|NOT NULL||(getdate())|0
+PointLog|1|UserUID|int|NOT NULL|||39
+PointLog|2|CharID|int|NOT NULL|||39
+PointLog|3|UsePoint|int|NOT NULL|||39
+PointLog|4|ProductCode|varchar(20)|NOT NULL|||39
+PointLog|5|TargetName|varchar(30)|NULL|||39
+PointLog|6|UseDate|datetime|NOT NULL||(getdate())|39
+PointLog|7|UseType|tinyint|NOT NULL|||39
+PointLog|8|RemainPoint|int|NULL|||39
+PointLog|9|OrderNumber|int|NULL|||39
+ProductLog|1|RowID|int|NOT NULL|IDENTITY||0
+ProductLog|2|ServerID|tinyint|NOT NULL|||0
+ProductLog|3|UserUID|int|NOT NULL|||0
+ProductLog|4|CharID|int|NOT NULL|||0
+ProductLog|5|ItemID|int|NOT NULL|||0
+ProductLog|6|ItemUID|bigint|NOT NULL|||0
+ProductLog|7|Quality|smallint|NOT NULL|||0
+ProductLog|8|ItemCount|tinyint|NOT NULL|||0
+ProductLog|9|ProductCode|varchar(20)|NOT NULL|||0
+ProductLog|10|OrderNumber|int|NOT NULL|||0
+ProductLog|11|VerifyCode|bigint|NULL|||0
+ProductLog|12|BuyDate|datetime|NOT NULL|||0
+ProductLog|13|ReceiveDate|datetime|NOT NULL|||0
+QuestAward|1|ItemID|int|NULL|||0
+TmpGuildEtin|1|GuildID|int|NULL|||0
+TmpGuildEtin|2|Etin|int|NULL|||0
+TmpGuildEtin|3|CurTime|datetime|NULL|||0
+UserMaxGrow|1|RowID|int|NOT NULL|IDENTITY||1
+UserMaxGrow|2|ServerID|tinyint|NOT NULL|||1
+UserMaxGrow|3|UserUID|int|NOT NULL|||1
+UserMaxGrow|4|Country|tinyint|NOT NULL|||1
+UserMaxGrow|5|MaxGrow|tinyint|NOT NULL|||1
+UserMaxGrow|6|Del|bit|NOT NULL||(0)|1
+UserStoredItems|1|RowID|int|NOT NULL|IDENTITY||0
+UserStoredItems|2|ServerID|tinyint|NOT NULL|||0
+UserStoredItems|3|UserUID|int|NOT NULL|||0
+UserStoredItems|4|ItemID|int|NOT NULL|||0
+UserStoredItems|5|Type|tinyint|NOT NULL|||0
+UserStoredItems|6|TypeID|tinyint|NOT NULL|||0
+UserStoredItems|7|ItemUID|bigint|NOT NULL|||0
+UserStoredItems|8|Slot|int|NOT NULL|||0
+UserStoredItems|9|Quality|smallint|NOT NULL|||0
+UserStoredItems|10|Gem1|tinyint|NOT NULL|||0
+UserStoredItems|11|Gem2|tinyint|NOT NULL|||0
+UserStoredItems|12|Gem3|tinyint|NOT NULL|||0
+UserStoredItems|13|Gem4|tinyint|NOT NULL|||0
+UserStoredItems|14|Gem5|tinyint|NOT NULL|||0
+UserStoredItems|15|Gem6|tinyint|NOT NULL|||0
+UserStoredItems|16|Craftname|varchar(20)|NULL|||0
+UserStoredItems|17|Count|tinyint|NOT NULL|||0
+UserStoredItems|18|Maketime|datetime|NOT NULL|||0
+UserStoredItems|19|Maketype|char(1)|NOT NULL|||0
+UserStoredItems|20|Del|bit|NOT NULL||(0)|0
+UserStoredMoney|1|RowID|int|NOT NULL|IDENTITY||0
+UserStoredMoney|2|ServerID|tinyint|NOT NULL|||0
+UserStoredMoney|3|UserUID|int|NOT NULL|||0
+UserStoredMoney|4|Money|bigint|NOT NULL||(0)|0
+UserStoredMoney|5|LastAccessTime|datetime|NOT NULL||(getdate())|0
+UserStoredMoney|6|Del|bit|NOT NULL||(0)|0
+UserStoredPointItems|1|UserUID|int|NOT NULL|||0
+UserStoredPointItems|2|Slot|tinyint|NOT NULL|||0
+UserStoredPointItems|3|ItemID|int|NOT NULL|||0
+UserStoredPointItems|4|ItemCount|tinyint|NOT NULL|||0
+UserStoredPointItems|5|BuyDate|datetime|NULL||(getdate())|0
+WorldInfo|1|RowID|int|NOT NULL|IDENTITY||1
+WorldInfo|2|LastWorldTime|int|NOT NULL|||1
+WorldInfo|3|GodBless_Light|int|NOT NULL|||1
+WorldInfo|4|GodBless_Dark|int|NOT NULL|||1

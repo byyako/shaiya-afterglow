@@ -599,3 +599,27 @@ Logged as "gm listens to a player's chat". Live test section 49 (needs the DLL i
   happens and the GM gets no answer. Saves go to the database before the answers, not through ps_dbAgent's queue.
   Every value from a command (names, texts) reaches SQL only as a bound parameter, so the original's SQL injection through GM commands
   (`docs/original/community-fixes.md`) cannot happen.
+
+## 14. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The same GM groups `0xF1xx` to `0xFAxx` (EP3 ps_game 0x457000 to 0x45a7e0, matched by switch position) with the same opcodes, except
+`0xF10A` and `0xFA18` to `0xFA1A`, which EP4.5 added (confirmed, dispatch tables). The family levels were not compared.
+
+### EP5.4
+
+- The family limits are unchanged: `PacketAdminChat` 5, `PacketAdminUQ` 10, `PacketAdminCmdA` 1 (2 inside), `B` 2, `C` 3, `D` 4, `E` 5
+  (confirmed). The staff level byte moved from `CUser+0x5768` to `+0x5808`.
+- The opcodes the US client sends without a server case (`F70A`, `F70B`, `F805`, `F806`, `F809`, `F80A`, `F80F`, `F810`, `FA16`, `FA17`)
+  still fall to the group default and disconnect the GM (confirmed, dispatch tables).
+- Three new opcodes (layouts confirmed; behaviour beyond the layout not read):
+
+  | opcode | layout (with the opcode) | where (EP5.4 ps_game) | what |
+  |---|---|---|---|
+  | `0xF603` | `u8 len` (≤ 0x7F) @2, text @3 | 0x480b34 | console commands from the game, see [`operator-console.md`](operator-console.md) |
+  | `0xF70F` | 5: `u16` @2, `u8` @4 | 0x481955 | relayed as `0x0818` on the session link (inferred); the handler group uses the strings `MobCreate`/`MobCreateAll`, so a summon by `MobCreate.ini` set is likely (inferred) |
+  | `0xFA1B` | 32: guild name @2 (cut at 0x1A), `u32` @0x1B, `u8` @0x1F (< 9) | 0x484099 | a command on a guild (`CGuildMgr::FindGuild`), logged as `%s,%d` |

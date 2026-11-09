@@ -644,3 +644,61 @@ bug was looked up again in this build.
   battle-trade visual-slot script, an Archer/Hunter LUC tweak); the offsets and `pet.dll` show it is for a later build, and its
   battle-trade `SConnection::Send` is `0x4ED0E0` (this build: `0x4D4D20`), as with `ps_gametablas.CT`. Kept as research only.
 - prof_shaiyafiles: a staff command list (`GMCodes.pdf`), an item spreadsheet, SQL procedures and a PHP management panel.
+
+## Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 linked 2008-01-17; EP5.4 2011-09-14, modified after linking), `ps_dbAgent` (EP3
+2008-01-04; EP5.4 2011-09-14, modified after linking) and `ps_gameLog` (EP3 2007-12-07; EP5.4 2010-10-18) were checked for the bugs on
+this page, read statically; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). "Present" means the same defect is there;
+"cannot occur" means the request does not exist in that build. Every address is in the named build's `ps_game` unless another binary is
+named. The post-link changes to EP5.4 `ps_game` apply none of these fixes.
+
+| fix | EP3 | EP5.4 |
+|---|---|---|
+| `npc-shop-price-wrap` | present (inferred, same 32-bit `imul` at 0x451e70) | present (confirmed, 0x479871) |
+| `npc-shop-range` | not checked | present (confirmed: the NPC is found anywhere in the zone, case 0x4796ae) |
+| `myshop-visit-cleanup` | not checked | not checked |
+| `myshop-price-wrap` | present (confirmed, 0x45e4dc) | present (confirmed, 0x4878a8); a new check refuses a sale that would overflow the seller's gold (0x4878e8) |
+| `bound-trade` | present (confirmed, `ExchangeItemAdd` 0x455bf0) | present (inferred) |
+| `bound-duel` | not checked | present (inferred: the stake checks read only real type, count and slot, 0x48c565–0x48c5c1) |
+| `bound-shop` | not checked | present (inferred from the compares in the place case of `PacketMyShop` 0x487370) |
+| `guild-bank-bound` | present (inferred, 0x42b170) | present (inferred, 0x435bc0) |
+| `cloak-lapis` | present (confirmed, 0x4490c5) | present (0x46cae3) |
+| `cloak-lapisia` | cannot occur (no `0x0805`) | present (0x46c9f5) |
+| `enchant-material-bounds` | cannot occur | fixed (0x46cbf5–0x46cc04) |
+| `enchant-seed` | cannot occur | present (0x46ccf9) |
+| `remake-distinct` | cannot occur | fixed (0x46da24) |
+| `blacksmith-range` | present (inferred, `PacketGem` 0x452610) | present (inferred) |
+| `op-exclusive` | present (confirmed, 0x449537) | partly: a new item special 69 hammer links for sure (0x46e776); the 2000 % hammers are still capped |
+| `repair-shield-slot` | present (confirmed, 0x44c0c8) | present (confirmed, 0x47208e) |
+| `helmet-cloak-drop` | the EP3 behaviour: drops and boxes refuse real types 16 and 24 (confirmed, 0x48763a, 0x44db7a) | not located; boxes refuse real type 24 only (0x473bbd) |
+| `rune-skill-cut` | not checked | not checked |
+| `learn-skill-level` | not checked | present (confirmed, 0x49354f) |
+| `stealth-equip` | not checked | gone: the shape tests were removed (confirmed) |
+| `time-damage-player` | present (inferred, same constants in `CUser::TimeDamage` 0x46abf0) | present (confirmed, 0x495e2a) |
+| `low-hp-rows` | not checked | unchanged (inferred, 0x497050) |
+| `block-buff-end` | not checked | present (confirmed, 0x4949b4, 0x4949dd) |
+| `fire-thorns-aggro` | not checked | present (confirmed, 0x4580d0) |
+| `illusion-save` | not checked | present (inferred, 0x47ad70) |
+| `illusion-newcomers` | not checked | not checked |
+| `party-kick-leader` | not checked | partly fixed: the leader's index moves down (confirmed, 0x450324); the loot turn does not |
+| `party-exp-levelup` | not checked | present (confirmed, 0x46517b) |
+| `quest-full-bags` | not checked | not checked |
+| `quest-end-npc` | not checked | present (confirmed, 0x48e6c6, 0x48e754) |
+| `quest-npc-range` | not checked | present (confirmed, `CZone::FindNpc` 0x41e460 has no distance) |
+| `gatekeeper-logout` | not checked | present (confirmed, 0x476db0) |
+| `mob-speed-id` | present (confirmed, `CMob::SendSpeed` 0x4745f0) | present (confirmed, 0x4a1050) |
+| `nan-pos` | present (inferred: `CMap::IsSafePos` 0x412190 is identical to EP4.5's) | fixed: `0x0501` and `0x0220` refuse non-finite positions (confirmed, 0x478514, 0x477555); EP5.4 ps_dbAgent also zeroes a non-finite position before saving (confirmed, EP5.4 ps_dbAgent 0x427160) |
+| `chat-markup-filter` | not checked | not checked |
+| `exchange-count-guard` | present (confirmed, 0x455e37) | fixed for duel stakes (confirmed, 0x48bacd); present in the trade (confirmed, 0x47e81a) |
+| `trade-other` | not checked | fixed: trading with oneself, or while in a duel or with a shop open, is refused (0x47de00) |
+| `character-name-filter`, `guild-text-filter`, `gift-target-filter` | present (confirmed: EP3 ps_dbAgent writes the same names into `'%s'` unescaped) | present (confirmed: the EP5.4 ps_dbAgent statements are unchanged; the guild remark still refuses only `'`, 0x485c63, and creation checks nothing) |
+| `gm-notice-filter`, `gm-target-filter`, `game-log-texts` | present (confirmed: EP3 ps_gameLog escapes only chat) | present (confirmed: EP5.4 ps_gameLog escapes only chat) |
+
+Held back: the item-mall points. EP5.4 still hands the items over before the points are confirmed, but its billing answer can take them
+back by a purchase number (EP5.4 ps_game 0x407386–0x407692; confirmed), and its DB agent gained a gift rollback procedure. That path
+needs a billing service the pack does not configure.
+
+Login server ([`ps_login.md`](ps_login.md) section 13): EP5.4 `ps_login` requires a key-reply length of exactly 0x80 (EP5.4 ps_login
+0x404542), which removes the heap write that EP3 and EP4.5 have, and changes the login query's quotes, which narrows but does not close
+the SQL injection (confirmed for the bytes).

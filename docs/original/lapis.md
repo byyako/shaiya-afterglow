@@ -358,3 +358,49 @@ place is emptied, and the player gets **`0x0206`** (7 bytes: `u8 bag, u8 slot, u
 - Not built: `NEW_SERVER` (by decision: the Lapisia price stays full). Built: the game log records, premium accounts (`docs/original/item-mall.md`), the guild house rates (`docs/original/guild-house.md` section 9) and
   random craft stats on dropped and bought items (`docs/original/item-origins.md` section 6).
 - **Lapisia and rune effects** (an addition, `docs/server/effects.md`): a Lapisia whose extension row has an `enchant` effect uses that effect's success rate (1,000,000 always succeeds without a draw), jump table (in place of the `enchant` rules) and `safe` (a failure never destroys the item); a Recreation Rune with a `recreate` effect redraws only the named crafted numbers the item already has, and is kept when none is there. The price, the material and every check are the core's. With no such extension nothing here changes.
+
+## 12. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **Linking, extraction and badges only** (confirmed): `PacketGem` (EP3 ps_game 0x452610) has `0x0801` to `0x0804`; there is no
+  `0x0805` to `0x0808`, no `ItemEnchant.ini` and no enchant key in the strings. EP3 has no enchanting, runes, remake or appraisal, so the
+  enchant, remake and rune flaws cannot occur there.
+- **The same link rules** (confirmed): the 1 to 50 % clamp before the roll (EP3 ps_game 0x44952b to 0x44953c, so
+  [`op-exclusive`](community-fixes.md#op-exclusive) applies), the cloak shortcut of [`cloak-lapis`](community-fixes.md#cloak-lapis)
+  (`EnableGemAdd`, EP3 ps_game 0x4490c5), and the same lapis prices (the price function at EP3 ps_game 0x448e30).
+- **The guild-house discount needs guild ranking 6 or better** and a usable house (EP3 ps_game 0x4492d5, 0x4492e2); EP4.5 needs 14 or
+  better (0x46146c) (confirmed).
+- **The `exp` column is an experience bonus, not absorption** (confirmed): EP3 adds it to a percent experience bonus (EP3 ps_game
+  0x44018b, 0x442133); there is no absorption and no `0x0525` in EP3.
+
+### EP5.4
+
+- **Two new blacksmith requests** (confirmed): `0x0809` (EP5.4 ps_game 0x46f000) and `0x080A` (EP5.4 ps_game 0x46f3d0) ask for the link
+  and extraction chance and price without changing anything. Request: six `u8` (item bag and slot, then lapis bag and slot for `0x0809`,
+  or flag and gem position for `0x080A`, then hammer bag and slot). Answer, 15 bytes:
+
+| offset | field |
+|---|---|
+| 0 | u16 opcode (`0x0809` or `0x080A`) |
+| 2 | u8 ok (0 refused) |
+| 3 | f64 chance in per cent |
+| 11 | u32 price |
+
+- **Linking** (confirmed, `ItemGemAdd` EP5.4 ps_game 0x46e3f0, matched by dispatch): a new hammer of special 69 gives 100 %, applied after
+  the 50 cap (0x46e776); `EnableGemAdd` (EP5.4 ps_game 0x46cac0) also requires the item's level to be at least the lapis' `ReqInt`
+  (0x46cad2). The cloak shortcut stays (0x46cae3).
+- **Enchanting** (confirmed, `ItemLapisianAdd` EP5.4 ps_game 0x46cba0, matched by dispatch): succeeds when `r < (rate + materialCount)
+  × multiplier` (EP4.5: `materialCount + r < rate`), so the material count now raises the chance by a few millionths; the multiplier is
+  1.0 unless the operator's `enchant` event runs. The per-enchant reseed ([`enchant-seed`](community-fixes.md#enchant-seed)) and the
+  cloak shortcut stay; [`enchant-material-bounds`](community-fixes.md#enchant-material-bounds) and
+  [`remake-distinct`](community-fixes.md#remake-distinct) are fixed (0x46cbf5, 0x46da24).
+- **Timed rate events** (confirmed): the console words `/gemmix`, `/gemext` and `/enchant` add a bonus to link and extraction chances or
+  multiply the enchant rate within an hour window ([`operator-console.md`](operator-console.md) for EP4.5's console).
+- **`ItemEnchant.ini`** is byte-identical to EP4.5's server-patch copy (confirmed, MD5), which supports section 2's choice. The reload
+  still copies the weapon value into the defence slot (EP5.4 ps_game 0x4dc297, 0x4dc2e6), but the `/reitemenh` console word is gone, so
+  how that reload is reached was not traced.
+- There is no `0x080B` to `0x080D` handler: the EP5 crafting the EP5.4 client knows is not in this server (confirmed, dispatch).

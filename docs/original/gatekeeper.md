@@ -75,3 +75,27 @@ On the player's next update after the scheduled time (here: right away), the pla
 - The other `m_nMovePositionType` values: 0 return to the bind position (`CMap::GetBindPos`), 2 to 6 items and skills (town portal scrolls, recall,
   `0x0222` casting cancelled), and the delays they use.
 - Portals (`0x020A`, `CUser` and `CMap` portal data in the svmaps).
+
+## 6. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `NpcQuest.SData`, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+Function names in those builds are carried over from EP4.5 (matched by strings, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- `0x020C` is in the same opcode set (confirmed); the case body was not compared. `0x0110` and `0x0111` exist only in EP4.5 (confirmed,
+  immediate sweep), so there is no move to the war server.
+- `NpcQuest.SData` has fewer gatekeepers: EP4.5 adds 24, among them the war-map ones 46 to 57 and the empty 60 to 69. Gatekeeper 20's
+  second gate (map 43) is free in EP3 and costs 39,800 in EP4.5 (confirmed, the file).
+
+### EP5.4
+
+- **The same request** (confirmed, case EP5.4 ps_game 0x476bb3): destination 0 to 2, the NPC in the zone, type 2, within 30, the
+  country, a named destination, the cost, the map loaded, `IsSafePos`, the guild-house rate, map 200 through the portal code. **The
+  logout fault of section 2 is still there**: with a logout pending the move is not scheduled (EP5.4 ps_game 0x476db0) but the cost is
+  taken and `0x020C` 1 is sent (0x476df8 to 0x476ed8).
+- **Data** (confirmed, `NpcQuest.SData`): the placeholder gatekeepers 60 to 69 now serve maps 68 and 69 (21,000 to 100,800), and three new
+  ones (70 to 72) link 68, 35 and 36. Gatekeeper 13 gains a free gate to map 61 and 17 one to map 59; 16 → 69 and 20 → 68 cost
+  189,000. The map-0 gate goes to 1,000,000 and the battle-zone gates (maps 102 to 104) to 2,000,000. The war server's `GateKeeperLvMax`
+  goes 60 → 70 ([`gamewar.md`](gamewar.md)).

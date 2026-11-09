@@ -328,3 +328,25 @@ kill, the Goddess Blessing, the 10-minute tick, `0x020F` to the faction, `0x0211
 `docs/original/operator-console.md`); the Charge allowance (`docs/original/move-check.md` section 1, for players as for monsters). Built: duels and guild
 wars (`docs/original/duel.md`, `docs/original/guild-war.md`), item options (`docs/original/item-options.md`), obelisks
 (`docs/original/obelisks.md`).
+
+## 12. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `KillStatus.SData`, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+Function names in those builds are carried over from EP4.5 (matched by strings, constants or the call graph, as those pages list).
+
+### EP3
+
+- `KillStatus.SData` differs in three Light records (confirmed, decoded with the layout of section 8): grade 1 gives 6 % SP/MP
+  regeneration (EP4.5 5 %), grade 13 adds 5 % max HP, SP and MP (EP4.5 nothing), grade 27 adds 11 % MP and SP (EP4.5 5 %).
+- `CWorld::AddKillCount` exists (EP3 ps_game 0x410780). The PvP `AttackDamage` (EP3 ps_game 0x440ed0) has the same damage-type switch
+  and cap (confirmed). The skill-on-player path was not compared further.
+
+### EP5.4
+
+- **The faction count is the same** (confirmed): `CWorld::UpdateKillCount` (EP5.4 ps_game 0x4196d0) only inlines `SetKillCount`, with the
+  same 10-minute send and reset; `GetKillStep` and `GetKillStepEnable` (EP5.4 ps_game 0x49ce90, 0x49cef0) walk the same 16 steps;
+  `KillStatus.SData` is byte-identical. A kill still adds 1 to the faction count, whatever it adds to the player's ([`pvp.md`](pvp.md)).
+- **Skills on players**: the PvP damage cap is 60000 (EP5.4 ps_game 0x463dc0). Buff kind 98 makes a skill with a state effect fail on
+  its holder (`AttackSuccess`, EP5.4 ps_game 0x463a65), and debuff kinds 74 to 76 lock the victim's attacks, skills and item use, one
+  kind at a time ([`skills-buffs.md`](skills-buffs.md)) (confirmed).

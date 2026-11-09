@@ -1,0 +1,19 @@
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+EventItems|1|ItemID|int|NULL|||0
+EventItems|2|ItemCount|tinyint|NULL|||0
+EventItems|3|IndexItem|int|NULL|||0
+Users_Product|1|RowID|int|NOT NULL|IDENTITY||0
+Users_Product|2|UserUID|int|NOT NULL|||0
+Users_Product|3|Slot|tinyint|NOT NULL|||0
+Users_Product|4|ItemID|int|NOT NULL|||0
+Users_Product|5|ItemCount|tinyint|NOT NULL|||0
+Users_Product|6|ProductCode|varchar(20)|NOT NULL|||0
+Users_Product|7|OrderNumber|bigint|NOT NULL|||0
+Users_Product|8|VerifyCode|bigint|NULL|||0
+Users_Product|9|BuyDate|datetime|NULL|||0

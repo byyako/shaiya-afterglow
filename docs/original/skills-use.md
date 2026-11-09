@@ -355,3 +355,37 @@ equipment, 8 previous skill, 9 cooldown, 10 cannot attack, 11 wrong target.
   them alive and of the caster's country, and since the duels and guild wars not in a duel and on the same side of a war
   (`docs/original/duel.md` section 5, `docs/original/guild-war.md` section 5). Any monster killed by a skill stops the caster (section 8 step
   4), the target or one in its area.
+
+## 15. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- The requests `0x0511` and `0x0517` are in the same `PacketPC` opcode set (confirmed, dispatch tables).
+- `CUser::AttackSuccess` (EP3 ps_game 0x438540) and `CUser::AttackDamage` (EP3 ps_game 0x438a60) have the same constants and the same
+  damage-type switch over 0 to 5 with the cap 30000 (confirmed), so sections 11 and 12 hold, except that elements stop at 4
+  ([`combat.md`](combat.md)).
+- The checks, targeting, areas and heals were not compared one by one.
+
+### EP5.4
+
+- **Damage types 0 to 11** (switch table EP5.4 ps_game 0x45a0ec, confirmed). Types 0 to 5 as in section 12, with type 4 capped at 60000
+  (EP5.4 ps_game 0x459637) and type 3 still at 30000 (0x45954d). New (EP5.4 ps_game 0x459705 to 0x459905, confirmed), each at least 1 and
+  then the normal formula as type 1:
+
+| type | base per HP/SP/MP value `v` |
+|---|---|
+| 6, 7 | `v × REC`, `v + REC` |
+| 8, 9 | `v × DEX`, `v + DEX` |
+| 10, 11 | `v × WIS`, `v + WIS` |
+
+- **The hit on a monster is split** into a single-target function (EP5.4 ps_game 0x45bdd0, `0x0517`, `0x0518`, `0x051A`) and an area
+  function (EP5.4 ps_game 0x45c320, `0x0519`, `0x051A`), the area code calling only the latter (confirmed). The packet sizes are unchanged.
+- **Checks** (section 6): while buff kind 96 lasts, `EnableUseSkillUser` and `EnableUseSkillMob` (EP5.4 ps_game 0x45ad25, 0x45af60) skip
+  the combo check, so a combo skill needs no previous skill (confirmed for the skip, inferred for its meaning). While a debuff of kind
+  74 to 76 is on the player, `PacketPC` refuses `0x0511` and `0x0517` (and attacks and item use) (EP5.4 ps_game 0x4789a1 to 0x4790fc,
+  confirmed); see [`skills-buffs.md`](skills-buffs.md).
+- The `PacketPC` opcode set is the same (confirmed), and the hit roll keeps its constants (EP5.4 ps_game 0x459090, confirmed).

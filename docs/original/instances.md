@@ -436,3 +436,36 @@ ranking map, R, `docs/original/guild-ranking.md` section 10; G stays refused; `c
 3. **`LuaGetNumberAggro(n)` answers the n-th highest** (the original: the second for any n ≥ 2). No shipped script calls it.
 4. **A hit's `OnAttacked` and a death's `OnDeath` run at the next Lua pass** (within a second), not inside the hit: the boss's first
    line, the portal opening and the deaths' summons come up to a second later than in the original.
+
+## 19. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `Map.ini` and `Lua/` files, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md). Function names in those builds are carried over from EP4.5 (matched by strings, the call graph or the `LuaMob`
+name table, as those pages list).
+
+### EP3
+
+No party instances and no Lua monsters. The instance count string (EP3 ps_game 0x4e3810) names guild-house and guild-ranking zones but no
+party term (inferred from it), there is no Lua library (confirmed), and maps 45 and up do not exist.
+
+### EP5.4
+
+- **The code is all there, the data turns it off** (confirmed): `IsPartyInsZoneOpenTime` (EP5.4 ps_game 0x42fa40),
+  `ParseMapOpenTimeArray` (0x42d2c0), `FindPartyInsZone` (0x41a840) and the portal's type-3 branch (0x4768a0, the same codes 9, 4, 11,
+  10) exist, but `Map.ini` drops `CreateType = P` from maps 64 to 66. They become shared maps, and the Lua bosses run in one zone for
+  everyone. The new `EnterMaxUser` and `ExpireTime` values there do nothing (inferred).
+- The expiry of section 6 still never resets its time (EP5.4 ps_game 0x40412d, confirmed).
+- Map files 98 and 99 are copies of a Cailum Sacra section past `MapCount`, not loaded (inferred).
+- **Scripts** (confirmed, the files): `116.lua` calls `LuaCreateMob(2472, …)` up to three times while it returns 0 (its comment: a
+  temporary fix), and 116 and 117 call `LuaDeleteMob` with count 0 and a fifth argument 500.0. Whether EP5.4's `LuaDeleteMob` reads a
+  fifth argument (a radius in place of the fixed 100) was not checked.
+- **Three new functions** (confirmed, name table EP5.4 ps_game 0x581ea8):
+
+| function | arguments | effect |
+|---|---|---|
+| `LuaGetMobUID` (EP5.4 ps_game 0x4cba70) | mode, monster type, radius | the caller's own id, or the id of a monster of that type in the cells around within the radius (inferred reading of the loop) |
+| `LuaUseSkillAtMob` (0x4cbad0) | target id, skill id | `CMob::HealUser` with that skill on itself (target 0) or on a living monster of the zone of the same country within the skill's range |
+| `LuaMobCommand` (0x4cbb10) | monster id, three numbers | calls that monster's Lua function `OnCommand(caller id, the three numbers)` (EP5.4 ps_game 0x4c76b0) if it is alive and has a script |
+
+- 27 new monsters have Lua AI numbers 121 to 185, and none of those scripts is shipped (confirmed, data).

@@ -346,3 +346,60 @@ Third-party projects consulted: `momo314/Imgeneus`, `7Power/Origin`,
 `Drakkus/ShaiyaGenesis`, `Spelunkern/Shaiya-Core`, `kurtekat/shaiya-episode-6`,
 `tristonplummer/Eden`, `matigramirez/Parsec`, `matigramirez/Etaine`. Archive index from
 `archive.openshaiya.org`.
+
+## 9. Other episodes
+
+The EP3 and EP5.4 builds of the servers were compared with EP4.5, read statically like the rest of this note: `ps_login` (EP3
+2007-12-07; EP5.4 is that EP3 build with 7 bytes changed), `ps_session` (EP3 2007-12-07, EP5.4 2011-09-14), `ps_game` (EP3 2008-01-17,
+EP5.4 2011-09-14, modified after linking), `ps_dbAgent` (EP3 2008-01-04, EP5.4 2011-09-14, modified after linking) and `ps_gameLog`
+(EP3 2007-12-07, EP5.4 2010-10-18). Overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **Login connection:** the same handshake, key exchange, AES-128-CTR and server list as EP4.5 (confirmed, side-by-side diffs). The
+  `0xA102` login keeps up to 31 characters of user name and 32 of password (EP3 ps_login 0x4044ea, 0x4044ee), sent to the database in
+  plain text (confirmed; details in [`ps_login.md`](ps_login.md)).
+- **Login → session `0x701`** is 0x63 bytes, without EP4.5's last u32 (EP3 ps_login 0x4046bc), and the session's `0x801` reply to the
+  game server is 90 bytes (EP3 ps_session 0x403158), without the auto-reconnect character id and the server id (confirmed).
+- **Game connection:** the same connection states, the same opcode groups at the same switch positions, minus the market group `0x1C`
+  (EP3 ps_game `PacketProcessing` 0x44e330, matched by its `0xA301` compare and state tree; confirmed). EP4.5 added 42 client opcodes:
+  `0x0307`, `0x0559`, `0x0805`–`0x0808`, `0x0B0C`–`0x0B18`, `0x0B1A`, `0x1112`, `0x1C01`–`0x1C0D`, `0x1C14`–`0x1C17`, `0xF10A` and
+  `0xFA18`–`0xFA1A` (confirmed, dispatch walk). EP3 has nothing EP4.5 lacks except `0xB106` in state 3, which it answers with the item-mall
+  product list (EP3 ps_game 0x441950; confirmed).
+- **Server-built packets only in EP4.5** (confirmed: the opcode constants are absent from the EP3 image): `0x0110`–`0x0114` (server move,
+  reconnect, server time), `0x0228`, `0x0524`, `0x0525` (absorption), `0x0558` (scouting), the party updates `0x0C0A`–`0x0C14`, `0x110A`/
+  `0x110B` (scripted monsters) and `0xB103` (billing info).
+- No packet length checks, as in EP4.5 (confirmed).
+- Comparing the builds showed that the EP3 server reads the create packet's name as a 21-byte field at offset 10, like EP4.5
+  (EP3 ps_game 0x452896, `TrimString(…, 21)`); the 19-byte EP3 name of section 4.2 (source [I]) is not what the EP3 server enforces.
+
+### EP5.4
+
+- **Login:** the EP3 code with three patches: the `0xA101` key reply's length byte must be exactly 0x80 (EP5.4 ps_login 0x404542), the
+  connection cap is removed (0x411abd) and the login query quotes the name and password with `"` (0x445e70) (confirmed).
+- **Session:** reads `0x701` only up to offset 0x62 (EP5.4 ps_session 0x404168), so it takes the 0x63-byte form; its `0x801` reply is
+  95 bytes, exactly the PDB struct (EP5.4 ps_session 0x403657) (confirmed). New session ↔ game messages (confirmed, dispatch): `0x105`
+  (cash billing up or down), `0x108` (16 random bytes per session run, meaning unknown), `0x818` and `0x81B` (relays), and `0x1B01`–`0x1B03`
+  (item-mall points through a PayLetter billing link).
+- **Game:** the same dispatch; every EP4.5 opcode is still handled (confirmed, all 65536 values walked in both builds, EP5.4 ps_game
+  `PacketProcessing` 0x474940, matched by its unique string). New:
+
+  | opcode | dir | layout (lengths with the opcode) | where (EP5.4 ps_game) | status |
+  |---|---|---|---|---|
+  | `0x0308`, `0x0309` | C→S | 6: `u32 targetId` @2 | `PacketGetInfo` 0x477e19, 0x477eff | confirmed |
+  | `0x030A` | C→S | 2 | 0x477fab | confirmed |
+  | `0x030B`, `0x030C`, `0x030D` | S→C | target's buff list, one buff added (10: `u8 kind` @2, `u32 objectId` @3, `u16` @7, `u8` @9), one removed | 0x456bef, 0x456d31, 0x456e21 | confirmed |
+  | `0x0809`, `0x080A` | C→S | 8: six `u8` @2..@7 | `PacketGem` | confirmed |
+  | `0x0B1B` | both | 7: `u32 id` @2, `u8 partyType` @6 | `PacketParty` 0x475fa4 | confirmed |
+  | `0xF603` | both | `u8 len` (≤ 0x7F) @2, text @3 | `PacketAdminCmdA` 0x480b34 | confirmed |
+  | `0xF70F` | C→S | 5: `u16` @2, `u8` @4 | 0x481955 | confirmed |
+  | `0xFA1B` | C→S | 32: guild name @2, `u32` @0x1B, `u8` @0x1F | 0x484099 | confirmed |
+  | `0xB106` | S→C | `u8 n` @2, then n rows of 76 bytes (`code[21]`, `name[51]`, `u32 price`), at most 25 per page | 0x4dc090, in state 3 | confirmed |
+
+  Any `0xB1xx` other than `0xB106` in state 3 closes the connection (EP5.4 ps_game 0x474b75). `0xA302` (GameGuard) is no longer routed
+  (EP5.4 ps_game 0x4748e0). A connection whose receive queue holds more than 100 packets is closed and logged (EP5.4 ps_game 0x474864;
+  EP4.5: 1000, no log). There are still no length checks (confirmed).
+- **Game log:** the record header is 87 bytes, the user name 32 bytes instead of 19 (EP5.4 ps_game 0x467f60, EP5.4 ps_gameLog 0x401830;
+  confirmed).
+- Comparing the builds showed that no build reads a `[BILLING_GUM]` section (no such string in any `ps_session` image, confirmed), so the
+  1072 "billing (GUM) port" of section 1 belongs to an ini block nothing uses.

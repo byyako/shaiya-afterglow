@@ -305,3 +305,32 @@ owner's feet, as the original's ends do; a side whose client still shows the win
 
 Game logs are not sent (none are built). Guild wars, with their halves of `IsTeam`, `IsTeamUsable` and the deaths, are in
 `docs/original/guild-war.md`.
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by the opcode switch tables or constants, as those pages list).
+
+### EP3
+
+`PacketPVP` (EP3 ps_game 0x4623e0, matched by dispatch) handles the same `0x24xx` opcodes (confirmed, dispatch tables). The case bodies
+and the stake checks were not compared.
+
+### EP5.4
+
+`PacketPVP` (EP5.4 ps_game 0x48bde0, matched by constants) handles the same seven opcodes with the same calls (confirmed). New checks
+(confirmed):
+
+| where | EP5.4 |
+|---|---|
+| request `0x2401` | refused ("not possible") when either side trades or has a personal shop (EP5.4 ps_game 0x48bea5 to 0x48bed3); **a request to oneself closes the connection** (EP5.4 ps_game 0x48bed9) |
+| answer, stakes, start | the same trade, shop and self checks against the partner (for example EP5.4 ps_game 0x48c5e2 to 0x48c618 in `0x240A`) |
+| a stake from a bag (`0x240A`) | the slot must still hold an item (EP5.4 ps_game 0x48c577) |
+
+The trade side refuses too while either player duels (`0x0A05` to `0x0A08`). So EP5.4 closes the gaps of section 3 (no check of
+trades or shops, the request to oneself) much as the new server does (section 7), except that it drops the connection on a request to
+oneself instead of answering. **The stake count guard is fixed**: `ExchangePvP` (EP5.4 ps_game 0x48b950) takes
+the partial-stack path only when the offered count is below the count held (`jb`, EP5.4 ps_game 0x48bacd; EP4.5 `jne` 0x47ccbe), so a
+stack that shrank is handed over whole (confirmed); the trade keeps the old test (EP5.4 ps_game 0x47e81a). Bound items can still be
+staked: no stake check reads the bound flag (inferred from the checks present, EP5.4 ps_game 0x48c565 to 0x48c5c1).

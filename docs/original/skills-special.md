@@ -335,3 +335,32 @@ Confirmed, `CUser::PacketMaininterface` cases 0x0212, 0x0210; `CUser::StatusAtta
     `docs/original/party.md` section 13; 179 has no learnable row); mounts are in `docs/original/vehicles.md` (Evolution refuses a mounted
     target);
   - `StatusStand` on a one-off skill's target (section 9) is not built (nothing reaches it).
+
+## 13. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- **No scouting reply**: `0x0558` exists only in the EP4.5 image (confirmed, immediate sweep), and EP3 `SkillOnce` (EP3 ps_game
+  0x43e1d0) is 432 bytes against 652.
+- **No shape 102 packet**: `0x0524` (`CUser::SendShape`) exists only in the EP4.5 image (confirmed).
+- Resurrection (`LifeSkill`, EP3 ps_game 0x4439a0), hiding's end (`RemApplySkillHide`, EP3 ps_game 0x46d600) and `TauntMob` (EP3 ps_game
+  0x46c180, 576 bytes against 812) exist; their bodies were not compared.
+- Fields: `CZone::UpdateTrab` (EP3 ps_game 0x41e630) has the same structure, EP4.5 a few more constants (0x65, 0x50) (confirmed).
+  `TrabDamage` was not matched in EP3.
+
+### EP5.4
+
+- **Shape 103** (buff kind 97, [`skills-buffs.md`](skills-buffs.md)): dismounts, sets shape 103 and stops the attack (EP5.4 ps_game
+  0x494645 to 0x4946d0). Hiding's end (`RemApplySkillHide`, EP5.4 ps_game 0x499980) removes kind 97 as well as 88, so the shape ends on
+  the same triggers as hiding (confirmed for the constants, inferred for the triggers).
+- **Equipment no longer tests the shape.** EP4.5 skips the item's attack and defence while a shape is set (four tests, 0x454d1d to
+  0x455200); EP5.4 `ItemEquipmentAdd` and `ItemEquipmentRem` (EP5.4 ps_game 0x461640, 0x461d10) never read the shape byte (confirmed),
+  so the stealth equipment drift of [`community-fixes.md`](community-fixes.md) is gone.
+- Resurrection (`LifeSkill`, EP5.4 ps_game 0x466bd0) makes the same calls plus one new one (0x4781d0) before `CZone::SendView`, not
+  read (confirmed).
+- Fields: `CZone::UpdateTrab` (EP5.4 ps_game 0x429090) and `TrabDamage` (0x428ed0) make the same calls with the same packets and
+  constants; only the damage cap is 60000 (confirmed). The exclusive rule for 88, 90 and skill 114 is unchanged (confirmed).

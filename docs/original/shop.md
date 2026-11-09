@@ -100,3 +100,28 @@ Follows sections 2 and 3, with these differences:
 
 - The `+0x142c` state that ignores shop packets (likely dying or dead).
 - What the original does with items in bags above `m_nMaxBag`.
+
+## 6. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The same buying and selling** (`PacketShop` EP3 ps_game 0x451810, matched by dispatch, `0x0702` and `0x0703`). The buy price is the
+  same 32-bit product ([`npc-shop-price-wrap`](community-fixes.md#npc-shop-price-wrap); `imul` at EP3 ps_game 0x451e70, inferred to be
+  the same path as EP4.5 0x46b55e).
+- **The guild-house discount** also calls `CGuild::EnableGuildHouse` in EP3; EP4.5 does not call it there (confirmed at call level).
+- Data (confirmed, `NpcQuest.SData`): EP4.5 adds 76 merchants, and 8 shared merchants differ (EP4.5 adds items of types 28, 44 and 100).
+
+### EP5.4
+
+- **The same program** (confirmed): `PacketShop` (EP5.4 ps_game 0x479220, matched by opcode switch table) finds the NPC anywhere in the
+  zone (no distance), checks the same type, index and count, applies the guild-house rate, and computes the buy price as a 32-bit `imul`
+  (EP5.4 ps_game 0x479871): the price wrap is not fixed. Selling multiplies `count × nSell` in each branch as EP4.5 does (EP5.4 ps_game
+  0x479311 and on).
+- The new item's unique id comes from EP5.4 ps_game 0x464840 instead of `SUniqueIDGenByServer::GenID`, and a function at EP5.4 ps_game
+  0x468080 runs after each purchase; neither was read.
+- **Placement** (confirmed): `CMap::InitNPC` (EP5.4 ps_game 0x42fb50) skips merchants of shop kind 7 or 8 (0x42fbbc to 0x42fbd1), so
+  the eight capital cloak merchants of maps 35 and 36 are absent; why was not found.
+- Data (confirmed, `NpcQuest.SData`): 44 merchants get 791 more entries, mostly consumables and level-38 to 48 jewellery and armour.

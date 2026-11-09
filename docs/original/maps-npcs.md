@@ -115,3 +115,34 @@ for the NPCs that left the view and `0x0E01` for those that came into it. The cl
 
 - Walking NPCs, guards, `0x0E03`/`0x0E05`/`0x0E06` and the client's `0x0E04`: `docs/original/guards.md`. Regions and weather timing
   are still open (shops, gatekeepers, quests, monsters, portals and obelisks have their own documents).
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their map files, `Map.ini` and `NpcQuest.SData`, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md)
+and [`ep5.4.md`](ep5.4.md). Function names in those builds are carried over from EP4.5 (matched by strings or the call graph, as those
+pages list).
+
+### EP3
+
+- `MapCount = 45`: maps 0 to 44. 30 map files are byte-identical to EP4.5's; the others mostly have fewer NPCs and portals, and map 42
+  is a different map (another declared size; 8 NPCs, no portals) (confirmed, the files).
+- `CWorld::InitMaps` (EP3 ps_game 0x411570) is the same code with a 0x1c4-byte map object (EP4.5 0x1f0); `LoadMap` (EP3 ps_game
+  0x421490), `LoadGameMapConfig`, `IsSafePos` and `IsBlock` are identical or nearly so (confirmed).
+- `NpcQuest.SData` parses with the EP4.5 layout (text in Shift-JIS): 1,116 NPCs against 1,379 (confirmed). `CMap::InitNPC` was not
+  compared.
+
+### EP5.4
+
+- **Maps** (confirmed, files and `Map.ini`): `MapCount` 68 → 80, new maps 68 to 79 (the level 60 to 75 fields, a shared relic field 70,
+  dungeons), and files 80, 98 and 99 that lie past the count and are not loaded (inferred). Every file parses with the EP4.5 layout. Map
+  60 is rebuilt as a small town (86 NPCs, no monsters, no portal); map 62's blocked-cell bitmap is empty. Maps 73 and 75 to 79 spawn
+  monster ids that have no definition.
+- **No fixed map limit**: `InitMaps` (EP5.4 ps_game 0x41ab20) allocates `MapCount` maps, now 0x208 bytes each (confirmed).
+- **`Map.ini`**: the same keys in the same order (`LoadConfig`, EP5.4 ps_game 0x42d3e0), plus `MapCurse` (a country, a skill and two
+  bytes: that country's players get the skill on entering, cannot save a position there and are moved off the map at login) and
+  `[DEFAULT_SET_ZONE] ReBirthAddSkillID`/`LV` (a skill after a full rebirth) (confirmed). No shipped file sets either. The "map 42 is
+  the auction house" test becomes a per-map flag set for map 42 (EP5.4 ps_game 0x42db4b), same behaviour.
+- **NPCs**: `CMap::InitNPC` (EP5.4 ps_game 0x42fb50) no longer skips type 5, so the eight gambling NPCs (maps 1, 2, 19, 20, 28, 29, 35,
+  36) are placed; it skips merchants whose shop kind is 7 or 8 instead (EP5.4 ps_game 0x42fbbc to 0x42fbd1), the eight cloak sellers of
+  maps 35 and 36 (confirmed; why, not found). `NpcQuest.SData` has 1,524 NPCs (145 new, text in GBK).

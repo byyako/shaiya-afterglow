@@ -388,3 +388,24 @@ assumes the window does too), the NPC's look and click distance, the labels, the
 what chat from others does on the gambling screen.
 
 **Design notes of the research, not acted on:** none needed; it suggests keeping `0x0213` before `0x3106` and the 6-byte `0x3109`, as built.
+
+## 14. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking), with their map files, were
+compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`PacketMiniGame` (EP3 ps_game 0x45d5f0) handles the same `0x3101`–`0x3109` (confirmed, dispatch tables). Whether EP3's `CMap::InitNPC`
+skips the gambling NPCs was not read.
+
+### EP5.4
+
+- **The house is open.** `CMap::InitNPC` (EP5.4 ps_game 0x42fb50, matched by call graph) has no type-5 test; it skips instead merchants
+  whose shop kind is 7 or 8 (0x42fbbc–0x42fbd1) (confirmed). With the shipped maps that places eight gambling NPCs, on maps 1, 2, 19, 20,
+  28, 29 and the two new ones on 35 and 36, and leaves out eight capital cloak merchants (confirmed for the placement; the play is
+  inferred, nothing was run).
+- **The game is unchanged:** the same nine cases in states 3 and 4, and every table byte-identical (bets 100 to 3000 at EP5.4 ps_game
+  0x56b36c, symbols and weights 0x56b388, lines 0x56b470, card odds 0x56b45c, patterns 0x56b4d0 to 0x56b990) (confirmed). So the house
+  keeps its 41 % return. `SlotBatting` (EP5.4 ps_game 0x4d3390) saves the money through `CUser::SendDBMoney` instead of building `0x0603`
+  itself.

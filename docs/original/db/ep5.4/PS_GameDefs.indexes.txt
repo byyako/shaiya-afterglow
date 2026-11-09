@@ -1,0 +1,6 @@
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+IX_Items|Items|0|0|CLUSTERED
+PK_Items|Items|1|1|NONCLUSTERED
+PK_Mobs|Mobs|1|1|CLUSTERED
+PK_ProductList|ProductList|1|1|CLUSTERED
+IX_Skills|Skills|0|0|CLUSTERED

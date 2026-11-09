@@ -202,3 +202,52 @@ Its output was compared with the SQL Server export, table by table, and is byte 
 - Only the types the definitions use are read (`tinyint`, `smallint`, `int`, `bigint`, `bit`, `datetime`, `char` and `varchar`,
   `nchar`, `nvarchar`, a few more); another type stops the reader with a message. Text is passed on as bytes (hex in the export);
   the GBK decoding stays in `load_into_postgres.py`.
+
+## Other episodes
+
+The databases shipped with the EP3 and EP5.4 server packs were compared with the EP4.5 backups, read statically like the rest of this
+note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Their description files are in `docs/original/db/ep3/` and
+`docs/original/db/ep5.4/`, which `docs/original/db/README.md` explains.
+
+**Versions** (confirmed, boot pages): all ten EP3 `.MDF` files and nine of the ten EP5.4 ones are database version 539 (SQL Server
+2000), which SQL Server 2022 refuses to attach (Msg 950). They were read with a static reader of the SQL Server 2000 catalogue; for the
+seven EP5.4 databases whose schema equals EP4.5's, its output is byte for byte what SQL Server 2022 wrote for EP4.5 (confirmed). EP5.4
+`PS_GameDefs` is version 661 (SQL Server 2008 R2, created on 2000) and was attached normally. EP3 has `PS_Monitor` and `PS_Statistics`
+where EP4.5 has `PS_StatData` and `PS_Statics`.
+
+### EP3
+
+- A thinner set, made 2009-01 to 2009-04: no primary keys or defaults on most tables, different name case (`CHARS`, `charitems`),
+  `PS_GameData` with 27 tables against 54 (no market, guild bank, NPC levels, `Guilds`/`GuildDetails`), `PS_Billing` with 3 against 16
+  (confirmed). `OMG_GameWeb` and `PS_Monitor` are empty.
+- `PS_GameDefs` is a stub: one placeholder column per table and no rows, so there are no EP3 definitions to export (confirmed).
+- `PS_UserData`: `Users_Master.Pw` is varchar(32) (EP4.5 12); extra procedures compare or change passwords in plain text (confirmed).
+- `PS_GameLog` has only `UserLog`; the action-log insert is in `PS_GameData` (confirmed).
+- The item-mall delivery procedure `usp_Insert_Product_User_E` is in clear text in EP3 (encrypted in EP4.5 and EP5.4): at most 240 slots
+  per user, one row per item, one transaction (confirmed).
+
+### EP5.4
+
+- The EP4.5 schema, older in places (confirmed). `PS_Billing`, `PS_GMTool`, `PS_StatData` and `PS_Statics` are identical, procedures
+  included. `PS_UserData` lacks `CreatedGuilds`, `UserLoginStatus`, `UserOnlineTimeLog`, `WebPointLog` and two procedures, all created in
+  the EP4.5 backup after the EP5.4 copy's date; so the play-time point grant of EP4.5's `usp_Try_GameLogout_R` is a 2009 addition to the
+  EP4.5 pack.
+- `PS_GameData`: `Chars.K1` defaults to 0 (EP4.5 120000); `usp_Read_User_MaxGrow_R` returns the stored value where EP4.5 returns a
+  constant 3, and EP5.4 stores 3 at country choice instead; the cash-point read goes through a linked server; `usp_Save_Char_Name_E`
+  has its commit commented out, and since `BEGIN TRANSACTION` is commented out in both builds, neither renames atomically (EP4.5's lone
+  `COMMIT` fails unless the caller holds a transaction, inferred).
+- `PS_GameDefs`: `ProductList.RowID` became `IDENTITY`; more rows (items 16,047 → 19,572, skills 1,333 → 3,738, monsters 2,747 → 3,088).
+- `PS_ChatLog.ChatLog.ChatData` is char(100) (EP4.5 char(10)).
+- The EP5.4 `ps_dbAgent` calls four item-mall procedures that no shipped backup has (`usp_Save_User_BuyPointItems2`,
+  `usp_Read_User_CashPoint_UsersMaster`, `usp_Save_User_GiftPointItems2`, `usp_Rollback_User_GiftPointItems`), so that pack's item mall
+  cannot have worked with its own databases (inferred).
+
+### What operators should know
+
+- EP3's `usp_Try_GameLogin_Taiwan` accepts any password for an existing account, and EP3's `ps_login` calls it (confirmed). Never run
+  an EP3 `PS_UserData` with real accounts.
+- EP5.4's `PS_ChatLog` ships a trigger on its chat table that grants elevated rights on certain chat lines; the game log server writes
+  every chat line there. An operator restoring that database should drop the trigger (and keep `xp_cmdshell` off) (confirmed from the
+  trigger text).
+- In every episode, the servers write text into SQL statements unescaped (`sprintf` with `'%s'`); the only change is EP5.4 quoting
+  floats in one save statement (confirmed, string comparison).

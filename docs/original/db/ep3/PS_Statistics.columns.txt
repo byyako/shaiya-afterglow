@@ -1,0 +1,9 @@
+DAILY_REPORT|1|REG_DATE|char(10)|NULL|||0
+DAILY_REPORT|2|NEW_MEMBERS|char(10)|NULL|||0
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0

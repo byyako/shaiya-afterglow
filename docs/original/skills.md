@@ -183,3 +183,35 @@ The adds of types 20 to 31 are the `add` terms of the player's numbers (`m_pAtta
     only, and then removes level 2's passive effect, which was never added, so the totals go wrong);
   - a request the original leaves without a reply (unknown skill at level 2 or 3, a race that may not learn it) gets result 3, so the
     client is not left waiting.
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- **Definitions** (`CGameData::LoadConstSkill`, EP3 ps_game 0x497a70): the same 63 columns, levels 1 to 3 and 100, the same clamps for
+  attack kind, defence type, range and the `wType` 93 and 122 rules (confirmed). Different (confirmed): weapons 1 to **15** (EP3 ps_game
+  0x4984e1; EP4.5 1 to 19), `AttrType` above 4 becomes 0 (EP3 ps_game 0x49851c; five elements), and the record is **156 bytes** (EP3
+  ps_game 0x49861a) against 160. Which field EP4.5 added was not identified.
+- **Learning**: `EnableLearnSkill` (EP3 ps_game 0x468bc0) has the same constants (confirmed); `LearnSkill` (EP3 ps_game 0x468e20) was not
+  read in detail, so whether EP3 has the level skip of section 3 is open.
+- **Abilities**: `CUser::SetSkillAbility` (EP3 ps_game 0x46a760) has the same switch over types 1 to 46 (confirmed).
+- The skill list on entering, quick slots and passive skills were not compared.
+
+### EP5.4
+
+- **Nine skill levels.** `LoadConstSkill` (EP5.4 ps_game 0x4d8620) reads the same 63 columns with the same clamps, stores levels 1 to 9
+  (EP5.4 ps_game 0x4d90c3) and 100, and `GetSkillInfo` (EP5.4 ps_game 0x41bb30) answers them (confirmed). The record grew to 164 bytes:
+  a `TypeDetail` of 1000 or more is stored as `TypeDetail % 1000` with `TypeDetail / 1000` in the new field (EP5.4 ps_game 0x4d914e to
+  0x4d916b, confirmed). Who reads the new field was not checked.
+- **Learning** accepts levels 1 to 9 (EP5.4 ps_game 0x493419); otherwise the same checks, order and `0x0209` results, and the level skip
+  of section 3 is still there (EP5.4 ps_game 0x49354f) (confirmed).
+- **Abilities**: the switch has 49 cases (EP5.4 ps_game 0x495585, confirmed). 47 makes a counted player kill add 2
+  ([`pvp.md`](pvp.md)); 48 adds to the damage reduction that EP4.5 sets only from items and lapis (read in `CUser::Damage`, EP5.4 ps_game
+  0x458148); 49 adds the value to all six stats and 5 × the value to max HP, SP and MP (EP5.4 ps_game 0x495952). The data's types 50 and 51
+  fall outside the switch and do nothing here (inferred).
+- **Data** (`PS_GameDefs`, confirmed): skill ids 355 → 380, levels 4 to 9 added to old skills (415 rows), 1,270 of 1,298 shared rows
+  changed (points, required level, damage, times, costs), and 1,955 junk rows with skill id 0.

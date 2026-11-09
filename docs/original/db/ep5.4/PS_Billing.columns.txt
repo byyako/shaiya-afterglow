@@ -1,0 +1,157 @@
+AuctionProductList|1|RowID|int|NOT NULL|||0
+AuctionProductList|2|ProductName|varchar(50)|NOT NULL|||0
+AuctionProductList|3|ProductCode|varchar(20)|NOT NULL|||0
+AuctionProductList|4|BuyCost|int|NOT NULL|||0
+AuctionProductList|5|ItemID1|int|NOT NULL|||0
+AuctionProductList|6|ItemCount1|tinyint|NOT NULL|||0
+AuctionProductList|7|ItemID2|int|NULL|||0
+AuctionProductList|8|ItemCount2|tinyint|NULL|||0
+AuctionProductList|9|ItemID3|int|NULL|||0
+AuctionProductList|10|ItemCount3|tinyint|NULL|||0
+AuctionProductList|11|ItemID4|int|NULL|||0
+AuctionProductList|12|ItemCount4|tinyint|NULL|||0
+AuctionProductList|13|ItemID5|int|NULL|||0
+AuctionProductList|14|ItemCount5|tinyint|NULL|||0
+AuctionProductList|15|ItemID6|int|NULL|||0
+AuctionProductList|16|ItemCount6|tinyint|NULL|||0
+AuctionProductList|17|ItemID7|int|NULL|||0
+AuctionProductList|18|ItemCount7|tinyint|NULL|||0
+AuctionProductList|19|ItemID8|int|NULL|||0
+AuctionProductList|20|ItemCount8|tinyint|NULL|||0
+AuctionProductList|21|ItemID9|int|NULL|||0
+AuctionProductList|22|ItemCount9|tinyint|NULL|||0
+AuctionProductList|23|ItemID10|int|NULL|||0
+AuctionProductList|24|ItemCount10|tinyint|NULL|||0
+AuctionProductList|25|ItemID11|int|NULL|||0
+AuctionProductList|26|ItemCount11|tinyint|NULL|||0
+AuctionProductList|27|ItemID12|int|NULL|||0
+AuctionProductList|28|ItemCount12|tinyint|NULL|||0
+AuctionProductList|29|ItemID13|int|NULL|||0
+AuctionProductList|30|ItemCount13|tinyint|NULL|||0
+AuctionProductList|31|ItemID14|int|NULL|||0
+AuctionProductList|32|ItemCount14|tinyint|NULL|||0
+AuctionProductList|33|ItemID15|int|NULL|||0
+AuctionProductList|34|ItemCount15|tinyint|NULL|||0
+AuctionProductList|35|ItemID16|int|NULL|||0
+AuctionProductList|36|ItemCount16|tinyint|NULL|||0
+AuctionProductList|37|ItemID17|int|NULL|||0
+AuctionProductList|38|ItemCount17|tinyint|NULL|||0
+AuctionProductList|39|ItemID18|int|NULL|||0
+AuctionProductList|40|ItemCount18|tinyint|NULL|||0
+AuctionProductList|41|ItemID19|int|NULL|||0
+AuctionProductList|42|ItemCount19|tinyint|NULL|||0
+AuctionProductList|43|ItemID20|int|NULL|||0
+AuctionProductList|44|ItemCount20|tinyint|NULL|||0
+AuctionProductList|45|ItemID21|int|NULL|||0
+AuctionProductList|46|ItemCount21|tinyint|NULL|||0
+AuctionProductList|47|ItemID22|int|NULL|||0
+AuctionProductList|48|ItemCount22|tinyint|NULL|||0
+AuctionProductList|49|ItemID23|int|NULL|||0
+AuctionProductList|50|ItemCount23|tinyint|NULL|||0
+AuctionProductList|51|ItemID24|int|NULL|||0
+AuctionProductList|52|ItemCount24|tinyint|NULL|||0
+Clean_AllUser2|1|UserUID|int|NOT NULL|||0
+Clean_AllUser2|2|UserID|varchar(18)|NULL|||0
+Clean_AllUser2|3|SocialNo|varchar(13)|NULL|||0
+Clean_AllUsers|1|UserUID|int|NOT NULL|||0
+Clean_AllUsers|2|UserID|varchar(18)|NULL|||0
+Clean_AllUsers|3|SocialNo|varchar(13)|NOT NULL|||0
+Clean_Users_Detail|1|UserID|varchar(12)|NOT NULL|||0
+Clean_Users_Detail|2|UserUID|int|NOT NULL|||0
+Clean_Users_Detail|3|UserName|varchar(20)|NOT NULL|||0
+Clean_Users_Detail|4|SocialNo1|char(6)|NOT NULL|||0
+Clean_Users_Detail|5|SocialNo2|char(7)|NOT NULL|||0
+Clean_Users_Detail|6|PwQuestion|varchar(100)|NOT NULL|||0
+Clean_Users_Detail|7|PwAnswer|varchar(20)|NOT NULL|||0
+Clean_Users_Detail|8|Email|varchar(100)|NOT NULL|||0
+Clean_Users_Detail|9|PostNo|char(7)|NOT NULL|||0
+Clean_Users_Detail|10|Addr1|varchar(100)|NOT NULL|||0
+Clean_Users_Detail|11|Addr2|varchar(100)|NOT NULL|||0
+Clean_Users_Detail|12|Phone1|varchar(3)|NOT NULL|||0
+Clean_Users_Detail|13|Phone2|varchar(4)|NOT NULL|||0
+Clean_Users_Detail|14|Phone3|varchar(4)|NOT NULL|||0
+Clean_Users_Detail|15|Mobile1|varchar(3)|NULL|||0
+Clean_Users_Detail|16|Mobile2|varchar(4)|NULL|||0
+Clean_Users_Detail|17|Mobile3|varchar(4)|NULL|||0
+Clean_Users_Detail|18|NewsLetter|bit|NOT NULL||(1)|0
+Clean_Users_Detail|19|Sms|bit|NOT NULL||(1)|0
+Clean_Users_Detail|20|AdultAuth|bit|NOT NULL|||0
+Clean_Users_Detail|21|AdultAuthDate|datetime|NULL|||0
+Clean_Users_Detail|22|EmailAuth|char(1)|NOT NULL||('N')|0
+Clean_Users_Detail|23|EmailAuthKey|varchar(10)|NULL|||0
+Clean_Users_Detail|24|Job|varchar(50)|NULL|||0
+Clean_Users_Detail|25|JobNo|tinyint|NULL||(21)|0
+Clean_Users_Detail|26|LocalNo|tinyint|NULL||(17)|0
+Clean_Users_Detail|27|PwQuNo|tinyint|NULL||(14)|0
+Clean_Users_Master|1|RowID|int|NOT NULL|||0
+Clean_Users_Master|2|UserUID|int|NOT NULL|||0
+Clean_Users_Master|3|UserID|varchar(12)|NOT NULL|||0
+Clean_Users_Master|4|Pw|varchar(12)|NULL|||0
+Clean_Users_Master|5|JoinDate|smalldatetime|NOT NULL||(getdate())|0
+Clean_Users_Master|6|Admin|bit|NOT NULL||(0)|0
+Clean_Users_Master|7|AdminLevel|tinyint|NOT NULL||(0)|0
+Clean_Users_Master|8|UseQueue|bit|NOT NULL||(0)|0
+Clean_Users_Master|9|Status|smallint|NOT NULL||(0)|0
+Clean_Users_Master|10|Leave|tinyint|NOT NULL||(0)|0
+Clean_Users_Master|11|LeaveDate|smalldatetime|NULL|||0
+Clean_Users_Master|12|UserType|char(1)|NOT NULL||('N')|0
+Clean_Users_Master|13|UserIp|varchar(15)|NULL|||0
+Clean_Users_Master|14|ModiIp|varchar(15)|NULL|||0
+Clean_Users_Master|15|ModiDate|datetime|NULL|||0
+Clean_Users_Master|16|Enpassword|char(32)|NULL|||0
+Clean_Users_Master|17|Point|int|NULL||(0)|0
+CleanLog|1|LogIndex|int|NOT NULL|IDENTITY||0
+CleanLog|2|GmID|varchar(18)|NOT NULL|||0
+CleanLog|3|ActionType|varchar(512)|NOT NULL|||0
+CleanLog|4|ActionDetail|varchar(2048)|NOT NULL|||0
+CleanLog|5|CurDate|datetime|NOT NULL||(getdate())|0
+CleanSocialNo|1|SocialNo|varchar(13)|NOT NULL|||0
+Considers|1|UserUID|int|NOT NULL|||0
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+EventItems|1|ItemID|int|NULL|||0
+EventItems|2|ItemCount|tinyint|NULL|||0
+EventItems|3|IndexItem|int|NULL|||0
+EventUsers|1|UserUID|int|NOT NULL|||0
+EventUsers|2|Slot|tinyint|NULL|||0
+EventUsers|3|ItemID|int|NULL|||0
+EventUsers|4|ItemCount|tinyint|NULL|||0
+EventUsers|5|ProductCode|varchar(20)|NULL|||0
+EventUsers|6|OrderNumber|int|NULL|||0
+EventUsers|7|VerifyCode|binary(50)|NULL|||0
+EventUsers|8|BuyDate|datetime|NULL|||0
+MileageEvent|1|ProductCode|varchar(20)|NOT NULL|||0
+MileageEvent|2|MileageCode|varchar(20)|NULL|||0
+MileageEvent|3|ProductName|varchar(30)|NOT NULL|||0
+MileageEvent|4|ItemCode|int|NULL|||0
+MileageEvent|5|ItemCount|int|NULL|||0
+MileageEvent|6|Package|tinyint|NULL|||0
+PcBangEvent|1|ProductCode|varchar(20)|NOT NULL|||0
+PcBangEvent|2|ProductName|varchar(30)|NOT NULL|||0
+PcBangEvent|3|ItemCode|int|NULL|||0
+PcBangEvent|4|ItemCount|int|NULL|||0
+PcBangEvent|5|Package|tinyint|NULL|||0
+TmpSlotError|1|UserUID|int|NOT NULL|||0
+Users_Product|1|RowID|int|NOT NULL|IDENTITY||0
+Users_Product|2|UserUID|int|NOT NULL|||0
+Users_Product|3|Slot|tinyint|NOT NULL|||0
+Users_Product|4|ItemID|int|NOT NULL|||0
+Users_Product|5|ItemCount|tinyint|NOT NULL|||0
+Users_Product|6|ProductCode|varchar(20)|NOT NULL|||0
+Users_Product|7|OrderNumber|int|NOT NULL|||0
+Users_Product|8|VerifyCode|bigint|NULL|||0
+Users_Product|9|BuyDate|datetime|NULL|||0
+Users_Product2|1|RowID|int|NOT NULL|IDENTITY||0
+Users_Product2|2|UserUID|int|NOT NULL|||0
+Users_Product2|3|Slot|tinyint|NOT NULL|||0
+Users_Product2|4|ItemID|int|NOT NULL|||0
+Users_Product2|5|ItemCount|tinyint|NOT NULL|||0
+Users_Product2|6|ProductCode|varchar(20)|NOT NULL|||0
+Users_Product2|7|OrderNumber|int|NOT NULL|||0
+Users_Product2|8|VerifyCode|bigint|NULL|||0
+Users_Product2|9|BuyDate|datetime|NULL|||0

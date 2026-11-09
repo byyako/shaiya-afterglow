@@ -320,3 +320,20 @@ Rebirth next to the leader (party section 11) uses the union's leader.
 - `0x0B0E` to an existing union: the client rebuilds its list from its party list (section 2, deviation 8).
 - `0x1105` shows for union members ("[Party]<p> : <b>", 353, looked up in the union list). `0xF10A`: the id is read and dropped; the
   line is 6606 "[Union] <b>" in the chat window and the screen-centre list (pink, 10 s); no name is added.
+
+## 13. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+There are no union parties: `0x0B0C`–`0x0B18`, `0x0B1A` and the union chat `0x1112` are not handled (confirmed, dispatch tables).
+
+### EP5.4
+
+The union cases are in the same `PacketParty` table with the same handlers (confirmed). `CParty::EnterRaidParty` (EP5.4 ps_game
+0x44ed90, matched by constants) keeps the 30-member limit (0x44edb0) and the groups of 6 (0x44f0bc) (confirmed). The only constant change
+in the union functions is the party type packet: `0x0520` to the view became `0x0B1B` to the player, which the client echoes back for the
+server to relay as `0x0520` (confirmed for the opcode; see [`party.md`](party.md)). The union experience share is inlined and was not
+compared.

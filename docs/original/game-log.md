@@ -568,3 +568,38 @@ connection puts its header on (`Guilds` writes one directly, with the character'
 `tests/game_flow.rs` (shop, pick-up, death drop, drop, warehouse, trade, chat, levels, stats, deaths and the ways back, quests, staff) and two
 PostgreSQL tests (the writer and the retention pass; the rows the item writes return). A duel's win and loss records and the market's are
 not exercised by an integration test (live test items instead).
+
+## 12. Other episodes
+
+The EP3 `ps_gameLog.exe` (linked 2007-12-07) and the EP5.4 one (a VS 2003 build of 2010-10-18), with the matching `ps_game` and
+`ps_userLog` builds, were compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- The same queueing and writers, the same 74-byte header (EP3 ps_gameLog `GetGameLogMainQuery` 0x401810; confirmed).
+- Fewer records (confirmed, writers' jump tables and format strings): 12 character, 25 item and 7 keep types (EP4.5 16, 47, 12); no party
+  group `0x0Fxx` (rejected as "Error Packet"); no market records, no `0x030D`–`0x0310`; the gem text has no craft name.
+- The shipped EP3 `PS_GameLog` has no `ActionLog` table; `usp_Insert_Action_Log_E` lives in `PS_GameData` there, so `DBGame01` must
+  point at `PS_GameData` (inferred).
+
+### EP5.4
+
+- **The header is 87 bytes:** `szUserName` is 32 bytes, so every field after it moved by 13 (EP5.4 ps_game `SetGameLogMain` 0x467f60;
+  EP5.4 ps_gameLog 0x401830 reads `dwCharID` at 0x26 … `dwTime` at 0x53; confirmed). The staff records' user name grew from 16 to 32
+  bytes. An EP4.5 `ps_game` and an EP5.4 `ps_gameLog` do not fit together (inferred).
+- New record `0x0430`, action 239: the header, an item block, a `u16` and a text (EP5.4 ps_gameLog case 0x4038df; confirmed). It is built
+  in `CUser::ItemUse` (EP5.4 ps_game 0x4745ad); what it records is not settled.
+- `0x0307` lost `firstmoney=`; `0x0803` no longer stores the other side's address (confirmed). `0x030E`–`0x0310` were not found as
+  constants in EP5.4 `ps_game`.
+- The `[MONITOR]` listener is gone (confirmed).
+
+### All three builds
+
+The guild records `0x0B06`/`0x0B07` still fail on a wrong value count, the item-make group is dropped, chat has `'` replaced with `_` and
+every other text goes into the SQL unescaped (confirmed). What operators should know: the chat writer inserts every chat line into
+`PS_ChatLog.dbo.ChatLog`, and the EP5.4 `PS_ChatLog` ships a trigger on that table that grants elevated rights on certain chat lines;
+an operator restoring that database should drop the trigger. See [`database-notes.md`](database-notes.md).
+
+Comparing the builds showed that the question records `0x0401`–`0x0403` of section 4 reach `ps_userLog`, which drops them (empty
+writer, EP4.5 ps_userLog 0x4012d0; confirmed in all three builds), so they are never stored.

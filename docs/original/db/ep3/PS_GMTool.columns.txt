@@ -1,0 +1,21 @@
+GroupList|1|ServerID|tinyint|NOT NULL|||0
+GroupList|2|GroupName|varchar(50)|NOT NULL|||0
+GroupList|3|GameDB|varchar(50)|NULL|||0
+GroupList|4|LogDB|varchar(50)|NULL|||0
+GroupList|5|ChatDB|varchar(50)|NULL|||0
+GroupList|6|Unity|tinyint|NOT NULL|||0
+UpdateLog|1|RowID|int|NOT NULL|IDENTITY||0
+UpdateLog|2|GMID|varchar(18)|NOT NULL|||0
+UpdateLog|3|UserID|varchar(18)|NOT NULL|||0
+UpdateLog|4|GroupName|varchar(50)|NOT NULL|||0
+UpdateLog|5|CharName|varchar(30)|NOT NULL|||0
+UpdateLog|6|ModType|tinyint|NOT NULL|||0
+UpdateLog|7|ModName|varchar(50)|NOT NULL|||0
+UpdateLog|8|ID|int|NOT NULL|||0
+UpdateLog|9|UID|bigint|NULL|||0
+UpdateLog|10|ModPart|varchar(50)|NOT NULL|||0
+UpdateLog|11|BeforeData|varchar(50)|NOT NULL|||0
+UpdateLog|12|AfterData|varchar(50)|NOT NULL|||0
+UpdateLog|13|ModReasonType|tinyint|NOT NULL|||0
+UpdateLog|14|ModReasonText|varchar(100)|NULL|||0
+UpdateLog|15|ModTime|datetime|NOT NULL|||0

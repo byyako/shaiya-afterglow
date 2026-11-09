@@ -334,3 +334,29 @@ and **`0x0610`** (`TP_MOB_RECOVER`, 10 bytes: `u32 id, i32 HP gained`) to the pl
   resurrection skill (`docs/original/skills-special.md` section 12) and the Target Resurrection Rune (`docs/original/item-use.md` section 11),
   parties, player kills, block and damage-reducing skills, item effects on being hit (`docs/original/item-options.md` section 7), lapis
   defence elements, the kill-count bonuses, staff invisibility (`docs/original/gm-commands.md` section 13).
+
+## 11. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or data references, as those pages list).
+
+### EP3
+
+- The same constants (confirmed): `CMob::FindTarget` (EP3 ps_game 0x4812d0), `CMob::Attack` (0x4831c0), `CMob::AttackAI` (0x482cb0,
+  matched by its reads of the attack-delay table), `CMob::AttackSuccess` (0x483590) and both `CMob::AttackDamage` (0x483ab0, 0x484250:
+  the same switch and cap 30000, five elements). `CUser::DeathByNPC` (EP3 ps_game 0x442bd0) keeps the 200 s rebirth time.
+- `CMob::SetTarget` (EP3 ps_game 0x4810f0) has no state-100 branch and no `SetTargetEx` call (confirmed).
+- `CMob::Chase` and `CMob::ReturnHome` were not located in EP3; recovery was not compared.
+
+### EP5.4
+
+- **The same** (confirmed at the constant and call level): `CMob::Attack` (EP5.4 ps_game 0x4b6b20; `0x0605`, `0x051B`), `AttackAI`
+  (0x4b6590; 0.4, 0.2, 0.05), `Chase` (0x4bb8f0; 1.5, 45, 0.3, 0.4, 0.6), `ReturnHome` (0x4bc110; 0.5, 10, 100 steps),
+  `GetMaxAttackUserID` (0x4a15d0; 5000 ms). `SetTarget` (EP5.4 ps_game 0x4b4010) is matched by call-graph position.
+- **Changed** (confirmed): the damage cap is 60000 in both `CMob::AttackDamage` (EP5.4 ps_game 0x4b7360, 0x4b7a20); a player holding buff
+  kind 98 resists every state effect of a monster skill (`CMob::AttackSuccess`, EP5.4 ps_game 0x4b6fd5); the automatic rebirth comes
+  after **185 s** instead of 200 s (EP5.4 ps_game 0x465d55, `DeathByNPC` 0x465e40).
+- **New setting**: `[DEFAULT_SET_ZONE] ReBirthAddSkillID` and `ReBirthAddSkillLV` in `Map.ini` put a skill on a player after a full rebirth
+  (`CUser::Rebirth`, EP5.4 ps_game 0x467057; also `KillSoulForDisconnect`, 0x466210) (confirmed). The shipped file leaves it at 0 (none).
+- Recovery over time was not compared.

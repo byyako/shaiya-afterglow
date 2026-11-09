@@ -222,3 +222,20 @@ Small choices made in the build:
   chase, no hold-position (`LuaSetHoldPosion`) and a target without a shape, as `AttackAIExp` asks.
 - **Whatever moves a monster otherwise** (an idle step, a summon, a Lua jump) leaves its arrival time as it is; an arrival time in the past
   counts from now, so at most one step's time is affected.
+
+## 10. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by the call graph and constants, as those pages list).
+
+### EP3
+
+`CMob::Chase` was not located in EP3, so its step times were not compared. `CNpc::Chase` (EP3 ps_game 0x4949a0) is nearly identical to
+EP4.5's (confirmed). `CMob::SendSpeed` (EP3 ps_game 0x4745f0) has the same missing monster id (confirmed).
+
+### EP5.4
+
+`CMob::Chase` (EP5.4 ps_game 0x4bb8f0, matched by call-graph position and constants) keeps the floats 1.5, 45, 0.3, 0.4 and 0.6
+(confirmed), so the step times of section 2 are most likely unchanged (inferred: the bodies were not compared step by step).
+`CMob::SendSpeed` (EP5.4 ps_game 0x4a1050) still writes no monster id (confirmed). The EP5.4 client's monster mover was not compared.

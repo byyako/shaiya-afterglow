@@ -317,3 +317,28 @@ All of them within 60 of the monster (and always to the player named), except `0
 - **Built in**: `crates/game-server/src/zone/mob_skills.rs` (sections 2 to 6, 8's payments and 9), `combat::mob_skill_hits` and
   `combat::mob_skill_damage` (section 7), `buffs::BuffEffects` (stun, stop, sleep, polymorph, no element) with the connection's speeds and
   refusals, `MobDefs::attach_skills` (section 1).
+
+## 12. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or data references, as those pages list).
+
+### EP3
+
+- `CMob::UseSkill` (EP3 ps_game 0x485af0, matched by its read of the attack-delay table) has the same constants and the same table
+  {1500, 1000, 500, 0, −500, −1000, −1500} (EP3 ps_game 0x5035a4) (confirmed).
+- `LoadConstMobSkill` (EP3 ps_game 0x4986a0) turns an `AttrType` above 4 into 0 (five elements) (confirmed).
+- `CMob::SetSkillAbility` (EP3 ps_game 0x4827b0) has the same switch over 7 to 34, and `CMob::TimeDamage` (EP3 ps_game 0x484e00) the same
+  types 0 to 5 (confirmed).
+
+### EP5.4
+
+- **The same** (confirmed): `CMob::UseSkill` (EP5.4 ps_game 0x4b9280) and its family (`SkillAttack` 0x4b9340, `SkillDebuff` 0x4b9a60,
+  `SkillHeal` 0x4b9ee0 and their range forms, matched by call graph and the switch on the skill's kind) keep their cases, constants,
+  packets (`0x060B`, `0x060D`) and the delay `2500 + table[attack speed]` (table EP5.4 ps_game 0x581990).
+- **Changed** (confirmed): `UseSkill` tests the skill pointer for null (EP5.4 ps_game 0x4b92b3; EP4.5 does not, 0x4a4915); the damage
+  cap is 60000; `CMob::TimeDamage` (EP5.4 ps_game 0x4b8470) gains type 12, doubling every tick; a player with buff kind 98 resists every
+  state effect (`CMob::AttackSuccess`, EP5.4 ps_game 0x4b6fd5).
+- Data (confirmed): 380 monster skill rows against 355, with new skills 367 to 371 and 375 to 380. Scripts can now make a monster heal or
+  buff another ([`instances.md`](instances.md)).

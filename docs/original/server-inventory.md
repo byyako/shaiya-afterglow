@@ -5,6 +5,9 @@ OpenShaiya archive. Raw data: `docs/original/inventory/server/` (`files.csv` wit
 `pe.csv`, `pe_imports.txt`, `network_strings.txt`, `pdb_identity.txt`). Tools: `tools/inventory_server.py`,
 `tools/pdb_check.py`.
 
+The EP3 and EP5.4 server packs are listed the same way in `docs/original/inventory/server-ep3/` and `server-ep5.4/`. They are
+compared with this pack in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md); the binary tables of all three episodes are there.
+
 ## Summary
 
 | | |

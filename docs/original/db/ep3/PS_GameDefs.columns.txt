@@ -1,0 +1,56 @@
+BaseItem|1|UserUID|varchar(4)|NULL|||0
+ConstMob|1|RowID|char(4)|NULL|||0
+ConstMobSkill|1|RowID|varchar(4)|NULL|||0
+ConstSkill|1|MaxID|varchar(50)|NOT NULL||(0)|1
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+EventItems|1|ItemID|int|NULL|||0
+EventItems|2|ItemCount|tinyint|NULL|||0
+EventItems|3|IndexItem|int|NULL|||0
+Exp|1|UserUID|varchar(4)|NULL|||0
+Items|1|UserUID|varchar(4)|NULL|||0
+ProductList|1|ProductCode|varchar(20)|NULL|||0
+ProductList|2|ProductName|varchar(50)|NULL|||0
+ProductList|3|BuyCost|int|NULL|||0
+ProductList|4|ItemCount1|tinyint|NULL|||0
+ProductList|5|ItemCount2|tinyint|NULL|||0
+ProductList|6|ItemCount3|tinyint|NULL|||0
+ProductList|7|ItemCount4|tinyint|NULL|||0
+ProductList|8|ItemCount5|tinyint|NULL|||0
+ProductList|9|ItemCount6|tinyint|NULL|||0
+ProductList|10|ItemCount7|tinyint|NULL|||0
+ProductList|11|ItemCount8|tinyint|NULL|||0
+ProductList|12|ItemCount9|tinyint|NULL|||0
+ProductList|13|ItemCount10|tinyint|NULL|||0
+ProductList|14|ItemCount11|tinyint|NULL|||0
+ProductList|15|ItemCount12|tinyint|NULL|||0
+ProductList|16|ItemCount13|tinyint|NULL|||0
+ProductList|17|ItemCount14|tinyint|NULL|||0
+ProductList|18|ItemCount15|tinyint|NULL|||0
+ProductList|19|ItemCount16|tinyint|NULL|||0
+ProductList|20|ItemCount17|tinyint|NULL|||0
+ProductList|21|ItemCount18|tinyint|NULL|||0
+ProductList|22|ItemCount19|tinyint|NULL|||0
+ProductList|23|ItemCount20|tinyint|NULL|||0
+ProductList|24|ItemCount21|tinyint|NULL|||0
+ProductList|25|ItemCount22|tinyint|NULL|||0
+ProductList|26|ItemCount23|tinyint|NULL|||0
+ProductList|27|ItemCount24|tinyint|NULL|||0
+ProductList|28|ItemID|char(10)|NULL|||0
+ProductList|29|ItemCount|char(10)|NULL|||0
+Skills|1|RowID|char(4)|NULL|||0
+Status|1|UserUID|varchar(18)|NULL|||0
+Users_Product|1|RowID|int|NOT NULL|IDENTITY||0
+Users_Product|2|UserUID|int|NOT NULL|||0
+Users_Product|3|Slot|tinyint|NOT NULL|||0
+Users_Product|4|ItemID|int|NOT NULL|||0
+Users_Product|5|ItemCount|tinyint|NOT NULL|||0
+Users_Product|6|ProductCode|varchar(20)|NOT NULL|||0
+Users_Product|7|OrderNumber|bigint|NOT NULL|||0
+Users_Product|8|VerifyCode|bigint|NULL|||0
+Users_Product|9|BuyDate|datetime|NULL|||0

@@ -245,3 +245,44 @@ Errors: **`0x0205`** 4 bytes `u8 0, u8 code`.
 - Not yet: limited drops (`Drop` above 0: never dropped here; unreachable in the data, `docs/original/quest-drops.md` section 5), premium
   bonuses. Built: random craft stats on drops (`docs/original/item-origins.md` section 6), quest and sequence items
   (`docs/original/quest-drops.md` section 6), skills (`docs/original/skills-use.md`), parties (`docs/original/party.md` section 13).
+
+## 10. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Neither build has a PDB, so
+function names there are carried over from EP4.5 (matched by unique strings, constants, the call graph or the opcode switch tables, as
+those pages list), and every address names its binary.
+
+### EP3
+
+- **The same numbers** (confirmed, equal constants and floats): the hit roll (`CUser::AttackSuccess`, EP3 ps_game 0x438540), the reach
+  slack 2.3 (`CUser::EnableAttackRange`, EP3 ps_game 0x437540 and 0x4375e0), the damage switch over types 0 to 5 with the cap 30000
+  (`CUser::AttackDamage`, EP3 ps_game 0x438a60, cap at 0x438d04), experience from monsters (`CMob::GetExp`, EP3 ps_game 0x4752a0), the
+  level cap 60 with 30 in easy mode (EP3 ps_game 0x44209a, 0x4420a0) and the per-level gains (`LevelUpStatus`, EP3 ps_game 0x46e630).
+- **Five elements, not nine** (confirmed): EP3 reads a 5 × 5 table (EP3 ps_game 0x5034c0) only for elements up to 4 (EP3 ps_game
+  0x438e3c). It equals the top-left 5 × 5 of the table in section 4; elements 5 to 8 are new in EP4.5.
+- **The lapis byte that EP4.5 uses for absorption is an experience bonus in EP3** (confirmed): `GemEquipmentAdd` adds it to a character
+  total (EP3 ps_game 0x44018b) and `AddExpFromUser` multiplies the gain by `1 + total / 100` (EP3 ps_game 0x442133 to 0x44218d).
+  `CUser::Damage` (EP3 ps_game 0x4376d0) subtracts the damage directly and `0x0525` does not exist.
+- **Drops** (section 7): `CMob::ItemDrop` (EP3 ps_game 0x487050) has no `SRandom` call, so every entry is rolled with `rand()`
+  (inferred from the calls). The helper that puts the item on the ground returns for real types 16 and 24 (EP3 ps_game 0x48763a,
+  confirmed). Comparing with EP3 showed that the "helmets and cloaks never drop" entry of [`community-fixes.md`](community-fixes.md)
+  describes EP3 code: the EP4.5 helper compares only real type 27 (0x4a660a).
+
+### EP5.4
+
+| what | EP4.5 | EP5.4 | status |
+|---|---|---|---|
+| damage cap | 30000 | 60000 (EP5.4 ps_game 0x45a0ae) | confirmed |
+| fixed reach term | 2.3 | 3.3 in both `EnableAttackRange` (EP5.4 ps_game 0x457f50, 0x458000) | confirmed |
+| moving slack (`GetAttackEnableRange`) | `speed × 3`, scaled, at least 2 | `speed` when the last step is at most 1000 ms old, else `speed × 0.5`, no minimum (EP5.4 ps_game 0x49b340) | confirmed |
+| level cap | 60 | experience table 4 × 71, level-up stops at 70 (EP5.4 ps_game 0x4651d9), but the entry gate (EP5.4 ps_game 0x46507d) and the table bounds (0x46515f) use 80 | confirmed |
+| experience gain | as section 5 | also × a per-map rate (zone map `+0x1f0`) and × a table at EP5.4 ps_game 0x582768 indexed by the character byte `+0x12d` (EP5.4 ps_game 0x4650de) | confirmed; the table's meaning not identified |
+
+Read literally, a level-70 character keeps gaining experience and rises to 80 while the lookups read past the 71-wide tables, and
+`StatusDefs` has no rows above 60, so levels 61 to 70 add nothing from the status table (inferred). The shipped `ExpDefs` values for
+levels 1 to 60 are EP4.5's divided by 100 (confirmed, data). Unchanged (confirmed at the constant and call level): the hit roll
+(EP5.4 ps_game 0x459090), the normal damage path and critical (EP5.4 ps_game 0x459490), the `0x0503` layout, `CMob::GetExp` (EP5.4
+ps_game 0x4a2190), drops (`CMob::ItemDrop`, EP5.4 ps_game 0x4ba950) and picking up (`0x0205`, EP5.4 ps_game 0x469c00). New: a 2-byte
+`0x0527` with no payload, sent from `PacketPC` and the attack tick (EP5.4 ps_game 0x4920d0); the EP5.4 client reads nothing from it, and
+its meaning is open.

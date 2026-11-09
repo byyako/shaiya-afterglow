@@ -207,3 +207,28 @@ uses grades 810 to 814**. Nothing can reach them, so the built rule ("a limited 
    wasted. With this, a member elsewhere no longer makes the item drop for the others.
 2. **The monster id counter is also saved every minute** (the original: every hour and at shutdown), so a crash gives out at most a
    minute's ids again instead of an hour's (repeated ids repeat sequence items). One small `UPDATE` a minute.
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `SequenceItemCreate.ini` and `MobID.ini`, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md). Function names in those builds are carried over from EP4.5 (matched by strings, constants or the call graph, as
+those pages list).
+
+### EP3
+
+- **Sequence items are off**: `SequenceItemCreate.ini` has `COUNT=0` (confirmed, the file; section 4.1). Its groups 1 to 6 carry the
+  same odd `SEQUENCE` numbers as EP5.4's (56,000,014 …), and group 7 is 200,001 with grade 393.
+- The loaders exist (`InitSequenceItemCreate` EP3 ps_game 0x4965b0, `InitItemCreate` 0x496730), without the `/reseqitem` and
+  `/reitemcre` reloads (confirmed, strings). The quest item and the drop limits were not compared.
+
+### EP5.4
+
+- `CMob::ItemDrop` (EP5.4 ps_game 0x4ba950, matched as the only other `SRandom` caller in the monster code) has the same order: the
+  quest item, the quest-linked items with `QuestFind`, the drop entries, the sequence items, the money (confirmed at the call and compare
+  level). The pick-up path (`CZone::GetPickItem` EP5.4 ps_game 0x41daf0, `QuestFind` 0x48d3a0) keeps its structure (confirmed at call
+  level, not instruction by instruction).
+- **Quest item ids above 3000 map to item type 99** in `LoadConstMob` (EP5.4 ps_game 0x4da047; EP4.5 only 27 to 29) (confirmed).
+- `SequenceItemCreate.ini` keeps `COUNT=7`, but every `SEQUENCE` is larger and not round (group 1 30,000,001 → 56,000,014; group 7, the
+  Lapisia, 16,001 → 25,411), and group 4's grade for levels 1 to 19 is 36 instead of 390 (confirmed, the file). `MobID.ini` holds a
+  different counter (405,555), which is run-time state.

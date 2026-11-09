@@ -143,3 +143,28 @@ the 5 × 5 view of the (new) cell (`CZone::PSendView` → `CCell::PSendAll`, no 
   home (`docs/original/mob-fight.md`).
 - Built: monster skills (`docs/original/mob-skills.md` section 11), "both" monsters (country 2 never matches a player's, so they fight
   both sides: `Zones::attackable`, `zone::targetable`), instance zones (`docs/original/instances.md` section 18).
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their monster data, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+Function names in those builds are carried over from EP4.5 (matched by strings, constants or the call graph, as those pages list).
+
+### EP3
+
+- `CGameData::LoadConstMob` (EP3 ps_game 0x4991f0) reads the same 35 columns into a 228-byte record (EP4.5 268); the added field was not
+  identified (confirmed).
+- `CMob::SendSpeed` (EP3 ps_game 0x4745f0) leaves the monster id out of the speed packet, as EP4.5 does (confirmed).
+- Spawning, respawning, the view and the info queries were not compared.
+
+### EP5.4
+
+- `LoadConstMob` (EP5.4 ps_game 0x4d9da0): a quest item id above 3000 now maps to item type 99 ([`quest-drops.md`](quest-drops.md))
+  (confirmed, EP5.4 ps_game 0x4da047). `CMob::SendSpeed` (EP5.4 ps_game 0x4a1050) still has no id (confirmed).
+- **Data** (confirmed, `PS_GameDefs`): 341 new monster ids (2747 to 3087, up to level 75) and 223 placeholders filled in; **no EP4.5
+  monster with HP changed any column**. Maps 73 and 75 to 79 spawn ids above 3087, which section 1 never spawns (inferred).
+- **Item summons**: `MobCreate.ini` (new, loaded by EP5.4 ps_game 0x4dcf10, named by its own error strings) defines weighted monster
+  groups per set; an item with `bySpecial` 73 summons set `shVG` through the picker EP5.4 ps_game 0x4727d0 (maps below 200, an optional
+  map list) (confirmed), and a new operator command `0xF70F` uses the same sets (inferred from the strings). The shipped sets name
+  monsters without HP or missing sets, so nothing spawns from them (inferred). How the summon places the monsters was not followed.
+- A player can subscribe to a monster target's buffs (`0x0309`, [`skills-buffs.md`](skills-buffs.md)).

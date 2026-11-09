@@ -297,3 +297,29 @@ the minutes since the start (capped at `dwTimeMin`). A pending reward choice is 
   6. **Time limits end to the second** rather than at the next 60-second pass; the time left is kept to the second.
   7. **The money in `0x0903` is what was added** when the cap of 2^32 − 1 cut it.
 - The quest items that monsters drop for these quests, and who may pick them up: `docs/original/quest-drops.md` (built).
+
+## 13. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking), with their
+`NpcQuest.SData`, were compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`PacketQuest` (EP3 ps_game 0x4526a0) handles the same `0x0902`–`0x0908` (confirmed, dispatch tables); the bodies and the faults of
+section 11 were not checked. EP3's `NpcQuest.SData` parses with the EP4.5 layout and has 1,409 quests (ids up to 1208); EP4.5 adds 312, 139
+of them for level 55 (confirmed, `tools/npcquest.py`).
+
+### EP5.4
+
+- The same handlers, the same `stQuestInfo` of 0x1d0 bytes, the same start and end tables (`QuestStartRequest` EP5.4 ps_game 0x48e230,
+  `QuestEndRequest` 0x48e2d0, matched by their start-type tables; confirmed).
+- Faults 1 and 2 of section 11 remain: an end with NPC id 0 skips the NPC (EP5.4 ps_game 0x48e6c6, 0x48e754), and the NPC is found
+  anywhere in the zone (`CZone::FindNpc` 0x41e460) (confirmed).
+- **No double experience below ultimate mode:** EP4.5 doubles `dwExp` when `byGrow` is 0 to 2 (EP4.5 ps_game 0x47ee5e); EP5.4 gives it as
+  written (EP5.4 ps_game 0x48de2e) and skips a reward of 0 (confirmed).
+- **A quest is closed once a follow-up is taken:** if any result's `wNextQuest` is in progress or finished, the start is refused (EP5.4
+  ps_game 0x48e187–0x48e1b3; confirmed). EP4.5 never reads `wNextQuest`.
+- A player kill skips the quest update while the character has no player-kill quest (EP5.4 ps_game 0x467d00; confirmed).
+- Data (confirmed): 524 new quests (ids 1721 to 2244, nearly all for levels 60 to 70), and 1,512 old quests have their top level raised
+  from 60 to 70. A second file, `NpcQuest-old.SData`, has another record layout and is not read by the server.

@@ -1,0 +1,13 @@
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+GameAccountTBL|1|UserUID|int|NOT NULL|||4
+GameAccountTBL|2|GameAccount|varchar(18)|NOT NULL|||4
+GameAccountTBL|3|OneTimePassword|varchar(32)|NOT NULL|||4
+GameAccountTBL|4|OTPExpireDate|datetime|NOT NULL|||4
+GameAccountTBL|5|DelCharPWD|varchar(50)|NOT NULL|||4
+GameAccountTBL|6|CreateDate|datetime|NOT NULL||(getdate())|4

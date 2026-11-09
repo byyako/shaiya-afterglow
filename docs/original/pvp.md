@@ -316,3 +316,38 @@ step as two messages (`0x0603` and `0x060C`), so a failure between them offered 
 **Not built**: `NEW_SERVER` (by decision, the kill rate instead). The rest listed at the top is built: skills on players and the faction kill count (part 2),
 duels with their victories and defeats (`docs/original/duel.md`), guild wars (`docs/original/guild-war.md`), item option skills on hits
 (`docs/original/item-options.md`).
+
+## 10. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- The kill count exists: `data/KillStatus.SData` (string EP3 ps_game 0x4eb854), `CWorld::AddKillCount` (EP3 ps_game 0x410780) and the
+  console's `enable/disable killcount` (confirmed).
+- The PvP `AttackDamage` (EP3 ps_game 0x440ed0) has the same switch and the cap 30000 (EP3 ps_game 0x441128), with five elements
+  (confirmed).
+- The death drop (`ItemDropByUser` EP3 ps_game 0x443df0, `ItemDropByUserDeath` 0x444290) has none of the honour-band constants, so the
+  honour rule of section 6 is not in EP3 (inferred from the constants).
+- The kill counter, the damage record and the reward panels were not compared.
+
+### EP5.4
+
+What a counted kill adds in `CUser::KillPCTo` (EP5.4 ps_game 0x467ce0; confirmed at EP5.4 ps_game 0x467d93 to 0x467e0f):
+
+| step | EP4.5 | EP5.4 |
+|---|---|---|
+| base | + 1 | + 1, or + 2 while a skill (ability type 47) is on |
+| `[NEW_SERVER]` doubling | + 1 more while set | gone (the string is not in the image) |
+| event bonus | none | + the `/killcnt` value inside its hour window |
+| map bonus | none | + the map's `/killupmap` value |
+| map curse | none | + a byte set on entering a map with `MapCurse` ([`maps-npcs.md`](maps-npcs.md)) |
+| cap | at most `g_nMaxKillValue` | at most the maximum, once at the end |
+
+The rest is unchanged: the faction kill count + 1 (not the bonus), `0x060C`, `0x020E` and `0x0522` (confirmed). The player-kill quest
+update is skipped when the character has no such quest (EP5.4 ps_game 0x467d00), and the game log record grows from 0x75 to 0x82 bytes
+(confirmed). An item skill of one kind is refused while the kill doubler is on or the kills are at a limit (EP5.4 ps_game 0x4726c1 to
+0x4726ea, confirmed for the compares). The PvP damage cap is 60000 (EP5.4 ps_game 0x463dc0), the death drop is unchanged
+(EP5.4 ps_game 0x4670a0), and the reward panels make the same calls (inferred, offsets moved).

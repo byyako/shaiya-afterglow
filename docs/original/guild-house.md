@@ -304,3 +304,23 @@ operator moved in by `FA12` would also be served.
      (a special outside 52 to 55) stays in the bags instead of being destroyed for nothing. Both start by ending a trade, a duel stakes
      window and a personal shop (audit R3). A player who left or was kicked while the request was on its way, or a guild disbanded
      meanwhile, gets no answer to the return and "not the master" (`0x0D34 3`) for the purchase; nothing is taken.
+
+## 12. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking), with their `Data/` trees, were
+compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- `GuildHouse.ini` is identical to EP4.5's, and `0x0D25` reaches `CGuild::NpcUpgrade` (confirmed).
+- The lapis-mix discount needs a guild ranking of 6 or better and a usable house (EP3 ps_game 0x4492d5, 0x4492e2), where EP4.5 needs
+  14 or better (EP4.5 ps_game 0x46146c) (confirmed).
+- The NPC shop checks `CGuild::EnableGuildHouse` before the house discount; EP4.5 does not call it there (confirmed, call lists).
+
+### EP5.4
+
+- The code is EP4.5's: `CGuildMgr::InitGuildHouseIniFile` (EP5.4 ps_game 0x437960, matched by the string `ShopWeapon`) reads the same
+  keys, the rate functions keep their constants (inferred), and buying (`0x0D34`) and returning Etin (`0x0D35`) read the same (EP5.4
+  ps_game 0x485f2a; confirmed).
+- The data differs (confirmed, `GuildHouse.ini`): `HouseKeepEtin` 2000 → 1000; a new `[ShopPosion]` section with a level-1 `KeepEtin` of
+  20 (built-in 50); new `Ranking=` keys that no build reads (the string is in neither `ps_game`).

@@ -488,3 +488,27 @@ connection and the end pass, migration `0025_market.sql`), with these small choi
     no longer keeps an auction open for bids.
 5. **A refresh of the page lists at most 18 auctions** (audit R22): the path with a cursor takes every matching auction from the page's
     lowest id up, which can hold more than a page once new listings arrived; it is cut at `PAGE + 1` rows so the answer always fits a packet.
+
+## 17. Other episodes
+
+The EP3 builds of `ps_game.exe` (2008-01-17) and `ps_dbAgent.exe` (2008-01-04) and the EP5.4 builds (2011-09-14, `ps_game` modified
+after linking) were compared with the EP4.5 builds of this note, read statically like the rest of the note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+**There is no auction house** (confirmed): no `0x1C01` to `0x1C17` in the dispatch, no `CMarketMgr` or `Market*` strings, no market
+group (`0x0F`) and no market procedures in `ps_dbAgent`, and no `Market*` tables in the database. It is an EP4.5 addition.
+
+### EP5.4
+
+- **The same rules** (confirmed): `PacketMarket` (EP5.4 ps_game 0x4862b0, matched by opcode switch table) keeps the map flag, set only
+  for map 42 (EP5.4 ps_game 0x42db4b); the "market loaded" gate; the minimum price of 500 (EP5.4 ps_game 0x4863fb); the deposit per
+  started 500,000 (0x48642a); the period index clamped to 3; and bids of `trunc(current × 1.05)` (1.05 at EP5.4 ps_game 0x5741c0).
+  Search, the lists, collecting, the end pass and the GM cases `0xFA19`/`0xFA1A` have the same calls and constants (inferred, not read
+  line by line).
+- **Times are 64-bit** (confirmed): the end time is `hours × 3600` on a 64-bit `time` (EP5.4 ps_game 0x4864b1); the packed dates on the
+  wire keep their size (inferred).
+- The database agent's market group `0x0F06` to `0x0F0D` is unchanged (confirmed). The war server of EP5.4 has no auction house
+  ([`gamewar.md`](gamewar.md)). The "remote auction house scroll" (special 61) is in the EP5.4 data, but no code reads that special
+  (inferred unused).

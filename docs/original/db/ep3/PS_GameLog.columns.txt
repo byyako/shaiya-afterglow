@@ -1,0 +1,13 @@
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+UserLog|1|SessionID|bigint|NULL|||33
+UserLog|2|UserUID|int|NULL|||33
+UserLog|3|LogType|bit|NULL|||33
+UserLog|4|LogTime|datetime|NULL|||33
+UserLog|5|LogoutType|smallint|NULL|||33
+UserLog|6|ErrType|int|NULL|||33

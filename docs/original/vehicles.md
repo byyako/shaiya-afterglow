@@ -125,3 +125,24 @@ A passenger's `0x0201` (`TP_USER_ENTER`, `docs/original/enter-world.md` section 
 - As the original; the move speed check (section 2) is built (`docs/original/move-check.md`). Staff invisibility (shape 13) and duels are
   built (`docs/original/gm-commands.md` section 13, `zone::vehicle` `Placed::shape_packet`; `docs/original/duel.md` section 7).
 - No deviations.
+
+## 6. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The mount requests exist (`0x0216` and `0x021C` to `0x021E` in the dispatch table, confirmed); their bodies were not compared.
+
+### EP5.4
+
+- **Summoning and getting off are unchanged** (confirmed): `0x0216` (EP5.4 ps_game 0x477052) is the same code; only the vehicle status
+  moved (`CUser+0x147c`).
+- **The rider's shape is unchanged** (confirmed): type 14, or 15 for a hard or ultimate player on a hard-or-better mount, plus `range` + 7
+  or `range` × 2 (EP5.4 ps_game 0x49db8a to 0x49dbc9, in the function matched to `CUser::UpdateRebirth` by this identical block).
+- **48 mounts** in the data (EP4.5 32), with `range` up to 16, so shapes up to 38 (EP4.5 27); the server passes the number on unchecked,
+  and whether the client draws it was not checked (inferred).
+- **A new buff kind 97 dismounts** (confirmed): it clears the vehicle status, gets the passenger off and sets shape 103 (EP5.4 ps_game
+  0x494645 to 0x4946d0).
+- The new move check allows 8.0 for a rider (EP5.4 ps_game 0x4785aa to 0x47862f) (confirmed). The two-seat requests were not compared.

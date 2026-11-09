@@ -248,3 +248,34 @@ offers only these races (section 1.3).
 - The meaning of `0x0404`, `0x0211` and `0x021B` to the client; the attack speed formula; what makes the client start loading.
 - Whether the client needs any of the "if any" packets for a character without them (the original never sends them empty, so it should not).
 - `usp_Read_Char_Items_Simple_R` and `usp_Read_BaseItemDefs_R` procedure texts (the MSSQL container has them).
+
+## 8. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- Character create `0x0102` is read the same way: faction ≠ 2, slot < 5, grow ≤ max grow, family < 4, job < 6, then a 21-byte name at
+  offset 10 trimmed and checked (EP3 ps_game 0x452837, 0x452896; confirmed). The list record is 83 bytes (EP3 ps_game 0x4539cb).
+- The enter-world burst (EP3 ps_game `PacketUserDBChar` 0x453660, case `0x407`) calls the same steps in the same order (confirmed, call
+  sequences compared). EP4.5 added `BillingApply` before the burst, the reconnect path (`0x0112`, `0x0113`, the `0x306` request) and the
+  server time `0x0114` (confirmed: absent from the EP3 image), and the `0xB103` billing info after the handshake.
+- Zone entry (`CZone::EnterUser`, EP3 ps_game 0x412db0) makes the same calls; EP4.5 only adds a log line before closing on an unsafe
+  position (confirmed).
+
+### EP5.4
+
+- `GameVersion` from `ps_game.ini` only goes to the session server in `0x0805` (EP5.4 ps_game 0x4077c5); the game server never compares
+  it with anything a client sends (confirmed).
+- The character screen handles the same seven requests and closes on any other; names stay at most 20 bytes, family 0 to 3, job 0 to 5
+  (EP5.4 ps_game 0x47a29c; confirmed).
+- **New create check:** races 0 and 1 need the account's country 0, races 2 and 3 country 1; otherwise the connection is closed with
+  reason 9 (EP5.4 ps_game 0x49028b, 0x490391, 0x490298; confirmed).
+- Two more race and faction checks were compiled (at the list: delete the character; at loading: disconnect) and switched off after
+  linking by three jump edits (EP5.4 ps_game 0x47b54e, 0x47b608, 0x47c134; confirmed against the untouched `ps_gamewar`).
+- The list shows a character on an instance map or a map with a `MapCurse` for its faction at that map's bind position
+  (`CMap::GetBindPos` EP5.4 ps_game 0x42ff60; confirmed at the call level). `CWorld::LoginUser` (EP5.4 ps_game 0x413b30) no longer
+  sends billing info.
+- Before `0x0201`, in state 3, the server answers the client's `0xB106` with the item-mall product pages (EP5.4 ps_game 0x474b75;
+  confirmed).

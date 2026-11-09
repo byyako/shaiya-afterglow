@@ -85,6 +85,11 @@ are picked by `site/mkdocs.yml`; the groups below are the site's groups.
 - [`guards.md`](guards.md): Walking NPCs and guards
 - [`instances.md`](instances.md): Party instance zones
 
+## Other episodes
+
+- [`ep3.md`](ep3.md): The EP3 server pack, compared with EP4.5
+- [`ep5.4.md`](ep5.4.md): The EP5.4 server pack, compared with EP4.5
+
 ## Reference notes (not on the site)
 
 - [`client-login.md`](client-login.md): how the US `game.exe` reaches the login server, and how to point it elsewhere.
@@ -96,5 +101,5 @@ are picked by `site/mkdocs.yml`; the groups below are the site's groups.
 ## Data folders
 
 - [`symbols/`](symbols/README.md): the symbol tables and packet structs read from the PDBs.
-- [`db/`](db/README.md): the structure of the ten original databases.
-- [`inventory/`](inventory/README.md): the lists of the two packs of original files.
+- [`db/`](db/README.md): the structure of the ten original databases, and of the EP3 and EP5.4 ones (`docs/original/db/ep3/`, `docs/original/db/ep5.4/`).
+- [`inventory/`](inventory/README.md): the lists of the four packs of original files (EP4.5, the Omega repack, EP3, EP5.4).

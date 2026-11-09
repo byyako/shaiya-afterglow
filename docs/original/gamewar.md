@@ -313,3 +313,18 @@ Not built, by decision (`docs/server/deviations.md`, the "Not built, by decision
 - The EP4.5 war server is a separate, older build, without four months of `ps_game` changes.
 - In EP4.5, map 104's exits skip the faction rooms. EP5.4 corrects that.
 - `CDamageMob::GetPartyDamage` and `GetPrivateDamage` exist but nothing calls them.
+
+## 10. Other episodes
+
+The EP3 and EP5.4 server packs were compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md)
+and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+EP3 has no war server: there is no `ps_gamewar.exe` in the pack (confirmed). Its `ps_session` (linked 2007-12-07) has none of the war
+messages either: no connection type 10 (EP3 ps_session 0x402a08, a table of 5 types), no game opcodes `0x807` to `0x817` and no
+30-second reconnect timer (confirmed).
+
+### EP5.4
+
+The EP5.4 `ps_gamewar` (linked 2011-09-14, not modified after linking) is described in section 8.

@@ -353,3 +353,44 @@ Confirmed.
 - As in the original, a dead member's yes to a summon moves the body; it stays dead on the new map (the zone takes a player entering with
   no HP as dead).
 - **An extension's effect** (an addition, `docs/server/effects.md`): an item the extensions' rows gave a `use` effect is carried out between the script (`game.on_item`) and the core's own effect, after the rules' `item_use` point and the reuse group; the core's refusal of a bare special-0 item no longer applies to it. A level stone is the reference. With no such extension nothing here changes.
+
+## 12. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **Specials 0 to 56** (confirmed for the bound): the `bySpecial` switch of `CUser::ItemUse` (EP3 ps_game 0x44ccf0, matched by dispatch,
+  `0x050A`) ends at 56 (`cmp ecx, 0x38`, EP3 ps_game 0x44d01c); EP4.5 ends at 59. The case list shows special 59 (the move to the war
+  server) as the one EP4.5 case EP3 lacks; which cases are filled was not re-checked.
+- **Item skills are self buffs only** (confirmed): there is no `0x0559` and no target kind 1 or 2 (EP4.5 0x465904 to 0x465982,
+  `AttackUser`/`AttackMob`), so no item hits another target.
+- **Boxes (special 42) refuse helmets and cloaks** (confirmed): a rolled item of real type 16 or 24 gives the error answer and the box is
+  kept (EP3 ps_game 0x44db7a to 0x44db8c). EP4.5 has no such check.
+- `UseItemSkill`, the resurrection runes and the free resets exist; they were not compared.
+
+### EP5.4
+
+- **Specials 0 to 74** (confirmed): `ItemUse` (EP5.4 ps_game 0x472da0, matched by the `0x050A` case) switches over 0 to 74 (`cmp ecx,
+  0x4a`, EP5.4 ps_game 0x473167); every EP4.5 case keeps its body (same call sequence). New cases:
+
+| special | EP5.4 ps_game | what it does (confirmed) |
+|---|---|---|
+| 68 | 0x4743f9 | resets every guild house NPC level of the guild ([`guild-house.md`](guild-house.md)), rank 1 only; used up only when a level changed |
+| 70 | 0x47335d | one counted stat reset (below) |
+| 73 | 0x47448c | summons monsters at the player from a new `Data/MobCreate.ini` set `shVG` (map below 200, allowed by the set); logged to the game log as record `0x0430` |
+| 74 | 0x474072 | a recall to map 39 with the checks and 5-second cast of specials 47 to 49 (no item in the data uses it) |
+
+- **Free resets are counted** (confirmed): `0x0214` and `0x0215` are both allowed while the character's used count is below a limit,
+  3 each by default (EP5.4 ps_game 0x476fac, 0x476fff), set with the console words `/resetstatcnt` and `/resetskillcnt`; the counts are
+  read from the character record at load, and `0x021B` carries `limit − used` for each. Comparing with EP5.4 showed that section 8's
+  fixed refusal of the free stat reset was changed in the later build.
+- **Boxes** (confirmed, EP5.4 ps_game 0x473aaa): `shVG` 1000 to 1255 is a new kind that rolls every line of a `RandomItemsCreate` set
+  ([`item-origins.md`](item-origins.md)); a rolled cloak (real type 24) is refused in both kinds.
+- **Item buffs** (confirmed): `UseItemSkill` (EP5.4 ps_game 0x4725b0, matched by call order) has the nine "same kind running" checks of section 7 and one new
+  ability, 47, a doubled kill count (EP5.4 ps_game 0x4726c1).
+- **Two new gates on `0x050A`** (confirmed): `CUser+0x5880` (a server transfer is pending, EP5.4 ps_game 0x478f9a) and `CUser+0x1358`
+  (EP5.4 ps_game 0x478fa7), the lock of the new debuff kinds 74 to 76 that also blocks attacks, skills, `0x0557`, `0x0559` and `/town`.
+- The tables of specials 47 to 49 are unchanged (EP5.4 ps_game 0x56e608, 0x56e628, 0x56e648). Specials 61, 76 to 78 and 85 to 98 are on
+  EP5.4 items but no code compares them (inferred unused by this build).

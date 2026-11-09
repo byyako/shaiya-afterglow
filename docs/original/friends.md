@@ -240,3 +240,20 @@ Confirmed, `PS_GameData`.
      tool wrote can not overflow a list packet; the checks of deviation 3 are unchanged.
 - Kept from the original: same map to ask and to answer, same faction, one waiting request per player, 30 s to answer, online shown only both ways,
   removing is one-sided, blocking needs the player in the world and of the same faction, the party search as in section 8.
+
+## 12. Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 2008-01-17; EP5.4 2011-09-14, modified after linking) and `ps_dbAgent` (EP3 2008-01-04;
+EP5.4 2011-09-14, modified after linking) were compared with EP4.5, read statically like the rest of this note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`PacketComm` (EP3 ps_game 0x45b710) handles the same `0x22xx` opcodes, and the database agent's friend group `0xC02`–`0xC08` is the same
+(confirmed, dispatch and jump tables). The bodies were not compared.
+
+### EP5.4
+
+No change found. `PacketComm` (EP5.4 ps_game 0x484360, matched by constants) handles the same eight opcodes with exactly the same call
+sequences, and the `CFriend` functions (EP5.4 ps_game 0x4d1990–0x4d1f00, matched by call graph) keep their sizes within compiler noise
+(confirmed). The database agent's friend group is unchanged (confirmed).

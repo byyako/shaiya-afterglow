@@ -169,3 +169,33 @@ It returns success once `count` is all placed, and failure when no empty slot is
   `wReqWis` 1 to 99 in `defs.items`).
 - No deviations.
 - Quest items and sequence items (make type `'D'` for the first, `'V'` for the second) dropped by monsters: `docs/original/quest-drops.md` (built).
+
+## 7. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **No crafted values are read** (confirmed): EP3 has no craft-name parser like `CItem::CopyCraftExpassion` and its `ItemEquipmentAdd`
+  (EP3 ps_game 0x43f590, matched by call graph) adds none. Whether EP3 rolls craft stats when an item is made was not established.
+  The EP3 database still has `charitems.Craftname` (varchar(50), EP4.5 20) and `Maketype` (varchar(50), EP4.5 1) (confirmed, schema).
+- **Boxes** (confirmed): `InitItemCreate` (EP3 ps_game 0x496730, matched by call graph) reads `ItemCreate.ini`; a rolled helmet or
+  cloak (real type 16 or 24) gives the error answer and the box is kept (EP3 ps_game 0x44db7a to 0x44db8c). The EP3 file has 40 sets:
+  37 equal EP4.5's, sets 1 and 2 have one more line (grade 142, weight 400) and set 38 other weights; sets 41 to 68 are EP4.5's
+  additions (confirmed, file).
+
+### EP5.4
+
+- **Grades up to 3072** (confirmed): `CItemDrop::InitItemCreate` (EP5.4 ps_game 0x4d69f0, matched by its string) accepts grades up to
+  0xc00 (EP5.4 ps_game 0x4d6d82) and `GetItemPlz` (EP5.4 ps_game 0x4d5f30) too; EP4.5 stops at 1024. Sets 1 to 68 of the file equal
+  EP4.5's; sets 69 to 88 are new.
+- **Multi-item boxes** (confirmed): `CItemDrop::InitRandomItemsCreate` (EP5.4 ps_game 0x4d6df0, named by its log string) reads
+  `[RandomItemsCreate_n]` sections, n 1000 to 1255, each line a grade and a chance in per cent. A box of special 42 with `shVG` 1000 or
+  more needs as many free bag places as the set has lines, then rolls every line separately and makes one item per success; the box is
+  used up whatever came out (EP5.4 ps_game 0x473aaa to 0x473b6e). The generator is reseeded with `time(0) xor` the character id at
+  every use (EP5.4 ps_game 0x473b2e), so two boxes opened in the same second roll the same (inferred).
+- **Cloaks are refused in both box kinds** (confirmed, EP5.4 ps_game 0x473bbd): the error answer, box kept.
+- `CUser::ItemCreate` (EP5.4 ps_game 0x46bd10; name carried over, match method not recorded) still makes up to 1000 and sends the 57-byte `0x0701`; new
+  `CItem` fields `+0x84` to `+0x9c` are cleared at creation (`+0x9c` holds the item-mall purchase number, [`item-mall.md`](item-mall.md)).
+- Data (confirmed, file and rows): two boxes name sets the file does not have (1028, 1031), so they always fail (inferred).

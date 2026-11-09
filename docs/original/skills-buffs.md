@@ -438,3 +438,53 @@ As planned, with these points:
 - **Unverified:** the client's icons for the kept buffs after a duel death (live test 50); a guild war's death goes through the same
   `keep_exp` (`defeat`) but has no test of its own.
 
+## 17. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants, the call graph or switch tables, as those pages list).
+
+### EP3
+
+| function | EP3 | EP4.5 |
+|---|---|---|
+| `AddApplySkillBuff` (EP3 ps_game 0x469800) | `wType` 69 to 93 | 69 to 95 |
+| `RemApplySkillBuff` (EP3 ps_game 0x469a60) | 81 to 92 (84 does nothing) | 81 to 95 |
+| `AddApplySkillDebuff` (EP3 ps_game 0x469e80), `RemApplySkillDebuff` (0x469fd0) | 62 to 90, 61 to 90 | the same |
+
+So the element buffs 94 and 95 (section 5) are new in EP4.5, with the four new elements (confirmed, switch bounds). Damage over time
+(`CUser::TimeDamage`, EP3 ps_game 0x46abf0) has the same switch over types 0 to 5 and the same constants (confirmed). The list, dispel,
+the low-HP passives and saving were not compared.
+
+### EP5.4
+
+| kind | applied (EP5.4 ps_game) | effect | status |
+|---|---|---|---|
+| buff 96 | byte set at 0x49462d, cleared at 0x494b4d | the skill checks skip the combo prerequisite | confirmed; meaning inferred |
+| buff 97 | 0x494645 to 0x4946d0 | dismounts, then shape 103 and attack stop; removed with shape 0 (0x494a1a); hiding's end removes it too | confirmed |
+| buff 98 | 0x494639, cleared at 0x494b68 | skills with a state effect fail on the character, from players (0x463a65) and monsters (0x4b6fd5): immunity to state debuffs | confirmed |
+| debuffs 74 to 76 | 0x494d3a to 0x494e43 | one at a time (a new one removes the old type's entries); while one lasts, attacks, skills and item use are refused (0x4789a1 to 0x4790fc) | confirmed |
+| debuffs 78, 79 | 0x494eec, 0x494f0d | new removal calls, not read | confirmed (calls) |
+
+The buff and debuff switches grow to 69 to 98 and 81 to 98 (EP5.4 ps_game 0x494140, 0x494760); death and `SkillClearAll` clear the new
+kinds (EP5.4 ps_game 0x498644, 0x4988af) (confirmed). `AddApplySkill` (EP5.4 ps_game 0x493970) no longer calls the map rule; the rule
+(EP5.4 ps_game 0x4936a0) covers maps 18 **and 30** and runs only from `ChkApplySkillByMap` (EP5.4 ps_game 0x493730), so those buffs are
+cast normally and stripped when that check runs (confirmed; when it runs inferred). Damage over time gains type 12, each tick doubling
+the value (EP5.4 ps_game 0x495d48 to 0x495e12), and the cap is 60000 (confirmed). Still as in EP4.5: the player damage-over-time
+addition (EP5.4 ps_game 0x495e2a) and the block-buff end (0x4949b4, 0x4949dd) (confirmed), the save filter (`SendDBAgentCharGetInfo`,
+EP5.4 ps_game 0x47ad70) and the low-HP passives (`ChkHPAbilityApply`, EP5.4 ps_game 0x497050: 180 s, 30 s) (inferred, same calls).
+
+**Target buffs (new packets).** A client selects a player (`0x0308`) or monster (`0x0309`) target with `u32 id` (6 bytes) or clears
+it (`0x030A`, 2 bytes); the server then sends that target's buffs to everyone watching it: `0x030B` the list, `0x030C` one added,
+`0x030D` one removed (EP5.4 ps_game 0x456bef, 0x456d31, 0x456e21 for players; 0x4b5f9f, 0x4b60a9, 0x4b6179 for monsters). Layouts
+confirmed in the server immediates and the EP5.4 client; the meaning is confirmed client side, inferred for the server.
+
+| `0x030C` / `0x030D` | size | field |
+|---|---|---|
+| 0 | 2 | opcode |
+| 2 | 1 | kind (1 player, 2 monster) |
+| 3 | 4 | object id |
+| 7 | 2 | skill id |
+| 9 | 1 | skill level |
+
+`0x030B` has the same first 7 bytes, then `u8 n` and `n` rows of `u16 skill id, u8 level, u32 seconds left`.

@@ -464,3 +464,24 @@ in part 1, instead of the game log.
   zone a moment later: the GM may see the `F501` before its own notice.
 - `F703` (part 1) took the equipped items too (`Inventory::is_bag` includes bag 0) though its deviation 5 says bags only; fixed with this
   change (`bag != 0`).
+
+## 11. Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 2008-01-17; EP5.4 2011-09-14, modified after linking) and `ps_userLog` (EP3 2007-12-07;
+EP5.4 2009-09-22) were compared with EP4.5, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and
+[`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`PacketUQ` (EP3 ps_game 0x456fc0) and `PacketAdminUQ` (0x4578a0) are at the same switch positions with the same opcodes, as are the
+`PacketAdminCmdC`/`D` groups (confirmed, dispatch tables). Their bodies were not compared.
+
+### EP5.4
+
+The same opcode sets (`0x1201`, `F201` to `F204`, and the `C` and `D` groups) and the same staff levels (confirmed). `SendAdminAll`
+(EP5.4 ps_game 0x453c20, matched by call graph) also carries the results of console commands typed in the game to every staff member
+([`operator-console.md`](operator-console.md)).
+
+Comparing the builds showed that the question records `0x0401` to `0x0403` sent to `g_pClientToLog` end in `ps_userLog`, which accepts
+group `0x04` and writes nothing: its writer `WriteLogGameUQ` is empty (EP4.5 ps_userLog 0x4012d0, 24 bytes), in all three builds
+(confirmed). So questions and answers are never stored anywhere, not only lost on a restart.

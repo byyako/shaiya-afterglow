@@ -148,3 +148,24 @@ the stack limit (the source is emptied), otherwise the target holds the limit an
   so a modified client can use the warehouse anywhere. NPC type 6 is the warehouse keeper by the NPC data's grouping
   (`docs/original/maps-npcs.md`; 39 such NPCs on 14 maps, e.g. map 1 at (491, 1785), (1560, 1811), (1046, 821)); ps_game itself never looks at
   the type for this.
+
+## 9. Other episodes
+
+The EP3 builds of `ps_game.exe` (2008-01-17) and `ps_dbAgent.exe` (2008-01-04) and the EP5.4 builds (2011-09-14, `ps_game` modified
+after linking) were compared with the EP4.5 builds of this note, read statically like the rest of the note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The second part starts at slot 40** (confirmed): `IsBank` (EP3 ps_game 0x445240) allows bag 100 and slots below 240 as in EP4.5, but
+  a target slot of **40** or more needs the Double Warehouse flag (`CUser+0x5758`, EP3 ps_game 0x44f326, 0x44f3a6); EP4.5 uses 120
+  (0x4684e5). Whether the EP3 client shows 40 free slots was not checked.
+- Saving is per item as in EP4.5 (`SaveCharacterBankItemUnit`, EP3 ps_dbAgent 0x41b3e0, matched by strings).
+
+### EP5.4
+
+- **Unchanged** (confirmed): bag 100 with slots below 240, slots 120 and up behind the flag `CUser+0x5968` (EP5.4 ps_game 0x476123 to
+  0x476145); `ItemBankToBag` (EP5.4 ps_game 0x468e80), `ItemBagToBank` (0x469400) and `ItemBankToBank` (0x469950), matched by the branch
+  arguments. The warehouse moved to `CUser+0x400`.
+- Warehouse moves are ignored while a server transfer is pending (`CUser+0x5880`, EP5.4 ps_game 0x4760ed) (confirmed).
+- Saving is unchanged (`SaveCharacterBankItemUnit`, EP5.4 ps_dbAgent 0x428b20, matched by strings).

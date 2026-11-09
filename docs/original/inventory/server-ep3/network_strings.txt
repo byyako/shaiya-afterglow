@@ -1,0 +1,12 @@
+## PSM_Client/Bin/ps_dbAgent.exe
+Bin.net
+## PSM_Client/Bin/ps_game.exe
+Bin.net
+## PSM_Client/Bin/ps_gameLog.exe
+Bin.net
+## PSM_Client/Bin/ps_login.exe
+Bin.net
+## PSM_Client/Bin/ps_session.exe
+Bin.net
+## PSM_Client/Bin/ps_userLog.exe
+Bin.net

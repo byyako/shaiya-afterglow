@@ -348,3 +348,47 @@ server but not to one's own account, the product without a server row answering 
   warehouse and the billing storage) and a PostgreSQL test (purchase, gift, refusals, loading, takes, notices, the shipped list).
 - Live test: `docs/testing/live-test-checklist.md` section 44.
 
+## 14. Other episodes
+
+The EP3 builds of `ps_game.exe` (2008-01-17) and `ps_dbAgent.exe` (2008-01-04) and the EP5.4 builds (2011-09-14, `ps_game` modified
+after linking) were compared with the EP4.5 builds of this note, read statically like the rest of the note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The same four requests** (confirmed): `PacketPoint` (EP3 ps_game 0x45eb60, matched by dispatch) has `0x2602`, `0x2603`, `0x2605` and
+  `0x2607`; the database agent's point group is `0x0E02` to `0x0E09` (EP4.5 to `0x0E0A`).
+- **EP3 answers `0xB106`** (confirmed): in state 3 it sends the product list (EP3 ps_game 0x441950 → sender EP3 ps_game 0x49b440), rows
+  of 76 bytes (length `count × 76 + 3`, EP3 ps_game 0x49b456), and the console word `/initpl` reloads the list. Comparing with EP3
+  showed that EP4.5 dropped an answer the earlier build gave; "never answered" holds for EP4.5 only.
+- **No billing info `0xB103`** after the handshake (confirmed: the constant is not in the EP3 image).
+- **Points go through `*_PayLetterT` procedures** (confirmed, `ps_dbAgent` strings), which are not in the EP3 database backup. EP3's
+  `PS_Billing` has 3 tables; its delivery procedure `usp_Insert_Product_User_E`, encrypted in EP4.5, is in clear text: at most 240 slots
+  per user, the product read from `ProductList` through a linked server, one `Users_Product` row per item, all in one transaction.
+
+### EP5.4
+
+- **The product list is sent** (confirmed): `CGameData::LoadProductList` (EP5.4 ps_game 0x4dbd00, matched by its string) reads a 51st
+  column `ProductName` and builds up to 50 ready `0xB106` pages of **25 rows** (EP5.4 ps_game 0x4dbf34). They answer the one `0xB106`
+  sent in state 3 and are pushed to every player after `/initpl`, which also reopens a mall an operator had closed (EP5.4 ps_game
+  0x409e23). The EP5.4 client copies at most 64 rows without checking the count.
+
+| offset | `0xB106` S→C (3 + 76n) |
+|---|---|
+| 0 | u16 opcode |
+| 2 | u8 n |
+| 3 + 76i | char code[21] |
+| +0x15 | char name[51] |
+| +0x48 | u32 price |
+
+- **Points come from a billing service through ps_session** (confirmed, `PacketPoint` EP5.4 ps_game 0x487f20, matched by opcode switch
+  table): the refresh asks the session (`0x1B01`) only while it reports billing up; a purchase takes a per-character lock (the flag that
+  EP4.5 only reads, EP5.4 ps_game 0x488183) and a purchase number stored in each item (`CItem+0x9c`) and sent to the session (`0x1B02`).
+  A refused payment takes the items back by that number (client `0x0206`, agent `0x0702`) and answers result 2; a gift asks the session
+  first (`0x1B03`), and a refused gift clears the target's storage rows (new client `0x2609`). Storage rows grow to 8 bytes, under a lock.
+- **Oddity 1** (section 9) is answered in part: items are still given before the points are confirmed, but a refusal now takes them
+  back (confirmed). **Oddity 2** is still there and the stuck lock now blocks purchases too (confirmed, EP5.4 ps_game 0x48896d).
+- `/disablegift` (`g_bDisableShop` 3) stops gifts only (confirmed, EP5.4 ps_game 0x409c38).
+- The shipped setup has no PayLetter section, so refresh and gifts stay silent (inferred); the database agent's four new procedures (`usp_Save_User_BuyPointItems2` and three more) are in no
+  database backup (confirmed by search).
+- Data (confirmed, rows): `ProductList` 84 → 249 codes, 24 in common and all repriced, prices up to 50,000.

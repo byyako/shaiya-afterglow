@@ -1,0 +1,15 @@
+ChatLog|1|row|int|NOT NULL|IDENTITY||0
+ChatLog|2|UserUID|char(10)|NULL|||0
+ChatLog|3|CharID|char(10)|NULL|||0
+ChatLog|4|ChatType|char(10)|NULL|||0
+ChatLog|5|TargetName|char(10)|NULL|||0
+ChatLog|6|ChatData|char(100)|NULL|||0
+ChatLog|7|MapID|char(10)|NULL|||0
+ChatLog|8|ChatTime|char(10)|NULL|||0
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0

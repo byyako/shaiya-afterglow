@@ -1,0 +1,13 @@
+## PSM_Client/Bin/ps_game.exe
+Lua.org
+www.lua.org
+## PSM_Client/Bin/ps_gamewar.exe
+192.168.0.2
+Lua.org
+www.lua.org
+## PSM_Client/Bin/ps_login.exe
+Bin.net
+## PSM_Client/Bin/ps_userLog.exe
+Bin.net
+## PSM_Server/PSMServer_Patch.exe
+build.net

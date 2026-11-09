@@ -76,3 +76,29 @@ destination is off its map, the connection is closed when the player arrives (`C
 
 - `0x0227` (handled by the same code), instance zones, guild houses and the guild ranking battle.
 - Bind areas and respawning (`CMap::GetBindPos`, `m_nMovePositionType` 0).
+
+## 5. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their map files, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+Function names in those builds are carried over from EP4.5 (matched by strings, the call graph or switch tables, as those pages list).
+
+### EP3
+
+- `0x020A` is in the same `PacketMaininterface` opcode set (confirmed); the case body was not compared. `FindPortalLink`,
+  `UpdatePortalLink` and `IsSafePos` are identical or nearly so (confirmed).
+- The move to another server (`0x0110`, `0x0111`) exists only in EP4.5 (confirmed, immediate sweep), so EP3 has no map-200 path.
+- Maps 0 to 44 only, mostly with fewer portals. EP3's map 0 has four portals with countries 1010, 1011, 1020 and 1021 to maps 45 and 47,
+  which EP3 does not have (confirmed, the map file).
+
+### EP5.4
+
+- **The same checks with the same numbers** (confirmed, case EP5.4 ps_game 0x47673f): not dead, the portal by index, within 40 (EP5.4
+  ps_game 0x574140), the destination loaded, the country, the level range, then the `CreateType` switch 3 to 6 (EP5.4 ps_game 0x477a40)
+  with the same refusal codes. Only the order changed: "destination loaded" is tested before the country and the level; all three are
+  silent refusals.
+- **Map 200**: no `[NEW_SERVER]` branch; the player's action and personal shop are cancelled and `0x080C` is sent (EP5.4 ps_game 0x47679a
+  to 0x4767e4, confirmed).
+- **Data** (confirmed, map files): maps 19, 20, 28 and 29 keep one of their two portals on the same spot (to 33, 34, 37, 38) and lose
+  the one to 59, 61, 62, 63; no portal leads into 59 to 63 any more (gatekeepers serve 59 and 61; 62 and 63 are unreachable except by
+  rebirth or a GM move, inferred). Maps 35 and 36 get a portal to map 200; 43 and 44 lead to the new fields 68 and 69.

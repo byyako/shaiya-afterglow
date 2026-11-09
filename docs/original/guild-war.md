@@ -238,3 +238,22 @@ those who joined), taken after the maps; each player in a war carries its enemy 
 officers': one per pair of guilds, run every second. Game logs are not sent. The enemy guild's name in `0x2505 2` comes from the client's
 guild list, which holds only guilds of its own country (`docs/original/guild.md` section 9): after losing to a guild of the other
 country the client prints no "<g> guild won." line, as with the original.
+
+## 8. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by the opcode switch tables or constants, as those pages list).
+
+### EP3
+
+`PacketPVPGuild` (EP3 ps_game 0x462d50, matched by dispatch) handles the same `0x2501` and `0x2502` (confirmed, dispatch tables). The
+case bodies were not compared.
+
+### EP5.4
+
+No differences found. `PacketPVPGuild` (EP5.4 ps_game 0x48c950, matched by constants) handles `0x2501` and `0x2502` with the same calls
+(`CGuild::PvPUserSet`, `CGuild::SendPvP`, the 5000 ms countdown) (confirmed). `0x2501` reads the same three fields of both sides at moved
+offsets, and the extra calls are lock releases on more exits (inferred: same checks). `PvPReset`, `PvPUserClear`, `PvPUserLeave`,
+`SendPvPJoinUser` and the `PvPChkLeaveBy*` checks have matches with the same constants (inferred). The united war server is
+[`gamewar.md`](gamewar.md).

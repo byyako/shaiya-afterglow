@@ -272,3 +272,22 @@ and the database write. Not yet tried with the client: section 35 of `docs/testi
   4. **The update is not lost to a short restart**: the server notes in the database when a battle closed and has not been ranked
      (`ranking_due`), and runs the update at start-up if that time has passed. (Battle points and entries stay in memory as the
      original, so a restart during the battle still loses them.)
+
+## 11. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The battle exists: `CMap::IsGuildRankMapOpenTime` (EP3 ps_game 0x4247c0, matched by call graph) and the console line
+`cmd guildhouse cur=%d, max=%d, guildrank cur=%d, max=%d` are there (confirmed). It was not compared further.
+
+### EP5.4
+
+- The clock is the same: `IsGuildRankMapOpenTime` and `IsGuildRankMapCloseTime` (EP5.4 ps_game 0x42f770, 0x42f850) read the same two
+  `(weekday, hour, hours)` entries with the same past-midnight handling (confirmed for the open test).
+- The notices come at the same minutes (EP5.4 ps_game 0x42f996–0x42fa0c; confirmed). The type now goes through a global (EP5.4 ps_game
+  0x582780) read by `CWorld::CheckGuildRankNotices` (0x41a780); the two-beat timing that can skip a notice is unchanged (inferred).
+- `UpdateGuildPointRank` and `SendRankingZone` keep their constants (inferred); `GetGuildRankJoinCount` has no match (inlined or removed,
+  not settled).

@@ -299,3 +299,50 @@ Confirmed, in `game.exe`.
 The `0xA202` version field is the constant `0x10042600`, a literal in the code that builds the packet. For this US build it never changes.
 The original server only compares it when a global check is switched on and the server entry has a version; `0xFFFFFFFF` means "any".
 The new server mirrors that: `LOGIN_CHECK_VERSION` (off by default) and `LOGIN_GAME_VERSION` (unset means any).
+
+## 17. Other episodes
+
+The EP3 `ps_login.exe` (linked 2007-12-07) and the EP5.4 one were compared with the EP4.5 build, read statically like the rest of this
+note. The EP5.4 file is the EP3 build of 2007-12-07 with 7 bytes changed, so an EP3 address is also the EP5.4 address of the same code.
+Overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- The network library, the key exchange, the AES cipher, the server list, server selection, the console commands and the session link
+  are the same code as EP4.5 (confirmed, side-by-side diffs; for example `CUser::OnRecv` EP3 ps_login 0x4042f0, `CServerList::SendList`
+  EP3 ps_login 0x407180).
+- The login packet keeps a user name of up to 31 characters and a password of up to 32 (EP3 ps_login 0x4044ea, 0x4044ee); EP4.5 cuts
+  both at 12 (confirmed).
+- The password is not hashed. The check that runs is `ChkPasswd` (EP3 ps_login 0x404580, matched by call-graph shape), which calls
+  `usp_Try_GameLogin_Taiwan` with the plain password and binds two result columns (confirmed, call site EP3 ps_login 0x404a73).
+- So `0x701` to the session server is 0x63 bytes, without EP4.5's last 4-byte field (confirmed, built at EP3 ps_login 0x4046bc).
+- The combined server list is loaded only with `[GAMESERVERS] EnableServerComb=1` (EP3 ps_login 0x40757a); there is no `[MONITOR]`
+  listener (confirmed).
+- What operators should know: the `usp_Try_GameLogin_Taiwan` in the shipped EP3 `PS_UserData` has its password check commented out,
+  so it accepts any password for an existing account (confirmed from the procedure text). Together with the call above, an EP3 server as
+  shipped lets anyone into any account by name.
+
+### EP5.4
+
+The 7 changed bytes are three patches (confirmed, `cmp` of the two files):
+
+| where (EP5.4 ps_login) | change | effect |
+|---|---|---|
+| 0x404542, `0xA101` case | `ja` → `jne` after `cmp al, 0x80` | the key reply's length byte must be exactly 0x80 |
+| 0x411abd, `SAgent::OnAccept` (matched by its unique string) | `jge` → two `nop` | the `MaxConnection` cap is gone; connections are accepted up to the pool size |
+| 0x445e70, the login query | `'%s'` → `"%s"` around the user name and password | narrows the SQL injection of section 13 item 1 but does not close it; the text is still unescaped (inferred) |
+
+The shipped `ps_login.ini` sets `MaxConnection=3000`, which no longer limits accepting (inferred), and has no `[GAMESERVERS]` block,
+which this code does not need. The EP5.4 `usp_Try_GameLogin_Taiwan` does check the password (through `sp_LoginSuccessCheck`;
+confirmed from the procedure text).
+
+Comparing the builds showed four things about the EP4.5 text above (confirmed unless marked):
+
+- The key-reply defect of sections 3 and 13 item 2 is a heap write, not an over-read: with a length byte of 0 to 4, `BinToMpz` zeroes 4 or
+  8 bytes in front of its buffer (EP4.5 ps_login 0x40bc50, 0x40bc57); whether that crashes the process is inferred.
+- Section 6: EP4.5 always runs `ChkPasswdMD5` (EP4.5 ps_login 0x404700) and `usp_try_gamelogin_korea` with the MD5 hex string;
+  `ChkPasswd` has no caller.
+- Section 11: the key pool starts with 16 keys of 1024 bits, then `CKeyMgr::OnUpdate` (EP4.5 ps_login 0x406af0) adds one at a time up to
+  1024, using about a tenth of a CPU.
+- Sections 9 and 11: the session server's `0x703` reply carries no address (EP4.5 ps_session 0x4040e1), so it does not fill in the game
+  server's IP; that comes from the login server's own list (inferred).

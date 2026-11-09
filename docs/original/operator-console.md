@@ -383,3 +383,29 @@ Steps 1 to 7 of section 6 as planned, with these points:
   Kill Boost Stone and its buff; the PostgreSQL test of the definitions checks both rows. Tests: `config` (the forms and refusals), `zone`
   (by id, by id and level, a monster's level-100 skill of the same id not counted). Unverified: the client's copy (the data patch) and
   the whole in a live PvP kill (live test 51).
+
+## 11. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The console has the EP4.5 words except `/aiset`, `/viewmap` and the eight data reloads (`/reitem` … `/reseqitem`), which EP4.5 added; it
+has `/initpl` (reload the item-mall product list, string EP3 ps_game 0x4e3384) and the GameGuard (CSAuth2) commands, which EP4.5 does
+not (confirmed by strings).
+
+### EP5.4
+
+Read in `InitConsoleCommand` (EP5.4 ps_game 0x4090c0, matched by the string `/exp2xdisable`) and `OnConsoleCommand` (0x409460).
+
+- The 27 EP4.5 words keep their ids, argument counts and answers; `/quitt` is unchanged (confirmed).
+- The eight data reloads are gone (confirmed: no such strings).
+- 19 new words (confirmed from the registration list): `/initpl` (reload the product list; it also re-opens a mall an operator had
+  closed, EP5.4 ps_game 0x409e23), `/disablegift` (`g_bDisableShop` = 3), `/servertime <hour> <min>`, `/addsr <f>`, `/resetstatcnt`,
+  `/resetskillcnt`, and timed events with a start hour, a period and "once" or "keep": `/killcnt`, `/killupmap`, `/expupcamp`,
+  `/expupmap`, `/gemmix`, `/gemext`, `/enchant`, each with a reset word. "keep" stores the event in `.\data\ServerCmd.ini`, which is
+  re-read at start; no such file is shipped. What each value changes in play is inferred from the names and the readers' places.
+- `SConsole::AddCommand` takes a fifth argument, "may also be run from the game". Level-1 staff type such commands in the game with
+  `0xF603` (`u8 len`, text); the result goes to every staff member as `0xF603` and to the session link as `0x080E` (EP5.4 ps_game 0x40c810,
+  0x407b50; confirmed). Kick, notice, shutdown and the shop switches stay console-only.

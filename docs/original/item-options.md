@@ -171,3 +171,19 @@ with the owner as caster. The packets of a player's own lapis skills reach it in
 skill or blow on a monster set them off: then they follow that skill's or blow's packets, ahead of anything queued for it meanwhile (an
 armour lapis striking back at it during an area skill shows after the whole skill, its cost included). A critical hit of a gem's skill would wear the weapon only when its owner
 is the one attacking (no lapis skill can be critical: types 0 and 4 never are).
+
+## 8. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`AttackItemOption` exists (EP3 ps_game 0x437bc0, matched by call graph); neither side of the item option skills was compared.
+
+### EP5.4
+
+- **The armour scans are the same, quirk included** (confirmed): `BeAttackedItemOption` for a player and for a monster (EP5.4 ps_game
+  0x458980, 0x458ae0, matched by the slot order 6, 0, 1, 3, 2, 4 and the dead checks) behave as in EP4.5; in the player version an empty
+  slot still ends the scan (EP5.4 ps_game 0x458a01) while the monster version goes on to the next slot (section 4).
+- The weapon side (`AttackItemOption`) was not compared.

@@ -337,3 +337,29 @@ shows as if it had been taken (the client ignores the result byte).
 - The guild house, Etin and NPC upgrades: `docs/original/guild-house.md` (part 1); the ranking battle and the ranking:
   `docs/original/guild-ranking.md` (part 2, built); the bank: `docs/original/guild-bank.md` (part 3, built). Guild wars:
   `docs/original/guild-war.md`.
+
+## 16. Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 2008-01-17; EP5.4 2011-09-14, modified after linking) and `ps_dbAgent` (EP3 2008-01-04;
+EP5.4 2011-09-14, modified after linking) were compared with EP4.5, read statically like the rest of this note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- `PacketGuild` (EP3 ps_game 0x45c340) handles the same `0x0Dxx` set (confirmed, dispatch tables); the bodies were not compared.
+- The database agent's guild group is narrower, `0xB04`–`0xB12` against `0xB04`–`0xB17` (confirmed, EP3 ps_dbAgent jump table); EP4.5
+  added five guild messages (guild house, NPC upgrades; inferred from the names). EP3 saves guild info with 7 values, EP4.5 with 9
+  (`usp_Save_GuildInfo_E` → `_E2`; confirmed, strings).
+- The shipped EP3 `PS_GameData` has no `Guilds`, `GuildDetails`, `GuildStoredItems` or `GuildNpcLv` tables (confirmed, description
+  files under `docs/original/db/ep3/`).
+
+### EP5.4
+
+- The same 16 opcodes with the same call sequence case by case (`PacketGuild` EP5.4 ps_game 0x484fc0, matched by opcode switch table;
+  confirmed). Creation makes the same checks with the same result codes (EP5.4 ps_game 0x485027–0x48515c), and `NpcUpgrade` the same
+  limits (EP5.4 ps_game 0x4363aa–0x4364c5) (confirmed).
+- Still present: the remark refuses `'` (EP5.4 ps_game 0x485c63) but creation looks at nothing, and the names go into the database
+  agent's SQL unescaped (confirmed; [`community-fixes.md`](community-fixes.md#guild-text-filter)).
+- The game handles the database agent's `0x0B04`, which EP4.5 ignores (EP5.4 ps_game group handler 0x405e00; confirmed); where the EP5.4
+  agent sends it was not found. The agent now reads the return value of `usp_Create_Guild2_E` (confirmed, string).
+- A new GM command `0xFA1B` works on a guild by name ([`gm-commands.md`](gm-commands.md)).

@@ -219,3 +219,24 @@ Built as section 8 describes, all in `crates/game-server`:
 - Live test section 46 (`docs/testing/live-test-checklist.md`); MageChar was given Fire Thorns 47 (`character_skills` number 7). The open client
   question (what is drawn for `0x0513` from a buff or a field) is entry 3 of `docs/testing/client-research-queue.md`.
 
+## 11. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by strings, constants or the call graph, as those pages list).
+
+### EP3
+
+- `CZone::UpdateTrab` (EP3 ps_game 0x41e630) has the same structure; EP4.5 has a few more constants (0x65, 0x50) (confirmed).
+  `TrabDamage` was not matched in EP3, so the damage to players was not compared.
+- `CUser::Damage` (EP3 ps_game 0x4376d0, 0x437750) subtracts the damage directly: no absorption and no `0x0525` (confirmed).
+
+### EP5.4
+
+- `CZone::UpdateTrab` (EP5.4 ps_game 0x429090) and `TrabDamage` (EP5.4 ps_game 0x428ed0) make the same calls (hide removal,
+  `CUser::Damage` and `Death`, `CMob::Damage`, `Death` and `SetTarget`), send the same packets (`0x0513` players, `0x0519` monsters) and
+  keep the same constants; only the cap changed, 30000 → 60000 (EP5.4 ps_game 0x429066) (confirmed).
+- The Fire Thorns aggro check is unchanged: the helper (EP5.4 ps_game 0x4580d0) returns no monster while the caster's status is 2
+  (confirmed).
+- `CUser::Damage` also subtracts a damage reduction that a skill (ability type 48) can now raise (read at EP5.4 ps_game 0x458148,
+  confirmed; [`skills.md`](skills.md)).

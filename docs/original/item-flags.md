@@ -223,3 +223,32 @@ Small choices made in the build:
 - **The full party's bonus** is the raised gain (the original adds the gain after the multiplier).
 - **The player's own effects** raise its gold: each member's share is raised by that member's flags.
 - **Skill abilities of extensions** (an addition, `docs/server/effects.md`): beside the three ability pairs of the skill row, a skill level may carry server-only abilities from an extension's rows or the `kill_boost_skills` shorthand; the `kill_boost` ability multiplies a counted player kill while the skill is applied. They are not in `defs` and not in the client's rows.
+
+## 12. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The same experience bonuses** (confirmed): × 1.5 and × 2.0 for premium and + 0.2 for the item flags (EP3 ps_game 0x4420e2 to
+  0x442105). EP3 also multiplies experience by `1 + x / 100`, where x is the sum of the equipped lapis' `exp` column (EP3 ps_game
+  0x442133 to 0x44218d); EP4.5 uses that column for absorption.
+- **The warehouse's second half starts at slot 40**, behind the same flag (`CUser+0x5758`, EP3 ps_game 0x44f326) (confirmed).
+- **Death drops have no honour rule** (inferred from the constants): `ItemDropByUser` (EP3 ps_game 0x443df0, matched by call graph) has
+  none of EP4.5's honour bands (±10 to ±190).
+- The resurrection runes (`KillSoul` EP3 ps_game 0x443650, `FindItemRebirth` EP3 ps_game 0x448e90, matched by call graph) exist; they
+  were not compared. Gold drops and the ultimate-mode rules were not checked.
+
+### EP5.4
+
+- **The same experience bonuses** (confirmed, EP5.4 ps_game 0x465092 to 0x465143); the item-flag block moved to `CUser+0x594c`.
+- **Death drops are unchanged** (confirmed): `ItemDropByUser` (EP5.4 ps_game 0x4670a0, matched by the item type 94 exclusion and the
+  honour bands) and `ItemDropByUserDeath` (EP5.4 ps_game 0x4674f0) keep the level-10 limit, the Prevent-Drop checks, the honour bands, the
+  `byOG` and type-94 exclusions and the money loss.
+- **Resurrection runes are unchanged** (confirmed): `0x0553` (EP5.4 ps_game 0x478e00) makes the same calls with the same constants, and
+  `FindItemRebirth` (EP5.4 ps_game 0x46c780) still makes three passes for special-37 runes.
+- **The automatic rebirth comes after 185 s**, not 200 s (EP5.4 ps_game 0x465d55) (confirmed).
+- The Double Warehouse flag is at `CUser+0x5968` and opens slots 120 and up as in EP4.5 (confirmed, EP5.4 ps_game 0x476145). The
+  experience loss at death (`ExpDrop`, EP5.4 ps_game 0x467bc0) was compared only for its level bounds; gold drops and ultimate mode were
+  not compared.

@@ -317,3 +317,34 @@ position, kind 4). The 200 s automatic rebirth keeps type 0 (bind position).
     is refused or fails, leaves it on the ground too, before the error ends the connection; what does not fit is put on the ground
     before the pick-up packets are sent; and the events still queued for a member who is leaving the world are put on the ground by its
     connection's cleanup (an item where it dropped, gold at the member's feet, its own to pick up).
+
+## 14. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+`PacketParty` (EP3 ps_game 0x44ed10, matched by switch position) handles the normal party opcodes; the union opcodes `0x0B0C`–`0x0B18`
+and `0x0B1A` do not exist (confirmed, dispatch tables). The party update packets `0x0C0A`–`0x0C14` are built only by EP4.5 (confirmed:
+the opcode constants are absent from the EP3 image); how EP3 shows a member's state was not read. `party-kick-leader` and
+`party-exp-levelup` were not checked.
+
+### EP5.4
+
+- The same 20 opcodes with the same handlers, and the same experience by level gap (1.0, 0.8, 0.6, 0.4, 0.2) (confirmed,
+  `CParty::GetPartyExpByLevel` EP5.4 ps_game 0x44e230, matched by call graph).
+- **The party type goes through the client.** The server sends `0x0B1B` to the player only (`SendPartyType` EP5.4 ps_game 0x491670, and
+  14 sites in `CParty`); the EP5.4 client echoes it, and the server relays the client's type byte, unchecked, as `0x0520` to the view
+  (EP5.4 ps_game 0x475fa4) (confirmed). A modified client can therefore show any party mark to the players around; the server's own
+  party state does not read it (inferred).
+
+  | offset | size | `0x0B1B` (both directions) |
+  |---|---|---|
+  | 0 | 2 | opcode |
+  | 2 | 4 | player id (ignored on the way back; the server uses the sender's id) |
+  | 6 | 1 | party type: 0 none, 1 member, 2 leader |
+
+- Kicking a member placed before the leader now moves the leader's index down (EP5.4 ps_game 0x450324; confirmed); the loot turn still
+  does not move.
+- The full-party bonus is still lost on a level-up (EP5.4 ps_game 0x46517b; confirmed).

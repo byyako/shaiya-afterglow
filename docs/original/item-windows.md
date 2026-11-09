@@ -114,3 +114,21 @@ stay at its level.
 - **Deviation 2 (approved):** a saved position is **the server's position of the player**, not the one the client sends (the original keeps
   the client's, which may be up to 50 away and on a spot no one can stand on). The 50 check and the other refusals stay.
 - On a refused `0x0220` the map and position bytes are zeros (the original leaves stack bytes).
+
+## 5. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- The body change (`0x0226`), the saved positions and the experience wheels exist (the `0x0226` case is in the dispatch table); their
+  bodies were not compared.
+- `0x0228` (body change failed) is built only by EP4.5 (confirmed: the opcode constant is not in the EP3 image).
+
+### EP5.4
+
+- **Unchanged** (confirmed: the same calls and constants): the body change (`0x0226`, EP5.4 ps_game 0x4777dc), the experience wheels
+  (special 50) and the Teleportation Stone (special 39).
+- The recall tables of specials 47 to 49 are the same (EP5.4 ps_game 0x56e608, 0x56e628, 0x56e648). A new special 74 recalls to map 39
+  with the same checks and 5-second cast ([`item-use.md`](item-use.md)).

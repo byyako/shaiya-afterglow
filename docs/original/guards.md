@@ -253,3 +253,21 @@ Confirmed, `CNpc::ReturnHome(now, home)`.
   7. **A guard going back looks for targets too** (status 3: `FindTarget` first, as in status 0; a target found ends the walk home and
      the chase starts from where it is). The original only walks home, so a player could follow it there unharmed (seen in
      play). The 5-second lock and the 20 / 30 limits of section 5 still apply.
+
+## 11. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by the call graph and constants, as those pages list).
+
+### EP3
+
+- `CNpc::FindTarget` (EP3 ps_game 0x494270) lacks the two `now + 5000` stores and four state tests of EP4.5's (confirmed: no `0x1388`
+  there), so the 5-second "one guard per target" lock of section 5 is new in EP4.5 (inferred; the EP3 loop was not read).
+- `CNpc::Chase` (EP3 ps_game 0x4949a0) and `CNpc::ReturnHome` (0x494ed0) are nearly identical to EP4.5's (confirmed).
+
+### EP5.4
+
+No differences in the code. `CNpc::FindTarget` (EP5.4 ps_game 0x4d4050, matched by its floats 20 and 30 and the 5000 ms, the only such
+function) and `CNpc::UpdateAttackAI` (0x4d3fa0) have the same constants (confirmed). In the data, map 62's blocked-cell bitmap is empty,
+so guards there are not kept out of walls (inferred from [`maps-npcs.md`](maps-npcs.md)).

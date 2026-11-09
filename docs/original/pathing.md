@@ -167,3 +167,20 @@ Confirmed, `CMob::WhileMove`, `WhileReturnHome`, `ChaseExp`; corrects `docs/orig
 - **Deviation** (approved):
   1. **A monster that reaches a turn of a searched way keeps its height** (the original sets it to 0; the client gets heights only in
      `0x0601`, so a player coming into view would see the monster at height 0 until it moves).
+
+## 7. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md). Function names in those
+builds are carried over from EP4.5 (matched by the call graph and constants, as those pages list).
+
+### EP3
+
+`AStar::FindPath` (EP3 ps_game 0x472dd0) is identical to EP4.5's after masking addresses (confirmed). `CMob::Chase` and
+`CMob::ReturnHome` were not located; `CNpc::Chase` (EP3 ps_game 0x4949a0) and `CNpc::ReturnHome` (0x494ed0) are nearly identical
+(confirmed). EP3 has no Lua monsters, so section 5 does not apply.
+
+### EP5.4
+
+No differences found. `AStar::FindPath` (EP5.4 ps_game 0x49f650) keeps the 20 × 20 limits, and `CMob::Chase` (0x4bb8f0) and
+`CMob::ReturnHome` (0x4bc110) their constants (confirmed at the constant and call level).

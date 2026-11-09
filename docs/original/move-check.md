@@ -183,3 +183,30 @@ window start for the zone and the view, `0x020B` to them and the player, a mount
 distance checks; the connection's position is the window start. Charge takes its reach off when it goes off. A step that is too long
 now stops attacking too. `move_check` (default `true`). Logs: "move refused: too fast" (`info`), "move window" (`debug`). Tests:
 `move_check` (4) and `game_flow::walking_too_fast_goes_back_to_the_windows_start`. Live test: checklist section 45.
+
+## 10. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The same check: `stUserMoveChk::Update` (EP3 ps_game 0x450b10, called from `PacketPC` 0x450dba) has the same 5-second window and 50-unit
+slack, and the attack reach slack is the same (confirmed, floats and calls).
+
+### EP5.4
+
+A new function (EP5.4 ps_game 0x478240, its state at `CUser+0x554c`) replaces both the 35-unit step check and `stUserMoveChk` (confirmed):
+
+| part | EP5.4 |
+|---|---|
+| speed used | `g_ConstUserMoveSpeed` rounded up: below 5.0 → 5.0, 6.0 to 7.0 → 7.0; riding 8.0 |
+| one step | more than **30** units (less the Charge credit) is refused as "too far" (result 3, as EP4.5's refusal) |
+| time per step | clamped to 0.3 to 1.5 s |
+| window | judged after 6 steps and more than 3 s: passes when distance ≤ allowance × (1 + 1/(steps − 1)) + 4.0 |
+| failed window | the server moves the player back to the window's start (a same-map server move), unless a logout is pending |
+| after a server move | steps are ignored for 1.1 s (map moves, leaving a map; EP5.4 ps_game 0x455de0, 0x4148fb) |
+
+With one step a second at speed 5.0 that allows about 46 units in 7 s (inferred from the formula). Positions that are not finite are
+refused before the check (EP5.4 ps_game 0x478514). The attack reach slack is cut to the bare speed while the last step is under a second
+old, half of it otherwise (EP5.4 ps_game 0x49b340; confirmed). Moving the player back is what the new server does as deviation 1.

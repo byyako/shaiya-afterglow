@@ -108,3 +108,28 @@ the slot**, the last three 0 when it is empty. The client rewrites that slot.
 - Kind 1, owner = the dropper, no party, 60 s, 30 s for the owner alone: the existing ground rules.
 - As in the original, an item on the ground lives only in memory: a server stop loses it (it has already left the database).
 - No deviations.
+
+## 6. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **Helmets and cloaks never reach the ground** (confirmed): the helper that puts a monster's item on the ground (`CMob::ItemDrop`, EP3
+  ps_game 0x487610, matched by call graph, same callees as EP4.5 0x4a65a0) returns at once for real type 16 or 24 (EP3 ps_game 0x48763a
+  to 0x48764c). EP4.5's helper compares only real type 27. Comparing with EP3 showed that
+  [`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop) describes EP3 code: in EP4.5 helmets and cloaks drop.
+- **Monster drops roll with `rand()` only** (inferred from the calls): `CMob::ItemDrop` (EP3 ps_game 0x487050, matched by call graph)
+  has no `SRandom` call and no roll out of 1,000,000 (EP4.5 0x4a60fd).
+- Dropping and picking up (`0x0205`, `0x0206`) exist with the same opcodes; their bodies were not compared.
+
+### EP5.4
+
+- **Dropping and picking up are unchanged** (confirmed): `ItemDrop` (EP5.4 ps_game 0x469c00) and `ItemGet` (EP5.4 ps_game 0x46a1e0),
+  matched by the case call order, differ from EP4.5 only in stack and structure offsets (every immediate and compared field compared).
+- **Monster drops keep their structure** (confirmed at call and compare level): `CMob::ItemDrop` (EP5.4 ps_game 0x4ba950, matched as the
+  only other `SRandom` caller in the monster code) has the mob's own item, the quest-linked items, ten drop lines (seven rolled with
+  `rand()`, the rest with the Mersenne Twister), the sequence items and money, in that order.
+- **Item grades go to 3072** (confirmed): `CItemDrop::GetItemPlz` (EP5.4 ps_game 0x4d5f30) refuses grades above 0xc00, EP4.5 above
+  0x400.

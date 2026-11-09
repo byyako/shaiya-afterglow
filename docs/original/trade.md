@@ -210,3 +210,29 @@ What the references and the code above show. **Patch kit** is the original `ps_g
 | **Trading with oneself.** The shaiya-episode-6 project (shaiya-episode-6, github.com/kurtekat/shaiya-episode-6, `handler_0xA0A`) closes the connection of a player whose partner is itself. In EP4.5 the self link is undone at the answer (section 2.2). | `PacketExchange` case `0x0A01` | unchanged | refused (deviation 5) |
 | **Personal shop and trade together.** The same EP6 code refuses its confirm while either side has a personal shop open; EP4.5 closes the shop on every trade packet. | `stMyShop::Ended` | unchanged | every trade packet ends the shop and every shop packet ends the trade ([Personal shops](personal-shop.md)), so an item is never in both |
 | **The EP5+ confirm step** (`0x0A0A`): `ps_gametablas.CT` "trade exploit fix" sends `0x0A0A` 1/2 to both after a change so that a confirmation does not survive it. It is for a later build (its `SConnection::Send` is at 0x4ED0E0, EP4.5's 0x4D4D20). | not in EP4.5 | not needed | not needed: the ready flag is cleared by every change (section 2.6) |
+
+## 7. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **The same cases, a smaller handler** (confirmed): `PacketExchange` (EP3 ps_game 0x454fb0, matched by dispatch) has `0x0A01` to
+  `0x0A08` but is 917 bytes against 1664; EP4.5 added the `ExchangeCancleReady` resets and the `0x0A09` answer path (0x46f10c).
+- **The same holes** (confirmed): no `byOG` check in `ExchangeItemAdd` (EP3 ps_game 0x455bf0, [`bound-trade`](community-fixes.md#bound-trade))
+  and the unchecked count subtraction (EP3 ps_game 0x455e37, [`exchange-count-guard`](community-fixes.md#exchange-count-guard)).
+  Trading with oneself was not checked.
+
+### EP5.4
+
+- **The same cases** `0x0A01` to `0x0A08` (`PacketExchange` EP5.4 ps_game 0x47d940, matched by opcode switch table) (confirmed); there is
+  no `0x0A0A`.
+- **New refusals** (confirmed): `0x0A05` to `0x0A08` are refused while either player is in a duel (`CUser+0x558c`, inferred from its
+  writer) or has a personal shop open (`CUser+0x1638`, inferred), and when the partner is the player itself (EP5.4 ps_game 0x47de00),
+  which is [`trade-other`](community-fixes.md#trade-other). The exchange is also ignored while a server transfer is pending
+  (`CUser+0x5880`, EP5.4 ps_game 0x47e322).
+- **Still open** (confirmed): no `byOG` check on an offer, and the count guard is still missing (`jne` at EP5.4 ps_game 0x47e81a, the
+  subtraction at 0x47ea44). The duel's own stake transfer is fixed (`jb` at EP5.4 ps_game 0x48bacd, EP4.5 `jne` 0x47ccbe).
+- The `0x0A0A` fix of section 6 gives `SConnection::Send` at 0x4ED0E0, which is the send function of this EP5.4 build (a call at EP5.4
+  ps_game 0x4921a8); so that patch targets an EP5.4-type binary, which has no `0x0A0A` of its own (inferred).

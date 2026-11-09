@@ -1,0 +1,5 @@
+PK_ActionLog|ActionLog|1|1|CLUSTERED
+PK22|ActionLog|0|0|NONCLUSTERED
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+PK_UserLog|UserLog|1|1|CLUSTERED
+pk23|UserLog|0|0|NONCLUSTERED

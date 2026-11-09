@@ -1,0 +1,171 @@
+dtproperties|1|id|int|NOT NULL|IDENTITY||0
+dtproperties|2|objectid|int|NULL|||0
+dtproperties|3|property|varchar(64)|NOT NULL|||0
+dtproperties|4|value|varchar(255)|NULL|||0
+dtproperties|5|uvalue|nvarchar(255)|NULL|||0
+dtproperties|6|lvalue|image|NULL|||0
+dtproperties|7|version|int|NOT NULL||(0)|0
+UserBlockLog|1|RowID|int|NOT NULL|IDENTITY||0
+UserBlockLog|2|Status|smallint|NOT NULL|||0
+UserBlockLog|3|AppliedStatus|smallint|NOT NULL|||0
+UserBlockLog|4|UserUID|int|NOT NULL|||0
+UserBlockLog|5|CharID|int|NOT NULL|||0
+UserBlockLog|6|StartDate|datetime|NOT NULL|||0
+UserBlockLog|7|EndDate|datetime|NOT NULL|||0
+UserBlockLog|8|Cause|varchar(7000)|NOT NULL|||0
+UserBlockLog|9|ProcDate|datetime|NOT NULL|||0
+UserBlockLog|10|ProcAdminID|varchar(12)|NOT NULL|||0
+UserBlockLog|11|Enable|bit|NOT NULL|||0
+UserBlockLog|12|AutoRelease|bit|NOT NULL|||0
+UserLeaveLog|1|RowID|int|NOT NULL|IDENTITY||0
+UserLeaveLog|2|LeaveApplyNo|int|NOT NULL|||0
+UserLeaveLog|3|Status|smallint|NOT NULL|||0
+UserLeaveLog|4|AppliedStatus|smallint|NOT NULL|||0
+UserLeaveLog|5|UserUID|int|NOT NULL|||0
+UserLeaveLog|6|UserID|varchar(18)|NOT NULL|||0
+UserLeaveLog|7|UserName|varchar(50)|NOT NULL|||0
+UserLeaveLog|8|Phone1|varchar(3)|NOT NULL|||0
+UserLeaveLog|9|Phone2|varchar(4)|NOT NULL|||0
+UserLeaveLog|10|Phone3|varchar(4)|NOT NULL|||0
+UserLeaveLog|11|Email|varchar(100)|NOT NULL|||0
+UserLeaveLog|12|LeaveQuestion1|varchar(2000)|NOT NULL|||0
+UserLeaveLog|13|LeaveQuestion2|varchar(2000)|NOT NULL|||0
+UserLeaveLog|14|LeaveQuestion3|varchar(3000)|NOT NULL|||0
+UserLeaveLog|15|LeaveApplyDate|datetime|NOT NULL|||0
+UserLeaveLog|16|Result|tinyint|NOT NULL|||0
+UserLeaveLog|17|ProcAdminID|varchar(12)|NULL|||0
+UserLeaveLog|18|ProcDate|datetime|NULL|||0
+UserLeaveLog|19|Enable|bit|NOT NULL|||0
+UserLoginLog|1|RowID|int|NOT NULL|IDENTITY||0
+UserLoginLog|2|SessionID|bigint|NOT NULL|||0
+UserLoginLog|3|UserUID|int|NOT NULL|||0
+UserLoginLog|4|UserIP|varchar(15)|NOT NULL|||0
+UserLoginLog|5|LoginTime|datetime|NOT NULL|||0
+UserLoginLog|6|LogoutTime|datetime|NULL|||0
+UserLoginLog|7|LoginType|smallint|NOT NULL|||0
+UserLoginLog|8|ErrType|smallint|NOT NULL|||0
+UserLoginLog|9|ErrMsg|varchar(300)|NULL|||0
+UserLoginLog|10|PCBangRowID|int|NULL|||0
+UserPauseLog|1|RowID|int|NOT NULL|IDENTITY||0
+UserPauseLog|2|Status|smallint|NOT NULL|||0
+UserPauseLog|3|AppliedStatus|smallint|NOT NULL|||0
+UserPauseLog|4|UserUID|int|NOT NULL|||0
+UserPauseLog|5|Cause|varchar(7000)|NOT NULL|||0
+UserPauseLog|6|ProcDate|datetime|NOT NULL|||0
+UserPauseLog|7|ProcAdminID|varchar(12)|NOT NULL|||0
+UserPauseLog|8|StartDate|datetime|NOT NULL|||0
+UserPauseLog|9|EndDate|datetime|NOT NULL|||0
+UserPauseLog|10|Enable|bit|NOT NULL|||0
+UserPointChargeLog|1|RowID|int|NOT NULL|IDENTITY||0
+UserPointChargeLog|2|UserID|varchar(18)|NOT NULL|||0
+UserPointChargeLog|3|Point|int|NOT NULL|||0
+Users_Block|1|UserUID|int|NOT NULL|||0
+Users_Block|2|BlockEndDate|datetime|NOT NULL|||0
+Users_BlockLog|1|UserUID|int|NOT NULL|||0
+Users_BlockLog|2|Status|smallint|NOT NULL|||0
+Users_BlockLog|3|BlockEndDate|datetime|NULL|||0
+Users_BlockLog|4|GmID|varchar(18)|NULL|||0
+Users_BlockLog|5|InsertDate|datetime|NULL|||0
+Users_Deleted|1|UserID|varchar(18)|NOT NULL|||0
+Users_Deleted|2|Pw|varchar(12)|NOT NULL|||0
+Users_Deleted|3|UserUID|int|NOT NULL|||0
+Users_Deleted|4|Admin|bit|NOT NULL|||0
+Users_Deleted|5|UseQueue|bit|NOT NULL|||0
+Users_Deleted|6|UserName|varchar(20)|NOT NULL|||0
+Users_Deleted|7|SocialNo1|char(6)|NOT NULL|||0
+Users_Deleted|8|SocialNo2|char(7)|NOT NULL|||0
+Users_Deleted|9|PwQuestion|varchar(100)|NOT NULL|||0
+Users_Deleted|10|PwAnswer|varchar(20)|NOT NULL|||0
+Users_Deleted|11|Email|varchar(100)|NOT NULL|||0
+Users_Deleted|12|PostNo|char(7)|NOT NULL|||0
+Users_Deleted|13|Addr1|varchar(100)|NOT NULL|||0
+Users_Deleted|14|Addr2|varchar(100)|NOT NULL|||0
+Users_Deleted|15|Phone1|varchar(3)|NOT NULL|||0
+Users_Deleted|16|Phone2|varchar(4)|NOT NULL|||0
+Users_Deleted|17|Phone3|varchar(4)|NOT NULL|||0
+Users_Deleted|18|Mobile1|varchar(3)|NULL|||0
+Users_Deleted|19|Mobile2|varchar(4)|NULL|||0
+Users_Deleted|20|Mobile3|varchar(4)|NULL|||0
+Users_Deleted|21|NewsLetter|bit|NOT NULL|||0
+Users_Deleted|22|Sms|bit|NOT NULL|||0
+Users_Deleted|23|Job|varchar(50)|NULL|||0
+Users_Deleted|24|AdultAuth|bit|NOT NULL|||0
+Users_Deleted|25|AdultAuthDate|datetime|NULL|||0
+Users_Deleted|26|EmailAuth|char(1)|NOT NULL|||0
+Users_Deleted|27|EmailAuthKey|varchar(10)|NULL|||0
+Users_Deleted|28|JoinDate|smalldatetime|NOT NULL|||0
+Users_Deleted|29|LeaveDate|smalldatetime|NULL|||0
+Users_Deleted|30|DeleteDate|smalldatetime|NULL|||0
+Users_Deleted|31|ProcAdmin|varchar(50)|NULL|||0
+Users_Detail|1|UserID|varchar(18)|NOT NULL|||0
+Users_Detail|2|UserUID|int|NOT NULL|||0
+Users_Detail|3|UserName|varchar(20)|NULL|||0
+Users_Detail|4|SocialNo1|char(6)|NULL|||0
+Users_Detail|5|SocialNo2|char(7)|NULL|||0
+Users_Detail|6|PwQuestion|varchar(100)|NOT NULL|||0
+Users_Detail|7|PwAnswer|varchar(20)|NULL|||0
+Users_Detail|8|Email|varchar(100)|NOT NULL|||0
+Users_Detail|9|PostNo|char(7)|NULL|||0
+Users_Detail|10|Addr1|varchar(100)|NULL|||0
+Users_Detail|11|Addr2|varchar(100)|NULL|||0
+Users_Detail|12|Phone1|varchar(3)|NULL|||0
+Users_Detail|13|Phone2|varchar(4)|NULL|||0
+Users_Detail|14|Phone3|varchar(4)|NULL|||0
+Users_Detail|15|Mobile1|varchar(3)|NULL|||0
+Users_Detail|16|Mobile2|varchar(4)|NULL|||0
+Users_Detail|17|Mobile3|varchar(4)|NULL|||0
+Users_Detail|18|NewsLetter|bit|NOT NULL|||0
+Users_Detail|19|Sms|bit|NOT NULL|||0
+Users_Detail|20|AdultAuth|bit|NOT NULL|||0
+Users_Detail|21|AdultAuthDate|datetime|NULL|||0
+Users_Detail|22|EmailAuth|char(1)|NOT NULL||(1)|0
+Users_Detail|23|EmailAuthKey|varchar(10)|NULL|||0
+Users_Detail|24|Job|varchar(50)|NULL|||0
+Users_Detail|25|JobNo|tinyint|NULL|||0
+Users_Detail|26|LocalNo|tinyint|NULL|||0
+Users_Detail|27|PwQuNo|tinyint|NULL|||0
+Users_Master|1|RowID|int|NOT NULL|IDENTITY||4
+Users_Master|2|UserUID|int|NOT NULL|||4
+Users_Master|3|UserID|varchar(18)|NOT NULL|||4
+Users_Master|4|Pw|varchar(12)|NOT NULL|||4
+Users_Master|5|JoinDate|smalldatetime|NOT NULL||(getdate())|4
+Users_Master|6|Admin|bit|NOT NULL|||4
+Users_Master|7|AdminLevel|tinyint|NOT NULL|||4
+Users_Master|8|UseQueue|bit|NOT NULL|||4
+Users_Master|9|Status|smallint|NOT NULL|||4
+Users_Master|10|Leave|tinyint|NOT NULL|||4
+Users_Master|11|LeaveDate|smalldatetime|NULL|||4
+Users_Master|12|UserType|char(1)|NOT NULL|||4
+Users_Master|13|UserIp|varchar(15)|NULL|||4
+Users_Master|14|ModiIp|varchar(15)|NULL|||4
+Users_Master|15|ModiDate|datetime|NULL|||4
+Users_Master|16|Point|int|NOT NULL||(0)|4
+Users_Master|17|Enpassword|char(32)|NULL|||4
+Users_Master|18|Birth|varchar(8)|NULL|||4
+Users_Updatelog|1|seq|int|NOT NULL|IDENTITY||0
+Users_Updatelog|2|UserUID|int|NULL|||0
+Users_Updatelog|3|UserID|varchar(18)|NOT NULL|||0
+Users_Updatelog|4|Pw|varchar(12)|NOT NULL|||0
+Users_Updatelog|5|UserName|varchar(20)|NOT NULL|||0
+Users_Updatelog|6|SocialNo|char(14)|NOT NULL|||0
+Users_Updatelog|7|PwQuestion|varchar(100)|NOT NULL|||0
+Users_Updatelog|8|PwAnswer|varchar(20)|NOT NULL|||0
+Users_Updatelog|9|PwQuNo|tinyint|NOT NULL|||0
+Users_Updatelog|10|Email|varchar(100)|NOT NULL|||0
+Users_Updatelog|11|PostNo|char(7)|NOT NULL|||0
+Users_Updatelog|12|LocalNo|tinyint|NOT NULL|||0
+Users_Updatelog|13|Addr1|varchar(100)|NOT NULL|||0
+Users_Updatelog|14|Addr2|varchar(100)|NULL|||0
+Users_Updatelog|15|Phone|varchar(13)|NOT NULL|||0
+Users_Updatelog|16|Mobile|varchar(13)|NOT NULL|||0
+Users_Updatelog|17|NewsLetter|bit|NOT NULL|||0
+Users_Updatelog|18|Sms|bit|NOT NULL|||0
+Users_Updatelog|19|Job|varchar(50)|NOT NULL|||0
+Users_Updatelog|20|JobNo|tinyint|NOT NULL|||0
+Users_Updatelog|21|AdultAuth|tinyint|NULL|||0
+Users_Updatelog|22|AdultAuthDate|datetime|NULL|||0
+Users_Updatelog|23|EmailAuth|char(1)|NULL|||0
+Users_Updatelog|24|EmailAuthKey|varchar(10)|NULL|||0
+Users_Updatelog|25|Credate|datetime|NOT NULL|||0
+Users_Updatelog|26|Creip|varchar(15)|NOT NULL|||0
+Users_Updatelog|27|enpassword|char(32)|NULL|||0

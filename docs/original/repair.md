@@ -137,3 +137,20 @@ to 12 back to its full quality, `0x070B`, and `0x0554` (255, 255, money).
 - Not reproduced: the shield's saved-quality flaw of section 5 (each slot's quality is saved as it is).
 - Open, for the client side: the client gets no packet when an item wears. Whether `game.exe` lowers the qualities it shows by itself (and
   so asks the right repair price) is not known here; until it is, a client may show full quality until the next `0x0106` (relog) or answer.
+
+## 7. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+**The same repair** (confirmed): `ItemRepair` (EP3 ps_game 0x44ba50, matched by dispatch, `0x0554`) has the same structure (12 of 12
+calls), and the shield-slot save of [`repair-shield-slot`](community-fixes.md#repair-shield-slot) is there (EP3 ps_game 0x44c0c8, as
+EP4.5 0x4649d3).
+
+### EP5.4
+
+**The same repair** (confirmed): `ItemRepair` (EP5.4 ps_game 0x471b00, matched as the only call of the `0x0554` case after the two
+cancel calls) differs from EP4.5 only in moved offsets (every immediate and compared field compared). The shield-slot flaw is still
+there: the saved quality is written at the loop's final index 6 (EP5.4 ps_game 0x47208e).

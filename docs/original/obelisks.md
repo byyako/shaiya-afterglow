@@ -510,3 +510,32 @@ withdrawn**: the importer keeps reading the shipped file, which links nothing, a
 
 Still the original (no deviation): everything else of 11.2 and 11.3, including the hysteresis, the pairs, counting by last destroyer,
 `EnableMoveByPortal`, saving the roads, the ± 1 hour and random boss times, and the `/mera` fall of 11.5.
+
+## 12. Other episodes
+
+This section compares the EP3 build of `ps_game` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) with this one,
+and their `Obelisk.ini`, read statically like the rest of the note; the overview is in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+Function names in those builds are carried over from EP4.5 (matched by strings or the call graph, as those pages list).
+
+### EP3
+
+- The code is there: `CMap::LoadObelisk` (EP3 ps_game 0x422e90), `UpdatePortalLink` (0x425ad0) and `FindPortalLink` (0x426fa0); the
+  portal-link functions and `SendPortalLinkChange` are identical or nearly so to EP4.5's (confirmed).
+- `Obelisk.ini` has zones 0, 18 and 30 as in EP4.5, only six boss groups (maps 14, 17, 19, 20), and **four roads**: `[Portal_001…004,
+  (0, 1049)]`, Light needing obelisks (1, 2, 5) or (1, 5, 6), Fury (3, 4, 5) or (4, 5, 7) (confirmed, the file). Comparing with EP3
+  showed that the roads sections 1 and 8 infer from the file's notes were once written out, but all four name portal 1049, while EP3's
+  map 0 has portals 1010, 1011, 1020 and 1021 (to maps 45 and 47, which EP3 lacks). Section 11.1 drops a link whose portal does not
+  exist, so the roads never worked in EP3 either (inferred). The two dragon groups name portal 1049 too.
+
+### EP5.4
+
+- **The same code** (confirmed for `SendObeliskList`, EP5.4 ps_game 0x4316e0, and `SendObeliskChange`, 0x431860; the rest inferred from
+  matched constants): records of 0x70 bytes, `0x2101` with 13 bytes per obelisk flushed every 100, `0x2102` of 7 bytes. The loader
+  (EP5.4 ps_game 0x42de40, matched by the string `[Mob]`) reads the new zone with no new keys.
+- **Map 70's changes reach maps 68 and 69** (confirmed): after `0x2102` to its own map, a map-70 change goes to every player on 68 and
+  69 (EP5.4 ps_game 0x4318b4, loop 0x419390); `SendPortalLinkChange` does the same (0x4319d6). A player entering a map with a `MapCurse`
+  also gets map 70's `0x2101` (EP5.4 ps_game 0x41c891 to 0x41c8b9). In EP4.5 every obelisk packet is map-local.
+- **`[zone_70]`** (confirmed, the file): three relic obelisks, neutral at the start, each with 49 guard groups (most of them far across
+  the map); four bosses of level 73 with a 12-hour respawn whose portal `(100, 2000)` does not resolve. With 12 obelisks the capture
+  value of section 1 becomes 12288 ÷ 12 + 1 = 1025 (inferred). One guard line per relic lacks its `)`, which the tokenizer ignores
+  (inferred). The `bothmob` numbers are renumbered; `ObeliskWar.ini` is unchanged.

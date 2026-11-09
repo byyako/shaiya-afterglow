@@ -30,6 +30,7 @@ developer tools. Every shell script reads `.env` from the repository root (`.env
 | `defs/verify.py` | compares the loaded `defs` tables with the original database, field by field (`--counts-only`: only the row counts, against the column list, with no SQL Server) | both databases | operator, developer |
 | `defs/generate.py` | makes `db/defs/schema.sql` and the export queries (`export_queries.tsv`) from the column list `docs/original/db/PS_GameDefs.columns.txt` | the column list | developer |
 | `defs/describe_mssql.sh` | writes the three description files per original database (`docs/original/db/`), proven to reproduce them byte for byte | SQL Server (read only) | developer |
+| `defs/describe_mdf2000.py` | writes the same three description files for a SQL Server 2000 data file (`.MDF`, version 539, which SQL Server 2022 refuses) without SQL Server: the EP3 and EP5.4 packs' databases (`docs/original/db/ep3/`, `ep5.4/`), proven to reproduce them byte for byte | the pack's `PSM_Data/*.MDF` (read only) | developer |
 | `world/import.py` | imports the maps, NPCs, spawns, portals, obelisks, boss groups, monster AI and Lua, and the quests from the original server's `Data` folder once into the frozen copy `original_world`, records every file read with its SHA-256, and ends with `data-editor content rebuild world`; the same flags as the definitions' loader (`--dry-run` only reports) | the `Data` folder; PostgreSQL. It uses `svmap.py` and `npcquest.py` from this folder | operator |
 | `sdata/` | the client's data files: see below | | developer |
 

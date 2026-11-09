@@ -81,6 +81,9 @@ nav:
       - "Patch kit notes: how each fix works": original/server-patch-notes.md
       - "The original's server files: inventory": original/server-inventory.md
       - "The original's databases": original/database-notes.md
+      - Other episodes:
+          - "The EP3 server pack": original/ep3.md
+          - "The EP5.4 server pack": original/ep5.4.md
   - Characters and items:
       - Character numbers: original/stats.md
       - Moving and equipping: original/items.md

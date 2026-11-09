@@ -1,0 +1,11 @@
+PK_Clean_AllUsers|Clean_AllUsers|1|1|CLUSTERED
+PK_Users_Detail_Clean|Clean_Users_Detail|1|1|CLUSTERED
+IX_Users_Master_Clean_UserUID|Clean_Users_Master|0|1|NONCLUSTERED
+PK_Users_Master_Clean|Clean_Users_Master|1|1|CLUSTERED
+PK_CleanSocialNo|CleanSocialNo|1|1|CLUSTERED
+PK_Considers|Considers|1|1|CLUSTERED
+pk_dtproperties|dtproperties|1|1|CLUSTERED
+PK_Mileage|MileageEvent|1|1|CLUSTERED
+PK_PcBang|PcBangEvent|1|1|CLUSTERED
+PK_Users_Product|Users_Product|1|1|CLUSTERED
+PK_Users_Product2|Users_Product2|1|1|CLUSTERED

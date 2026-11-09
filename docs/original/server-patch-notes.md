@@ -799,3 +799,9 @@ detail has spaces while the displayed notice retains its original text. Check
 normal and maximum-length inputs and revert the copy to the recorded SHA-256.
 Existing quotes in stored names need separate cleanup before this test. No original
 server file or database was changed for the static/emulated validation.
+
+## Other episodes
+
+The byte lists here are for the EP4.5 `ps_game.exe` only; the EP3 (linked 2008-01-17) and EP5.4 (2011-09-14) builds are other images
+and the kit does not apply to them. Which of the fixed bugs those builds still have is in
+[`community-fixes.md`](community-fixes.md#other-episodes); overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).

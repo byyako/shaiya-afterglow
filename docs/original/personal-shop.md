@@ -294,3 +294,26 @@ is withdrawn with `0x230D 0`.
     drawing is asked in `docs/testing/client-research-queue.md` entry 13 (b).
 
 Game logs are not sent (none are built).
+
+## 8. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- The same requests (`PacketMyShop` EP3 ps_game 0x45dfc0, matched by dispatch, the same `0x23xx` set) (confirmed).
+- [`myshop-price-wrap`](community-fixes.md#myshop-price-wrap) is there: the price is an unchecked 32-bit `imul` (EP3 ps_game 0x45e4dc)
+  (confirmed). The visitor clean-up and the bound-item check were not checked.
+
+### EP5.4
+
+| | EP4.5 | EP5.4 | status |
+|---|---|---|---|
+| shop slots | 12 (0x478e66) | **20** (EP5.4 ps_game 0x487605) | confirmed |
+| placing (`0x2305`) | no bound or quest-item check | the same | confirmed for the compares present, inferred for the missing `ReqOg` read |
+| buy price (`0x230D`) | 32-bit `imul` (0x4790f0) | the same (EP5.4 ps_game 0x4878a8) | confirmed |
+| seller's gold | not checked | **new**: gold + price must fit in 32 bits, else a failure answer (EP5.4 ps_game 0x4878e8) | confirmed |
+
+`PacketMyShop` is EP5.4 ps_game 0x487370 (matched by opcode switch table). 20 slots need a client that draws them. A trade is now
+refused while either player has a shop open ([`trade.md`](trade.md)). The visitor clean-up was not read.

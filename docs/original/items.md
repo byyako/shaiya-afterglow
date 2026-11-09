@@ -83,3 +83,27 @@ All of these must hold:
   slot's riding, the equipment quality bookkeeping (`0x070C` to ps_dbAgent). (Since built: stats `docs/original/stats.md`, the warehouse
   `docs/original/warehouse.md`, riding `docs/original/vehicles.md`, quality `docs/original/repair.md`, the guild warehouse
   `docs/original/guild-bank.md`.)
+
+## 5. Other episodes
+
+The EP3 build of `ps_game.exe` (2008-01-17) and the EP5.4 build (2011-09-14, modified after linking) were compared with the EP4.5 build
+of this note, read statically like the rest of the note; overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+- **Moving** (confirmed): the `0x0204` case (EP3 ps_game 0x44f2c3) and `ItemBagToBag` (EP3 ps_game 0x4454c0, matched by call order, 46
+  of 46 calls) work as in EP4.5, except that EP4.5 also ignores the move in shape 100 (EP4.5 0x468482) and EP3 does not.
+- **Equipping** (confirmed): `EnableEquipment` (EP3 ps_game 0x4452a0, matched by call order) lacks EP4.5's check of the sex-only items,
+  specials 64 and 65 (EP4.5 0x45b5f5 to 0x45b613); EP3 has no such items.
+- The warehouse's second part starts at slot 40 ([`warehouse.md`](warehouse.md)).
+
+### EP5.4
+
+- **The same rules** (confirmed): `0x0204` branches by bag kind as in EP4.5 (EP5.4 ps_game 0x4760d3), and the `PacketMaininterface` case
+  set `0x0204` to `0x0227` is identical. `EnableEquipment` (EP5.4 ps_game 0x468370, matched by call position and an identical compare
+  chain) has the same 14 slots, real types per slot, and country, class, mode and sex rules; `ItemBagToBag` (EP5.4 ps_game 0x4685a0,
+  matched by the branch arguments) keeps the slot limits 13 and 14 (0x4685e6, 0x46862b).
+- **A new freeze during a server transfer** (confirmed for the gate, inferred for its purpose): `0x0204` is ignored while `CUser+0x5880`
+  is set (EP5.4 ps_game 0x4760ed). The flag is set by the special-59 item (the move to the war server) with a 5-second timer, and the
+  same test guards item use and trades.
+- `CUser` offsets moved: bag items `+0x1c0`, bag count `+0x130c`, warehouse `+0x400` (confirmed by the same compares).

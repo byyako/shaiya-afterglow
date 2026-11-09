@@ -416,3 +416,37 @@ are fields of the agent object set during start-up; their values were **not** re
 - Keepalive timing values (section 9).
 - Note on the PDB: the `CUser` type record places `m_Crypto` at `+0x5520`, the code uses `+0x5524`; the fields from `m_qwSessionID` on agree
   (8-byte alignment absorbs the difference). Names in this document come from the PDB, offsets from the code.
+
+## 11. Other episodes
+
+The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, modified after linking) were compared with the EP4.5
+build, read statically like the rest of this note. Overview in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md); the opcode differences are
+in [`protocol-notes.md`](protocol-notes.md) section 9.
+
+### EP3
+
+- The same program, smaller: 1937 EP4.5 functions were paired with EP3 ones, 819 identical after masking addresses (confirmed). The
+  receive path, the connection states and the opcode group table are the same; `CUser::UpdatePackets` (EP3 ps_game 0x44e250) is
+  identical, with the same 1000-packet cap (confirmed). There is no market group `0x1C`, and state 3 answers `0xB106` (confirmed).
+- The GameGuard CSAuth2 server library is linked in (strings; confirmed); the EP3 `0xA302` path was not walked.
+- One database-agent link (no `dbagent2`), no watchdog for stalled world threads, no minidumps, no hot reload from the console
+  (confirmed by strings).
+- No reconnect path into a character: the `0x0112`/`0x0113` burst branch and the `0x306` request are absent (inferred from the missing
+  code), and there is no `0xB103` billing info (confirmed).
+
+### EP5.4
+
+- The same dispatch, connection states and thread layout (I/O, database and world thread counts) (confirmed, EP5.4 ps_game 0x474940,
+  0x4f8dd0, 0x4f9890, 0x402cae). Receive changes: no `0xA302` branch and no GameGuard start-up; a receive queue above 100 packets closes the
+  connection with a log line (EP5.4 ps_game 0x474864). The missing length checks of section 8 are still missing (confirmed).
+- Server links: the session link gains `0x105`, `0x108`, `0x818`, `0x81B` and `0x1B01`–`0x1B03` (item-mall points); the database agent's
+  `0x0B04` (guild) is handled (EP5.4 ps_game 0x405e00 group) (confirmed). The game-log header is 87 bytes.
+- Character create closes the connection (reason 9) when the race does not belong to the account's faction (EP5.4 ps_game 0x490298;
+  confirmed). See [`enter-world.md`](enter-world.md).
+- **Modified after linking** (confirmed against the untouched `ps_gamewar` of the same day): the `.rsrc` size fields were raised from
+  0x1b4 to 0x200, and three jumps were turned unconditional (EP5.4 ps_game 0x47b54e, 0x47b608, 0x47c134), which switches off the race and
+  faction checks at the character list and at loading. These do not give the stored checksum, so more bytes were changed (not
+  located).
+- Comparing the builds showed that the u32 at offset 95 of the `0x801` reply (section 3.2) is the third result column of EP4.5's login
+  procedure, which ps_login appends to `0x701` and ps_session passes on (EP4.5 ps_session 0x403c65, 0x4031ae; confirmed). It exists only
+  in EP4.5: EP3's session sends 90 bytes, EP5.4's 95.

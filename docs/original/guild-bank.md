@@ -348,3 +348,24 @@ section 36 of `docs/testing/live-test-checklist.md`.
   the table's key and ends the connection, as any move the database refuses.
 - **Not deviations, but different underneath**: the move, its fee and the money are saved together before the answer (the original saves
   them apart and later); a bank row's slot is checked (0 to 239) by the table.
+
+## 15. Other episodes
+
+The EP3 and EP5.4 builds of `ps_game` (EP3 2008-01-17; EP5.4 2011-09-14, modified after linking) and `ps_dbAgent` (EP3 2008-01-04;
+EP5.4 2011-09-14, modified after linking) were compared with EP4.5, read statically like the rest of this note; overview in
+[`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md).
+
+### EP3
+
+The guild bank exists: the load error string (EP3 ps_game 0x4e3974), `CGuild::ItemBagToGuildBank` (0x42a6c0, matched by call graph,
+the same 15 calls) with the same refusals of real type 27 and bound items (0x44f44f, 0x44f458), and `GuildMgrSave::DBSaveItem` in EP3
+ps_dbAgent (0x40f770, matched by strings) (confirmed). `guild-bank-bound` is most likely there too (inferred, EP3 ps_game 0x42b170).
+
+### EP5.4
+
+- **A stack of count 0 is dropped at load** (`CClientToDBAgent::PacketGuild` EP5.4 ps_game 0x406025–0x4060ec, matched by the string
+  `Error GuildBankItem Count`; confirmed): the game sends `0x0B15` (`u32 guild, u8 slot`, 7 bytes) to the database agent, logs
+  `GuildItemLoad ItemCount=0 …` to the operator link as `0x080E`, and creates no item. EP4.5 never sends `0x0B15`.
+- The rest of the loader is the same: an oversized equipment row is lowered and fixed with `0x0B14`, and an undefined item still crashes
+  the server on purpose (EP5.4 ps_game 0x406006) (confirmed).
+- The three moves keep their constants (inferred), and the bound-item swap is most likely still there (inferred, EP5.4 ps_game 0x435bc0).
