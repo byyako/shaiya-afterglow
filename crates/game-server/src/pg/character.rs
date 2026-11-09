@@ -396,6 +396,18 @@ impl CharacterStore for PgBackend {
 
     async fn save_position(&self, character_id: u32, map: u16, position: [f32; 3], dir: i16, health: [u16; 3]) -> Result<()> {
         let [hp, mp, sp] = health.map(|v| v.min(i16::MAX as u16) as i16);
+        // A position that is not finite is never written: the last good one stays (EP5.4's save check, `docs/original/ep5.4.md`,
+        // "What was fixed"; `docs/original/move-check.md` section 10).
+        if !position.iter().all(|v| v.is_finite()) {
+            sqlx::query("UPDATE characters SET hp = $2, mp = $3, sp = $4 WHERE id = $1")
+                .bind(i32::try_from(character_id)?)
+                .bind(hp)
+                .bind(mp)
+                .bind(sp)
+                .execute(&self.pool)
+                .await?;
+            return Ok(());
+        }
         sqlx::query(
             "UPDATE characters SET map = $2, pos_x = $3, pos_y = $4, pos_z = $5, dir = $6, hp = $7, mp = $8, sp = $9 WHERE id = $1",
         )

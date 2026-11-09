@@ -67,7 +67,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | ps_login | passwords stored as the original's database holds them → Argon2 hashes in `accounts` | robust | |
 | ps_game 3 | the game connection's address is never compared with the login's → it must match | fix | `check_ip` (`true`) |
 | R8, R9, R11, R18, R22, R26, R28, R29 | the auction and guild-bank turns held across writes; the handshake order; eight database connections; player-triggered log lines; oversize packets; the console's staff level; the Lua `os` library; the bank count fix-ups → each made safe | robust | `db_pool`, `db_acquire_secs` |
-| R21 | a NaN or huge height stored and relayed; shop titles unchecked; hair, face and size unchecked (the last still stored as sent: entry 13 of `docs/testing/client-research-queue.md` gave the ranges, the clamp is not built) | fix | |
+| R21 | a NaN or huge height stored and relayed; a position that is not finite saved (never written now, the last good one kept, as EP5.4: `docs/original/ep5.4.md`); shop titles unchecked; hair, face and size unchecked (the last still stored as sent: entry 13 of `docs/testing/client-research-queue.md` gave the ranges, the clamp is not built) | fix | |
 | R3, R12-R16, R20, R23-R25, R27, N6 | exchanges, rewards and saves in several writes → each one transaction, or retried; listed under their systems below | fix | |
 | client-extras 2 | a kicked connection closes silently → `0x0004 00` first, so the client says why and quits | client | |
 | client-extras 3 | a new login while the old connection is still leaving is refused → it waits for it | robust | `handshake_wait_secs` (`15`) |
@@ -150,7 +150,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | auction | 1, 4, 5 | gold rows paid past the deadline; bids up to a minute after the end; refreshes larger than a packet → fixed | fix | |
 | auction | 2 | the name search is case-sensitive → ignores case | gameplay | |
 | auction | 3 | `/auctionrecall` keeps the seller's deposit → returns it | tooling | |
-| guild-bank | 1-4 | the bank anywhere; bound items in by a swap; the wrong refusal text; a guild with items in its bank disbanded → each fixed | fix, client | |
+| guild-bank | 1-4 | the bank anywhere; bound items in by a swap; the wrong refusal text; a guild with items in its bank disbanded → each fixed; a stack of count 0 at load left out, as EP5.4 (section 15) | fix, client | |
 | mini-game | | the gambling house unreachable (type-5 NPCs never made) → shown, with the original's odds (fairer odds are settings) | addition | `mini_game` (`true`), `slot_payout_percent` (`100`), `card_win_chances` (`400,200,100,50,10`) |
 
 ## 7. Parties, unions, guilds, friends, quests

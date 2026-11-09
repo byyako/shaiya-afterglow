@@ -218,6 +218,10 @@ async fn characters_follow_the_original_rules() {
     backend.save_position(id, 1, [600.5, 80.0, 1700.25], 270, [10, 20, 30]).await.unwrap();
     let moved = backend.load(alice, 1, id).await.unwrap().unwrap();
     assert_eq!((moved.map, moved.position, moved.dir), (1, [600.5, 80.0, 1700.25], 270));
+    // A position that is not finite is not written; the health is (`docs/original/move-check.md` section 10).
+    backend.save_position(id, 2, [f32::NAN, 80.0, f32::INFINITY], 90, [11, 21, 31]).await.unwrap();
+    let kept = backend.load(alice, 1, id).await.unwrap().unwrap();
+    assert_eq!((kept.map, kept.position, kept.dir, kept.health), (1, [600.5, 80.0, 1700.25], 270, [11, 21, 31]));
     assert!(backend.load(alice, 2, id).await.unwrap().is_none(), "other server");
 
     // A cloak's gems are its look in the list.

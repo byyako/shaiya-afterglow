@@ -254,7 +254,7 @@ async fn the_server_loads_the_effects_of_enabled_extensions_only() {
 
     let (effects, abilities) = load().await;
     let effects = effects.unwrap();
-    assert_eq!(effects.counts(), [("level_up", 1), ("enchant", 0), ("recreate", 0)]);
+    assert_eq!(effects.counts(), [("level_up", 1), ("enchant", 0), ("recreate", 0), ("capture", 0), ("pet_egg", 0)]);
     assert_eq!(effects.get(100212).unwrap().describe(), "level_up levels = 1");
     let abilities = abilities.unwrap();
     assert_eq!((abilities.len(), abilities[0].0, abilities[0].1, abilities[0].2.kill_boost()), (1, 200, 1, Some(2)));

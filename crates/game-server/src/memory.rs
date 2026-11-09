@@ -548,10 +548,13 @@ impl CharacterStore for MemoryBackend {
         let mut characters = self.characters.guard();
         if let Some(c) = characters.iter_mut().find(|c| c.summary.id == character_id) {
             c.play.health = health;
-            c.play.map = map;
-            c.play.position = position;
-            c.play.dir = dir;
-            c.summary.map = map;
+            // Never a position that is not finite, as at `pg::character` (`docs/original/move-check.md` section 10).
+            if position.iter().all(|v| v.is_finite()) {
+                c.play.map = map;
+                c.play.position = position;
+                c.play.dir = dir;
+                c.summary.map = map;
+            }
         }
         Ok(())
     }

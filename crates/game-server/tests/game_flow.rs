@@ -628,6 +628,10 @@ async fn entering_off_the_map_closes_the_connection() {
     // As if the character had been saved past the edge of the 2048 map.
     use game_server::backend::CharacterStore;
     backend.save_position(1, 1, [2048.0, 0.0, 100.0], 0, [1, 1, 1]).await.unwrap();
+    // A position that is not finite is never written: the last one stays (`docs/original/move-check.md` section 10).
+    backend.save_position(1, 2, [f32::NAN, 0.0, f32::INFINITY], 5, [2, 2, 2]).await.unwrap();
+    let kept = backend.play(1).unwrap();
+    assert_eq!((kept.map, kept.position, kept.dir, kept.health), (1, [2048.0, 0.0, 100.0], 0, [2, 2, 2]));
     client.write(g::char_id_request(g::OP_CHAR_SELECT, 1)).await;
     while frame::opcode(&client.read().await.expect("burst")) != w::OP_CHAR_QUICK {}
     client.write(shaiya_proto::encode(w::OP_USER_ENTER, &[])).await;

@@ -195,7 +195,8 @@ fn combine(defs: &ItemDefs, moving: &ItemUnit, other: &ItemUnit, from: (u8, u8),
 
 /// The stored banks at start (section 2): an item whose type has no definition is left out (the original crashes), and an equipment
 /// item (real type 1 to 25) whose count is above its stack limit is lowered to it. Returns the fixed counts as `(guild, slot,
-/// count)` for the database.
+/// count)` for the database. A stack of count 0 is left out too, its slot free, as EP5.4 does (section 15; the database's own check
+/// keeps such a row out of PostgreSQL).
 pub fn check_loaded(stored: &mut [StoredGuild], defs: &ItemDefs) -> Vec<(u32, u8, u8)> {
     let mut fixes = Vec::new();
     for guild in stored {
@@ -211,6 +212,16 @@ pub fn check_loaded(stored: &mut [StoredGuild], defs: &ItemDefs) -> Vec<(u32, u8
                 );
                 return false;
             };
+            if item.count == 0 {
+                tracing::error!(
+                    guild = id,
+                    slot = item.slot,
+                    item_type = item.item_type,
+                    type_id = item.type_id,
+                    "guild bank item of count 0 left out"
+                );
+                return false;
+            }
             if (1..=25).contains(&real_type(def.item_type)) && item.count > def.max_count {
                 let count = def.max_count.max(1);
                 tracing::warn!(
@@ -421,6 +432,25 @@ mod tests {
         assert_eq!(fixes, [(7, 0, 1)], "only the equipment is lowered");
         let kept: Vec<_> = guilds[0].bank.iter().map(|i| (i.slot, i.count)).collect();
         assert_eq!(kept, [(0, 1), (1, 200), (3, 10)]);
+    }
+
+    #[test]
+    fn loading_drops_a_stack_of_count_0() {
+        // EP5.4's load check (section 15): the row is left out and its slot is free; nothing to fix in the database.
+        let mut guilds = [StoredGuild {
+            id: 7,
+            name: "G".into(),
+            country: 0,
+            remark: String::new(),
+            members: Vec::new(),
+            house: Default::default(),
+            bank: vec![unit(255, 0, 25, 1, 0), unit(255, 1, 5, 1, 0), unit(255, 2, 25, 3, 1)],
+        }];
+        assert_eq!(check_loaded(&mut guilds, &defs()), []);
+        let kept: Vec<_> = guilds[0].bank.iter().map(|i| (i.slot, i.count)).collect();
+        assert_eq!(kept, [(2, 1)]);
+        let bank = GuildBank::new(&guilds[0].bank);
+        assert!(bank.get(0).is_none() && bank.get(1).is_none(), "the slots are free");
     }
 
     #[test]
