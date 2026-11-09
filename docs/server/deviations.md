@@ -186,7 +186,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | small-items | 7 | `0x0559` kinds 1 and 2 → built with the attack checks | fix | |
 | small-items | 8 | `F706` / `F707` as the original (deviation 19 of gm-commands withdrawn) | none | |
 
-Not built, by decision: the second game server for map 200 (`ps_gamewar.exe`), the original console's other live reloads, the global
+Not built, by decision: the second game server for map 200 (`ps_gamewar.exe`, `docs/original/gamewar.md`), the original console's other live reloads, the global
 chat without its item (small-items 2), the obelisk road links (obelisks 3-6).
 
 ## 9. Notes on the classification

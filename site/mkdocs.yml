@@ -67,6 +67,7 @@ nav:
       - Protocol notes: original/protocol-notes.md
       - Login server (ps_login): original/ps_login.md
       - Game server (ps_game): original/ps_game.md
+      - United war server (ps_gamewar): original/gamewar.md
       - Entering the world: original/enter-world.md
       - Movement, sitting, leaving: original/world.md
       - Client-ready extras: original/client-extras.md

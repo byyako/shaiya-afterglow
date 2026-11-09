@@ -37,8 +37,9 @@ gatekeeper (type 2) or has no definition; the horizontal distance from the playe
 country is not 2 and not the player's; the destination has no name; its cost is above the player's money; its map is not loaded (`CWorld::GetMap`);
 its position is not on that map (`CMap::IsSafePos`).
 
-Two special cases, not needed with the shipped data: a destination on **map 200** (none exist) goes to a guild ranking battle through ps_dbAgent
-(`0x080C`) instead; on a **guild house map** (map type 6) guild rules apply (`CGuild`, `0x0D28`-style errors).
+Two special cases, not needed with the shipped data. A destination on **map 200** (none exist) is a move to the united war server
+(0x469002): `0x080C` goes to the session manager (`g_pClientToMgr`), or `0x0110 2` is sent while `[NEW_SERVER] Check` is set
+(`docs/original/gamewar.md` section 4). On a **guild house map** (map type 6), guild rules apply (`CGuild`, `0x0D28`-style errors).
 
 **Accepted:** unless a logout is pending (`m_nLogoutType`), the move is scheduled with `m_nMovePositionType` 1 and the time set to now; then, in all
 cases, the cost is taken from the money (saved), logged (`0x0804`), and the player is answered. **Original bug:** with a logout pending, the money is

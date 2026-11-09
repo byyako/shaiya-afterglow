@@ -11,6 +11,7 @@ are picked by `site/mkdocs.yml`; the groups below are the site's groups.
 - [`protocol-notes.md`](protocol-notes.md): Protocol notes
 - [`ps_login.md`](ps_login.md): Login server (ps_login)
 - [`ps_game.md`](ps_game.md): Game server (ps_game)
+- [`gamewar.md`](gamewar.md): The united war server (ps_gamewar)
 - [`enter-world.md`](enter-world.md): Entering the world
 - [`world.md`](world.md): Movement, sitting, leaving
 - [`client-extras.md`](client-extras.md): Client-ready extras
