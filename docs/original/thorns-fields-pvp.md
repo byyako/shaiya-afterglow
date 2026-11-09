@@ -228,7 +228,8 @@ builds are carried over from EP4.5 (matched by strings, constants or the call gr
 ### EP3
 
 - `CZone::UpdateTrab` (EP3 ps_game 0x41e630) has the same structure; EP4.5 has a few more constants (0x65, 0x50) (confirmed).
-  `TrabDamage` was not matched in EP3, so the damage to players was not compared.
+  `TrabDamage` (EP3 ps_game 0x41e400, matched by call position in `UpdateTrab`) has the same size and constants, cap 30000
+  (confirmed).
 - `CUser::Damage` (EP3 ps_game 0x4376d0, 0x437750) subtracts the damage directly: no absorption and no `0x0525` (confirmed).
 
 ### EP5.4

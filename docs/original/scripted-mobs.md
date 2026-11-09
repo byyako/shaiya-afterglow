@@ -451,3 +451,5 @@ tables, as those pages list).
 - The `LuaMob` table (EP5.4 ps_game 0x581ea8) keeps the 23 methods and adds three (`LuaGetMobUID`, `LuaUseSkillAtMob`, `LuaMobCommand`
   with an `OnCommand` callback; [`instances.md`](instances.md)). 27 new monsters have Lua AI numbers 121 to 185 with no script shipped
   (confirmed, data).
+- EP5.4 `LuaDeleteMob` (EP5.4 ps_game 0x4cb790) reads a fifth number argument (confirmed), most likely the radius that EP4.5 fixes at
+  100 (inferred).

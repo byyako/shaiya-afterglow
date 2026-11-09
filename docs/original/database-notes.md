@@ -240,7 +240,7 @@ where EP4.5 has `PS_StatData` and `PS_Statics`.
 - `PS_ChatLog.ChatLog.ChatData` is char(100) (EP4.5 char(10)).
 - The EP5.4 `ps_dbAgent` calls four item-mall procedures that no shipped backup has (`usp_Save_User_BuyPointItems2`,
   `usp_Read_User_CashPoint_UsersMaster`, `usp_Save_User_GiftPointItems2`, `usp_Rollback_User_GiftPointItems`), so that pack's item mall
-  cannot have worked with its own databases (inferred).
+  cannot have worked with its own databases (inferred). `usp_Rollback_User_GiftPointItems` runs when billing refuses a gift and the target account is not loaded in the agent (`0x0E09`, EP5.4 ps_dbAgent 0x407f71 → 0x423b90; confirmed).
 
 ### What operators should know
 

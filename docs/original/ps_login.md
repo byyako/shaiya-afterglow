@@ -115,7 +115,8 @@ Confirmed.
 Confirmed, details inferred.
 
 `CUser::OnDispatchDB` case 2 hashes the password (`FUN_0040a3b0` update, `FUN_0040b0b0` final into a 32-byte buffer: MD5 as a 32-character
-hex string, **inferred**) and calls `CUser::ChkPasswdMD5` (0x404700), which runs one of these stored procedures (strings at 0x447054, 0x4470b0):
+hex string, **inferred**) and calls `CUser::ChkPasswdMD5` (0x404700), its only caller being 0x404ab5. It runs the first of these stored procedures; `CUser::ChkPasswd`
+(0x404580), the plain-password form, has no caller in this build (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) (strings at 0x447054, 0x4470b0):
 
 ```
 EXEC usp_try_gamelogin_korea '%s','%s', %I64d,'%s'
@@ -143,8 +144,10 @@ columns: `Pw varchar(12)` (a plain-text password column, which explains the 12-c
 should hash with a modern algorithm (the server sees the plain password after decryption, so any hash can be used).
 
 On success: user id (the procedure's out value) at `this+0x100`, privilege at `this+0x104`, state := 2, the user is added to the online map
-(`CServer::AddUser`), and a `0x701` message of 0x67 bytes goes to the **session server** containing the user id, other per-connection ids, the
-username and `CUserCrypto::GetKeyGen` output (the AES key and a second 16 bytes, plus the 16-byte identity). So the game server learns the
+(`CServer::AddUser`), and a `0x701` message of 0x67 bytes goes to the **session server**: the client's IPv4 address at offset 2, the user id at 6,
+the privilege at 10, the 64-bit session id at 11, the user name at 19, the 16-byte identity at 51, the 32 bytes of
+`CUserCrypto::GetKeyGen` (the AES key and the first 16 bytes of SHA-256 of the login counter) at 67, and the login procedure's third
+result column at 99 (confirmed, built at 0x40481d to 0x404869) (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). So the game server learns the
 AES key through the session server, which is how the XOR layer and the game handshake are keyed later (consistent with [W]).
 
 On failure: attempt counter `this+0x130` is incremented; below 10 the state returns to 0 and an `0xA102` with the error status is sent;
@@ -185,8 +188,9 @@ Request: `u8 serverId, u32 clientVersion` (version at `payload[1..5]`). Checks i
 | `0xFC` (-4) | server saturated | `EnableUserCount(list, privilege < 0xB)` false (inferred meaning: the server-full check, with the flag saying whether this user is subject to the cap) |
 | `0xFD` (-3) | version mismatch | `EnableVersion(clientVersion, list)` false |
 
-On success the login server forwards a `0x703` message (8 bytes) to the session server, sets `this+0x138 = 0xFE`, and the session server completes the
-reply with the game server IP (not shown in this binary). The `0xFE/0xFD/0xFC` values equal the -2/-3/-4 codes in the Imgeneus doc.
+On success the login server forwards a `0x703` message (8 bytes) to the session server, sets `this+0x138 = 0xFE`, and the session server answers it.
+The session's `0x703` reply carries no address (ps_session 0x4040e1, confirmed), so the game server's IP comes from the login
+server's own server list (inferred) (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). The `0xFE/0xFD/0xFC` values equal the -2/-3/-4 codes in the Imgeneus doc.
 
 ## 10. What this changes in the protocol notes
 
@@ -197,10 +201,12 @@ reply with the game server IP (not shown in this binary). The `0xFE/0xFD/0xFC` v
 
 ## 11. Open items
 
-- `ps_session.exe` completes the select-server reply (game server IP) and shares keys with the game server: read `0x701` and `0x703` there.
+- Settled 2026-11-09: `ps_session` does not complete the select-server reply (section 9), and it passes the `0x701` key bytes to the game
+  server in its `0x801` reply (`docs/original/ps_game.md` section 3.2).
 - `FUN_00406e50` (the database call): confirm which variant is used and how `Status` maps to the `0xA102` result byte.
 - Validate the cipher with a known-answer test (see section 4).
-- `CKeyMgr::GenKey` / `SRsa::GenKeyPair`: how the key pool is generated (key size, public exponent, pool size).
+- `CKeyMgr::GenKey` / `SRsa::GenKeyPair`: the public exponent. Settled 2026-11-09: the pool starts with 16 keys of 1024 bits made at
+  start-up (0x456dbc to 0x4575fc), and `CKeyMgr::OnUpdate` (0x406af0) adds one per run up to 1024 (confirmed; the same in EP3).
 
 ## 12. Database result mapping and privilege
 
@@ -336,13 +342,10 @@ The shipped `ps_login.ini` sets `MaxConnection=3000`, which no longer limits acc
 which this code does not need. The EP5.4 `usp_Try_GameLogin_Taiwan` does check the password (through `sp_LoginSuccessCheck`;
 confirmed from the procedure text).
 
-Comparing the builds showed four things about the EP4.5 text above (confirmed unless marked):
+Comparing the builds showed this about the EP4.5 text above:
 
 - The key-reply defect of sections 3 and 13 item 2 is a heap write, not an over-read: with a length byte of 0 to 4, `BinToMpz` zeroes 4 or
-  8 bytes in front of its buffer (EP4.5 ps_login 0x40bc50, 0x40bc57); whether that crashes the process is inferred.
-- Section 6: EP4.5 always runs `ChkPasswdMD5` (EP4.5 ps_login 0x404700) and `usp_try_gamelogin_korea` with the MD5 hex string;
-  `ChkPasswd` has no caller.
-- Section 11: the key pool starts with 16 keys of 1024 bits, then `CKeyMgr::OnUpdate` (EP4.5 ps_login 0x406af0) adds one at a time up to
-  1024, using about a tenth of a CPU.
-- Sections 9 and 11: the session server's `0x703` reply carries no address (EP4.5 ps_session 0x4040e1), so it does not fill in the game
-  server's IP; that comes from the login server's own list (inferred).
+  8 bytes in front of its buffer (EP4.5 ps_login 0x40bc50, 0x40bc57); whether that crashes the process is inferred. Read by one reader and not yet checked by a second, so sections 3 and 13 are
+  left as they were.
+- Sections 6, 9 and 11 were corrected in place on 2026-11-09 (the procedure that runs, the `0x701` layout, the `0x703` reply, the key
+  pool).

@@ -108,7 +108,7 @@ Confirmed, 0x4030ac.
 | 86 | `dwBillingRemainTime` | ps_session always sends 0 |
 | 90 | `dwAutoCharID` | non-zero only for the reconnect feature: skip the character screen and enter with this character |
 | 94 | `byServerID` | `m_byRealServerID` |
-| 95 | u32 (not in the PDB struct) | stored in `m_nMovePositionType`; ps_session fills it from its user record. Purpose unknown |
+| 95 | u32 (not in the PDB struct) | stored in `m_nMovePositionType`. ps_session fills it from the third result column of EP4.5's login procedure, which ps_login appends to `0x701` (ps_session 0x403c65, 0x4031ae; confirmed). Its meaning is unknown. Only EP4.5 sends it: EP3's session sends 90 bytes, EP5.4's 95 (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) |
 
 ### 3.3 Completion: `CWorld::LoginUser`
 
@@ -447,6 +447,4 @@ in [`protocol-notes.md`](protocol-notes.md) section 9.
   0x1b4 to 0x200, and three jumps were turned unconditional (EP5.4 ps_game 0x47b54e, 0x47b608, 0x47c134), which switches off the race and
   faction checks at the character list and at loading. These do not give the stored checksum, so more bytes were changed (not
   located).
-- Comparing the builds showed that the u32 at offset 95 of the `0x801` reply (section 3.2) is the third result column of EP4.5's login
-  procedure, which ps_login appends to `0x701` and ps_session passes on (EP4.5 ps_session 0x403c65, 0x4031ae; confirmed). It exists only
-  in EP4.5: EP3's session sends 90 bytes, EP5.4's 95.
+- The `0x801` reply is 95 bytes, without EP4.5's extra u32 at offset 95 (section 3.2) (confirmed).

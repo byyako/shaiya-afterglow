@@ -350,7 +350,7 @@ builds are carried over from EP4.5 (matched by strings, constants, the call grap
 - Resurrection (`LifeSkill`, EP3 ps_game 0x4439a0), hiding's end (`RemApplySkillHide`, EP3 ps_game 0x46d600) and `TauntMob` (EP3 ps_game
   0x46c180, 576 bytes against 812) exist; their bodies were not compared.
 - Fields: `CZone::UpdateTrab` (EP3 ps_game 0x41e630) has the same structure, EP4.5 a few more constants (0x65, 0x50) (confirmed).
-  `TrabDamage` was not matched in EP3.
+  `TrabDamage` (EP3 ps_game 0x41e400, matched by call position) has the same constants (confirmed).
 
 ### EP5.4
 

@@ -261,7 +261,9 @@ client.
 ### Helmets and cloaks never drop {#helmet-cloak-drop}
 
 - **Symptom:** checks on real types 16 (helmets) and 24 (cloaks) leave them out when items drop.
-- **Where:** not looked up in this build (item drops are not covered on these pages).
+- **Where:** not in this build. EP4.5's helper that puts a monster's item on the ground compares only real type 27 (0x4a660a), so
+  helmets and cloaks do drop in EP4.5. The check is EP3 code (EP3 ps_game 0x48763a for drops, 0x44db80 for boxes; confirmed); in EP5.4
+  only boxes refuse real type 24 (EP5.4 ps_game 0x473bbd). The community fix is for a build that has the check (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
 - **Fix:** community fix in `ps_gametablas.CT`, "Fix drop of helmets and capes", by **Eric-Dutra16** and **andr3y_you96**. Whether it
   is a bug or a choice is up to the server.
 
@@ -656,12 +658,12 @@ named. The post-link changes to EP5.4 `ps_game` apply none of these fixes.
 | fix | EP3 | EP5.4 |
 |---|---|---|
 | `npc-shop-price-wrap` | present (inferred, same 32-bit `imul` at 0x451e70) | present (confirmed, 0x479871) |
-| `npc-shop-range` | not checked | present (confirmed: the NPC is found anywhere in the zone, case 0x4796ae) |
-| `myshop-visit-cleanup` | not checked | not checked |
+| `npc-shop-range` | present (confirmed, `CZone::FindNpc` 0x413b20) | present (confirmed: the NPC is found anywhere in the zone, case 0x4796ae) |
+| `myshop-visit-cleanup` | present (confirmed, 0x43668e) | not checked |
 | `myshop-price-wrap` | present (confirmed, 0x45e4dc) | present (confirmed, 0x4878a8); a new check refuses a sale that would overflow the seller's gold (0x4878e8) |
 | `bound-trade` | present (confirmed, `ExchangeItemAdd` 0x455bf0) | present (inferred) |
-| `bound-duel` | not checked | present (inferred: the stake checks read only real type, count and slot, 0x48c565–0x48c5c1) |
-| `bound-shop` | not checked | present (inferred from the compares in the place case of `PacketMyShop` 0x487370) |
+| `bound-duel` | present (confirmed, 0x462a46) | present (inferred: the stake checks read only real type, count and slot, 0x48c565–0x48c5c1) |
+| `bound-shop` | present (confirmed, 0x45e288) | present (inferred from the compares in the place case of `PacketMyShop` 0x487370) |
 | `guild-bank-bound` | present (inferred, 0x42b170) | present (inferred, 0x435bc0) |
 | `cloak-lapis` | present (confirmed, 0x4490c5) | present (0x46cae3) |
 | `cloak-lapisia` | cannot occur (no `0x0805`) | present (0x46c9f5) |
@@ -673,25 +675,25 @@ named. The post-link changes to EP5.4 `ps_game` apply none of these fixes.
 | `repair-shield-slot` | present (confirmed, 0x44c0c8) | present (confirmed, 0x47208e) |
 | `helmet-cloak-drop` | the EP3 behaviour: drops and boxes refuse real types 16 and 24 (confirmed, 0x48763a, 0x44db7a) | not located; boxes refuse real type 24 only (0x473bbd) |
 | `rune-skill-cut` | not checked | not checked |
-| `learn-skill-level` | not checked | present (confirmed, 0x49354f) |
-| `stealth-equip` | not checked | gone: the shape tests were removed (confirmed) |
-| `time-damage-player` | present (inferred, same constants in `CUser::TimeDamage` 0x46abf0) | present (confirmed, 0x495e2a) |
-| `low-hp-rows` | not checked | unchanged (inferred, 0x497050) |
-| `block-buff-end` | not checked | present (confirmed, 0x4949b4, 0x4949dd) |
-| `fire-thorns-aggro` | not checked | present (confirmed, 0x4580d0) |
-| `illusion-save` | not checked | present (inferred, 0x47ad70) |
-| `illusion-newcomers` | not checked | not checked |
-| `party-kick-leader` | not checked | partly fixed: the leader's index moves down (confirmed, 0x450324); the loot turn does not |
-| `party-exp-levelup` | not checked | present (confirmed, 0x46517b) |
+| `learn-skill-level` | present (confirmed, 0x468fcf) | present (confirmed, 0x49354f) |
+| `stealth-equip` | present (confirmed: three shape tests each in `ItemEquipmentAdd` 0x43f590 and `ItemEquipmentRem` 0x43fa30; Stealth's end 0x469dc7 recomputes nothing) | gone: the shape tests were removed (confirmed) |
+| `time-damage-player` | present (confirmed, 0x46ae55) | present (confirmed, 0x495e2a) |
+| `low-hp-rows` | present (confirmed, `ChkHPAbilityApply` 0x46b8f0) | unchanged (inferred, 0x497050) |
+| `block-buff-end` | present (confirmed, 0x469d68, 0x469d92) | present (confirmed, 0x4949b4, 0x4949dd) |
+| `fire-thorns-aggro` | present (confirmed, 0x43bd68) | present (confirmed, 0x4580d0) |
+| `illusion-save` | present (inferred: the save filter 0x4532d2 has no exception at all) | present (inferred, 0x47ad70) |
+| `illusion-newcomers` | different: EP3 has no `0x0524`, so no observer gets the monster (inferred) | not checked |
+| `party-kick-leader` | present (confirmed, `CParty::ExpelUser` 0x432dc0, 0x432e51) | partly fixed: the leader's index moves down (confirmed, 0x450324); the loot turn does not |
+| `party-exp-levelup` | cannot occur: no full-party bonus (confirmed, `AddExpFromUser` 0x442070) | present (confirmed, 0x46517b) |
 | `quest-full-bags` | not checked | not checked |
-| `quest-end-npc` | not checked | present (confirmed, 0x48e6c6, 0x48e754) |
-| `quest-npc-range` | not checked | present (confirmed, `CZone::FindNpc` 0x41e460 has no distance) |
-| `gatekeeper-logout` | not checked | present (confirmed, 0x476db0) |
+| `quest-end-npc` | present (confirmed, 0x4645bc) | present (confirmed, 0x48e6c6, 0x48e754) |
+| `quest-npc-range` | present (confirmed, `CZone::FindNpc` 0x413b20) | present (confirmed, `CZone::FindNpc` 0x41e460 has no distance) |
+| `gatekeeper-logout` | present (confirmed, 0x44fd9f) | present (confirmed, 0x476db0) |
 | `mob-speed-id` | present (confirmed, `CMob::SendSpeed` 0x4745f0) | present (confirmed, 0x4a1050) |
 | `nan-pos` | present (inferred: `CMap::IsSafePos` 0x412190 is identical to EP4.5's) | fixed: `0x0501` and `0x0220` refuse non-finite positions (confirmed, 0x478514, 0x477555); EP5.4 ps_dbAgent also zeroes a non-finite position before saving (confirmed, EP5.4 ps_dbAgent 0x427160) |
-| `chat-markup-filter` | not checked | not checked |
+| `chat-markup-filter` | present (inferred: the same relaying handlers, no filter seen) | not checked |
 | `exchange-count-guard` | present (confirmed, 0x455e37) | fixed for duel stakes (confirmed, 0x48bacd); present in the trade (confirmed, 0x47e81a) |
-| `trade-other` | not checked | fixed: trading with oneself, or while in a duel or with a shop open, is refused (0x47de00) |
+| `trade-other` | present (inferred, `PacketExchange` 0x454fb0) | fixed: trading with oneself, or while in a duel or with a shop open, is refused (0x47de00) |
 | `character-name-filter`, `guild-text-filter`, `gift-target-filter` | present (confirmed: EP3 ps_dbAgent writes the same names into `'%s'` unescaped) | present (confirmed: the EP5.4 ps_dbAgent statements are unchanged; the guild remark still refuses only `'`, 0x485c63, and creation checks nothing) |
 | `gm-notice-filter`, `gm-target-filter`, `game-log-texts` | present (confirmed: EP3 ps_gameLog escapes only chat) | present (confirmed: EP5.4 ps_gameLog escapes only chat) |
 

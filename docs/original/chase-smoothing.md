@@ -231,7 +231,8 @@ builds are carried over from EP4.5 (matched by the call graph and constants, as 
 
 ### EP3
 
-`CMob::Chase` was not located in EP3, so its step times were not compared. `CNpc::Chase` (EP3 ps_game 0x4949a0) is nearly identical to
+`CMob::Chase` (EP3 ps_game 0x487d80, matched by call position in `AttackAI` and constants) has the same floats 0.3, 0.4, 0.6, 1.0, 1.5
+and 45 (confirmed), so the step times of section 2 are most likely unchanged (inferred: the bodies were not compared step by step). `CNpc::Chase` (EP3 ps_game 0x4949a0) is nearly identical to
 EP4.5's (confirmed). `CMob::SendSpeed` (EP3 ps_game 0x4745f0) has the same missing monster id (confirmed).
 
 ### EP5.4

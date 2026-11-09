@@ -52,10 +52,9 @@ How the modified programs were changed (confirmed unless marked):
   one changes the quote character of the login query's user name and password. [`ps_login.md`](ps_login.md), Other episodes.
 - **`ps_game`**: three conditional jumps made unconditional (EP5.4 ps_game 0x47b54e, 0x47b608, 0x47c134; `ps_gamewar` has the
   original jumps). They switch off the new check that a character's race belongs to the account's faction, at the character list and
-  at loading. The `.rsrc` size fields were raised from 0x1b4 to 0x200. These do not account for the whole checksum difference; the
-  rest was not located. [`enter-world.md`](enter-world.md), Other episodes.
+  at loading. The `.rsrc` size fields were raised from 0x1b4 to 0x200. A fourth jump (EP5.4 ps_game 0x487fc7, `jne` → `jmp`) lets an item-mall purchase through when the billing link is down (inferred), the string table name `data/de_string.DB` became `data/cn_string.DB` (0x56f414), and the 19 level bounds of 80 are 70 in `ps_gamewar` (very likely edits too, inferred). Even with all these put back the checksum does not match (0x18d10e against 0x18530a), so at least one more edit was not located. [`enter-world.md`](enter-world.md), Other episodes.
 - **`ps_dbAgent`**: the character save statement's format string at EP5.4 ps_dbAgent 0x487888 was rewritten in place, same length.
-  One more small change was not located.
+  One more small change (a word-sum difference of 0x100, one byte +1 at an odd offset) was not located; it is not in a string.
 
 ## 2. The game server
 
@@ -64,10 +63,12 @@ The detail is in each system note. In outline (confirmed unless marked):
 - **Dispatch and protocol.** The same states, opcode groups and handlers as EP4.5; no opcode removed. New client opcodes: `0x0308`
   to `0x030A` (select and clear a target; the server then sends that target's buffs as `0x030B` list, `0x030C` added, `0x030D`
   removed), `0x0809`/`0x080A` (link and extraction chance), `0x0B1B` (party type, echoed by the client), `0xB106` answered before
-  entering the world, the staff opcodes `0xF603`, `0xF70F`, `0xFA1B`. The GameGuard path is gone. A connection whose receive queue
+  entering the world, the staff opcodes `0xF603`, `0xF70F` (`/mmake` on every server) and `0xFA1B` (guild rank by character id). The GameGuard path is gone. A connection whose receive queue
   passes 100 packets is closed and logged (EP4.5: 1000, no log). [`ps_game.md`](ps_game.md), [`protocol-notes.md`](protocol-notes.md).
-- **Characters and combat.** Level cap 70, but some level checks still use 80 and the status table has no rows past 60 (so levels 61
-  to 70 could be gained without HP, SP and MP growth; inferred). Skills of nine levels. Skill damage types 6 to 12, ability types 47
+- **Characters and combat.** Level cap 70, but 19 level checks use 80, where `ps_gamewar` of the same day has 70, so they were very
+  likely raised after linking. Read literally, a level-70 character still gains experience and then rises one level per gain up to 80,
+  with thresholds read from the wrong table row (the path is confirmed, the outcome inferred). The status table has no rows past 60, so
+  levels 61 to 70 come without HP, SP and MP growth (inferred). Skills of nine levels. Skill damage types 6 to 12, ability types 47
   to 49, buff kinds 96 to 98, debuff kinds 74 to 76. Damage cap 60000 (EP4.5: 30000). [`stats.md`](stats.md), [`combat.md`](combat.md),
   [`skills-use.md`](skills-use.md), [`skills-buffs.md`](skills-buffs.md).
 - **Movement.** A new move check: steps of at most 30 units, windows judged after 6 steps and 3 s, a failed player moved back,
@@ -81,15 +82,15 @@ The detail is in each system note. In outline (confirmed unless marked):
   [`operator-console.md`](operator-console.md).
 - **Social.** Unchanged in code apart from kill-rate events, the `MapCurse` map key (unused by the data), the map-70 relic broadcast
   and the `0x0B1B` echo. [`guild.md`](guild.md), [`pvp.md`](pvp.md), [`obelisks.md`](obelisks.md).
-- **Personal shops** have 20 slots. **The auction house** is unchanged. [`personal-shop.md`](personal-shop.md).
+- **Personal shops** have 20 slots, and a visitor who changes map is now taken off the seller's list (the EP4.5 `myshop-visit-cleanup` bug is fixed). **The auction house** is unchanged, case by case. `0xB103` is no longer sent. [`personal-shop.md`](personal-shop.md).
 - **The war server** is covered in [`gamewar.md`](gamewar.md).
 
 ## 3. The other programs
 
 - **`ps_session`** (unmodified): the core is unchanged. New are the PayLetter billing link, a broadcast of the billing link's state
-  (`0x105`), 16 random bytes sent to each game server (`0x108`, purpose unknown), and two relays (`0x818`, `0x81B`). It takes EP3's
+  (`0x105`), 16 random bytes sent to each game server (`0x108`, purpose unknown), and two relays (`0x818`, the all-server `/mmake`; `0x81B`). Without `[PAYLETTER]` it never answers a purchase (`0x1B02`) (inferred). It takes EP3's
   0x63-byte `0x701` from `ps_login`. [`ps_login.md`](ps_login.md), Other episodes.
-- **`ps_dbAgent`**: the same message set; the item-mall procedures renamed (`*2`, `*_UsersMaster`), and four of them exist in no
+- **`ps_dbAgent`**: the same message set, with `0x0E09` (billing refused: drop the purchase or roll the gift back) and `0x0E0A` (billing confirmed) now handled; the item-mall procedures renamed (`*2`, `*_UsersMaster`), and four of them exist in no
   database of the pack, so the shipped item mall can't have worked with its own databases (inferred). Saved positions are checked for
   NaN. Saving is still a per-user 15-minute timer. [`database-notes.md`](database-notes.md), Other episodes.
 - **`ps_gameLog`**: EP4.5's code reading the 87-byte EP5.4 record header (the user name grew from 19 to 32 bytes), so EP4.5 and EP5.4
@@ -126,11 +127,31 @@ The `Data/` tree (confirmed from the files; the detail is in the system notes):
 - **Tables:** `ItemCreate.ini` gains box sets, grades above 1024 and `[RandomItemsCreate_n]`; `MobCreate.ini` is new; `ItemEnchant.ini`
   is byte-identical to EP4.5's server-patch copy; `Obelisk.ini` gains the map-70 relics; `KillStatus.SData` is unchanged. Two Lua scripts
   (116, 117) changed. [`item-origins.md`](item-origins.md), [`obelisks.md`](obelisks.md), [`scripted-mobs.md`](scripted-mobs.md).
-- **Language:** every text is Chinese (GBK); `cn_string.DB` replaces `kr_string.DB` in use.
+- **Language:** every text is Chinese (GBK); `cn_string.DB` replaces `kr_string.DB` in use; the name in `ps_game` was changed from `de_string.DB` after linking.
 - **Gaps:** boxes and summon items name sets the ini files don't have, 27 Lua monsters have no script, and the experience table for levels
   1 to 60 is EP4.5's divided by 100 (unexplained). Treat the pack as a source of ideas, not as a clean reference.
 
-## 6. The system notes
+## 6. The client side, checked in the EP6 client
+
+The EP5.4 packets above were named from an EP5.4 client decompilation, which is evidence, not an authority. No original EP5.4
+`game.exe` is available, so the same packets were read statically in the original EP6 client (2016-02-12; an unpacked dump, so its
+code reads directly). EP6 is later than EP5.4: agreement supports the EP5.4 reading, a difference says only that EP6 differs.
+
+| packet or rule | EP6 client | result |
+|---|---|---|
+| `0x030B` buff list, `0x030C` buff added, `0x030D` buff removed | read in the fallback handler 0x599c30 (0x599d94, 0x599eb3, 0x59a0d6), dropped when the kind or id does not match the selected target | holds |
+| `0x0308`, `0x0309`, `0x030A` (target select and clear) | `0x030A` sent at 0x44cf3e; after a 500 ms wait (0x44cf80), `0x0309` for a monster (kind 0, 0x44cf99) or `0x0308` for a player (kind 2, 0x44cfca) | holds |
+| `0xB106` product list | count byte, then that many 76-byte rows into a buffer of exactly 64 rows, no check of the count (0x5e9470) | holds; the server must cap a page at 64 rows |
+| `0x0809`, `0x080A` (chance preview) | request bytes in the order of the link request `0x0801`: lapis, then item, then hammer (0x4a9b8d, 0x4a9979); 15-byte answers (0x59a069, 0x599ffc) | holds, with the `0x0809` fields reordered in [`lapis.md`](lapis.md) |
+| `0x0527`, `0x0520`, `0x0B1B` echo, `0x2609`, `0xF603` in and out | 0x5dec40, 0x5e1e10, 0x5f1b50, 0x5e9360, 0x5e68c0 and 0x5ef63c | holds |
+| `0x0115` server time | the payload is one u32 (0x599c8f); the time the client compares it with is its own clock | holds, with a smaller payload than first read |
+| skill levels | the EP6 lookup accepts levels 1 to 15 (0x46cdcc); the EP5.4 decompilation's checks against 9 | differs in EP6; nine levels for EP5.4 rest on the decompilation |
+| shape 103 (buff 97) | the highest case of the shape switch (0x4e8b39); it hides the character from every viewer (0x4e8cdf) | known in EP6; "hidden" is inferred from the flag |
+
+All addresses in this table are in the EP6 `game.exe`. To confirm these for EP5.4 itself, an original EP5.4 `game.exe` would be needed:
+the decompilation's addresses refer to one.
+
+## 7. The system notes
 
 Each system note ends with an "Other episodes" section that has an EP3 and an EP5.4 part:
 

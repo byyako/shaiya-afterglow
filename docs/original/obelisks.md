@@ -524,8 +524,10 @@ Function names in those builds are carried over from EP4.5 (matched by strings o
 - `Obelisk.ini` has zones 0, 18 and 30 as in EP4.5, only six boss groups (maps 14, 17, 19, 20), and **four roads**: `[Portal_001…004,
   (0, 1049)]`, Light needing obelisks (1, 2, 5) or (1, 5, 6), Fury (3, 4, 5) or (4, 5, 7) (confirmed, the file). Comparing with EP3
   showed that the roads sections 1 and 8 infer from the file's notes were once written out, but all four name portal 1049, while EP3's
-  map 0 has portals 1010, 1011, 1020 and 1021 (to maps 45 and 47, which EP3 lacks). Section 11.1 drops a link whose portal does not
-  exist, so the roads never worked in EP3 either (inferred). The two dragon groups name portal 1049 too.
+  map 0 has portals 1010, 1011, 1020 and 1021 (to maps 45 and 47, which EP3 lacks). EP3's loader (EP3 ps_game 0x422e90) parses the
+  same heads, `[Portal_` included, so it reads the four roads (inferred from the shared parser). Where it sets them up was not located,
+  so that it drops portal 1049 as section 11.1 does rests on the EP4.5 rule, and the roads most likely never worked in EP3 either
+  (inferred). The two dragon groups name portal 1049 too.
 
 ### EP5.4
 

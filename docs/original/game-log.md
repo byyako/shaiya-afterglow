@@ -321,7 +321,8 @@ Every function of `ps_game.exe` that sends to `g_pClientToGameLog`, with its typ
 
 **A correction**: `docs/original/gm-commands-2.md` says the user questions write game-log records `0x0401` to `0x0403`. They go to
 `g_pClientToLog` (0x546f48, a `CLogConnection`, not the game log): `CUserQuestionMgr::AddQuestion` 0401, `AddAnswer` 0402, `AddAnswerSend` 0403.
-In the game log those types are item records.
+In the game log those types are item records. `g_pClientToLog` is the connection to `ps_userLog`, which writes nothing for them: its
+writer `WriteLogGameUQ` is empty (ps_userLog 0x4012d0; the same in EP3 and EP5.4, confirmed), so the questions are never stored (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
 
 ## 5. The new server now
 
@@ -601,5 +602,4 @@ every other text goes into the SQL unescaped (confirmed). What operators should 
 `PS_ChatLog.dbo.ChatLog`, and the EP5.4 `PS_ChatLog` ships a trigger on that table that grants elevated rights on certain chat lines;
 an operator restoring that database should drop the trigger. See [`database-notes.md`](database-notes.md).
 
-Comparing the builds showed that the question records `0x0401`–`0x0403` of section 4 reach `ps_userLog`, which drops them (empty
-writer, EP4.5 ps_userLog 0x4012d0; confirmed in all three builds), so they are never stored.
+The question records `0x0401`–`0x0403` reach `ps_userLog`, which drops them, in all three builds (section 4).

@@ -306,8 +306,9 @@ The EP3 `ps_game.exe` (linked 2008-01-17) and the EP5.4 one (linked 2011-09-14, 
 
 ### EP3
 
-`PacketQuest` (EP3 ps_game 0x4526a0) handles the same `0x0902`–`0x0908` (confirmed, dispatch tables); the bodies and the faults of
-section 11 were not checked. EP3's `NpcQuest.SData` parses with the EP4.5 layout and has 1,409 quests (ids up to 1208); EP4.5 adds 312, 139
+`PacketQuest` (EP3 ps_game 0x4526a0) handles the same `0x0902`–`0x0908` (confirmed, dispatch tables); faults 1 and 2 of section 11
+are there: an end with NPC id 0 skips the NPC (EP3 ps_game 0x4645bc) and `CZone::FindNpc` (0x413b20) has no distance (confirmed); fault 3
+(full bags) was not checked. EP3's `NpcQuest.SData` parses with the EP4.5 layout and has 1,409 quests (ids up to 1208); EP4.5 adds 312, 139
 of them for level 55 (confirmed, `tools/npcquest.py`).
 
 ### EP5.4

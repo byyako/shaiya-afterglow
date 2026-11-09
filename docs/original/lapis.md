@@ -380,8 +380,10 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 ### EP5.4
 
 - **Two new blacksmith requests** (confirmed): `0x0809` (EP5.4 ps_game 0x46f000) and `0x080A` (EP5.4 ps_game 0x46f3d0) ask for the link
-  and extraction chance and price without changing anything. Request: six `u8` (item bag and slot, then lapis bag and slot for `0x0809`,
-  or flag and gem position for `0x080A`, then hammer bag and slot). Answer, 15 bytes:
+  and extraction chance and price without changing anything. Request: six `u8`. For `0x0809` they are the lapis bag and slot, then the item bag and
+  slot, then the hammer bag and slot, the order of the link request `0x0801` (the EP6 client sends them so, EP6 game.exe 0x4a9b8d, as the
+  EP5.4 client decompilation does; corrected 2026-11-09, the first reading had the lapis and the item swapped; inferred for EP5.4). For
+  `0x080A`: the item bag and slot, a flag and the gem position, then the hammer bag and slot. Answer, 15 bytes:
 
 | offset | field |
 |---|---|

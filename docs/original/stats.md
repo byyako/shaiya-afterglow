@@ -146,7 +146,7 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
   levels 1 to 60).
 - **The status table is 6 × 71** for the level cap of 70 (EP5.4 ps_game 0x4d83b2), but the shipped `StatusDefs` stops at level 60, so
   levels 61 to 70 get 0 from it and max HP, SP and MP drop at the step to 61 (inferred). `InitEquipment` (EP5.4 ps_game 0x461010) uses
-  the level bounds 70 and 80 (confirmed).
+  the level bounds 70 and 80 (confirmed); the 80s are 70 in `ps_gamewar` and were very likely raised after linking.
 - **Shapes no longer hide equipment** (confirmed): `ItemEquipmentAdd`/`ItemEquipmentRem` (EP5.4 ps_game 0x461640, 0x461d10, matched by
   call graph) never read the shape byte; EP4.5 skips the item's attack and defence while a shape is set (0x454d1d to 0x455200). This
   removes the cause of [`stealth-equip`](community-fixes.md#stealth-equip).

@@ -505,8 +505,7 @@ group (`0x0F`) and no market procedures in `ps_dbAgent`, and no `Market*` tables
 - **The same rules** (confirmed): `PacketMarket` (EP5.4 ps_game 0x4862b0, matched by opcode switch table) keeps the map flag, set only
   for map 42 (EP5.4 ps_game 0x42db4b); the "market loaded" gate; the minimum price of 500 (EP5.4 ps_game 0x4863fb); the deposit per
   started 500,000 (0x48642a); the period index clamped to 3; and bids of `trunc(current × 1.05)` (1.05 at EP5.4 ps_game 0x5741c0).
-  Search, the lists, collecting, the end pass and the GM cases `0xFA19`/`0xFA1A` have the same calls and constants (inferred, not read
-  line by line).
+  Every case was compared: search, page, the four lists (36/40/46/36 rows of 52/48/41/53 bytes, EP5.4 ps_game 0x442334 to 0x44298c), cancel, buy now, bid, collecting and the interest list (10 at most, EP5.4 ps_game 0x4445db) give the same results in the same order, and the end pass the same rows and DB messages (confirmed, token diff of the 37 matched `CMarketMgr` functions and `PacketMarket`). Only the game-log records are 13 bytes longer (the EP5.4 log header).
 - **Times are 64-bit** (confirmed): the end time is `hours × 3600` on a 64-bit `time` (EP5.4 ps_game 0x4864b1); the packed dates on the
   wire keep their size (inferred).
 - The database agent's market group `0x0F06` to `0x0F0D` is unchanged (confirmed). The war server of EP5.4 has no auction house

@@ -28,7 +28,8 @@ GM).
 
 - **Players ask the staff questions** with `/request GM <text>`; the questions wait in one queue for the whole server. A staff member
   takes the oldest with `/UQGET`, answers it in the question window and sees how many wait with `/UQCOUNT`.
-- **An answer never reaches the player.** It only goes to a log, and the questions live in memory only: a restart loses them all.
+- **An answer never reaches the player, and nothing is stored.** Questions and answers go only to the log connection, whose `ps_userLog`
+  writes nothing for them, and the questions live in memory only: a restart loses them all (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
 - **Level 3 staff** can heal and cure, empty a player's bags or equipment, kick, and give or take quests. **Level 4** can read a
   character sheet, summon one player or a whole party, and post notices to the staff, those around, one player, the zone, a faction or
   everyone, each optionally repeated every so many seconds.
@@ -338,7 +339,9 @@ Confirmed, in ps_game.
 | `0x0A02` | `F80C` | `(char, quest, 2)`: the quest's row deleted |
 | `0x0205`-style item creation | `F80B` | the start items (as `QuestAddItem`) |
 
-The questions and answers go only to the log connection `g_pClientToLog` (`0x0401`, `0x0402`, `0x0403`; not the game log), never to the database: a restart loses them.
+The questions and answers go only to the log connection `g_pClientToLog` (`0x0401`, `0x0402`, `0x0403`; not the game log). There `ps_userLog` accepts
+group `0x04` and writes nothing: its writer `WriteLogGameUQ` is empty (ps_userLog 0x4012d0, 24 bytes; the same in EP3 and EP5.4, confirmed).
+So questions and answers never reach a database, and a restart loses them (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
 
 ## 8. The client (from `docs/client/gm-and-commands.md`, not read here)
 
@@ -482,6 +485,4 @@ The same opcode sets (`0x1201`, `F201` to `F204`, and the `C` and `D` groups) an
 (EP5.4 ps_game 0x453c20, matched by call graph) also carries the results of console commands typed in the game to every staff member
 ([`operator-console.md`](operator-console.md)).
 
-Comparing the builds showed that the question records `0x0401` to `0x0403` sent to `g_pClientToLog` end in `ps_userLog`, which accepts
-group `0x04` and writes nothing: its writer `WriteLogGameUQ` is empty (EP4.5 ps_userLog 0x4012d0, 24 bytes), in all three builds
-(confirmed). So questions and answers are never stored anywhere, not only lost on a restart.
+The question records go to `ps_userLog`, which drops them, in all three builds (section 3).

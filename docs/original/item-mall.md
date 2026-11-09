@@ -371,7 +371,9 @@ after linking) were compared with the EP4.5 builds of this note, read statically
 - **The product list is sent** (confirmed): `CGameData::LoadProductList` (EP5.4 ps_game 0x4dbd00, matched by its string) reads a 51st
   column `ProductName` and builds up to 50 ready `0xB106` pages of **25 rows** (EP5.4 ps_game 0x4dbf34). They answer the one `0xB106`
   sent in state 3 and are pushed to every player after `/initpl`, which also reopens a mall an operator had closed (EP5.4 ps_game
-  0x409e23). The EP5.4 client copies at most 64 rows without checking the count.
+  0x409e23). The client reads the count byte and then that many 76-byte rows into a buffer with room for exactly 64 rows (4864 bytes), without
+  checking the count (the EP5.4 client decompilation; the same in the EP6 client, EP6 game.exe 0x5e9470, which adds a stack check after
+  the buffer). A server must never send more than 64 rows in one `0xB106`.
 
 | offset | `0xB106` S→C (3 + 76n) |
 |---|---|
@@ -386,9 +388,14 @@ after linking) were compared with the EP4.5 builds of this note, read statically
   EP4.5 only reads, EP5.4 ps_game 0x488183) and a purchase number stored in each item (`CItem+0x9c`) and sent to the session (`0x1B02`).
   A refused payment takes the items back by that number (client `0x0206`, agent `0x0702`) and answers result 2; a gift asks the session
   first (`0x1B03`), and a refused gift clears the target's storage rows (new client `0x2609`). Storage rows grow to 8 bytes, under a lock.
+- **No `0xB103`** (confirmed): `CWorld::LoginUser` (EP5.4 ps_game 0x413b30) sends `0xA301` and returns; the premium field now holds
+  minutes left (EP5.4 ps_game 0x413d18).
+- The database agent's new `0x0E0A` (billing success) marks the pending purchases as confirmed and queues their save; `0x0E09`
+  (refusal) drops a purchase or clears a gift from the target's storage, or, when the target is not loaded, runs
+  `usp_Rollback_User_GiftPointItems` (EP5.4 ps_dbAgent 0x407d3d, 0x407f8d, 0x423b90; confirmed, the save order inferred).
 - **Oddity 1** (section 9) is answered in part: items are still given before the points are confirmed, but a refusal now takes them
   back (confirmed). **Oddity 2** is still there and the stuck lock now blocks purchases too (confirmed, EP5.4 ps_game 0x48896d).
 - `/disablegift` (`g_bDisableShop` 3) stops gifts only (confirmed, EP5.4 ps_game 0x409c38).
-- The shipped setup has no PayLetter section, so refresh and gifts stay silent (inferred); the database agent's four new procedures (`usp_Save_User_BuyPointItems2` and three more) are in no
+- The shipped setup has no PayLetter section, so refresh and gifts stay silent, and a purchase's `0x1B02` is never answered: ps_session sends it to the unconnected PayLetter link without a check and no timer answers expired requests (EP5.4 ps_session 0x403fe0; inferred), so the first purchase leaves the lock set; the database agent's four new procedures (`usp_Save_User_BuyPointItems2` and three more) are in no
   database backup (confirmed by search).
 - Data (confirmed, rows): `ProductList` 84 → 249 codes, 24 in common and all repriced, prices up to 50,000.

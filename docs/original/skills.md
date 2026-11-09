@@ -196,8 +196,8 @@ builds are carried over from EP4.5 (matched by strings, constants, the call grap
   attack kind, defence type, range and the `wType` 93 and 122 rules (confirmed). Different (confirmed): weapons 1 to **15** (EP3 ps_game
   0x4984e1; EP4.5 1 to 19), `AttrType` above 4 becomes 0 (EP3 ps_game 0x49851c; five elements), and the record is **156 bytes** (EP3
   ps_game 0x49861a) against 160. Which field EP4.5 added was not identified.
-- **Learning**: `EnableLearnSkill` (EP3 ps_game 0x468bc0) has the same constants (confirmed); `LearnSkill` (EP3 ps_game 0x468e20) was not
-  read in detail, so whether EP3 has the level skip of section 3 is open.
+- **Learning**: `EnableLearnSkill` (EP3 ps_game 0x468bc0) has the same constants (confirmed); `LearnSkill` (EP3 ps_game 0x468e20) has the
+  level skip of section 3 (EP3 ps_game 0x468fcf, confirmed).
 - **Abilities**: `CUser::SetSkillAbility` (EP3 ps_game 0x46a760) has the same switch over types 1 to 46 (confirmed).
 - The skill list on entering, quick slots and passive skills were not compared.
 

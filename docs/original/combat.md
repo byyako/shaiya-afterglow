@@ -266,8 +266,8 @@ those pages list), and every address names its binary.
   `CUser::Damage` (EP3 ps_game 0x4376d0) subtracts the damage directly and `0x0525` does not exist.
 - **Drops** (section 7): `CMob::ItemDrop` (EP3 ps_game 0x487050) has no `SRandom` call, so every entry is rolled with `rand()`
   (inferred from the calls). The helper that puts the item on the ground returns for real types 16 and 24 (EP3 ps_game 0x48763a,
-  confirmed). Comparing with EP3 showed that the "helmets and cloaks never drop" entry of [`community-fixes.md`](community-fixes.md)
-  describes EP3 code: the EP4.5 helper compares only real type 27 (0x4a660a).
+  confirmed); the EP4.5 helper compares only real type 27 (0x4a660a). See
+  [`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop).
 
 ### EP5.4
 

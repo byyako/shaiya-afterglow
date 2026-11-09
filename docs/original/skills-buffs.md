@@ -453,15 +453,16 @@ builds are carried over from EP4.5 (matched by strings, constants, the call grap
 | `AddApplySkillDebuff` (EP3 ps_game 0x469e80), `RemApplySkillDebuff` (0x469fd0) | 62 to 90, 61 to 90 | the same |
 
 So the element buffs 94 and 95 (section 5) are new in EP4.5, with the four new elements (confirmed, switch bounds). Damage over time
-(`CUser::TimeDamage`, EP3 ps_game 0x46abf0) has the same switch over types 0 to 5 and the same constants (confirmed). The list, dispel,
-the low-HP passives and saving were not compared.
+(`CUser::TimeDamage`, EP3 ps_game 0x46abf0) has the same switch over types 0 to 5 and the same constants (confirmed). The block buffs' end (cases 85 and 86,
+EP3 ps_game 0x469d68, 0x469d92), Stealth's end without a recompute (0x469dc7) and the low-HP passives' added rows (`ChkHPAbilityApply`
+0x46b8f0) are as in EP4.5 (confirmed). The list, dispel and saving were not compared.
 
 ### EP5.4
 
 | kind | applied (EP5.4 ps_game) | effect | status |
 |---|---|---|---|
 | buff 96 | byte set at 0x49462d, cleared at 0x494b4d | the skill checks skip the combo prerequisite | confirmed; meaning inferred |
-| buff 97 | 0x494645 to 0x4946d0 | dismounts, then shape 103 and attack stop; removed with shape 0 (0x494a1a); hiding's end removes it too | confirmed |
+| buff 97 | 0x494645 to 0x4946d0 | dismounts, then shape 103 and attack stop; removed with shape 0 (0x494a1a); hiding's end removes it too. In the EP6 client shape 103 hides the character from every viewer, like the stealth shape 13 without its exception for the party (EP6 game.exe 0x4e8cdf; the meaning of the flag is inferred) | confirmed |
 | buff 98 | 0x494639, cleared at 0x494b68 | skills with a state effect fail on the character, from players (0x463a65) and monsters (0x4b6fd5): immunity to state debuffs | confirmed |
 | debuffs 74 to 76 | 0x494d3a to 0x494e43 | one at a time (a new one removes the old type's entries); while one lasts, attacks, skills and item use are refused (0x4789a1 to 0x4790fc) | confirmed |
 | debuffs 78, 79 | 0x494eec, 0x494f0d | new removal calls, not read | confirmed (calls) |

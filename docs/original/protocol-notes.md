@@ -75,7 +75,7 @@ Other details:
   | dbagent | 30911 | |
   | gamelog | 30912 | |
   | PSM agent | 40900 | management layer |
-  | connectionManager / dbagent2 / gamelog | 1060 / 1056 / 1072 | [U] lists these; `ps_session.ini` [S] shows **1072 as the billing (GUM) port** and 10003 as a second billing port, so the 1072 label needs checking |
+  | connectionManager / dbagent2 / gamelog | 1060 / 1056 / 1072 | [U] lists these; `ps_session.ini` [S] shows **1072 as the billing (GUM) port** and 10003 as a second billing port, but no build of `ps_session` reads `[BILLING_GUM]` (no such string in any image, confirmed), so the 1072 billing label belongs to an ini block nothing uses (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) |
 - Database connection strings are stored as long hex blobs, so the configs are encrypted. **Unknown**
   algorithm. `PSM_Server/ps_passwordEnc.exe` is likely the tool that produces them.
 - `[MONITOR]` ports 50000/50001 belong to the PSM management agent.
@@ -155,8 +155,9 @@ Tag **[B]** = read directly in the EP4.5-era login server binary (built 2009-06-
 
 Not yet tested: the AES block function's byte order against real data. A known-answer test against a real capture is needed (section 8).
 
-The login server then passes the AES key and IV to the session server (message `0x701`) after a successful login, so the game server can
-rebuild the same cipher state. [B]
+The login server then passes the AES key and the first 16 bytes of SHA-256 of the login counter (offset 67), with the 16-byte identity
+(offset 51), to the session server (message `0x701`) after a successful login, so the game server can rebuild the cipher state
+(corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). [B]
 
 ### 3.3 Login and server selection
 
@@ -227,7 +228,8 @@ XORed with `table[n + j]`. The earlier [W] description (seed mixed with a hash o
 ### 4.2 Character screen
 
 All little-endian. Note the **name length differs by episode**: 19 bytes in EP3 [I], 21 bytes in
-EP5+ [C]. **EP4.5 [B]: requests carry 21-byte names; the list record carries 19 name bytes followed by the delete and rename flags.**
+EP5+ [C]. The EP3 server itself trims a 21-byte name at offset 10 of the create packet, like EP4.5 (EP3 ps_game 0x452896,
+confirmed), so the 19 bytes are the EP3 client's figure, not what the EP3 server enforces (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). **EP4.5 [B]: requests carry 21-byte names; the list record carries 19 name bytes followed by the delete and rename flags.**
 Exact EP4.5 layouts and checks are in `docs/original/ps_game.md` section 6, which supersedes the table below where they differ. There is
 no name-check packet (`0x0119` disconnects).
 
@@ -370,8 +372,7 @@ EP5.4 2011-09-14, modified after linking), `ps_dbAgent` (EP3 2008-01-04, EP5.4 2
   reconnect, server time), `0x0228`, `0x0524`, `0x0525` (absorption), `0x0558` (scouting), the party updates `0x0C0A`–`0x0C14`, `0x110A`/
   `0x110B` (scripted monsters) and `0xB103` (billing info).
 - No packet length checks, as in EP4.5 (confirmed).
-- Comparing the builds showed that the EP3 server reads the create packet's name as a 21-byte field at offset 10, like EP4.5
-  (EP3 ps_game 0x452896, `TrimString(…, 21)`); the 19-byte EP3 name of section 4.2 (source [I]) is not what the EP3 server enforces.
+- The create packet's name is a 21-byte field at offset 10, as in EP4.5 (EP3 ps_game 0x452896, `TrimString(…, 21)`, confirmed).
 
 ### EP5.4
 
@@ -401,5 +402,3 @@ EP5.4 2011-09-14, modified after linking), `ps_dbAgent` (EP3 2008-01-04, EP5.4 2
   EP4.5: 1000, no log). There are still no length checks (confirmed).
 - **Game log:** the record header is 87 bytes, the user name 32 bytes instead of 19 (EP5.4 ps_game 0x467f60, EP5.4 ps_gameLog 0x401830;
   confirmed).
-- Comparing the builds showed that no build reads a `[BILLING_GUM]` section (no such string in any `ps_session` image, confirmed), so the
-  1072 "billing (GUM) port" of section 1 belongs to an ini block nothing uses.

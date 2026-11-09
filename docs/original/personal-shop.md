@@ -316,4 +316,4 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 | seller's gold | not checked | **new**: gold + price must fit in 32 bits, else a failure answer (EP5.4 ps_game 0x4878e8) | confirmed |
 
 `PacketMyShop` is EP5.4 ps_game 0x487370 (matched by opcode switch table). 20 slots need a client that draws them. A trade is now
-refused while either player has a shop open ([`trade.md`](trade.md)). The visitor clean-up was not read.
+refused while either player has a shop open ([`trade.md`](trade.md)). The visitor clean-up is fixed (confirmed): `CUser::LeaveZone` (EP5.4 ps_game 0x455f20, matched by constants) takes the leaver off **the seller's** list (EP5.4 ps_game 0x487012 adds the shop offset to the found seller, where EP4.5 0x44af2e passes the leaver's own shop), so [`myshop-visit-cleanup`](community-fixes.md#myshop-visit-cleanup) is not needed there. The 16-visitor cap is unchanged (EP5.4 ps_game 0x486f57).

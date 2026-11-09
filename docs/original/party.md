@@ -327,8 +327,9 @@ build, read statically like the rest of this note; overview in [`ep3.md`](ep3.md
 
 `PacketParty` (EP3 ps_game 0x44ed10, matched by switch position) handles the normal party opcodes; the union opcodes `0x0B0C`–`0x0B18`
 and `0x0B1A` do not exist (confirmed, dispatch tables). The party update packets `0x0C0A`–`0x0C14` are built only by EP4.5 (confirmed:
-the opcode constants are absent from the EP3 image); how EP3 shows a member's state was not read. `party-kick-leader` and
-`party-exp-levelup` were not checked.
+the opcode constants are absent from the EP3 image); how EP3 shows a member's state was not read. Kicking a member placed before the leader
+moves the leadership as in EP4.5 (`CParty::ExpelUser` EP3 ps_game 0x432dc0, matched by call position; confirmed). There is no full-party
+bonus in `AddExpFromUser` (EP3 ps_game 0x442070), so `party-exp-levelup` cannot occur (confirmed).
 
 ### EP5.4
 

@@ -350,3 +350,28 @@ Function names in those builds are carried over from EP4.5 (matched by strings, 
 - **Skills on players**: the PvP damage cap is 60000 (EP5.4 ps_game 0x463dc0). Buff kind 98 makes a skill with a state effect fail on
   its holder (`AttackSuccess`, EP5.4 ps_game 0x463a65), and debuff kinds 74 to 76 lock the victim's attacks, skills and item use, one
   kind at a time ([`skills-buffs.md`](skills-buffs.md)) (confirmed).
+
+### EP8 (the data file only)
+
+A community member supplied an EP8 `KillStatus`, not as the original `.SData` but as a JSON export made by a data tool, with the bonus
+types written as names (`MaxHp`, `HpSitRecovery`, `LinkingRate`, …) instead of numbers. No EP8 server program was read, so only the
+data is compared (2026-11-09).
+
+- **The same grades** (confirmed, all 60 records): 30 per faction, the same kills (150 to 12288) and the same index per grade.
+- **Light gets what EP4.5 gave only Fury** (confirmed). EP4.5's file is lopsided: four Light grades give less than the Fury grade of the
+  same place. EP8 changes exactly those four, and every other record (all 30 Fury grades included) equals EP4.5's:
+
+  | Light grade | EP4.5 | EP8 |
+  |---|---|---|
+  | 3 (450 kills) | nothing | max HP, MP and SP + 5 % (types 1 to 3) |
+  | 13 (1950 kills) | nothing | max HP, MP and SP + 9 % |
+  | 14 (2100 kills) | ranged and magic defence + 2 (types 19, 20) | + 7 |
+  | 27 (10200 kills) | max MP and SP + 5 % (types 2, 3) | + 11 % |
+
+  Grade 1 keeps its one difference: Light 5 % SP and MP sitting recovery, Fury 6 % (both files). EP3's file had already raised Light
+  grades 13 and 27 part of the way (section 12, EP3).
+- **Names for types 26 and 27.** This build reads neither (section 8, "copied into the world, never read"). The export's tool calls
+  them `RepairCost` (type 26: 10 at grade 18) and `ItemCastTime` (type 27: 4 at grade 9). So a later build most likely lowers repair
+  costs by 10 % and item cast times at those grades (inferred from the tool's names only; no EP8 code was read). The name-to-number
+  mapping used here follows the type table of section 8 and reproduces all 56 unchanged records exactly, which confirms it for the types
+  the file uses.

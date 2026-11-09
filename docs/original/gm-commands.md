@@ -616,10 +616,10 @@ The same GM groups `0xF1xx` to `0xFAxx` (EP3 ps_game 0x457000 to 0x45a7e0, match
   (confirmed). The staff level byte moved from `CUser+0x5768` to `+0x5808`.
 - The opcodes the US client sends without a server case (`F70A`, `F70B`, `F805`, `F806`, `F809`, `F80A`, `F80F`, `F810`, `FA16`, `FA17`)
   still fall to the group default and disconnect the GM (confirmed, dispatch tables).
-- Three new opcodes (layouts confirmed; behaviour beyond the layout not read):
+- Three new opcodes (confirmed):
 
   | opcode | layout (with the opcode) | where (EP5.4 ps_game) | what |
   |---|---|---|---|
   | `0xF603` | `u8 len` (≤ 0x7F) @2, text @3 | 0x480b34 | console commands from the game, see [`operator-console.md`](operator-console.md) |
-  | `0xF70F` | 5: `u16` @2, `u8` @4 | 0x481955 | relayed as `0x0818` on the session link (inferred); the handler group uses the strings `MobCreate`/`MobCreateAll`, so a summon by `MobCreate.ini` set is likely (inferred) |
-  | `0xFA1B` | 32: guild name @2 (cut at 0x1A), `u32` @0x1B, `u8` @0x1F (< 9) | 0x484099 | a command on a guild (`CGuildMgr::FindGuild`), logged as `%s,%d` |
+  | `0xF70F` | 5: `u16` @2, `u8` @4 | 0x481955 | `/mmake` on every server: as `F704` (count ≤ 20, `CZone::MobGen` at the GM), then `0x0818` (19 bytes: monster, count, map, x, y, z) to the session, which passes it to the other game servers; each summons the same at that spot on that map and reports `gm cmd mmakeall ok` as `0x080E` (EP5.4 ps_game 0x427f80); log `MobCreateAll` |
+  | `0xFA1B` | 32: guild name @2 (cut at 0x1A), `u32` @0x1B, `u32 char id` @0x1B, `u8 rank` @0x1F (1 to 9) | 0x484099 | `FA13` by character id: sets the member's rank (leaders capped at 7), DB agent `0x0B09`, log `UserGuildLevel2` |

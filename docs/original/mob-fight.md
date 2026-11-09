@@ -347,7 +347,9 @@ builds are carried over from EP4.5 (matched by strings, constants, the call grap
   matched by its reads of the attack-delay table), `CMob::AttackSuccess` (0x483590) and both `CMob::AttackDamage` (0x483ab0, 0x484250:
   the same switch and cap 30000, five elements). `CUser::DeathByNPC` (EP3 ps_game 0x442bd0) keeps the 200 s rebirth time.
 - `CMob::SetTarget` (EP3 ps_game 0x4810f0) has no state-100 branch and no `SetTargetEx` call (confirmed).
-- `CMob::Chase` and `CMob::ReturnHome` were not located in EP3; recovery was not compared.
+- `CMob::Chase` (EP3 ps_game 0x487d80; 0.3, 0.4, 0.6, 1.5, 45) and `CMob::ReturnHome` (0x4885b0; 0.5, 10) keep EP4.5's
+  constants (confirmed; matched by call position and constants). Where EP4.5's `ReturnHome` sets state 100 (0x4a79cf), EP3 sets state 4
+  (EP3 ps_game 0x4888fd) (confirmed; what state 4 does was not read). Recovery was not compared.
 
 ### EP5.4
 

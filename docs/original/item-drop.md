@@ -118,8 +118,8 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 
 - **Helmets and cloaks never reach the ground** (confirmed): the helper that puts a monster's item on the ground (`CMob::ItemDrop`, EP3
   ps_game 0x487610, matched by call graph, same callees as EP4.5 0x4a65a0) returns at once for real type 16 or 24 (EP3 ps_game 0x48763a
-  to 0x48764c). EP4.5's helper compares only real type 27. Comparing with EP3 showed that
-  [`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop) describes EP3 code: in EP4.5 helmets and cloaks drop.
+  to 0x48764c). EP4.5's helper compares only real type 27, so in EP4.5 helmets and cloaks drop
+  ([`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop)).
 - **Monster drops roll with `rand()` only** (inferred from the calls): `CMob::ItemDrop` (EP3 ps_game 0x487050, matched by call graph)
   has no `SRandom` call and no roll out of 1,000,000 (EP4.5 0x4a60fd).
 - Dropping and picking up (`0x0205`, `0x0206`) exist with the same opcodes; their bodies were not compared.
