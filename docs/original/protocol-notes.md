@@ -76,8 +76,12 @@ Other details:
   | gamelog | 30912 | |
   | PSM agent | 40900 | management layer |
   | connectionManager / dbagent2 / gamelog | 1060 / 1056 / 1072 | [U] lists these; `ps_session.ini` [S] shows **1072 as the billing (GUM) port** and 10003 as a second billing port, but no build of `ps_session` reads `[BILLING_GUM]` (no such string in any image, confirmed), so the 1072 billing label belongs to an ini block nothing uses (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) |
-- Database connection strings are stored as long hex blobs, so the configs are encrypted. **Unknown**
-  algorithm. `PSM_Server/ps_passwordEnc.exe` is likely the tool that produces them.
+- Database connection strings are stored as long hex blobs, so the configs are encrypted: **plain RSA with a 1024-bit key built into
+  the servers** (confirmed). `PCryptoPasswdDecFromHex` (ps_game 0x4cf700) sets the key from hex strings in the image (`SRsa::SetKeyH`),
+  turns the blob into a number (`HexToBin`, `BinToMpz`) and decrypts it with `SRsa::Dec`; `PCryptoPasswdEncToHex` (0x4cf600) is the
+  reverse with `SRsaPublic::Enc`. `ps_dbAgent` carries the same key strings. `PSM_Server/ps_passwordEnc.exe` (a dialog program linked
+  with GNU MP) holds the public strings and none of the private ones, so it is the tool that makes the blobs (confirmed from its strings;
+  its code was not read).
 - `[MONITOR]` ports 50000/50001 belong to the PSM management agent.
 
 Target design: keep the logical split (login / game / persistence / logging) but not the process
@@ -262,7 +266,10 @@ Two variants documented: Gamigo `ps0032` (99 bytes) and US `ps0198` (87 bytes). 
 base stats (str, dex, rec, int, wis, luc); the US one omits them and is otherwise identical:
 `u16 statPoints, u16 skillPoints, u32 maxHp, u32 maxMp, u32 maxSp, u16 direction` (radians; degrees = `-direction * 180/pi`),
 `u32 prevExp, u32 nextExp, u32 exp, u32 gold, f32 x, f32 y, f32 z, u32 kills, u32 deaths, u32 victories, u32 defeats, char guildName[25]`.
-This is the "start loading the world" packet. The EP4.5 variant is unknown; the Gamigo `ps0032` build is the older of the two.
+This is the "start loading the world" packet. The EP4.5 variant is `TP_CHAR_DATA` ([`enter-world.md`](enter-world.md) section 3.1):
+the US layout without the base stats, but with the three maxima as `u16`, four `u32` kill counters, and the guild name sent only up to
+its zero, so the packet is 59 bytes plus the name's length (confirmed, `CUser::SendCharacterData` 0x483140, length at 0x48327b, PDB).
+The Gamigo `ps0032` build is the older of the two.
 
 Race / faction numbering [I]: 0 human, 1 elf, 2 deatheater, 3 vail; modes 0 easy, 1 normal, 2 hard,
 3 ultimate. Classes [C]: fighter, defender, ranger, archer, mage, priest (0 to 5).
@@ -290,8 +297,11 @@ tables, and some files are wrapped in a KISA SEED header.
 `3c 00 00 00 00 96 00 00 00 01 00 0b 05 00 0c 05 ...` and has no 128-byte header; reading it with
 the EP8 parser yields garbage. `NpcQuest.SData` (2,637,480 bytes) contains readable Korean text in
 CP949 stored as `u32 length` followed by the bytes, mixed with small fixed-width fields. The files
-appear to be unencrypted, little-endian binary. Record structure is **unknown** until the loader is
-read in `ps_game.exe`. The server also loads a text-based set: `Map.ini`, `MapWar.ini`,
+appear to be unencrypted, little-endian binary. The record structure is known from the loader (confirmed,
+`DBInitializeConstNpcQuest` 0x4caf80: it opens `data/NpcQuest.SData` and reads the NPCs with `CNpcData::Load` 0x4c9410, the item
+links with `CItemQuestData::Load` 0x4c9d90, then the quests with `CQuestData::Load` 0x4ca5d0): the NPC part is in
+[`maps-npcs.md`](maps-npcs.md) section 3, the item links in [`quest-drops.md`](quest-drops.md) section 1.3, the quests in
+[`quest.md`](quest.md). The server also loads a text-based set: `Map.ini`, `MapWar.ini`,
 `MobID.ini`, `mob_ai.ini`, `ItemCreate.ini`, `ItemEnchant.ini`, `SequenceItemCreate.ini`,
 `Obelisk.ini`, `ObeliskWar.ini`, `GuildHouse.ini`, `kr_string.DB`, `Map/` (77 map files, "SVMap"),
 `Lua/` and `AI/`.
@@ -380,8 +390,10 @@ EP5.4 2011-09-14, modified after linking), `ps_dbAgent` (EP3 2008-01-04, EP5.4 2
   connection cap is removed (0x411abd) and the login query quotes the name and password with `"` (0x445e70) (confirmed).
 - **Session:** reads `0x701` only up to offset 0x62 (EP5.4 ps_session 0x404168), so it takes the 0x63-byte form; its `0x801` reply is
   95 bytes, exactly the PDB struct (EP5.4 ps_session 0x403657) (confirmed). New session ↔ game messages (confirmed, dispatch): `0x105`
-  (cash billing up or down), `0x108` (16 random bytes per session run, meaning unknown), `0x818` and `0x81B` (relays), and `0x1B01`–`0x1B03`
-  (item-mall points through a PayLetter billing link).
+  (cash billing up or down), `0x108` (16 random bytes per session run: the XOR key, see below), `0x818` and `0x81B` (relays), and `0x1B01`–`0x1B03`
+  (item-mall points through a PayLetter billing link). The game server keeps the first `0x108` of its run as **the XOR seed** in place
+  of EP4.5's constant ([`ps_game.md`](ps_game.md) section 5): it stores the 16 bytes (EP5.4 ps_game 0x406a14, once per run), builds the XOR table from them with
+  SHA-256 (0x464ca0) and sends them to each client as `byEncKey` in `0xA301` (0x413d6d to 0x413db0) (confirmed).
 - **Game:** the same dispatch; every EP4.5 opcode is still handled (confirmed, all 65536 values walked in both builds, EP5.4 ps_game
   `PacketProcessing` 0x474940, matched by its unique string). New:
 

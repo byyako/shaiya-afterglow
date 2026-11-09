@@ -19,7 +19,9 @@ built 2010-04-26, MSVC 7.1, not packed, no PDB). Nothing was executed. The clien
 - Whether `game.exe` runs with `start game` as its only argument and without the updater. (The string exists; the check that uses it was not read.)
 - GameGuard: only the stray string `nProtect GameGuard` exists. There is no `GameMon` reference and no GameGuard module import, so it is probably
   not wired in, but nothing here proves the client starts without GameGuard files.
-- `ShaiyaUS.ini` in the client folder is encrypted (330 bytes). Which program reads it, and whether it matters, is unknown.
+- `ShaiyaUS.ini` in the client folder is encrypted (330 bytes). No program in the folder names it: `game.exe`, `Updater.exe` and
+  `CONFIG.exe` have no `ShaiyaUS` string, single-byte or UTF-16 (confirmed, a string search). Which program reads it (inferred: the
+  publisher's launcher, not shipped) and whether it matters stay unknown.
 - The cipher: all of `docs/original/ps_login.md` section 4 is from the server binary; the client side has not been read.
 
 ## Pointing the client at the server

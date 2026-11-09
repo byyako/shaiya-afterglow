@@ -112,8 +112,11 @@ itself (`WM_CLOSE` to its own window). Whether any original server sends it is n
 
 ### 3.4 Open (client side)
 
-- Whether `0x0004` on the **login** connection shows the same box (not used: the login server sends nothing, 3.1).
-- *Live*: the box's text in this client's language file, and that the client indeed quits after it.
+- Whether `0x0004` on the **login** connection shows the same box (inferred no answer needed: the login server sends nothing, 3.1;
+  not worth settling). The handler (`game.exe` 0x54c860) is a method of one packet class, in its table at 0x6a5c34 (vtable 0x6a5c20,
+  set at 0x40a4f2); which connections use that class was not traced.
+- *Live*: the box's text in this client's language file, and that the client indeed quits after it (`docs/testing/live-test-checklist.md`
+  section 64).
 
 ## 4. Other episodes
 

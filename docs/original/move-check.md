@@ -89,7 +89,8 @@ Player update 0x418c00 and the local mover 0x43c000 (move index at player `+0x27
 Index 255 gives no movement. **Mounted**: run **7.0** when the client's mount flag (`+0x378`) is 1 (shapes 14, 16) and **8.0** when it
 is 2 (shapes 15, 17, 24 to 27, 29, 30); walking is half (3.5, 4.0). The server's flat 8.0 riding speed covers both. A passenger follows
 its driver (the exemption stays). **Other directions**: lateral coefficients 0.5, 1, 1.5, 2, 2.5 and backward 0.8, 1.3, 1.8, 2.3, 2.8 by
-index (mounted: 2); the mover adds the directions, so a diagonal can exceed the forward-only table (inferred: about 5.22 at index 2).
+index (mounted: 2); the mover adds the directions, so a diagonal can exceed the forward-only table (inferred: about 5.22 at index 2; a recorded diagonal
+run settles it, `docs/testing/live-test-checklist.md` section 64).
 The forward table is therefore not a hard maximum for every input. Time is scaled in seconds (frame delta).
 
 **`0x0501` sending** (sender 0x586060, 17 bytes): no minimum interval or distance. Walking sends when more than **1000 ms** passed since
@@ -146,7 +147,8 @@ walks fast in steps of up to 35 units is never stopped.
 To build (`move_check.rs`, the rules; the `0x0501` handler):
 
 1. A `MoveCheck` per connection in the world, as section 1: `reset(now, pos)`, `update(now, pos, speed) -> bool`, `shorten(n)`.
-2. The speed of section 2: riding 8.0, behind someone none (not checked), otherwise the table at the current move speed (`totals`,
+2. The speed of section 2: riding 8.0, behind someone none (not checked; the original passes 10,007, which never fails, 0x46a37f to
+   0x46a394), otherwise the table at the current move speed (`totals`,
    clamped 0..4, without the move ban).
 3. Reset with the position wherever the server places the player: entering a zone (`state.entered`), `move_player` on the same map,
    coming back to life on the same map (both `revive_here` paths and the resurrection skill's `Resurrected`). The original resets on
@@ -164,7 +166,8 @@ To build (`move_check.rs`, the rules; the `0x0501` handler):
 2. **`move_check`** (default `true`): `false` turns the speed check off (the 35-unit step check stays), for a client that turns out
    to walk faster than the table.
 3. **Logging**: each refusal at `info` (distance walked, allowance, seconds, speed); each closed window at `debug` with its average
-   speed, so that a play session can show the client's real speeds (section 2, not verified).
+   speed, so that a play session can show the client's real speeds (section 2, not verified by a play session; the last item of
+   `docs/testing/live-test-checklist.md` section 45 collects them).
 4. **Not taken now: a tighter check** (oddity 1), for example a running allowance that carries over between windows, which would
    catch a client walking 1.5 times as fast. The client's table is known now (section 2a) but not that it is a maximum for every input, so
    a live calibration (deviation 3) comes first, or it would put back honest players. Until then the original's thresholds are kept.
@@ -177,7 +180,7 @@ To build (`move_check.rs`, the rules; the `0x0501` handler):
 ## 9. Built
 
 `move_check.rs` (the window, `Checked::{Open, Passed, Refused}`, the constants), in the `0x0501` handler after the step and map checks
-(`server.rs`, `speed_checked`): riding 8.0, a passenger not checked, otherwise the table at the current move speed. Started again on
+(`server.rs`, `speed_checked`): riding 8.0 (the original's, 0x46a378), a passenger not checked (the original's 10,007), otherwise the table at the current move speed. Started again on
 entering a zone, in `move_player`, and on the three same-map revivals. A refused step: `stop_attacking`, `Zones::move_back` (the
 window start for the zone and the view, `0x020B` to them and the player, a mount pair kept), `0x0502` 5, then the trade, duel and war
 distance checks; the connection's position is the window start. Charge takes its reach off when it goes off. A step that is too long
@@ -207,6 +210,7 @@ A new function (EP5.4 ps_game 0x478240, its state at `CUser+0x554c`) replaces bo
 | failed window | the server moves the player back to the window's start (a same-map server move), unless a logout is pending |
 | after a server move | steps are ignored for 1.1 s (map moves, leaving a map; EP5.4 ps_game 0x455de0, 0x4148fb) |
 
-With one step a second at speed 5.0 that allows about 46 units in 7 s (inferred from the formula). Positions that are not finite are
+With one step a second at speed 5.0 that allows about 46 units in 7 s (inferred from the formula; not worth settling, EP5.4 only and
+not copied by this server). Positions that are not finite are
 refused before the check (EP5.4 ps_game 0x478514). The attack reach slack is cut to the bare speed while the last step is under a second
 old, half of it otherwise (EP5.4 ps_game 0x49b340; confirmed). Moving the player back is what the new server does as deviation 1.

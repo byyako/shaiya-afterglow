@@ -88,7 +88,8 @@ The detail is in each system note. In outline (confirmed unless marked):
 ## 3. The other programs
 
 - **`ps_session`** (unmodified): the core is unchanged. New are the PayLetter billing link, a broadcast of the billing link's state
-  (`0x105`), 16 random bytes sent to each game server (`0x108`, purpose unknown), and two relays (`0x818`, the all-server `/mmake`; `0x81B`). Without `[PAYLETTER]` it never answers a purchase (`0x1B02`) (inferred). It takes EP3's
+  (`0x105`), 16 random bytes sent to each game server (`0x108`: the game server's XOR seed for the run, which it builds its XOR table from and sends
+to the clients in `0xA301`; EP5.4 ps_game 0x406a14, 0x464ca0, 0x413d6d; confirmed), and two relays (`0x818`, the all-server `/mmake`; `0x81B`). Without `[PAYLETTER]` it never answers a purchase (`0x1B02`) (inferred). It takes EP3's
   0x63-byte `0x701` from `ps_login`. [`ps_login.md`](ps_login.md), Other episodes.
 - **`ps_dbAgent`**: the same message set, with `0x0E09` (billing refused: drop the purchase or roll the gift back) and `0x0E0A` (billing confirmed) now handled; the item-mall procedures renamed (`*2`, `*_UsersMaster`), and four of them exist in no
   database of the pack, so the shipped item mall can't have worked with its own databases (inferred). Saved positions are checked for

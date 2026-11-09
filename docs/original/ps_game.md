@@ -108,7 +108,7 @@ Confirmed, 0x4030ac.
 | 86 | `dwBillingRemainTime` | ps_session always sends 0 |
 | 90 | `dwAutoCharID` | non-zero only for the reconnect feature: skip the character screen and enter with this character |
 | 94 | `byServerID` | `m_byRealServerID` |
-| 95 | u32 (not in the PDB struct) | stored in `m_nMovePositionType`. ps_session fills it from the third result column of EP4.5's login procedure, which ps_login appends to `0x701` (ps_session 0x403c65, 0x4031ae; confirmed). Its meaning is unknown. Only EP4.5 sends it: EP3's session sends 90 bytes, EP5.4's 95 (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) |
+| 95 | u32 (not in the PDB struct) | stored at `CUser+0x5814` (`CWorld::LoginUser` 0x40c723), a field the PDB's `CUser` record does not have (the code's `m_nMovePositionType` is `+0x5818`, section 10); -1 until then (`CUser::CUser` 0x449e93, `CUser::Reset` 0x44a029). ps_session fills it from the third result column of EP4.5's login procedure, which ps_login appends to `0x701` (ps_session 0x403c65, 0x4031ae; confirmed). Its one use: at 3 or below (and at -1) entering and leaving the world also write the game-log records `0x30F` / `0x310` ("NewUser Enter" / "NewUser Leave"; `CUser::EnterWorld` 0x44aa23, `CUser::LeaveWorld` 0x44ad01; confirmed), so it reads as an account-age or new-player value; what the login procedure puts in it is unknown, since `usp_try_gamelogin_korea` is not in the shipped databases ([`ps_login.md`](ps_login.md) section 6). Only EP4.5 sends it: EP3's session sends 90 bytes, EP5.4's 95 (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) |
 
 ### 3.3 Completion: `CWorld::LoginUser`
 
@@ -146,8 +146,11 @@ It is the first packet on the new AES stream: `InitAesKey` has run and the XOR f
 
 Confirmed, `CUser::SendBillingInfo` 0x457ad0.
 
-7 bytes: `u16 0xB103, u8 billingType, u32 remainTime`. Sent right after the handshake reply. What the client does with the values is unknown;
-the session server sends remain time 0, and the type comes from its user record.
+7 bytes: `u16 0xB103, u8 billingType, u32 remainTime`. Sent right after the handshake reply. The client (read-only, `game.exe` 0x559930): in region 2
+(China) the value is the seconds left; in every other region, this build's included, it stores the type, reads the value as a packed
+date (year = `v >> 26` + 2000, month = `v >> 22 & 15`, day = `v >> 17 & 31`, 0x559b03) and shows message 814, 815, 816 or 863 for types
+1 to 4 (0x559c94 to 0x559cba); **type 0 shows nothing** (confirmed, as `docs/client/CLIENT-FACTS.md` has it). The session server sends
+remain time 0, and the type comes from its user record.
 
 ## 4. AES on the game connection
 
@@ -162,8 +165,9 @@ Confirmed.
 - the identity is a separate fresh random 16-byte value (`SRandBlock16`).
 
 ps_login puts these 32 bytes at offset 0x43 of its `0x701` message to ps_session (verified, 0x40484c), and ps_session copies its stored
-32 bytes into `byAesKey` of the `0x801` reply (verified, 0x403160). That ps_session stores the `0x701` bytes unchanged in between is inferred
-(the copy in `CUserMgr::AddUser` was not traced).
+32 bytes into `byAesKey` of the `0x801` reply (verified, 0x403160). In between, ps_session stores the `0x701` bytes unchanged:
+`CConnection::PacketLogin` (0x403be0) passes offset 0x43 of the message to `CUserMgr::AddUser` (0x409700), which copies its 32 bytes as
+eight dwords into the user record at `+0x50`, for a new user and for one already known (confirmed).
 
 ### 4.2 Setting it up
 
@@ -264,13 +268,27 @@ in ps_dbAgent set the flag (verified, `CUser::OnDispatchDB` 0x403e4d and 0x403ff
 
 This is exactly the US `ps0198` layout documented by OpenShaiya (name 19, then delete and rename flags), now confirmed in the server.
 The 0x0101 records for empty slots are sent before the filled ones. Map: `ChkMapByCharLevel` (0x46c320) and a map-table lookup replace
-some stored maps (by map id, level and faction; maps 48, 49, 58 and 67 and maps flagged in the map table) with a return map before listing;
-the exact table was not written up (unknown, needed only for the map shown on the selection screen).
+some stored maps (by map id, level and faction; maps 48, 49, 58 and 67 and maps flagged in the map table) with a return map before listing.
+`ChkMapByCharLevel`'s own table (confirmed; called at 0x46d187 with the record's `wMap`, its `wLevel` and the account's `m_byCountry`)
+changes only the map shown on the selection screen:
+
+| stored map | when | shown map (Light / Fury) |
+|---|---|---|
+| 6 | level above 35 | 1 |
+| 8 | level above 35 | 2 |
+| 9 to 11, 55 to 58 | always | 0 |
+| 18 | level above 15 | 1 / 2 |
+| 30 | level above 30 | 19 / 20 |
+| 31, 32 | level above 30 | 30 |
+| 100 to 108 | always | 35 / 36 |
+
+It also returns a position for each (not sent in the list). The map-table lookup follows it (0x46d19c).
 
 After the list `m_bEnableDBCharacterSelect` and `m_bEnableDBCharacterRename` are set.
 
-Country values: 0 and 1 are the two factions; **2 means none chosen yet** (inferred: the client may only send 0 or 1, and create, delete,
-select and restore are refused while it is 2).
+Country values: 0 and 1 are the two factions; **2 means none chosen yet** (confirmed: ps_dbAgent's `DBCharacter::LoadCountry` 0x41fdc0
+gives country 2 and max grow 2 when the account has no `UserMaxGrow` row on this server; the client may only send 0 or 1, and create,
+delete, select and restore are refused while it is 2, `CUser::PacketCharacter` 0x46bf20).
 
 ### 6.2 Requests in the character screen
 
@@ -281,7 +299,7 @@ Every request below is accepted only in state 1. Any other `0x01xx` opcode, **in
 
 | opcode | request (offsets) | checks in the game server | result to the client |
 |---|---|---|---|
-| `0x0102` create | `TP_CHAR_CREATE`, 31 bytes: 2 `bySlot`, 3 `byFamily`, 4 `byGrow`, 5 `byHair`, 6 `byFace`, 7 `bySize`, 8 `byJob`, 9 `bySex`, 10 `szName[21]` | country != 2; slot < 5; grow <= max grow; family < 4; job < 6; name trimmed (below) and at least 2 characters. Hair, face, size and sex are not range-checked here. Then `CUser::ProcessCharacterCreate` (0x480e90) builds the database request | refused here: `0x0102` with `u8 1`. Otherwise the database agent's result is forwarded: `0x0102 u8 result`; **0 = success, followed by the full list again** (section 6.1 without the faction packet). Non-zero values are database failures (meanings unknown) |
+| `0x0102` create | `TP_CHAR_CREATE`, 31 bytes: 2 `bySlot`, 3 `byFamily`, 4 `byGrow`, 5 `byHair`, 6 `byFace`, 7 `bySize`, 8 `byJob`, 9 `bySex`, 10 `szName[21]` | country != 2; slot < 5; grow <= max grow; family < 4; job < 6; name trimmed (below) and at least 2 characters. Hair, face, size and sex are not range-checked here. Then `CUser::ProcessCharacterCreate` (0x480e90) builds the database request | refused here: `0x0102` with `u8 1`. Otherwise the database agent's result is forwarded: `0x0102 u8 result`; **0 = success, followed by the full list again** (section 6.1 without the faction packet). Non-zero values are database failures: **1** for any failure (name taken, slot used, query error) and **3** when the user record is gone (confirmed, ps_dbAgent `DBCharacter::CreateCharacter` 0x420270, sent as `0x404 u8 result` by `CUser::CreateCharacter` 0x4044b0; section 6.3) |
 | `0x0103` delete | `u32 charId` at 2 | country != 2 | when the database agent confirms: `0x0103`, 7 bytes, `u8 0, u32 charId`. The database call is `Usp_Delete_Char_Request_E`, a deletion request (the list's delete-pending flag) |
 | `0x0104` select | `u32 charId` at 2 | the list has been received (`m_bEnableDBCharacterSelect`, cleared here so it works once) and country != 2 | when the database agent has loaded the character: `0x0104`, 7 bytes, `u8 0, u32 charId`, then the enter-world burst (not in scope here) |
 | `0x0107` | none | | closes the connection (reason 1) |
@@ -291,7 +309,9 @@ Every request below is accepted only in state 1. Any other `0x01xx` opcode, **in
 
 Name handling in the game server: `TrimString(name, 21)` (0x46c250) forces `name[20] = 0` and removes every space; `ChkCharName` (0x46bf00)
 only requires the first two bytes to be non-zero. Character set, length limits beyond 20, uniqueness and banned words are left to the database.
-(`ps_dbAgent` builds the create call as text, `Usp_Create_Char_R(%u,'%s',...)`; whether it escapes the name was not checked.)
+(`ps_dbAgent` builds the create call as text, `Usp_Create_Char_R(%u,'%s',...)`, and does not escape the name: `CUser::PacketUserChar`
+(0x4056e0, case `0x404`) copies it with `CopyString` (0x408450, a plain copy) and `DBCharacter::CreateCharacter` (0x420270) formats it
+in as it is (confirmed).)
 
 ### 6.3 Database rules behind the character screen
 
@@ -303,7 +323,8 @@ Confirmed, in the restored `PS_GameData` procedures and in ps_dbAgent.
   changing it). No row means no faction chosen (country 2 in the game server, inferred from section 6.1).
 - **Names** (`usp_Create_Char_R`): spaces trimmed at both ends, then refused when any live character **on any server** has the name, or when
   a character above level 10 with that name was deleted less than 7 days ago. Comparison follows the database collation (case-insensitive in
-  the usual SQL Server setup; the collation of the restored database was not checked). The skill points of a new character are forced to 5.
+  the usual SQL Server setup; `docs/original/database-notes.md` records `Chinese_PRC_Stroke_CI_AS`, case-insensitive, at restore; not
+re-read here: the backups do not hold the collation's name as text, and the restored databases were not running). The skill points of a new character are forced to 5.
 - **Create result** (`DBCharacter::CreateCharacter`, ps_dbAgent 0x420270): the client gets `0x0102 u8 0` on success and `u8 1` for any failure
   (name taken, database error), `3` if the user record is gone. The base items are inserted in the same transaction
   (`Usp_Save_Char_Item_Add_E`).
@@ -380,9 +401,11 @@ Confirmed, unless marked.
 3. **Packet lengths are not checked** in the handshake or the character screen; short packets read leftover buffer contents.
 4. A wrong `0xA301` gets no answer and the connection stays open until 11 junk packets (state 0 counter), so idle unauthenticated connections cost nothing to hold.
 5. Faction can be re-chosen at any time from the character screen as far as the game server is concerned (`0x0109` is not restricted to
-   accounts without characters). Whether the database procedure refuses it is unknown.
+   accounts without characters), and the database procedure does not refuse it either: `usp_Save_Char_Country_E` inserts the row or
+   updates `Country` with no condition (confirmed, its text read from the `PS_GameData` backup; section 6.3).
 6. Character create trusts hair, face, size and sex values from the client.
-7. The database agent formats the character name into the SQL text (inferred risk of SQL injection; the name only has spaces removed).
+7. The database agent formats the character name into the SQL text without escaping it (confirmed, section 6.2; the name only has
+   spaces removed). That this allows SQL injection is inferred (not worth settling: the new server uses parameters).
 
 **The new server** (`docs/server/audit.md`, part 1): finding 4 is closed by limits the original does not have. At most 8 connections and 30
 new connections a minute from one address, and the whole handshake within 30 s of the connect (pings do not extend it). A write the client
@@ -398,24 +421,42 @@ out of time (the heartbeat would renew the row otherwise).
 
 ## 9. Keepalive `0x0003`
 
-Partly confirmed.
+Confirmed.
 
 Handled in every state. `SReply::CheckRecv` records the arrival time; when timing checks are enabled for the connection's agent, a keepalive that
 arrives sooner than `interval - tolerance` after the previous one closes the connection (reason 10, likely speed-hack detection) and one later than
 `interval + tolerance` closes it (reason 8). `SReply::CheckTime` also closes a connection whose keepalive is overdue. The interval and tolerances
-are fields of the agent object set during start-up; their values were **not** read (no direct callers of `SAgent::InitReply`).
+are set at start-up by `SAgentParam::SetParamReply` (fields `+0x30`, `+0x34`, `+0x38`, the switch at `+0x2a`; 0x4d8770), called by
+`CServer::Start`:
+
+- **client connections** (the accepting agent, 0x405a63 to 0x405a7a): checks on, interval **300 s**, early tolerance 300 s, late
+  tolerance 600 s. So the "too early" close (reason 10) never happens (`interval - tolerance` is 0), and a client is closed with reason 8
+  when **900 s** pass without a keepalive: on its arrival (`SReply::CheckRecv` 0x4dd6c0, from `SAgent::PacketSystem` 0x4d8a19) or by the
+  timer (`SReply::CheckTime` 0x4dd670, from `SAgent::UpdateReply` 0x4d90d8), counting from the connect when none came yet;
+- **server links** (0x405ae6 to 0x405afd): checks off.
 
 ## 10. Open items
 
 - Client side: what `game.exe` does with `0xB103` and with `0x0109` (`0xA301`, `byEncMode` and the XOR switch are settled in
   `docs/original/enter-world.md`).
-- `ChkMapByCharLevel`'s map table. (The enter-world burst and states 2 to 4 are in `docs/original/enter-world.md`.)
-- Database agent: when `byWithCountry` is set, and the creation stats, position and base items
-  (`CUser::ProcessCharacterCreate` in ps_game). Max grow, names, create results and delete storage are in section 6.3.
-- The extra u32 at offset 95 of ps_session's `0x801` reply.
-- Keepalive timing values (section 9).
-- Note on the PDB: the `CUser` type record places `m_Crypto` at `+0x5520`, the code uses `+0x5524`; the fields from `m_qwSessionID` on agree
-  (8-byte alignment absorbs the difference). Names in this document come from the PDB, offsets from the code.
+- Settled: `ChkMapByCharLevel`'s table (section 6.1). (The enter-world burst and states 2 to 4 are in `docs/original/enter-world.md`.)
+- Settled: the database agent sets `byWithCountry` on both of its list loads, when the user connects (requests 3 from
+  `CConnection::PacketUserConnect` 0x40b4ff and `PacketSystemConnect` 0x40b2b9, `CUser::OnDispatchDB` 0x403e4d) and when the player returns
+  to the character screen (request 10 from `CUser::LogoutSelect` 0x40301c, 0x403ffb), and not on the list after a create
+  (`CUser::CreateCharacter` 0x4044b0). The creation stats, position and base items are ps_game's (section 6.4): `CUser::PacketUserChar`
+  (0x4056e0, case `0x404`) only copies them into its create call (confirmed).
+- The extra u32 at offset 95 of ps_session's `0x801` reply: its use is settled (section 3.2), what the login procedure puts there is not.
+- Settled: keepalive timing values (section 9).
+- Note on the PDB: the `CUser` type record and the code disagree by 4 bytes over long stretches, not only at `m_Crypto` (record `+0x5520`,
+  code `+0x5524`: `CUser::OnRecv` 0x466d2b, `CWorld::LoginUser` 0x40c67b). The code is 4 bytes later before it as well (`m_nAttackSpeed`
+  record `+0x12e8`, code `+0x12ec`, `CUser::SendSpeedMe` 0x482767; `m_byWeaponSpeed` `+0x1304` / `+0x1308`, `CUser::ItemEquipmentAdd`
+  0x454fbb) and after it up to `m_nWhere` (code `+0x5758`). The two agree from `m_qwSessionID` to `m_dwUndefinePacket` (`CWorld::LoginUser`
+  fills `+0x5760`, `+0x5768`, `+0x5790`, `+0x57e8` and `+0x580c` from the `0x801` reply at 0x40c6ae to 0x40c71d, the record's
+  `m_qwSessionID`, `m_byUserPermission`, `m_nServerDBID`, `m_dwAutoCharID` and `m_byRealServerID`). The code
+  then has a 4-byte field the record lacks (`+0x5814`, section 3.2), so everything after is 4 bytes later again (`m_nMovePositionType`
+  `+0x5818`; `m_byResetStatus` `+0x584c`, `CUser::StatResetStatus` 0x480991; `m_dwLockOnTick` `+0x5850`, `CUser::SetLockOnTick` 0x44ba6f;
+  `m_csMove` `+0x5e98`) (confirmed). Where the first difference starts and why the record differs were not traced. Names in this document
+  come from the PDB, offsets from the code.
 
 ## 11. Other episodes
 
@@ -431,8 +472,10 @@ in [`protocol-notes.md`](protocol-notes.md) section 9.
 - The GameGuard CSAuth2 server library is linked in (strings; confirmed); the EP3 `0xA302` path was not walked.
 - One database-agent link (no `dbagent2`), no watchdog for stalled world threads, no minidumps, no hot reload from the console
   (confirmed by strings).
-- No reconnect path into a character: the `0x0112`/`0x0113` burst branch and the `0x306` request are absent (inferred from the missing
-  code), and there is no `0xB103` billing info (confirmed).
+- No reconnect path into a character (confirmed): no instruction of EP3's ps_game uses the constants `0x112` or `0x113` (EP4.5's
+  `CUser::PacketUserDBChar` builds them at 0x46d5d2 and 0x46d6e7), and its only `0x306` is the game-log record of entering the world
+  (EP3 ps_game 0x43638a, 0x71 bytes, EP4.5's `CUser::EnterWorld` 0x44a932), not the reconnect request EP4.5 sends to the database agent
+  when `m_dwAutoCharID` is set (`CUser::SendDBAgentConnect` 0x46c601). There is no `0xB103` billing info (confirmed).
 
 ### EP5.4
 

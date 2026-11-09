@@ -1758,3 +1758,20 @@ add it first, from the folder holding the original `Monster.SData`.
        5 seconds with the message and returns on leaving; `deny capture` by level refuses the net with its message.
 10. [ ] **Off**: `data-editor ext disable pets`, restart: both items are refused and stay, no pet comes out, nothing else differs.
         `base = 0` (the wild record) on a client without patch 111: a full-size, clickable pet that the server ignores when it is attacked.
+
+## 64. Client facts the static reading left open (`notes/confirm-ledger.md` cluster A1)
+
+For one real client (two for the third item). These are facts about the client that the code could not settle; nothing here changes
+the server. Note what you see in each item's note. ProbeHero and its account; for the last item, `RUST_LOG=game_server=debug`.
+
+- [ ] **The login boxes take 19 characters** (`docs/original/ps_login.md` section 13): type 20 characters into the ID box, then into the
+      password box; then again after Tab, after clicking from one box to the other, and after a failed login. Each box should stop at
+      19 every time. Note any box or path that takes more or fewer.
+- [ ] **A character with no items enters** (`docs/original/enter-world.md` section 7): with ProbeHero, move every item, the worn ones too,
+      into the warehouse (or sell it), log out to the character screen and select it again. It should enter the world with
+      empty bags; `Log.txt` (with `gsConfig.cfg` as `docs/client/README.md` says) should have no "Packet Underflow" line.
+- [ ] **The kick box** (`docs/original/client-extras.md` section 3.4): log ProbeHero's account in on one client and into the world,
+      then log the same account in on a second client. The first should show a box and quit by itself: note the box's text exactly.
+- [ ] **A diagonal run** (`docs/original/move-check.md` section 2a): on flat ground, run with forward and a side key held together
+      for about 30 seconds without stopping, then the same straight ahead. Never put back; afterwards note the `average` values of the
+      "move window" lines for both runs (the diagonal is expected near 5.22 against 5.0 straight).

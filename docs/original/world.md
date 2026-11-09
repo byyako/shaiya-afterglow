@@ -100,7 +100,9 @@ every list sent after a load.
 Confirmed, `CWorld::LeaveUser` 0x40ca20, `CUser::KillSoulForDisconnect` 0x459380.
 
 A closed client connection goes through `CWorld::LeaveUser` (called from `CServer::OnDisconnect` 0x406430; a close by the server itself, such as
-reason 9, inferred to end there too), by the connection's state (`m_nWhere`, `+0x5758`: 0 none, 1 character screen, 4 in the world; jump table
+reason 9, ends there too: `SConnection::Close` 0x4d43a0 only records the reason and closes the socket, and the worker's failed receive then
+runs `SConnection::Disconnect` → `SAgent::Disconnect`, which calls `CServer::OnDisconnect` through the vtable at 0x5301ac, at 0x4d8fef;
+confirmed), by the connection's state (`m_nWhere`, `+0x5758`: 0 none, 1 character screen, 4 in the world; jump table
 0x40cccc). In the world (state 4; states 2 and 3 are much the same, 3 also ends a mini game):
 
 1. A **dead** player (`m_nStatus` 1) comes back to life on paper: `KillSoulForDisconnect`.
@@ -153,7 +155,9 @@ In this order:
 5. `0x0451` weather to the player (`CZone::SendWeather`): `u8 0, u8 type, u8 power`; `00 00 00` when the zone has no weather.
 6. `0x2101` the map's obelisks and portal links (`CMap::SendObeliskList`): `u8 count`, 13 bytes each (`u32 id, u8 state, f32 x, f32 z`), up to 100 per
    packet; nothing when the map has none.
-7. `CUser::EnterZone`: server bookkeeping (movement check start, GameGuard), no packet.
+7. `CUser::EnterZone` (0x44ae30): server bookkeeping (movement check start), and two things that can send: buffs the map does not allow
+   are removed (`ChkApplySkillByMap` 0x484680, which sends the removal), and with GameGuard on (`g_bUseNProtect`) its query goes out
+   (`CUser::NProtectCSASend` 0x44b700) (confirmed).
 
 ### 5.3 Moving between cells (`CZone::MoveUserByPacket` 0x416550, `CZone::SendMoveUser` 0x41f350)
 
@@ -260,7 +264,11 @@ whispers are matched ignoring case (character names are unique ignoring case).
 
 ## 8. Open items
 
-- `0x0209` and the rest of `PacketMaininterface`; the friends (`0x22xx`) and points (`0x26xx`) requests the client sends; `0xB106`.
+- Settled elsewhere: `0x0209` is in `docs/original/skills.md` section 3 (`PacketMaininterface` case 0x468a4e), the friends requests
+  (`0x22xx`) in `friends.md`, the points requests (`0x26xx`) and `0xB106` in `item-mall.md`. `0xB106` is never answered: in the world
+  every `0xB1xx` goes to `CUser::PacketBilling` (0x4673ca), which handles only `0xB102` and closes the connection with reason 9 for any
+  other (0x457b50 to 0x457b69); the client sends `0xB106` before it enters the world (`enter-world.md` section 1.3). The other cases of
+  `PacketMaininterface` are on the pages of their features; a list of every case was not made (not worth it).
 
 ## 9. Other episodes
 

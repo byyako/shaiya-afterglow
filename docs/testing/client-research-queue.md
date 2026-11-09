@@ -71,6 +71,17 @@ it in the server spec it names.
     `Monster.SData` with the 2,473 pets and 527 fillers) is the client side's to pack, sign and hand out, as patches 109 and 110. One
     point to settle then: the archive member of `Monster.SData` (`data/monster/monster.sdata`) is written as `Monster/Monster.SData` in the
     generator's manifest by the pattern of the other two (`Item/Item.SData`, `Character/Skill.SData`); the client side confirms it.
+33. **Which received packet starts the client's world loading** (from `docs/original/enter-world.md` section 1.3, cluster A1 of
+    `notes/confirm-ledger.md`). The client sends `0x0201` at the end of its loading, from the scene update (`0x42e9fa`, `0x42fa77`); the
+    scene state byte `0x705040` has some twenty writers in that code and none is a packet handler. Which handler (of `0x0104`, `0x0105`,
+    `0x010B` or another packet of the enter-world burst) moves the scene to loading, and does the client wait for the whole burst or only
+    for that packet? What it changes: whether the new server may send anything of the burst after that packet, or must keep the
+    original's order to the end. A live log (`Log.txt`) of a select shows when the client stops reading the burst, but not why.
+34. **What the client shows with the `0x0404` world clock** (from `docs/original/enter-world.md` section 3, cluster A1). The handler
+    (`0x54f020` → `0x4c1bb0`) splits the value into an 84-day period, the week, the 4-hour block (block / 6 = the day) and the seconds;
+    which code reads those parts (a day and night cycle, a calendar on screen, timed events), and does a clock that starts at 0 at every
+    server start (the new server's) look wrong anywhere? What it changes: whether the new server should keep the clock across restarts as
+    the original does. A live test cannot answer it without knowing where to look.
 
 ## Answered
 

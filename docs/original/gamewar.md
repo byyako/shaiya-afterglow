@@ -170,8 +170,10 @@ usual checks (`docs/original/gatekeeper.md` section 2), it compares the player's
 `GateKeeperLvMin` (`CMap+0x1e0`) and `GateKeeperLvMax` (`+0x1e4`). Below the minimum or above the maximum, the request fails like the
 gatekeeper's other failures. The loader (`CMap::LoadGameMapConfig`, 0x42481b to 0x42485b) defaults the keys to 0 and 60, so a map
 without them takes levels 0 to 60. Shipped bands: 102 levels 10 to 15, 103 levels 21 to 30, 104 levels 31 to 60. The gatekeeper
-is the only reader of the bands that was found. Portals carry their own level range in the svmap (103's is 1 to 99). That GM moves
-skip the bands is inferred. The ordinary `ps_game` reads no such keys and has no such check.
+is the only reader of the bands that was found. Portals carry their own level range in the svmap (103's is 1 to 99). GM moves skip the bands
+(confirmed: in the war server's code only `CMap::LoadConfig` and this check read the two fields; every other access at those offsets is
+in `CMob`, `CZone`, `CNpc` or `CUser` code, by the war server's PDB names). The ordinary `ps_game` reads no such keys (it has no
+`GateKeeperLv` string) and has no such check.
 
 ## 4. Getting there and back
 
@@ -215,8 +217,12 @@ Confirmed. Home side: EP4.5 `ps_game`, `CClientToMgr::OnRecv` 0x409850 (jump tab
    Without the flag, the player gets the ordinary `0x010D` (quit). The client's side of `0x0111` is in
    `docs/client/packet-opportunities.md`: it recreates its connection and reconnects. On arrival, the war server places the
    character in room 100 or 101 with `GetGameStartPosWar` (`CUser::PacketUserDBSetInfo`). It keeps the player's DB id (`+0x5790`)
-   and uses it to pick the home DB agent (`CWorld::LoginUser`, `EnterUserWorld`). *Inferred:* the 32 bytes are what lets the
-   session accept the reconnect on the other server. Their origin and the war server's check were not traced.
+   and uses it to pick the home DB agent (`CWorld::LoginUser`, `EnterUserWorld`). The 32 bytes are the connection's AES key material
+   from the login (the key and the counter seed that ps_login made and ps_session keeps unchanged, [`ps_game.md`](ps_game.md) section
+   4.1): `CWorld::LoginUser` copies them from the `0x801` reply to `+0x57ec` and keys the connection with them (home ps_game 0x40c66d to
+   0x40c681), and `LogoutUser` sends them in `0x0111` (0x40c9b3) (confirmed). *Inferred:* the client keys its new connection with them,
+   and the war server gets the same bytes from the session's `0x801` for that user, so the two agree without a new login; the war
+   server's check of the reconnect was not traced.
 5. **Going home.** On the war server, any move to map 200 (the room portals, map 104's exits) sends the same `0x080C`. The
    session always answers 0. The war server's `LogoutUser` sends `0x0111` with the address of **the player's home game server**
    (the server table's +0x2c, found by DB id). If the player's DB id is not in the table, it logs "LogoutUser Error : n ==
@@ -236,8 +242,9 @@ Confirmed, the callers of `CUser::SendDBAgent` and `SendGameLog` (22 and 19 func
 | the faction kill counts | the session, to every home server (section 6) |
 
 There is no store of the war server's own, so nothing is lost when it restarts: every player is saved at home. The obelisks and
-the faction kill counters on the war server are kept in memory only. That follows from the empty `[DB]` section; whether anything
-else holds the obelisk state was not checked.
+the faction kill counters on the war server are kept in memory only. Nothing else holds the obelisk state: the war server's
+`CMap::SendDBObeliskChange` (0x428b20), `CMap::SendDBObeliskList` (0x428ba0) and `CWorld::SendDBObeliskList` (0x411d10) are each a
+lone `ret` (confirmed, by its PDB names), where the ordinary `ps_game`'s versions send the state to the database agent (0x42b260, 0x42b370).
 
 ## 6. Kills reported home
 

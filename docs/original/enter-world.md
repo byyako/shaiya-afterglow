@@ -64,7 +64,9 @@ same way. Field names below are matched to the code by this +4 rule and by how t
   (`0x47be67`). The create screen's two race buttons (`0x4656c0`, `0x465c60`) set race 0 (human) and race 1 (elf) when the country is 0,
   race 3 (deatheater) and race 2 (vail) otherwise. So **Light = 0 = races 0 and 1, Fury = 1 = races 2 and 3.**
 - **`0x0201`.** The client sends `0x0201` (2 bytes, no payload, `0x5858f0`) at the end of its world-loading step (two call sites in the scene
-  update code, `0x42e9fa` and `0x42fa77`). What starts the loading (which received packet) was not traced.
+  update code, `0x42e9fa` and `0x42fa77`). What starts the loading (which received packet) was not traced: both senders sit in
+  the scene update, whose state byte (`0x705040`) has some twenty writers, none of them a packet handler directly (inferred; the question
+  is entry 33 of `docs/testing/client-research-queue.md`).
 - **`0xB106`.** The client sends `0xB106` (2 bytes, `0x589570`) at the end of a scene set-up function (`0x426735`), when a feature check
   (`[0x7013d4]->vtable[1](10)`) passes. The original server has no handler for it: in states 2 and 3 it is ignored, in state 4 any `0xB1xx` other
   than `0xB102` would close the connection. It arrives while the player is still waiting (state 2), so it is harmless there.
@@ -94,7 +96,7 @@ All of these are queued in this order, **AES-encrypted**. Lengths include the op
 | # | opcode | sent | length | content |
 |---|---|---|---|---|
 | 1 | `0x0104` | always | 7 | select result: `u8 0`, `u32 charId` |
-| 2 | `0x0404` | always | 6 | `u32` world clock: a start value plus seconds since a start tick (`CWorld::GetWorldDay`). The start value comes from the database agent when the game server connects (`CClientToDBAgent::PacketSystemConnect`), so it is a clock kept across restarts. Meaning to the client unknown |
+| 2 | `0x0404` | always | 6 | `u32` world clock: a start value plus seconds since a start tick (`CWorld::GetWorldDay`). The start value comes from the database agent when the game server connects (`CClientToDBAgent::PacketSystemConnect`), so it is a clock kept across restarts. The client (read-only, `game.exe` 0x54f020 → 0x4c1bb0) keeps it as a calendar in seconds: it splits it into an 84-day period (7,257,600), the week in it (604,800), the 4-hour block of the week (14,400; block / 6 = the day) and the seconds in the block (confirmed). What it shows with it was not traced (client research queue entry 34) |
 | 2a | `0x0D0D`, `0x0D2F`, `0x0D0E` | always | | the guild list of the character's country (`CUser::EnterWorld` → `CGuildMgr::SendGuildList`, `docs/original/guild.md` section 9) |
 | 2b | `0x0D12`, `0x0D13`, `0x0D16` | in a guild | | its members, and to an officer the join requests (`CUser::InitGuild`, section 10 there) |
 | 3 | `0x0112` | reconnect only (`m_dwAutoCharID != 0`) | 8 | `u32 objectId, u16 map`. Not used by us |
@@ -115,7 +117,7 @@ All of these are queued in this order, **AES-encrypted**. Lengths include the op
 | 18 | `0x2606` | if any | 3 + 4n | stored point (cash shop) items |
 | 19 | guild | if in a guild | | `CGuild::SendBankItemList`, `CGuild::SendNpcLvList` (guild house: `docs/original/guild-house.md` section 1, `docs/original/guild-bank.md` section 4) |
 | 20 | `0x0114` | always | 6 | `TP_CHARACTER_SERVERTIME`: the local time packed by the server's `GetSystemTime` (0x4cb8e0): `(year - 2000) << 26 \| month << 22 \| day << 17 \| hour << 12 \| minute << 6 \| second` (computed as `year - 16` with overflow, the same low bits) |
-| 21 | `0x021B` | always | 4 | two bytes: `-byte(+0x584c)` and `1 - byte(+0x584d)` (inferred to be `m_byResetStatus`, `m_byResetSkill`: the stat and skill reset flags). For a normal character: `00 01` |
+| 21 | `0x021B` | always | 4 | two bytes: `-byte(+0x584c)` and `1 - byte(+0x584d)` (0x46d688, 0x46d690): `m_byResetStatus` and `m_byResetSkill`, the counts of stat and skill resets used, which `CUser::StatResetStatus` (0x480991) and `CUser::StatResetSkill` (0x480ca9) raise by 1 (confirmed; the code's offsets are the PDB's plus 4 here, `ps_game.md` section 10). The client stores the two bytes (`game.exe` 0x550820) and shows them as "chances left" in the NPC menu (0x48d240 with message 5172, 0x48d2df with 5173; confirmed, read-only). For a normal character: `00 01` |
 | 22 | `0x0210` | only in shape type 13 | 3 | run mode. Sent here on entering the zone while hidden (`Zones::enter`), not in the burst |
 | 23 | `0x010B` | always (normal path) | 3 + 5n | `TP_CHAR_QUICK`: `u8 count`, then `u8 bar, u8 slot, u8 bag, u16 number` per quick slot. On the reconnect path `0x0113` (2 bytes) is sent instead |
 
@@ -159,8 +161,13 @@ Confirmed, `CUser::SendSpeedMe` 0x482730, `GetMoveSpeed` 0x48a4d0.
 
 - `attackSpeed`: `m_nAttackSpeed` clamped to 0 to 9; `0xFF` while stunned, asleep, transformed or disabled by a skill.
 - `moveSpeed`: `m_nMoveSpeed` clamped to 0 to 4; `0xFF` in the same states (0 when transformed with a fixed mob shape).
-- `InitEquipment` (0x454560) starts both from fixed values (move speed **2**, attack speed 0) and adds the equipped items' values
-  (`Items.Speed`-like fields of the weapon and a per-weapon-type table). The exact attack speed formula was not written up (unknown).
+- `InitEquipment` (0x454560) starts both from fixed values (move speed **2** at 0x454592, attack speed 0 at 0x4545e2) and
+  `CUser::ItemEquipmentAdd` (0x454c70) adds the equipped items (confirmed):
+  - the weapon (slot 5, 0x454f98): attack range += `Items.Range`, **attack speed += `Items.AttackTime` + `m_byWeaponSpeed[its real
+    type]`** (the weapon-speed passives, `docs/original/skills.md` section 5);
+  - slots 8 to 12 (0x454cf6): attack range += `Range`, attack speed += `AttackTime`, move speed += `Items.Speed`;
+  - gems (`CUser::GemEquipmentAdd` 0x4560c0) and buffs (`docs/original/skills.md` section 6, abilities 16 and 17) add to both.
+  `SendSpeedMe` then clamps attack speed to 0 to 9 and move speed to 0 to 4 (above).
 
 ## 4. After the burst: waiting, then the zone
 
@@ -191,9 +198,13 @@ Confirmed, unless marked.
   Count, Maketime, Maketype`). `ItemID` = `Type * 1000 + TypeID` (true for every base item, `defs.items` is keyed the same way).
 - **Equipment shown on the character screen** (ps_dbAgent `DBCharacter::LoadCharacterList`, verified 0x41e200): `EXEC usp_Read_Char_Items_Simple_R charId, ?, 0`
   returns (slot, type, typeId, gems…) of the equipped items; for slot < 8 the list's `byEquipmentType[slot]` and `byEquipmentTypeID[slot]` are set, and for
-  **slot 7 the six gem bytes become `byCloakInfo[6]`** (the cloak's look). That the procedure returns bag 0 only is inferred (its text was not read).
-  Slot 5 is the weapon (base items, below) and 7 the cloak (above); the other slot meanings (0 helmet, 1 upper, 2 lower, 3 gloves, 4 boots, 6 shield)
-  are community knowledge, not verified here.
+  **slot 7 the six gem bytes become `byCloakInfo[6]`** (the cloak's look). The procedure returns bag 0 only:
+  `SELECT Slot,Type,TypeID,Gem1,...,Gem6 FROM CharItems WHERE CharID=@CharID AND Del=0 AND Bag=0 AND Slot<@Slot`, the `@Bag` argument
+  unused (confirmed, its text read from the `PS_GameData` backup).
+  The slots are fixed by `CUser::EnableEquipment` (0x45b450), which takes only items of one real type in each (the table `LITEM_TYPE`
+  0x542188 maps item types to real types): **0 helmet** (real type 16), **1 upper armour** (17), **2 lower armour** (18), **3 gloves** (20),
+  **4 boots** (21), **5 weapon** (its own check), **6 shield** (19), **7 cloak** (24), **8 amulet** (23), **9 and 10 rings** (22),
+  **11 and 12** item types 40 and 41 (real type 25), **13 mount** (item type 42) (confirmed; the names from the item names of those types).
 - **Base items for a new character** (`CGameData::LoadBaseItem` 0x4bf800, `ProcessCharacterCreate`): rows of `usp_Read_BaseItemDefs_R` read as
   (family, job, itemId, type, typeId, count, slot, quality), skipped unless the item exists in the item definitions. **The `Slot` and `Quality` columns
   are not used.** Placement is done after loading, per (race, class), in row order: the **first item with type 1 to 19 (a weapon) goes to bag 0 slot 5**
@@ -220,8 +231,11 @@ sends nothing, as in the original.
 
 ### 6.3 Select and the burst
 
-On `0x0104` with a live character of this account on this server, load the character and its items and send, AES-encrypted, in this order (refusing
-a character whose deletion is pending is an addition of the new server; whether the original refuses it was not checked):
+On `0x0104` with a live character of this account on this server, load the character and its items and send, AES-encrypted, in this order (the original
+refuses a character whose deletion is pending too: ps_dbAgent's select (`CUser::PacketUserChar` 0x4056e0, case `0x407`) accepts only a
+character with no deletion request and no rename pending, and otherwise drops the user (`CUser::ExitUser` 0x402f70 sends `0x302`), on
+which the game server closes the connection with reason 0x68 (`CClientToDBAgent::PacketUserConnect` 0x408dd7) (confirmed); the new
+server answers nothing and keeps the connection):
 `0x0104` (0, id), `0x0404` (seconds counter), `0x0105`, `0x0106` (only if items), `0x0108` (count 0), `0x051C` (attack speed from the weapon when known,
 otherwise 0; move speed 2), `0x0211` (country, 0, 0), `0x0230` (honor), `0x2601` (0 points, no log), `0x0114` (time), `0x021B` (`00 01`), `0x010B` (count 0).
 Then switch the send side to XOR. Bank, friends and save points are sent when not empty (`docs/original/warehouse.md` section 8,
@@ -243,11 +257,14 @@ offers only these races (section 1.3).
 
 ## 7. Open items
 
-- The zone-entry senders (`SendShape`, `SendSpeed`, `CZone::SendCellInfoView`, `SendWeather`, `CMap::SendObeliskList`, `CUser::EnterZone`) and the in-world
-  packets (movement, chat).
-- The meaning of `0x0404`, `0x0211` and `0x021B` to the client; the attack speed formula; what makes the client start loading.
-- Whether the client needs any of the "if any" packets for a character without them (the original never sends them empty, so it should not).
-- `usp_Read_Char_Items_Simple_R` and `usp_Read_BaseItemDefs_R` procedure texts (the MSSQL container has them).
+- Settled: the zone-entry senders are written up in `docs/original/world.md` section 5.2 (`CZone::EnterUser` calls them in that order,
+  0x416105 to 0x416141), and the in-world packets in `world.md` and the pages it links.
+- Settled: `0x021B` and the attack speed formula (sections 3 and 3.3); `0x0211` is `docs/original/pvp-2.md` section 9. Open, client side:
+  what the client shows with the `0x0404` clock and what makes it start loading (`docs/testing/client-research-queue.md` entries 33, 34).
+- Whether the client needs any of the "if any" packets for a character without them (the original never sends them empty, so it should
+  not; inferred, a live run settles it: `docs/testing/live-test-checklist.md` section 64).
+- Settled: `usp_Read_Char_Items_Simple_R` (section 5) and `usp_Read_BaseItemDefs_R`: `SELECT Family, Job, ItemID, Type, TypeID, [Count],
+  Slot, Quality FROM BaseItemsDefs ORDER BY Family ASC, Job ASC` (confirmed, read from the `PS_GameDefs` backup).
 
 ## 8. Other episodes
 

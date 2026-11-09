@@ -64,7 +64,8 @@ Confirmed.
 
 Client reply `0xA101`: `u8 length (<= 0x80)` then the RSA ciphertext. `CUserCrypto::KeyInit` (0x404ea0):
 
-1. The 128 ciphertext bytes are loaded raw into a big integer (dwords in memory order) = **little-endian integer**.
+1. The ciphertext bytes (as many as the length byte says; the real client sends 128) are loaded raw into a big integer (dwords in
+   memory order) = **little-endian integer** (`BinToMpz` 0x40bc10, called at 0x404ed2).
 2. `SRsa::Dec` (0x40c2c0) decrypts with the CRT components `p, q, dP, dQ, qInv` (offsets `+0x18` to `+0x60` of the key).
    Plain RSA, no padding.
 3. The result is copied back out as raw dwords into a 128-byte buffer (little-endian, zero-padded at the high end).
@@ -76,8 +77,11 @@ Client reply `0xA101`: `u8 length (<= 0x80)` then the RSA ciphertext. `CUserCryp
    decrypt context (`+0x16c`).
 7. Both counters (`+0x148`, `+0x260`) are set to the same IV and both stream positions to 0. `this+0x14 = 1` activates encryption.
 
-Weakness worth fixing in the rewrite: the length byte is only checked to be `<= 0x80`, yet `KeyInit` always reads 128 bytes, so a
-short packet makes the server read past the received data.
+Weakness worth fixing in the rewrite: the length byte is only checked to be `<= 0x80` (`CUser::OnRecv` 0x404540) and is never compared
+with the packet's size, so a packet shorter than its length byte makes `KeyInit` read past the received data. A length byte of 0 to 4
+also makes `BinToMpz` write zeros in front of its buffer: it sizes the number as `n = ceil(length / 4)` dwords and clears dwords `n - 1`
+and `n - 2` (0x40bc50, 0x40bc57), so 0 clears the 8 bytes before the heap buffer and 1 to 4 the 4 bytes before it (confirmed). Whether
+that crashes the process is inferred (it corrupts the heap block's header; only a run would show when it fails).
 
 ## 4. Stream cipher
 
@@ -96,8 +100,11 @@ encrypt object at `+0x54` and the decrypt object at `+0x16c`):
 - Applies to `data + 2`, length `u16(data) - 2`: the 2-byte length field stays plaintext, the opcode and payload are encrypted.
 - Encryption and decryption are the same operation. Server send and server receive use separate objects, both seeded with the
   same key and IV, so each direction has its own counter starting at the same value.
-- Inferred, not yet tested: `FUN_0040cf00` (the block encrypt) uses the standard AES byte order. A known-answer test against
-  a real client capture is needed before relying on it.
+- The block encrypt `AES_encrypt` (0x40cf00, the PDB name) is OpenSSL's table implementation in the standard byte order: it loads
+  the input as big-endian words (byte swaps at 0x40cf08 to 0x40cf82), stores the output the same way (0x40d409), and its tables are the
+  standard ones (`Te0` at 0x447f78 begins `0xc66363a5`, `Te4` at 0x448f78 `0x63636363`) (confirmed). The new server's copy uses a
+  standard AES-128, passes the FIPS-197 known answer (`crates/shaiya-crypto/tests/known_answers.rs`), and the real client logs in
+  through it (section 14).
 
 ## 5. Login `0xA102` client to server
 
@@ -114,17 +121,21 @@ Confirmed.
 
 Confirmed, details inferred.
 
-`CUser::OnDispatchDB` case 2 hashes the password (`FUN_0040a3b0` update, `FUN_0040b0b0` final into a 32-byte buffer: MD5 as a 32-character
-hex string, **inferred**) and calls `CUser::ChkPasswdMD5` (0x404700), its only caller being 0x404ab5. It runs the first of these stored procedures; `CUser::ChkPasswd`
+`CUser::OnDispatchDB` (0x404a10) case 2 hashes the password with `SMD5::MD5` (0x40a3b0: the MD5 initial values, then `md5_update`
+0x40a160 and `md5_final` 0x40a210) and writes the 16-byte digest as **32 upper-case hex digits** with `BinToHexL` (0x40b0b0, called with
+16 bytes at 0x404a97; its digit table is `0123456789ABCDEF`) (confirmed), then calls `CUser::ChkPasswdMD5` (0x404700), its only caller being 0x404ab5. It runs the first of these stored procedures; `CUser::ChkPasswd`
 (0x404580), the plain-password form, has no caller in this build (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)) (strings at 0x447054, 0x4470b0):
 
 ```
 EXEC usp_try_gamelogin_korea '%s','%s', %I64d,'%s'
 EXEC usp_try_gamelogin3_r    '%s','%s', %I64d,'%s'
 ```
-Arguments: user id (varchar 18), password, session id (bigint), client IP (varchar 15). Whether the password argument is plain text or an MD5 hex string depends on the variant: `usp_Try_GameLogin3_R` takes `varchar(18)` and hashes it itself, so it receives plain text; the `_Taiwan`/`_korea` style takes `varchar(32)`, so it receives the MD5 hex that `OnDispatchDB` computes. The binary has two paths, `CUser::ChkPasswd` (0x404580, not recognised as a function by Ghidra, **not yet read**) and `CUser::ChkPasswdMD5` (0x404700, read). Which one runs is decided by server mode, **not yet traced**.
-Only `usp_Try_GameLogin3_R` and `usp_Try_GameLogin_Taiwan` exist in the restored `PS_UserData`; the `_korea` string in the binary has no matching
-procedure here, so the server build selects between variants (which one is used by default is **not yet traced**).
+Arguments: user id (varchar 18), password, session id (bigint), client IP (varchar 15). Whether the password argument is plain text or an MD5 hex string depends on the variant: `usp_Try_GameLogin3_R` takes `varchar(18)` and hashes it itself, so it receives plain text; the `_Taiwan`/`_korea` style takes `varchar(32)`, so it receives the MD5 hex that `OnDispatchDB` computes. The binary has two paths, and only one runs: `ChkPasswdMD5` (0x404700) calls `GetUserMD5` (0x406e50), which formats **only
+`usp_try_gamelogin_korea`** (the string at 0x447054, pushed at 0x406ed9) with the MD5 hex; `GetUser` (0x406b50), the only user of the
+`usp_try_gamelogin3_r` string (0x406bd2), is called only from `ChkPasswd` (0x4045e6), which nothing calls (no call and no pointer to it
+in the image) (confirmed). Only `usp_Try_GameLogin3_R` and `usp_Try_GameLogin_Taiwan` exist in the restored `PS_UserData` (their texts
+were read from the backup), so this build needs a `usp_try_gamelogin_korea` that the shipped databases do not have. `GetUserMD5` binds
+three result columns (a `smallint` status, the `UserUID` and a third `int`, 0x406e50); the two shipped procedures return two.
 
 `usp_Try_GameLogin3_R` (read from the restored database, `sp_helptext`) does:
 1. `SELECT UserUID, Enpassword, Status, Leave FROM Users_Master WHERE UserID = @UserID`.
@@ -185,12 +196,14 @@ Request: `u8 serverId, u32 clientVersion` (version at `payload[1..5]`). Checks i
 | result | meaning | check |
 |---|---|---|
 | `0xFE` (-2) | cannot connect | server id unknown, or `EnableConnect` false |
-| `0xFC` (-4) | server saturated | `EnableUserCount(list, privilege < 0xB)` false (inferred meaning: the server-full check, with the flag saying whether this user is subject to the cap) |
+| `0xFC` (-4) | server saturated | `EnableUserCount(list, privilege < 0xB)` false: the server-full check (confirmed, 0x407500). With the flag set (staff, `privilege <= 10`, `setbe` at 0x40443d) it passes; otherwise it passes only while the entry's player count (`+0x10`, written by `SetUserCount` 0x4072a0) is below its capacity (`+0x12`, `SetUserCountMax` 0x4072b0) |
 | `0xFD` (-3) | version mismatch | `EnableVersion(clientVersion, list)` false |
 
 On success the login server forwards a `0x703` message (8 bytes) to the session server, sets `this+0x138 = 0xFE`, and the session server answers it.
-The session's `0x703` reply carries no address (ps_session 0x4040e1, confirmed), so the game server's IP comes from the login
-server's own server list (inferred) (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). The `0xFE/0xFD/0xFC` values equal the -2/-3/-4 codes in the Imgeneus doc.
+The session's `0x703` reply carries no address (ps_session 0x4040e1, confirmed). The login server answers the client when that reply
+comes (`CClientToMgr::OnRecv` 0x405562 to 0x4055d8): `u16 0xA202`, as the result byte the byte at offset 6 of the reply (the server id,
+or 0xFF when the session refused; also stored at `this+0x138`), and the IP of that server from **the login server's own server list**
+(entry `+0x0c`, 0 for an id outside the list; inlined at 0x4055b3 to 0x4055c7) (confirmed) (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)). The `0xFE/0xFD/0xFC` values equal the -2/-3/-4 codes in the Imgeneus doc.
 
 ## 10. What this changes in the protocol notes
 
@@ -203,8 +216,8 @@ server's own server list (inferred) (corrected 2026-11-09, found when comparing 
 
 - Settled 2026-11-09: `ps_session` does not complete the select-server reply (section 9), and it passes the `0x701` key bytes to the game
   server in its `0x801` reply (`docs/original/ps_game.md` section 3.2).
-- `FUN_00406e50` (the database call): confirm which variant is used and how `Status` maps to the `0xA102` result byte.
-- Validate the cipher with a known-answer test (see section 4).
+- Settled: `GetUserMD5` (0x406e50) runs `usp_try_gamelogin_korea` only, and maps `Status` as in section 12 (section 6).
+- Settled: the cipher is standard AES-128 (section 4).
 - `CKeyMgr::GenKey` / `SRsa::GenKeyPair`: the public exponent. Settled 2026-11-09: the pool starts with 16 keys of 1024 bits made at
   start-up (0x456dbc to 0x4575fc), and `CKeyMgr::OnUpdate` (0x406af0) adds one per run up to 1024 (confirmed; the same in EP3).
 
@@ -249,7 +262,9 @@ Confirmed.
    and runs it directly. Nothing in the path escapes quotes: `CUser::OnRecv` only cuts each field at 12 characters. Twelve characters are enough
    for an injected statement (for example `';SHUTDOWN--` is exactly 12). The remaining arguments are numeric or the client IP, which the server
    supplies. The same pattern very likely exists in the other query variants (`usp_try_gamelogin3_r`, the Taiwan form) built by the same code.
-2. **Over-read in the key reply.** `KeyInit` reads 128 bytes after a length byte that is only checked to be at most 0x80.
+2. **The key reply's length byte.** It is only checked to be at most 0x80 and never against the packet's size: a short packet makes
+   `KeyInit` read past the received data, and a length of 0 to 4 makes `BinToMpz` zero 4 or 8 bytes in front of its heap buffer
+   (section 3).
 3. **Account enumeration.** Result 1 (no such account) differs from result 3 (wrong password).
 4. **Unlimited reconnects.** Failed logins are counted per connection (10), not per address, so guessing continues by reconnecting.
 5. **Plain-text password column** (`Users_Master.Pw`, `varchar(12)`) next to the MD5 hash, and an unsalted MD5 for the hash.
@@ -272,7 +287,8 @@ still log in).
 (the IME object whose `+0x24` is the cap, set by `FUN_0051f440`, checked in `FUN_00522370`: input is refused once the typed byte length
 reaches it) gets **0x13 = 19** at the login window's construction (`FUN_004b1f70`) and after a failed login (`FUN_004b61b0`), **12 only when
 the region variable `0x6f1558` is 4 (Japan), 31 when it is 0xb**; this build starts at region 6, so 19. Nothing on the Tab or click paths changes
-it, so the ID and the password boxes share it (unverified by running the client). The window's buffers are 35 bytes each. The sender
+it, so the ID and the password boxes share it (inferred: the cap setter `0x51f440` has many callers, and typing into both boxes
+settles it; `docs/testing/live-test-checklist.md` section 64). The window's buffers are 35 bytes each. The sender
 (`0x5867c0`) puts **32 bytes of ID and the first 16 bytes of the password** into `0xA102` (a 16-character password goes out without a
 terminating zero; the 17th to 19th typed characters are dropped on send). So a client cannot use a password longer than 16 characters, and
 nothing in it needs 12..
@@ -336,16 +352,18 @@ The 7 changed bytes are three patches (confirmed, `cmp` of the two files):
 |---|---|---|
 | 0x404542, `0xA101` case | `ja` → `jne` after `cmp al, 0x80` | the key reply's length byte must be exactly 0x80 |
 | 0x411abd, `SAgent::OnAccept` (matched by its unique string) | `jge` → two `nop` | the `MaxConnection` cap is gone; connections are accepted up to the pool size |
-| 0x445e70, the login query | `'%s'` → `"%s"` around the user name and password | narrows the SQL injection of section 13 item 1 but does not close it; the text is still unescaped (inferred) |
+| 0x445e70, the login query (used at 0x406ab8) | `'%s'` → `"%s"` around the user name and password | narrows the SQL injection of section 13 item 1 but does not close it; the text is still unescaped (inferred; not worth settling, the new server uses parameters) |
 
-The shipped `ps_login.ini` sets `MaxConnection=3000`, which no longer limits accepting (inferred), and has no `[GAMESERVERS]` block,
+The shipped `ps_login.ini` sets `MaxConnection=3000`, which no longer limits accepting (confirmed: the value is stored only at
+`SAgent+0x12c`, by `SAgent::Init` 0x41169f, and besides the patched compare at 0x411aab its only reader is `GetMaxConnection` 0x404030;
+the other writes are the constructor's 0xFFFF at 0x411f3d and `SetMaxConnection` 0x403660), and has no `[GAMESERVERS]` block,
 which this code does not need. The EP5.4 `usp_Try_GameLogin_Taiwan` does check the password (through `sp_LoginSuccessCheck`;
 confirmed from the procedure text).
 
 Comparing the builds showed this about the EP4.5 text above:
 
-- The key-reply defect of sections 3 and 13 item 2 is a heap write, not an over-read: with a length byte of 0 to 4, `BinToMpz` zeroes 4 or
-  8 bytes in front of its buffer (EP4.5 ps_login 0x40bc50, 0x40bc57); whether that crashes the process is inferred. Read by one reader and not yet checked by a second, so sections 3 and 13 are
-  left as they were.
+- The key-reply defect of sections 3 and 13 item 2 includes a heap write: with a length byte of 0 to 4, `BinToMpz` zeroes 4 or
+  8 bytes in front of its buffer (EP4.5 ps_login 0x40bc50, 0x40bc57); whether that crashes the process is inferred. Sections 3 and 13
+  now say so.
 - Sections 6, 9 and 11 were corrected in place on 2026-11-09 (the procedure that runs, the `0x701` layout, the `0x703` reply, the key
   pool).
