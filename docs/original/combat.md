@@ -265,7 +265,7 @@ those pages list), and every address names its binary.
   total (EP3 ps_game 0x44018b) and `AddExpFromUser` multiplies the gain by `1 + total / 100` (EP3 ps_game 0x442133 to 0x44218d).
   `CUser::Damage` (EP3 ps_game 0x4376d0) subtracts the damage directly and `0x0525` does not exist.
 - **Drops** (section 7): `CMob::ItemDrop` (EP3 ps_game 0x487050) has no `SRandom` call, so every entry is rolled with `rand()`
-  (inferred from the calls). The helper that puts the item on the ground returns for real types 16 and 24 (EP3 ps_game 0x48763a,
+  (confirmed: every random call in it goes to the C library's `rand` at EP3 ps_game 0x4c3ff4, taken modulo 100 or the gold range). The helper that puts the item on the ground returns for real types 16 and 24 (EP3 ps_game 0x48763a,
   confirmed); the EP4.5 helper compares only real type 27 (0x4a660a). See
   [`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop).
 
@@ -280,7 +280,8 @@ those pages list), and every address names its binary.
 | experience gain | as section 5 | also × a per-map rate (zone map `+0x1f0`) and × a table at EP5.4 ps_game 0x582768 indexed by the character byte `+0x12d` (EP5.4 ps_game 0x4650de) | confirmed; the table's meaning not identified |
 
 Read literally, a level-70 character keeps gaining experience and rises to 80 while the lookups read past the 71-wide tables, and
-`StatusDefs` has no rows above 60, so levels 61 to 70 add nothing from the status table (inferred). The shipped `ExpDefs` values for
+`StatusDefs` has no rows above 60, so at the step to 61 the level-up takes the level-60 row off max HP, SP and MP and adds 0, and levels
+61 to 70 keep that lower base (confirmed, `LevelUpStatus` EP5.4 ps_game 0x49b4c2 and 0x49b555; [`stats.md`](stats.md), Other episodes). The shipped `ExpDefs` values for
 levels 1 to 60 are EP4.5's divided by 100 (confirmed, data). Unchanged (confirmed at the constant and call level): the hit roll
 (EP5.4 ps_game 0x459090), the normal damage path and critical (EP5.4 ps_game 0x459490), the `0x0503` layout, `CMob::GetExp` (EP5.4
 ps_game 0x4a2190), drops (`CMob::ItemDrop`, EP5.4 ps_game 0x4ba950) and picking up (`0x0205`, EP5.4 ps_game 0x469c00). New: a 2-byte

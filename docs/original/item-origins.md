@@ -193,9 +193,12 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 - **Multi-item boxes** (confirmed): `CItemDrop::InitRandomItemsCreate` (EP5.4 ps_game 0x4d6df0, named by its log string) reads
   `[RandomItemsCreate_n]` sections, n 1000 to 1255, each line a grade and a chance in per cent. A box of special 42 with `shVG` 1000 or
   more needs as many free bag places as the set has lines, then rolls every line separately and makes one item per success; the box is
-  used up whatever came out (EP5.4 ps_game 0x473aaa to 0x473b6e). The generator is reseeded with `time(0) xor` the character id at
-  every use (EP5.4 ps_game 0x473b2e), so two boxes opened in the same second roll the same (inferred).
+  used up whatever came out (EP5.4 ps_game 0x473aaa to 0x473b6e). A fresh generator (a Mersenne Twister, EP5.4 ps_game
+  0x4bd3e0) is made at every use (0x473b27) and seeded with `time(0) xor` the player's `m_dwUID` (`CUser+0x57f8`, a number counted up at
+  each login, 0x4115db; 0x473b2e to 0x473b44); each line is rolled out of 1,000,000 against its chance (0x473b53 to 0x473b6e). So two
+  boxes of one set opened by the same player in the same second roll the same (confirmed).
 - **Cloaks are refused in both box kinds** (confirmed, EP5.4 ps_game 0x473bbd): the error answer, box kept.
 - `CUser::ItemCreate` (EP5.4 ps_game 0x46bd10; name carried over, match method not recorded) still makes up to 1000 and sends the 57-byte `0x0701`; new
   `CItem` fields `+0x84` to `+0x9c` are cleared at creation (`+0x9c` holds the item-mall purchase number, [`item-mall.md`](item-mall.md)).
-- Data (confirmed, file and rows): two boxes name sets the file does not have (1028, 1031), so they always fail (inferred).
+- Data (confirmed, file and rows): two boxes name sets the file does not have (1028, 1031), so they always fail (confirmed: a box of 1000 or more needs its set to
+  have lines, else the error answer and the box is kept, EP5.4 ps_game 0x473ab6, 0x4d76bf).

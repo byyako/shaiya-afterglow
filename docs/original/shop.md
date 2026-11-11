@@ -44,7 +44,8 @@ Confirmed. Client → server, 8 bytes: `u32 npc object id, u8 index` (position i
 
 Nothing is answered when (in this order): the NPC is not in the player's zone; it is not a merchant (NPC type 1); its shop is not found;
 `index` is not below the shop's item count; the item definition does not exist; `count` is above the definition's stack limit or 0. (A
-first check on `+0x142c == 1`, most likely a status such as dying, also ignores the packet.)
+first check on `+0x142c == 1`, the player being dead, also ignores the packet: the field is `m_nStatus`, which `CUser::Death` sets to 1
+at 0x45871e.)
 
 Then the player's trade and personal shop are cancelled (`CUser::CancleActionExc`, `stMyShop::Ended`) and the price is `count * nBuy`, a
 32-bit multiplication (`imul` at 0x46b55a). (On a guild house map, map type 6, a guild discount from
@@ -96,10 +97,15 @@ Follows sections 2 and 3, with these differences:
   and a sale cancel the player's trade and personal shop (`Zones::cancel_actions`).
 - A purchase and a sale are written to the game log as `0x0403` and `0x0404` ([The game log](game-log.md)).
 
-## 5. Open questions
+## 5. Answered questions
 
-- The `+0x142c` state that ignores shop packets (likely dying or dead).
-- What the original does with items in bags above `m_nMaxBag`.
+- The `+0x142c` state that ignores shop packets is death (confirmed): PDB `m_nStatus`; `CUser::Death` returns when it is already 1
+  (0x4586cd) and sets it to 1 with HP, SP and MP 0 (0x45871e).
+- Items in bags above `m_nMaxBag` are kept but untouched (confirmed): the load places every item at its saved bag and slot without
+  looking at the bag count (`PacketUserDBSetInfo` 0x46dee2), and losing the bag skill only sets the count to 2 (`RemSkillPassive`
+  0x489e0d). Every function that takes or searches a bag stops at `m_nMaxBag` (`IsBag` 0x45b3d0, the shop, `ItemGet`, `ItemCreate`, the
+  quest item search, the death drop, `0x0106` at 0x4832c7, and the rest of the 37 that read it), so such items are not listed, moved,
+  sold, used, dropped or counted until the bag count rises again, and stay in the database.
 
 ## 6. Other episodes
 

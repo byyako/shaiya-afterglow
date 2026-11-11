@@ -135,8 +135,11 @@ to 12 back to its full quality, `0x070B`, and `0x0554` (255, 255, money).
   original's other refusals (no answer). The original checks nothing, so a modified client can repair anywhere. (Blacksmiths: 3 on map 1, 39
   in all on 18 maps.) The Repair Hammer needs none.
 - Not reproduced: the shield's saved-quality flaw of section 5 (each slot's quality is saved as it is).
-- Open, for the client side: the client gets no packet when an item wears. Whether `game.exe` lowers the qualities it shows by itself (and
-  so asks the right repair price) is not known here; until it is, a client may show full quality until the next `0x0106` (relog) or answer.
+- The client gets no packet when an item wears, and lowers its own copies the same way (confirmed in `game.exe`): the weapon −1 on
+  its own critical hit (0x4c1f80, the decrement at 0x4c1fcf), one armour piece per blow taken in a rotating order (0x4c1fe0, from
+  0x4c2078), none while ability 36 runs. It does not check the shape, where this server and the original skip wear, so a hidden or
+  transformed player's client shows lower qualities (and a higher repair price) than the server holds until the next `0x0106` or
+  repair answer.
 
 ## 7. Other episodes
 

@@ -1797,3 +1797,18 @@ settle; the server side of each is in the page named. Note what you see in each 
 - [ ] **A rune right after a skill** (`docs/original/community-fixes.md`, `rune-skill-cut`): TestRanger uses a skill with a long animation and
       at once a recall rune, then steps to cancel the rune's cast. Note whether the skill's animation is cut short (the server refuses the
       rune within 3 s of a skill, item-use deviation 4, so expect no cut).
+
+## 66. Client facts the static reading left open (`notes/confirm-ledger.md` cluster B)
+
+The item-mall setup of section 44 (the two player accounts, `target/release/mall`). These are facts about the client that the code could
+not settle; the server side of each is in `docs/original/item-mall.md` section 12. Note what you see in each item's note.
+
+- [ ] **A gift while the storage window is open**: TestPriest opens the item-mall storage window (the store button at the mall's lower
+      left) and keeps it open; ProbeHero gifts it a cheap product. Note whether the new rows appear in the open window at once, or only
+      after closing and opening it again, and whether dragging one into a bag works without reopening.
+- [ ] **A delivery while in the world**: with sefewfe in the world, `target/release/mall deliver <second player account> B1_Firec0001`;
+      then click the faction's bank teller (section 44 lists them). Note whether the window lists the new rows without a relog (this
+      server shows them at the next world entry, item-mall.md section 12).
+- [ ] **Offline-gift notices right after entering**: with sefewfe logged out, ProbeHero sends it two gifts; log in with sefewfe. The
+      server sends one `0x2604` with n = 0 per gift right after the enter-world burst. Note whether "You got a new present." (832) shows
+      once per gift, and whether anything else in the chat or the storage window looks wrong.

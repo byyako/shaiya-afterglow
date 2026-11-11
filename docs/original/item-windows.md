@@ -60,7 +60,8 @@ y, z`. Not refused while dead. The answer is **`0x0220`** (18 bytes, `TP_SAVEPOS
 On a refusal only the result and the index are filled; the map and position bytes are whatever the stack held.
 
 **Using the Teleportation Stone** (`CUser::ItemUse` 0x466097, special 39; the request's `target` is the index 1 to 4, which only `0x0557`
-carries, so the client's window is *inferred* to send `0x0557`): refused (the error answer) when the index is not 1 to 4, the slot is not set, the level cap of the map refuses (`ChkMoveMap`), on
+carries; the client's window sends `0x0557` with the slot button's index + 1, confirmed in `game.exe` (0x4dc7bb, the send at 0x4dc85d
+through the `0x0557` builder 0x5894f0) and saves with `0x0220` (0x4dc837)): refused (the error answer) when the index is not 1 to 4, the slot is not set, the level cap of the map refuses (`ChkMoveMap`), on
 another map `CMap::EnableMoveByPortal` refuses (the obelisk portals), the map is not loaded, `x` or `z` is not within `[0, map size)`, the
 map's create type is not 0, or a logout is pending. Otherwise the move by item of `docs/original/item-use.md` section 9: type 2, due in 5 s,
 `0x0221` to the players within 60, cancelled by a step, an attack or a skill; when due the item is used up and the player moves, `0x0222` with

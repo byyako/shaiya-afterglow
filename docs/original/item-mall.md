@@ -209,7 +209,8 @@ Confirmed.
   (`docs/original/ps_game.md` section 3.2, `byBillingType`; billing is turned off in the shipped `ps_session` configuration), with a
   remaining time `+0x5858` (0 from the session server; `CWorld::BillingRemainTime` 0x40c440 can set it from the manager connection).
 - **`0xB103`** right after the handshake reply (`CUser::SendBillingInfo` 0x457ad0): `u8 type, u32 value` (7 bytes). The US client (region
-  6): 1 → 814 "You are using individual package. (expire date : <b>)", 2 → 815 (the franchise PC room, 1.5× experience), 3 → 816, 4 →
+  6): 1 → 814 "You are using individual package. (expire date : <b>)", 2 → 815 (the franchise PC room, 1.5× experience), 3 → 816 "You are using individual and franchise PC room. Benefited with EXP of 2
+  times when using EXP Increase Stone. (expire date : <b>)" (the client's `sysmsg-uni.txt`), 4 →
   863 (missing from this client: "GetMsg Error 863"), 0 → nothing; `value` is shown as a **packed date** (`docs/client/CLIENT-FACTS.md`).
   Client reader 0x581d20 / logic 0x559930 (client research, "Queue 4"): region 6 reads `value` as the **packed local date**
   `(year-2000)<<26 | month<<22 | day<<17 | hour<<12 | minute<<6 | second`, takes **only year, month and day** (shown `YYYY-MM-DD`),
@@ -314,11 +315,13 @@ server but not to one's own account, the product without a server row answering 
 
 ## 12. Open
 
-- The windows' opening is known (section 6), to be confirmed live: the store button, and the Light's/Fury's Bank Teller.
+- The windows' opening is known (section 6), to be confirmed live: the store button, and the Light's/Fury's Bank Teller
+  (`docs/testing/live-test-checklist.md` section 44).
 - A gift taken while the item-mall storage window is open, and the billing storage delivered while in the world (seen at the next
-  world entry here).
-- What message 816 (premium type 3) says; types 2 has no date by design (section 7).
-- Whether the client shows `0x2604` n = 0 notices correctly when they come right after the burst.
+  world entry here) (live: section 66 of the checklist).
+- Whether the client shows `0x2604` n = 0 notices correctly when they come right after the burst (live: section 66).
+- Answered: message 816 (premium type 3) is "You are using individual and franchise PC room. Benefited with EXP of 2 times when using
+  EXP Increase Stone. (expire date : <b>)" (section 7); type 2 has no date by design.
 
 ## 13. As built
 
@@ -392,7 +395,10 @@ after linking) were compared with the EP4.5 builds of this note, read statically
   minutes left (EP5.4 ps_game 0x413d18).
 - The database agent's new `0x0E0A` (billing success) marks the pending purchases as confirmed and queues their save; `0x0E09`
   (refusal) drops a purchase or clears a gift from the target's storage, or, when the target is not loaded, runs
-  `usp_Rollback_User_GiftPointItems` (EP5.4 ps_dbAgent 0x407d3d, 0x407f8d, 0x423b90; confirmed, the save order inferred).
+  `usp_Rollback_User_GiftPointItems` (EP5.4 ps_dbAgent 0x407d3d, 0x407f8d, 0x423b90; confirmed). The rollback is job `0x18` on the buyer's
+  own queue (0x407f6d), with the target and the purchase number kept on the buyer (0x407eef, 0x407ef8); the job goes on the buyer's job list and
+  to the worker threads' completion port (0x436810 to 0x43685d). In which order it runs against the gift's own save statement was not
+  traced (inferred: not worth it, EP5.4 only).
 - **Oddity 1** (section 9) is answered in part: items are still given before the points are confirmed, but a refusal now takes them
   back (confirmed). **Oddity 2** is still there and the stuck lock now blocks purchases too (confirmed, EP5.4 ps_game 0x48896d).
 - `/disablegift` (`g_bDisableShop` 3) stops gifts only (confirmed, EP5.4 ps_game 0x409c38).

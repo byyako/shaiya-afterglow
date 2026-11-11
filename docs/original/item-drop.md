@@ -120,8 +120,10 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
   ps_game 0x487610, matched by call graph, same callees as EP4.5 0x4a65a0) returns at once for real type 16 or 24 (EP3 ps_game 0x48763a
   to 0x48764c). EP4.5's helper compares only real type 27, so in EP4.5 helmets and cloaks drop
   ([`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop)).
-- **Monster drops roll with `rand()` only** (inferred from the calls): `CMob::ItemDrop` (EP3 ps_game 0x487050, matched by call graph)
-  has no `SRandom` call and no roll out of 1,000,000 (EP4.5 0x4a60fd).
+- **Monster drops roll with `rand()` only** (confirmed): every random call in `CMob::ItemDrop` (EP3 ps_game 0x487050 to 0x48759b, matched
+  by call graph) goes to the C library's `rand` (EP3 ps_game 0x4c3ff4, the multiply-add at 0x4c3ffc), taken modulo 100 (0x4870c8 to
+  0x48738b) or modulo the gold range (0x4873ba). The only 1,000,000 in the file is outside it (EP3 ps_game 0x4bb10b). EP4.5 rolls its
+  first six lines with `rand() % 100` and the rest out of 1,000,000 with `SRandom` (0x4a60e1 to 0x4a6102).
 - Dropping and picking up (`0x0205`, `0x0206`) exist with the same opcodes; their bodies were not compared.
 
 ### EP5.4
@@ -131,5 +133,9 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 - **Monster drops keep their structure** (confirmed at call and compare level): `CMob::ItemDrop` (EP5.4 ps_game 0x4ba950, matched as the
   only other `SRandom` caller in the monster code) has the mob's own item, the quest-linked items, ten drop lines (seven rolled with
   `rand()`, the rest with the Mersenne Twister), the sequence items and money, in that order.
+- **Helmets and cloaks never reach the ground**, as in EP3 (confirmed): the helper that puts a monster's item on the ground (EP5.4
+  ps_game 0x4baf80) returns at once for real type 16 or 24 (0x4bafc8, 0x4bafd1) when its third argument is 0, which three of its four
+  calls in `CMob::ItemDrop` pass (0x4baa73, 0x4bab9f, 0x4babed; the fourth passes 1). The cheat table's helmet and cape fix removes
+  these two compares ([`helmet-cloak-drop`](community-fixes.md#helmet-cloak-drop)).
 - **Item grades go to 3072** (confirmed): `CItemDrop::GetItemPlz` (EP5.4 ps_game 0x4d5f30) refuses grades above 0xc00, EP4.5 above
   0x400.

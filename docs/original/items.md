@@ -103,7 +103,9 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
   set `0x0204` to `0x0227` is identical. `EnableEquipment` (EP5.4 ps_game 0x468370, matched by call position and an identical compare
   chain) has the same 14 slots, real types per slot, and country, class, mode and sex rules; `ItemBagToBag` (EP5.4 ps_game 0x4685a0,
   matched by the branch arguments) keeps the slot limits 13 and 14 (0x4685e6, 0x46862b).
-- **A new freeze during a server transfer** (confirmed for the gate, inferred for its purpose): `0x0204` is ignored while `CUser+0x5880`
-  is set (EP5.4 ps_game 0x4760ed). The flag is set by the special-59 item (the move to the war server) with a 5-second timer, and the
-  same test guards item use and trades.
+- **A new freeze during a server transfer** (confirmed): `0x0204` is ignored while `CUser+0x5880` is set (EP5.4 ps_game 0x4760ed), and the
+  same test guards item use and trades. The flag is EP4.5's server-move flag (`+0x57e0`, [`gamewar.md`](gamewar.md) section 4), set by
+  the session's answers to a move to the war server: `0x080C` with result 0 sets it to 1 with a type-2 logout 5 seconds on (EP5.4 ps_game
+  0x406e17), `0x0816` with result 0 sets it to 2 (0x406ea3), and the special-59 item, used while it is 2, sets it to 1 with the same
+  logout (0x49e16b; session dispatch table 0x4076bc). EP4.5 has the flag but no gate.
 - `CUser` offsets moved: bag items `+0x1c0`, bag count `+0x130c`, warehouse `+0x400` (confirmed by the same compares).

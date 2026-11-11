@@ -329,8 +329,9 @@ builds are carried over from EP4.5 (matched by strings, constants, the call grap
   console's `enable/disable killcount` (confirmed).
 - The PvP `AttackDamage` (EP3 ps_game 0x440ed0) has the same switch and the cap 30000 (EP3 ps_game 0x441128), with five elements
   (confirmed).
-- The death drop (`ItemDropByUser` EP3 ps_game 0x443df0, `ItemDropByUserDeath` 0x444290) has none of the honour-band constants, so the
-  honour rule of section 6 is not in EP3 (inferred from the constants).
+- The death drop (`ItemDropByUser` EP3 ps_game 0x443df0, `ItemDropByUserDeath` 0x444290) never reads the VG, so the honour rule of
+  section 6 is not in EP3 (confirmed): a player loses an item with a flat 40 % (EP3 ps_game 0x443efa) and gold as in EP4.5 (30 %,
+  0x444048). Details in [`item-flags.md`](item-flags.md), Other episodes.
 - The kill counter, the damage record and the reward panels were not compared.
 
 ### EP5.4

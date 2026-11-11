@@ -159,7 +159,8 @@ after linking) were compared with the EP4.5 builds of this note, read statically
 
 - **The second part starts at slot 40** (confirmed): `IsBank` (EP3 ps_game 0x445240) allows bag 100 and slots below 240 as in EP4.5, but
   a target slot of **40** or more needs the Double Warehouse flag (`CUser+0x5758`, EP3 ps_game 0x44f326, 0x44f3a6); EP4.5 uses 120
-  (0x4684e5). Whether the EP3 client shows 40 free slots was not checked.
+  (0x4684e5). Whether the EP3 client shows 40 free slots is not known (not answerable here: no EP3 client is among the files
+  read).
 - Saving is per item as in EP4.5 (`SaveCharacterBankItemUnit`, EP3 ps_dbAgent 0x41b3e0, matched by strings).
 
 ### EP5.4

@@ -393,4 +393,6 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 - **Two new gates on `0x050A`** (confirmed): `CUser+0x5880` (a server transfer is pending, EP5.4 ps_game 0x478f9a) and `CUser+0x1358`
   (EP5.4 ps_game 0x478fa7), the lock of the new debuff kinds 74 to 76 that also blocks attacks, skills, `0x0557`, `0x0559` and `/town`.
 - The tables of specials 47 to 49 are unchanged (EP5.4 ps_game 0x56e608, 0x56e628, 0x56e648). Specials 61, 76 to 78 and 85 to 98 are on
-  EP5.4 items but no code compares them (inferred unused by this build).
+  EP5.4 items but unused by this build (confirmed): the item-use switch (EP5.4 ps_game 0x473163) sends every special above 74 and
+  special 61 (byte table 0x474754) to its default, the error answer `0x050A` with zeros, item kept (0x47468a, 0x472b80), and no compare
+  of the special byte elsewhere names them.

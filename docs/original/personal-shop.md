@@ -290,8 +290,10 @@ is withdrawn with `0x230D 0`.
 
 10. **A title is checked like chat** (audit R21): one holding a byte below 0x20, or a colour marker (`<<NNNcCC`) whose length runs past the
     text (the marker that crashes clients, `docs/client/client-packets.md`), is refused as `0x2303` is refused outside a market map: the
-    shop does not open and nothing is sent. The original shows any title to the whole view. Whether the sign goes through the chat text
-    drawing is asked in `docs/testing/client-research-queue.md` entry 13 (b).
+    shop does not open and nothing is sent. The original shows any title to the whole view. The sign does not go through the chat window, but through the client's
+    over-head text drawing, which parses the same marker into a 260-byte buffer (confirmed in `game.exe`: the player's sign text at
+    `+0x2f4` goes to 0x41b1e0 at 0x44c05d, then to 0x5373b0 at 0x41b221; `docs/testing/client-research-queue.md` entry 13 (b)), so the
+    check is needed there as well.
 
 Game logs are not sent (none are built).
 
@@ -304,14 +306,17 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 
 - The same requests (`PacketMyShop` EP3 ps_game 0x45dfc0, matched by dispatch, the same `0x23xx` set) (confirmed).
 - [`myshop-price-wrap`](community-fixes.md#myshop-price-wrap) is there: the price is an unchecked 32-bit `imul` (EP3 ps_game 0x45e4dc)
-  (confirmed). The visitor clean-up and the bound-item check were not checked.
+  (confirmed). [`myshop-visit-cleanup`](community-fixes.md#myshop-visit-cleanup) is there too: leaving a zone takes the leaver off its
+  own shop's visitor list (EP3 ps_game 0x43668e to 0x436690, the same call as EP4.5 0x44af2e to 0x44af30, to a list function that equals
+  EP4.5's `stMyShop::Unuse`) (confirmed). Placing an item reads no item definition, so bound items can be placed as in EP4.5
+  (EP3 ps_game 0x45e213 to 0x45e288) (confirmed).
 
 ### EP5.4
 
 | | EP4.5 | EP5.4 | status |
 |---|---|---|---|
 | shop slots | 12 (0x478e66) | **20** (EP5.4 ps_game 0x487605) | confirmed |
-| placing (`0x2305`) | no bound or quest-item check | the same | confirmed for the compares present, inferred for the missing `ReqOg` read |
+| placing (`0x2305`) | no bound or quest-item check | the same: the case reads the item and its count only, never its definition (EP5.4 ps_game 0x4875c6 to 0x48767b) | confirmed |
 | buy price (`0x230D`) | 32-bit `imul` (0x4790f0) | the same (EP5.4 ps_game 0x4878a8) | confirmed |
 | seller's gold | not checked | **new**: gold + price must fit in 32 bits, else a failure answer (EP5.4 ps_game 0x4878e8) | confirmed |
 

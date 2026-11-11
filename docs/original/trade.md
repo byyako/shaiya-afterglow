@@ -229,11 +229,15 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 
 - **The same cases** `0x0A01` to `0x0A08` (`PacketExchange` EP5.4 ps_game 0x47d940, matched by opcode switch table) (confirmed); there is
   no `0x0A0A`.
-- **New refusals** (confirmed): `0x0A05` to `0x0A08` are refused while either player is in a duel (`CUser+0x558c`, inferred from its
-  writer) or has a personal shop open (`CUser+0x1638`, inferred), and when the partner is the player itself (EP5.4 ps_game 0x47de00),
+- **New refusals** (confirmed): `0x0A05` to `0x0A08` are refused while either player is in any duel state (`CUser+0x558c` not 0: the
+  duel status, EP4.5's `m_nPvPStatus`, which the duel request sets to 1 and 2 at EP5.4 ps_game 0x48beff and 0x48bf15 as EP4.5 does at
+  0x47d1cf and 0x47d1e5) or has a personal shop being set up or open (`CUser+0x1638` not 0: the shop's `nStatus`, set to 1 at 0x48755e and
+  2 at 0x4874ca) (EP5.4 ps_game 0x47ddca to 0x47ddf8), and when the partner is the player itself (EP5.4 ps_game 0x47de00),
   which is [`trade-other`](community-fixes.md#trade-other). The exchange is also ignored while a server transfer is pending
   (`CUser+0x5880`, EP5.4 ps_game 0x47e322).
 - **Still open** (confirmed): no `byOG` check on an offer, and the count guard is still missing (`jne` at EP5.4 ps_game 0x47e81a, the
   subtraction at 0x47ea44). The duel's own stake transfer is fixed (`jb` at EP5.4 ps_game 0x48bacd, EP4.5 `jne` 0x47ccbe).
-- The `0x0A0A` fix of section 6 gives `SConnection::Send` at 0x4ED0E0, which is the send function of this EP5.4 build (a call at EP5.4
-  ps_game 0x4921a8); so that patch targets an EP5.4-type binary, which has no `0x0A0A` of its own (inferred).
+- The `0x0A0A` fix of section 6 targets this EP5.4 build, which has no `0x0A0A` of its own (confirmed): it calls `SConnection::Send` at
+  0x4ED0E0, the send function of this build (a call at EP5.4 ps_game 0x4921a8), and hooks `ps_game.exe+7E007`, which is EP5.4 ps_game
+  0x47e007, the `call 0x4ed0e0` that sends the second `PacketExchange` answer (to `esi`); in EP4.5 that address is padding. The same
+  table's helmet and cape fix patches EP5.4 ps_game 0x4bafc8, 0x4bafd1 and 0x473bbd.

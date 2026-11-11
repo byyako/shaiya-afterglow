@@ -381,8 +381,10 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 
 - **Two new blacksmith requests** (confirmed): `0x0809` (EP5.4 ps_game 0x46f000) and `0x080A` (EP5.4 ps_game 0x46f3d0) ask for the link
   and extraction chance and price without changing anything. Request: six `u8`. For `0x0809` they are the lapis bag and slot, then the item bag and
-  slot, then the hammer bag and slot, the order of the link request `0x0801` (the EP6 client sends them so, EP6 game.exe 0x4a9b8d, as the
-  EP5.4 client decompilation does; corrected 2026-11-09, the first reading had the lapis and the item swapped; inferred for EP5.4). For
+  slot, then the hammer bag and slot, the order of the link request `0x0801` (confirmed for EP5.4: `ItemGemAdd` takes bytes 2 and 3 as the lapis, which `EnableGemAdd`
+  requires to be of type 30, bytes 4 and 5 as the item, which needs a free gem slot, and bytes 6 and 7 as the hammer, EP5.4 ps_game
+  0x46e43a to 0x46e4bd, 0x46caec, 0x46e63c; `0x0809` reads them the same way, 0x46f031 to 0x46f0c9; the EP6 client sends them so, EP6
+  game.exe 0x4a9b8d; corrected 2026-11-09, the first reading had the lapis and the item swapped). For
   `0x080A`: the item bag and slot, a flag and the gem position, then the hammer bag and slot. Answer, 15 bytes:
 
 | offset | field |
@@ -403,6 +405,7 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 - **Timed rate events** (confirmed): the console words `/gemmix`, `/gemext` and `/enchant` add a bonus to link and extraction chances or
   multiply the enchant rate within an hour window ([`operator-console.md`](operator-console.md) for EP4.5's console).
 - **`ItemEnchant.ini`** is byte-identical to EP4.5's server-patch copy (confirmed, MD5), which supports section 2's choice. The reload
-  still copies the weapon value into the defence slot (EP5.4 ps_game 0x4dc297, 0x4dc2e6), but the `/reitemenh` console word is gone, so
-  how that reload is reached was not traced.
+  still copies the weapon value into the defence slot (EP5.4 ps_game 0x4dc297, 0x4dc2e6), but nothing reaches it (confirmed): the
+  `/reitemenh` console word is gone, and the reload (EP5.4 ps_game 0x4dc1d0) has no call, jump or stored address anywhere in the file;
+  only the load at start-up (0x4dc0c0, called at 0x4d7a3b) reads the file, so the bug cannot happen in this build.
 - There is no `0x080B` to `0x080D` handler: the EP5 crafting the EP5.4 client knows is not in this server (confirmed, dispatch).

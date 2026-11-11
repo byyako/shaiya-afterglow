@@ -115,7 +115,9 @@ collection deadline, then the item's type, type id, quality, gems, count and cra
 | **1** | returned unsold or cancelled (the seller's) | refund of an outbid or cancelled bid (the bidder's) |
 | **2** | taken by a GM's `/auctionrecall` (the GM's) | — |
 
-The client does not read them for display (`docs/client/auction-house.md`, Open; client research, section 2.7 below, covers the list row only).
+The client keeps them but no reader of them is known (`docs/client/auction-house.md`, Open): `game.exe` copies a collect row's result type
+into its list entry (`0x1C06` at 0x55d94a, entry built at 0x45b1c0, the byte at entry `+0x2c`, 0x45b28e); what reads that byte was not
+traced (inferred unread: a negative over the whole client, not worth it). Section 2.7 covers the list row.
 
 ### 2.7 What the client draws of a list row (client research, "Queue 5", verified)
 
@@ -507,7 +509,8 @@ group (`0x0F`) and no market procedures in `ps_dbAgent`, and no `Market*` tables
   started 500,000 (0x48642a); the period index clamped to 3; and bids of `trunc(current × 1.05)` (1.05 at EP5.4 ps_game 0x5741c0).
   Every case was compared: search, page, the four lists (36/40/46/36 rows of 52/48/41/53 bytes, EP5.4 ps_game 0x442334 to 0x44298c), cancel, buy now, bid, collecting and the interest list (10 at most, EP5.4 ps_game 0x4445db) give the same results in the same order, and the end pass the same rows and DB messages (confirmed, token diff of the 37 matched `CMarketMgr` functions and `PacketMarket`). Only the game-log records are 13 bytes longer (the EP5.4 log header).
 - **Times are 64-bit** (confirmed): the end time is `hours × 3600` on a 64-bit `time` (EP5.4 ps_game 0x4864b1); the packed dates on the
-  wire keep their size (inferred).
+  wire keep their size (confirmed): the local time is packed back into one `u32` (EP5.4 ps_game 0x4e1d30, called at 0x486502) with
+  the bit layout of section 2.5 (it subtracts 16 from the full year, which is the same as 2000 in the 6 bits kept).
 - The database agent's market group `0x0F06` to `0x0F0D` is unchanged (confirmed). The war server of EP5.4 has no auction house
-  ([`gamewar.md`](gamewar.md)). The "remote auction house scroll" (special 61) is in the EP5.4 data, but no code reads that special
-  (inferred unused).
+  ([`gamewar.md`](gamewar.md)). The "remote auction house scroll" (special 61) is in the EP5.4 data, but the item-use switch sends special 61
+  to its error answer (confirmed, EP5.4 ps_game 0x473163, byte table 0x474754; [`item-use.md`](item-use.md), Other episodes).

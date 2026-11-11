@@ -235,10 +235,15 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
   0x442105). EP3 also multiplies experience by `1 + x / 100`, where x is the sum of the equipped lapis' `exp` column (EP3 ps_game
   0x442133 to 0x44218d); EP4.5 uses that column for absorption.
 - **The warehouse's second half starts at slot 40**, behind the same flag (`CUser+0x5758`, EP3 ps_game 0x44f326) (confirmed).
-- **Death drops have no honour rule** (inferred from the constants): `ItemDropByUser` (EP3 ps_game 0x443df0, matched by call graph) has
-  none of EP4.5's honour bands (±10 to ±190).
-- The resurrection runes (`KillSoul` EP3 ps_game 0x443650, `FindItemRebirth` EP3 ps_game 0x448e90, matched by call graph) exist; they
-  were not compared. Gold drops and the ultimate-mode rules were not checked.
+- **Death drops have no honour rule** (confirmed): `ItemDropByUser` (EP3 ps_game 0x443df0, matched by call graph) never reads the VG; a
+  player loses an item with a flat **40 %** (`rand() % 100 < 40`, EP3 ps_game 0x443efa), among the first 10 of real type 1 to 25 with
+  `byOG` 0 and not real type 16 (0x443f33 to 0x443f46). Staff lose `rand() % 3 + 1` items among the first 25, real type 16 excepted
+  (0x443e3e to 0x443e94). A third round over the equipment is dead code: its chance is `rand() % 100 < 0` (0x443fcb). Gold as in EP4.5:
+  30 %, a loss of `rand() % (5 × level) + 1`, shared out in a party or dropped (0x44403b to 0x444269).
+- **The resurrection runes are EP4.5's** (confirmed): `FindItemRebirth` (EP3 ps_game 0x448e90) is EP4.5's 0x45f740 instruction for
+  instruction (only the offsets differ), and `KillSoul` (EP3 ps_game 0x443650, matched by call graph) has EP4.5's steps and constants,
+  the ultimate-mode rebirth check included (EP3 `+0x5764`, EP4.5 `+0x58d8`). `KillSoulForDisconnect` was not compared (not worth it: EP3
+  is not copied).
 
 ### EP5.4
 

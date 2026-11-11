@@ -262,8 +262,9 @@ client.
 
 - **Symptom:** checks on real types 16 (helmets) and 24 (cloaks) leave them out when items drop.
 - **Where:** not in this build. EP4.5's helper that puts a monster's item on the ground compares only real type 27 (0x4a660a), so
-  helmets and cloaks do drop in EP4.5. The check is EP3 code (EP3 ps_game 0x48763a for drops, 0x44db80 for boxes; confirmed); in EP5.4
-  only boxes refuse real type 24 (EP5.4 ps_game 0x473bbd). The community fix is for a build that has the check (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
+  helmets and cloaks do drop in EP4.5. The check is EP3 code (EP3 ps_game 0x48763a for drops, 0x44db80 for boxes; confirmed) and is in EP5.4 too:
+  its drop helper refuses real types 16 and 24 (EP5.4 ps_game 0x4bafc8, 0x4bafd1) and boxes refuse real type 24 (0x473bbd). The cheat
+  table's fix removes exactly those three compares of the EP5.4 build (confirmed: its addresses are EP5.4 ps_game's). The community fix is for a build that has the check (corrected 2026-11-09, found when comparing the EP3, EP4.5 and EP5.4 builds: [`ep3.md`](ep3.md), [`ep5.4.md`](ep5.4.md)).
 - **Fix:** community fix in `ps_gametablas.CT`, "Fix drop of helmets and capes", by **Eric-Dutra16** and **andr3y_you96**. Whether it
   is a bug or a choice is up to the server.
 
@@ -530,8 +531,9 @@ client.
   queue packets, and each zone's packets are handled one after another on its world thread (`CWorldThread::Update` →
   `CZone::UpdatePackets` → `CUser::UpdatePackets`), and two traders are always in one zone.
 - **Trading with oneself** is undone when the request is answered.
-- The "trade exploit fix" in `ps_gametablas.CT` is for a later episode, whose trade has an extra confirm step (`0x0A0A`); EP4.5 already
-  clears both ready flags on every change to an offer.
+- The "trade exploit fix" in `ps_gametablas.CT` is for the EP5.4 build (confirmed: it hooks `ps_game.exe+7E007`, which is a send call in
+  `PacketExchange` there, EP5.4 ps_game 0x47e007, and padding in EP4.5), and it adds `0x0A0A` packets, the extra confirm step of later
+  clients, which that build does not send itself; EP4.5 already clears both ready flags on every change to an offer.
 
 ## Text that reaches the database
 
@@ -675,7 +677,7 @@ named. The post-link changes to EP5.4 `ps_game` apply none of these fixes.
 | `blacksmith-range` | present (confirmed: no NPC lookup from `PacketGem` 0x452610 or its four handlers; `CZone::FindNpc` 0x413b20 is called only by the NPC, shop, main-interface and quest code) | present (confirmed, the same: `PacketGem` 0x479f90 and its ten handlers; `CZone::FindNpc` 0x41e460) |
 | `op-exclusive` | present (confirmed, 0x449537) | partly: a new item special 69 hammer links for sure (0x46e776); the 2000 % hammers are still capped |
 | `repair-shield-slot` | present (confirmed, 0x44c0c8) | present (confirmed, 0x47208e) |
-| `helmet-cloak-drop` | the EP3 behaviour: drops and boxes refuse real types 16 and 24 (confirmed, 0x48763a, 0x44db7a) | not located; boxes refuse real type 24 only (0x473bbd) |
+| `helmet-cloak-drop` | the EP3 behaviour: drops and boxes refuse real types 16 and 24 (confirmed, 0x48763a, 0x44db7a) | the same for drops (confirmed: the drop helper 0x4baf80 compares real types 16 and 24 at 0x4bafc8 and 0x4bafd1 for the three item calls of `CMob::ItemDrop`); boxes refuse real type 24 only (0x473bbd) |
 | `rune-skill-cut` | present (confirmed: `CancleMove` 0x46e090 still frees the reuse group, 0x46e0c7); whether `ItemUse` adds a wait after a skill was not read | present (the same: 0x49ae40, 0x49ae77); `ItemUse` not read |
 | `learn-skill-level` | present (confirmed, 0x468fcf) | present (confirmed, 0x49354f) |
 | `stealth-equip` | present (confirmed: three shape tests each in `ItemEquipmentAdd` 0x43f590 and `ItemEquipmentRem` 0x43fa30; Stealth's end 0x469dc7 recomputes nothing) | gone: the shape tests were removed (confirmed) |

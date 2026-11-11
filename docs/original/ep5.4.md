@@ -72,8 +72,8 @@ The detail is in each system note. In outline (confirmed unless marked):
   likely raised after linking. Read literally, a level-70 character still gains experience and then rises one level per gain up to 80,
   with thresholds read from the wrong table row (the path is confirmed, the outcome inferred: it needs a run of the EP5.4 server, not worth
   it for a build the new server does not copy). The status table has no rows past 60 (confirmed: `StatusDefs` has 360 rows, levels 1 to 60
-  for six jobs, `docs/original/db/ep5.4/`), so levels 61 to 70 come without HP, SP and MP growth (inferred: the code that reads those rows
-  for a level above 60 was not read). Skills of nine levels. Skill damage types 6 to 12, ability types 47
+  for six jobs, `docs/original/db/ep5.4/`), so the step to 61 takes the level-60 row off max HP, SP and MP and adds 0, and levels 61 to 70 keep that
+  lower base (confirmed: the unfilled rows are 0, `LevelUpStatus` EP5.4 ps_game 0x49b4c2 and 0x49b555, `InitEquipment` 0x4612cc). Skills of nine levels. Skill damage types 6 to 12, ability types 47
   to 49, buff kinds 96 to 98, debuff kinds 74 to 76. Damage cap 60000 (EP4.5: 30000). [`stats.md`](stats.md), [`combat.md`](combat.md),
   [`skills-use.md`](skills-use.md), [`skills-buffs.md`](skills-buffs.md).
 - **Movement.** A new move check: steps of at most 30 units, windows judged after 6 steps and 3 s, a failed player moved back,

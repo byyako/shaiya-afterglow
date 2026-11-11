@@ -81,9 +81,9 @@ The newer-login kick (`0x0004 0`, `Kick::NewLogin`) keeps closing at once: its t
 login during the hold (the `Online` is dropped before it, as before the drain now), so a banned player's retry gets the login server's refusal
 and a kicked one can log in again at once.
 
-The ban notices are shown by the same handler family (`F805`/`F70A` → 340 "Ban connecting by operator" or 341 "… for <v> minutes"); that they
-go to the chat window like 339 is *inferred* from the same handler table (`gm-and-commands.md`, the `F501`… table), not traced; the hold does no
-harm if they don't.
+The ban notices are shown by the same handler family (`F805`/`F70A` → 340 "Ban connecting by operator" or 341 "… for <v> minutes"), and they
+go to the chat window like 339 (confirmed in `game.exe`: the handler 0x5541a0 prints them with the system-line call and chat type 0x13 at
+0x5541be, as 0x554010 prints 339; the two handlers are neighbouring slots of one table).
 
 **Live test:** StaffChar (staff) `/kick TestChar`: TestChar's chat shows "Log out by operator", about 3 s later the 10069 box. `/aban 2
 testaccount2` with PriestChar online: "Ban connecting for 2 minutes by operator" in the chat, then the box.
@@ -234,9 +234,11 @@ play with this client (only the `0x1108` path sets it).
 The server could send normal chat lines with a prefix as `0x1108` without the item (a global chat was asked for). Not built
 now; only the original's item path is.
 
-**Open for the client side** (not analysed here, `docs/client` is the client side's): how the client shows an `0x1108` whose name is its own
-character (the same 481 line, or another colour or channel), and whether the client itself keeps a "message to server" state after a
-successful special-38 `0x050A` that changes what it sends (the server's reading: it sends plain `0x1101`, `docs/original/world.md` section 6a).
+**The client side.** An `0x1108` whose name is the player's own character is shown as any other: the same 481 line, chat type 0x1e
+(confirmed in `game.exe`: the chat handler 0x554260 compares the name only with the block list, and its `0x1108` case 0x5544a2 to
+0x5544e1 has no test of the own name). Whether the client itself keeps a "message to server" state after a successful special-38
+`0x050A` that changes what it sends was not traced (inferred: it sends plain `0x1101`, `docs/original/world.md` section 6a); the live
+test of section 41 of `docs/testing/live-test-checklist.md` ("the next line is normal chat") settles it.
 
 **Live test:** TestChar uses a Message To Server: the item goes; a second one at once is refused (and the first is not lost); TestChar
 types a normal line: PriestChar on another map and StaffChar (Fury) both see "[chatting all members]TestChar : …", and **TestChar's own
@@ -339,8 +341,10 @@ that character.
 2. The name is trimmed (`TrimString`: every space removed, byte 20 forced to 0); its first two bytes must be non-zero, otherwise **`0x010E u8
    2`** (3 bytes).
 3. **`0x0409`** to ps_dbAgent (31 bytes: `u32 account id, u32 character id, char name[21]`).
-4. ps_dbAgent: the character must be **one of the account's five listed characters** with **`RenameCnt` > 0**; otherwise no rename (the
-   answer on that path, `0x40591f`, was not traced). Then **`usp_Save_Char_Name_E(server, character, old name, new name)`** (both trimmed):
+4. ps_dbAgent: the character must be **one of the account's five listed characters** with **`RenameCnt` > 0**; otherwise no rename and no answer: that
+   path (0x40591f) is the code of `CUser::Disconnect` (0x402f50), so the agent drops the player (in its state 2 a job 9, otherwise
+   `ExitUser` 0x402f70, which sends `0x0302` to the game server) (confirmed, ps_dbAgent `PacketUserChar` 0x4056e0, case `0x0409` 0x405a4c,
+   the checks at 0x405a6f and 0x405a86). Then **`usp_Save_Char_Name_E(server, character, old name, new name)`** (both trimmed):
    - a **live character** (`Del = 0`) of that name exists (this server's database; the comparison is the database's, case-insensitive
      under its default collation) → −2;
    - `Chars`: `CharName` = the new name, **`RenameCnt − 1`**, **`OldCharName`** = the old name; `Guilds.MasterName`, `FriendChars.FriendName`
@@ -426,7 +430,9 @@ Only in the world (the world dispatcher). Both requests are 2 bytes; any other `
 - **`0x0F02`**: gold above 10 → gold − 10, saved, `0x0F02 u8 1`; otherwise `0x0F02 u8 0`.
 
 No NPC, distance or state check (not even death). The client (`packet-opportunities.md`) opens dialog `0x69` with the numbers on `u8 1` and
-shows 303 "Insufficient gold" on 0; `0x0F02` 1 "shows it". Which NPC's menu sends them is not known on the server side (open for the client).
+shows 303 "Insufficient gold" on 0; `0x0F02` 1 "shows it". The client sends `0x0F01` only from the menu of an NPC of **type 14**, button 2 (confirmed in `game.exe`: the menu's type switch 0x48ce46
+with table 0x491c2c, type 14 at 0x48d0e9, the send at 0x48d0f2), and the client loads no type-14 NPC
+(`docs/client/research-priest-packets.md`); `0x0F02` only from the window `0x0F01` opens (0x4d09e2, 0x4d0b21).
 Since the US character window has no honour line and the client ignores `0x0230` (`CLIENT-FACTS.md`), the reading is the only place a player
 sees its honour.
 
@@ -516,6 +522,8 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
   default, and `0x021B` carries the real `limit − used` counts (EP5.4 ps_game 0x47bcf8 to 0x47bd1f); EP4.5 always sends `00 01` or
   `00 00` (section 2).
 - **The rename procedure** (confirmed, procedure text): EP5.4's `usp_Save_Char_Name_E` has both `BEGIN TRANSACTION` and `COMMIT`
-  commented out, so the rename runs without a transaction; EP4.5's has an active `COMMIT` with no `BEGIN`, which fails unless the caller
-  holds a transaction (inferred).
+  commented out, so the rename runs without a transaction; EP4.5's has an active `COMMIT` with no `BEGIN`, and the caller holds none (confirmed:
+  ps_dbAgent `DBCharacter::RenameCharacter` 0x41d6a0 never calls `SDatabase::BeginTrans` 0x43e730, and `SDatabase::Connect` turns
+  autocommit on, 0x43ef08), so that `COMMIT` raises SQL Server's "no corresponding BEGIN TRANSACTION" error (inferred: server behaviour,
+  not run).
 - `0x0307` and `0x0559` are kept; the Priest was not compared.
