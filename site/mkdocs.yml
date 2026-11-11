@@ -67,6 +67,7 @@ nav:
       - Protocol notes: original/protocol-notes.md
       - Login server (ps_login): original/ps_login.md
       - Game server (ps_game): original/ps_game.md
+      - "Server files: configuration and data": original/server-files.md
       - United war server (ps_gamewar): original/gamewar.md
       - Entering the world: original/enter-world.md
       - Movement, sitting, leaving: original/world.md
@@ -130,12 +131,14 @@ nav:
       - Portals: original/portals.md
       - Gatekeepers: original/gatekeeper.md
       - Monsters: original/mobs.md
+      - Monster AI 0 to 9: original/mob-ai.md
       - Monsters fighting back: original/mob-fight.md
       - "Monster drops: quest and sequence items": original/quest-drops.md
       - Monster skills: original/mob-skills.md
       - Monster paths (A*): original/pathing.md
       - Monsters chasing: original/chase-smoothing.md
       - Scripted monsters: original/scripted-mobs.md
+      - Monster speech: original/mob-speech.md
       - Walking NPCs and guards: original/guards.md
       - Party instance zones: original/instances.md
   - Client (game.exe):

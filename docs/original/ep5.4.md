@@ -136,7 +136,7 @@ The `Data/` tree (confirmed from the files; the detail is in the system notes):
   is byte-identical to EP4.5's server-patch copy; `Obelisk.ini` gains the map-70 relics; `KillStatus.SData` is unchanged. Two Lua scripts
   (116, 117) changed. [`item-origins.md`](item-origins.md), [`obelisks.md`](obelisks.md), [`scripted-mobs.md`](scripted-mobs.md).
 - **Language:** every text is Chinese (GBK); `cn_string.DB` replaces `kr_string.DB` in use; the name in `ps_game` was changed from `de_string.DB` after linking.
-- **Gaps:** boxes and summon items name sets the ini files don't have, 27 Lua monsters have no script, and the experience table for levels
+- **Gaps:** boxes and summon items name sets the ini files don't have, 27 Lua monsters have no script (16 of the scripts turned up later in a community set: [`instances.md`](instances.md) section 19), and the experience table for levels
   1 to 60 is EP4.5's divided by 100 (unexplained). Treat the pack as a source of ideas, not as a clean reference.
 
 ## 6. The client side, checked in the EP6 client

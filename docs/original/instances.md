@@ -469,3 +469,43 @@ party term (inferred from it), there is no Lua library (confirmed), and maps 45 
 | `LuaMobCommand` (0x4cbb10) | monster id, three numbers | calls that monster's Lua function `OnCommand(caller id, the three numbers)` (EP5.4 ps_game 0x4c76b0) if it is alive and has a script |
 
 - 27 new monsters have Lua AI numbers 121 to 185, and none of those scripts is shipped (confirmed, data).
+
+**The missing scripts, found later.** A community set of 28 Lua files (not kept in the repository) has **16 of the 27**: 126 to 149.
+They are in the original's form, code page 949 with Korean comments, and dated 2011 (`ver.110107` to `ver.110921`). Each spoken line
+is a `LuaSayByIndex` with the line's Korean kept above it as a commented-out `LuaSay`. Their monsters are EP5.4's "returned Cryptic
+One" chain (monsters 3005 to 3073; the EP5.4 definitions agree with every script's monster id). Scripts 121 to 124, 150 and 180 to 185 are
+still missing. Where the monsters stand is not in our data: EP5.4's own `Obelisk.ini` does not place them, and the zones below come from
+the scripts' headers. The scripts call `RecallUser(…, 74, …)`, so the throne is on map 74 (inferred).
+
+| AI | monster | the header | what the script does (confirmed, the files) |
+|---|---|---|---|
+| 126 | 3028 | man-eaters' zone, sub-boss Frozen Man-eating Hydra | lines on contact, reset and death; skill 462 sixteen times at set times; at HP ≤ 70 % and ≤ 30 % a line and then 4 × 3066 and 8 × 3067 guards; on death removes them and makes **3041** at (296.0, 338.1) |
+| 127 | 3019 | lava zone, sub-boss (its line 6051 names it Nantarios) | a line in each HP band from 98 % down to 20 %, pulls everyone within 200 to (0, 148, 0) of map 74 (`RecallUser`), skills 386 and 401, orders the monsters around to attack (`AttackOrderSurroundMob`); on death makes **3041** |
+| 129 | 3005 | crystal mine, Cryptic One's "Peri Queen" | at HP ≤ 90 % calls 2 × 3061; after 30 s counts the 3061 still alive and calls **two of the next kind (3062, then 3063, then 3064) for each**, up to 16; at ≤ 70 % 8 × 3065; on death removes them and makes **3042** |
+| 133 | 3043 | dimensional rift, sub-boss (lines 6070 and 6073 call "Kirhiross's guards") | in the HP bands 90–70, 60–40 and 30–10 % calls a random number of 3059 and taunts while they live; on death opens portal 1007 (`LuaUpdateInsZonePortal`) and makes **3042** |
+| 134 | 3067 | the Hydra's guard | finds its parent (`LuaGetMobUID`) and heals it with skill 438 every 5 s (`LuaUseSkillAtMob`) |
+| 135 | 3041 | Cryptic One's throne, boss 2 | lines at HP 95, 85, 75, 65, 55 %; at 50 % calls 4 × 3030; on death sends everyone within 200 to one of three spots of map 74 at random and opens the matching portal (1008, 1010 or 1012) |
+| 136 to 139 | 3030 to 3033 | the throne boss's four guards | one line each; skill 336; they watch the boss's HP (`LuaGetMobHP`) and remove themselves with it |
+| 141 | 3023 | otherworld garden, "Delizabeth Etory" | calls 4 × 3070 and then 3071s; a line every 5 % of HP from 50 % down to 10 %; skills 186, 445 to 448, 450; on death makes **3041** |
+| 144 | 3010 | lava falls, Cryptic One's "Bulldozer" | a fire line at random; from HP ≤ 65 % one 3069 (two from 20 %) every 5 % down to 5 %, each with a line; skills 17, 387, 450; on death makes **3042** |
+| 145 | 3042 | Cryptic One, third form, the body | 10 s into the fight a line and its double 3072; skill 459 while their HP differ (`LuaGetMobHP` of both); every 30 s line 6112 and skill 463; at every 10 % of HP from 90 % down, the pair of lines 6130 and 6131 and skill 461 (line 6121 at 10 %) |
+| 146 | 3072 | the double | calls 2 × 3073; skill 459 |
+| 147 | 3040 | Cryptic One's throne, boss 1 | lines on contact, reset, at 95 % and at timed points; skill 461; on death sends everyone within 200 to one of three spots of map 74 and opens portal 1002, 1004 or 1006 |
+| 149 | 3069 | the Bulldozer's summon | 30 s after it appears: skill 460, then it removes itself |
+
+Every one of them calls `LuaDeleteMob` with count 0 and a radius as the fifth argument, as EP5.4's 116 and 117 do. 134 and 136 to 139,
+145 and 146 use `LuaGetMobUID` or `LuaUseSkillAtMob`, which only EP5.4's server has. Their lines are the client's sysmsg 6038 to 6131
+([Monster speech](mob-speech.md) section 5).
+
+**The same set's other files are not the original's** (confirmed, a comparison of the code with the shipped scripts):
+
+- **116, 117, 118** are EP5.4's (the two changed ones as above).
+- **111 to 115** were re-saved as UTF-8 (the Korean comments are destroyed) and edited: 111 opens the section-4 portal on its **first
+  hit** instead of on death; 112 says 6401 and an English `LuaSay` on its first hit and opens nothing; 113 calls `LuaHoldPosion`, a
+  function neither server has (the name is `LuaSetHoldPosion`), so its hook fails; 114 becomes unbeatable when hit and loses its skills;
+  115 drops the walk to (173, 179) and removes itself at once. They look like a private server's rework of the floor and are not used
+  here.
+- **119** ("Kimuraku Monster_ID-835", UTF-8, an English header) makes 20 Gold Boxes (1967) on every combat turn below 3 % HP. In the
+  data Kimuraku has AI 3 and no definition has AI 119: a private server's script.
+- **160 to 162** (2012, `ver.120701` to `ver.120703`) are three summoned relic guardians (3536 to 3538, past EP5.4's definitions):
+  when one dies it removes the other two within 900.

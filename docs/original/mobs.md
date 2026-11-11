@@ -97,7 +97,9 @@ at most 32.8 s), next new-target time `now + 5000`. The home position
 
 **Scripted monsters:** a definition whose `byAI` (column `AI`) is 10 to 99 gets a state machine from `Data/mob_ai.ini` and `Data/AI/*`
 (`CAIFactory::SetFSM`; on success the state is 100), 100 and above a Lua one (`CMob::InitLuaFSM`). Those run their scripts instead of what
-follows: `docs/original/scripted-mobs.md` (93 of the shipped definitions, 65 of them spawned, on maps 45 to 47).
+follows: `docs/original/scripted-mobs.md` (93 of the shipped definitions: 65 of them in spawn areas, on maps 45 to 47, and 16 bosses in the
+boss groups of maps 48 and 49). What the numbers 0 to 9 change
+in the code below and in the fight (aggressive, calls for help, standing still) is on [Monster AI 0 to 9](mob-ai.md).
 
 **`CMob::UpdateIdle(now)`** for the others, only in state 0 (idle):
 

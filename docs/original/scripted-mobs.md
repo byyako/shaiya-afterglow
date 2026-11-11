@@ -13,8 +13,9 @@ AI uses them).
 
 ## In short
 
-- **Scripted monsters live on maps 45 to 47**: the scorpions, crocodiles, Helltooths and sphinx followers there (65 kinds). Each runs a
-  small state machine written in an editor and saved as text files the server loads at start.
+- **Scripted monsters live on maps 45 to 47**: the scorpions, crocodiles, Helltooths and sphinx followers there (65 kinds), and the
+  Cryptic One bosses of maps 48 and 49 (boss groups). Each runs a small state machine written in an editor and saved as text files the
+  server loads at start.
 - **What the scripts do**: wander or run, fight using the ordinary attack code, shout lines in chat, call other monsters to attack,
   summon helpers, change their own strength, defence, attack speed and recovery, and switch their element.
 - **They fight once a second**, not twice like ordinary monsters, and they never come to help others.
@@ -52,11 +53,12 @@ In the data (`defs.mobs`, spawns from `world.mob_areas`):
 | 20 to 22 | `CrocoNamed1` to `3` | 2 named crocodiles each (1629 to 1634) | 47 |
 | 26 | `TrollNamed1` | 3 named Helltooths (1635 to 1637) | 47 |
 | 27 | `HellTouthNamed1` | 4 (1638 to 1641) | 47 |
-| 28 to 34 | `Deinos`, `Parridalis`, `Alcarian`, `ZinAlcaria`, `Belizabeth`, `Kirhiross`, `CrypticOne` | 2 or 4 bosses each (1700 to 1714, 1800 to 1814) | not spawned by any file here |
-| 23 to 25, 35, 36 | `OrcNamed1` to `3`, `Haruhion`, `Freezing` | none | |
+| 28 to 34 | `Deinos`, `Parridalis`, `Alcarian`, `ZinAlcaria`, `Belizabeth`, `Kirhiross`, `CrypticOne` | 2 or 4 bosses each (1700 to 1714, 1800 to 1814) | the boss groups 007 to 020 of `Obelisk.ini`, maps 48 and 49 (`docs/original/obelisks.md` section 11; **corrected**: earlier "not spawned by any file here", read from the spawn areas only) |
+| 23 to 25, 35, 36 | `OrcNamed1` to `3`, `Haruhion`, `Freezing` | none (the US client's `Monster.SData` gives 35 and 36 to four bosses that are AI 1 on the server: `docs/original/mob-ai.md` section 5) | |
 | 104, 111 to 118 | Lua `104.lua` (missing), `111.lua` to `118.lua` | one each (1890, 2464 to 2472) | 2471 on maps 65 and 66 (party instances), the rest summoned by scripts |
 
-So the scripted monsters a player meets are those of maps 45 to 47: 65 definitions with `AI` 10 to 27.
+So the scripted monsters a player meets are those of maps 45 to 47 (65 definitions with `AI` 10 to 27) and the bosses of the boss
+groups on maps 48 and 49 (`AI` 28 to 34). The numbers 0 to 9 are built into the server: [Monster AI 0 to 9](mob-ai.md).
 
 ## 2. The files (verified, `CAIFactory::LoadMobAI` 0x4a8df0, `InitFSM` 0x4a98f0, `LoadLocalVariableText` 0x4a99f0,
 `LoadSystemFunctionText` 0x4a9b30, `LoadStateMachineText` 0x4a9d90, `LoadCPPFunctionsList` 0x4aa920)
@@ -310,7 +312,9 @@ strlen(text)`** and **8 + len bytes sent** (no NUL; the text ends with the file'
 - `Say2`: **kind 1**, to every player on the map within the radius (horizontal, `≤`, the cells within `radius / 40` rounded). All uses
   pass 200.
 
-The client prints kind 0 and 1 as "<monster name> : <text>" in chat (`docs/client/scripted-monsters.md`, "Speech and voice").
+The client prints kind 0 and 1 as "<monster name> : <text>" in chat (`docs/client/scripted-monsters.md`, "Speech and voice"). Which
+monster says each line, and when, is on [Monster speech](mob-speech.md); the US client's own English of these lines (sysmsg 6001 to
+6031) is never used by the original.
 
 ## 9. Summons
 

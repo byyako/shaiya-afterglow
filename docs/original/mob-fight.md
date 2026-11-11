@@ -5,7 +5,8 @@ chase, go home and attack — and the player's side of it: death, rebirth and re
 executed. Players attacking monsters are on [Fighting monsters](combat.md), spawning and walking about on
 [Monsters](mobs.md), the client's side on [World packets](../client/client-world-packets.md). Scripted monsters (`AI` 10 and above,
 state 100 or a stack machine) are on [Scripted monsters](scripted-mobs.md): they reach `AttackAI` and what follows through their
-`Battle` handler, and that page lists where they leave the paths below.
+`Battle` handler, and that page lists where they leave the paths below. What each `AI` number from 0 to 9 does (who is aggressive, who calls
+for help, who stands still) is summed up on [Monster AI 0 to 9](mob-ai.md).
 
 ## In short
 

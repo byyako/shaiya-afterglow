@@ -11,6 +11,7 @@ are picked by `site/mkdocs.yml`; the groups below are the site's groups.
 - [`protocol-notes.md`](protocol-notes.md): Protocol notes
 - [`ps_login.md`](ps_login.md): Login server (ps_login)
 - [`ps_game.md`](ps_game.md): Game server (ps_game)
+- [`server-files.md`](server-files.md): The server's files: configuration and data reference
 - [`gamewar.md`](gamewar.md): The united war server (ps_gamewar)
 - [`enter-world.md`](enter-world.md): Entering the world
 - [`world.md`](world.md): Movement, sitting, leaving
@@ -76,12 +77,14 @@ are picked by `site/mkdocs.yml`; the groups below are the site's groups.
 - [`portals.md`](portals.md): Portals
 - [`gatekeeper.md`](gatekeeper.md): Gatekeepers
 - [`mobs.md`](mobs.md): Monsters
+- [`mob-ai.md`](mob-ai.md): Monster AI 0 to 9
 - [`mob-fight.md`](mob-fight.md): Monsters fighting back
 - [`quest-drops.md`](quest-drops.md): Monster drops: quest and sequence items
 - [`mob-skills.md`](mob-skills.md): Monster skills
 - [`pathing.md`](pathing.md): Monster paths (A*)
 - [`chase-smoothing.md`](chase-smoothing.md): Monsters chasing
 - [`scripted-mobs.md`](scripted-mobs.md): Scripted monsters
+- [`mob-speech.md`](mob-speech.md): Monster speech
 - [`guards.md`](guards.md): Walking NPCs and guards
 - [`instances.md`](instances.md): Party instance zones
 

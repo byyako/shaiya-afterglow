@@ -112,6 +112,7 @@ From the robustness audit (`docs/server/audit.md`, findings R1 to R30, every one
 | thorns-fields-pvp | 1, 2 | `0x0513` reach and the order of victims inside one pass | internal | |
 | thorns-fields-pvp | 3 | a Fire Thorns kill stops whatever the caster was doing → it does not | fix | |
 | mob-fight | | aggressive monsters target players of their own country first and drop them → passed over; `0x0609` names the monster; `0x0521` after entering; a lower maximum lowers the current value | fix, client | |
+| mob-ai | 1 | an idle Lua monster answers an AI 5 call for help → Lua monsters never answer (no shipped AI 5 monster stands near one) | internal | |
 | mob-skills | | damage over time on players added → multiplied, as on monsters; a healed monster's HP also as `0x0305`; drain hits as a blow; area hits stop when a reflection kills; DoT end within 60 | fix, client | |
 | pathing | 1 | a monster at a turn of its way set to height 0 → keeps its height | fix | |
 | chase-smoothing | 1-5 | monsters, guards and walking NPCs step to the server's clock, so the client shows them stopping and starting → paced to the client's walking, with a 100 ms move tick | fix (display, kept on) | `smooth_chase` (`true`) |

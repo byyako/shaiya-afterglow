@@ -8,6 +8,8 @@ OpenShaiya archive. Raw data: `docs/original/inventory/server/` (`files.csv` wit
 The EP3 and EP5.4 server packs are listed the same way in `docs/original/inventory/server-ep3/` and `server-ep5.4/`. They are
 compared with this pack in [`ep3.md`](ep3.md) and [`ep5.4.md`](ep5.4.md); the binary tables of all three episodes are there.
 
+What each config and data file holds, every key the programs read and how to change it: [The server's files](server-files.md).
+
 ## Summary
 
 | | |
