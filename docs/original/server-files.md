@@ -80,6 +80,21 @@ Confirmed, the `InitLogFile`, `InitServer` and `InitDB` functions of each progra
   [Protocol notes](protocol-notes.md)). `PSM_Server/ps_passwordEnc.exe` makes these blobs. A plain password does not work. An empty
   server field (the shipped `ps_gamewar.ini`) leaves the server name empty for the ODBC connection.
 
+**Example: how a value is written.** Put a note on a line of its own that starts with `;`. A note after the value on the same line
+becomes part of the value:
+
+```ini
+[CONNECTION]
+; the session server on this machine, at its built-in port 30900
+Session=127.0.0.1
+; the session server on another machine, at a port of our choosing
+;Session=10.0.0.5:31900
+
+[DB]
+; server, database, user, password (the hex blob ps_passwordEnc.exe makes; never the plain password)
+GameDef=127.0.0.1, PS_GameDefs, Shaiya, 52DF3B06881C9EB6...(256 hex digits in all)
+```
+
 ### 2.2 The sections every program has
 
 Confirmed, the same code in all seven (ps_game `InitLogFile` 0x403ca9 to 0x403d45 and `InitServer` 0x4041e9 onwards).
@@ -97,6 +112,29 @@ Confirmed, the same code in all seven (ps_game `InitLogFile` 0x403ca9 to 0x403d4
 Shipped: `Replace=1`, `Append=0` everywhere, so each program starts a fresh `PS_<PROGRAM>__system.log` and overwrites the last one; set
 `Append=1` to keep the history, or `Replace=0` to keep one file per start. `ps_dbAgent` also writes `.\Log\PS_DBAGENT__charsave.log`.
 
+**Example: the sections every program has.**
+
+```ini
+[SERVER]
+; the name in the log's first line and in the handshakes
+ServerName=Game01
+; empty: the built-in port (30810 for a game server)
+ServerPort=
+; turn players away once 5000 are connected
+MaxConnection=5000
+
+[LOGFILE]
+; always write .\Log\PS_GAME__system.log ...
+Replace=1
+; ... and add to it instead of emptying it at each start
+Append=1
+
+[MONITOR]
+; no PSM management agent watching this program
+Enable=0
+Port=50000
+```
+
 ### 2.3 The ports
 
 Confirmed, the defaults in each `InitServer` (`ServerPort`) and at each `[CONNECTION]` key.
@@ -113,6 +151,19 @@ Confirmed, the defaults in each `InitServer` (`ServerPort`) and at each `[CONNEC
 Change a port in both places: the program's own `ServerPort`, and `host:port` in every config that connects to it. The client is
 configured with the login server's address only; the game server's address reaches players through the session and login servers
 (`GamePublicIP`, section 2.4).
+
+**Example: moving the game log to its own machine and port.** The game log listens on the new port, and every program that writes
+to it is told the same port:
+
+```ini
+; ps_gameLog.ini
+[SERVER]
+ServerPort=31912
+
+; ps_game.ini (and every other game server's)
+[CONNECTION]
+GameLog=10.0.0.20:31912
+```
 
 ### 2.4 `ps_game.ini` (and `ps_gamewar.ini`)
 
@@ -141,6 +192,62 @@ log instead) and `[UNITED_WAR_SERVER]` (confirmed, the trace of its reads). It k
 250: the server does not start) and one `GameNN = name, server id, DB id, home game IP, home DB agent IP, home game log IP` line per
 home server ([United war server](gamewar.md) section 2 has the table). The shipped file's server line is a placeholder.
 
+**Example: a complete `ps_game.ini`** for one server with everything on one machine (`203.0.113.10` stands for the machine's public
+address):
+
+```ini
+[SERVER]
+ServerName=Game01
+ServerPort=
+MaxConnection=5000
+
+[CONNECTION]
+; every service on this machine, at its built-in port
+Session=127.0.0.1
+UserLog=127.0.0.1
+DBAgent=127.0.0.1
+GameLog=127.0.0.1
+
+[DB]
+GameDef=127.0.0.1, PS_GameDefs, Shaiya, 52DF3B06...(the encrypted password)
+
+[GAMEINFO]
+; keep the same name as the server's lines in ps_login.ini and ps_session.ini
+GameName=Teos
+; the address players are sent to: the public address or a host name, not 127.0.0.1
+GamePublicIP=203.0.113.10
+; the US client's version, so the login server's version check lets it in
+GameVersion=0x10042600
+; this server's records go to ps_gameLog's DBGame01
+GameLogDBID=1
+
+[LOGFILE]
+Replace=1
+Append=1
+
+[MONITOR]
+Enable=0
+Port=50000
+
+[UNITED_WAR_SERVER]
+; the war server players go to through the war portal
+PublicIP=203.0.113.50
+
+[NEW_SERVER]
+; 1 only for a newly opened server (double kill counts, cheaper enchanting, no war)
+Check=0
+```
+
+**Example: the war server's list of home servers** (`ps_gamewar.ini`): name, server id, database id, then the home game server's
+public address, its DB agent and its game log.
+
+```ini
+[GAMESERVERS]
+GameServerCount=2
+Game01=Teos, 1, 1, 203.0.113.10, 10.0.0.11, 10.0.0.12
+Game02=Ilios, 2, 2, 203.0.113.20, 10.0.0.21, 10.0.0.22
+```
+
 ### 2.5 `ps_login.ini`
 
 Confirmed, `ps_login` of 2009 (`ShaiyaServerPatch/Server/ServerMain/PS_Login/`) `InitServer` 0x406407, `InitDB` 0x4067b2,
@@ -158,6 +265,25 @@ Confirmed, `ps_login` of 2009 (`ShaiyaServerPatch/Server/ServerMain/PS_Login/`) 
 `[GAMESERVERS] EnableServerComb = 1`. The 2009 build reads it always and has no such key. Use the 2009 build, which has a matching
 PDB ([Server files inventory](server-inventory.md)).
 
+**Example: two game servers in the login list.** Each line is the name players see, the server id (below 256) and the database id:
+
+```ini
+[CONNECTION]
+Session=127.0.0.1
+UserLog=127.0.0.1
+
+[DB]
+UserData=127.0.0.1, PS_UserData, Shaiya, 081EECD7...(the encrypted password)
+
+[GAMESERVERS]
+GameServerCount=2
+Game01=Teos, 1, 1
+Game02=Ilios, 2, 2
+```
+
+The shipped files give the server the same name in `ps_game.ini` `GameName`, in `ps_session.ini` and in `ps_login.ini` (all
+`ServerName`); keep them the same (inferred from the shipped set; the matching code was not read).
+
 ### 2.6 `ps_session.ini`
 
 Confirmed, `ps_session` `InitServer` 0x407c97 to 0x408037, `CServerList::Load` 0x4081e8.
@@ -169,6 +295,22 @@ Confirmed, `ps_session` `InitServer` 0x407c97 to 0x408037, `CServerList::Load` 0
 | `[BILLING_GBK] Enable` | 0 | non-zero: connect to a GBK billing server (`SGBKClient::Open`) |
 | `[BILLING_GBK] IP`, `Port` | | its address. A failed connection is logged ("GBK Server connect failed") and the start goes on |
 | `[BILLING_GUM]` (all keys) | | **read by no build** (confirmed: the section name is in no image); leftovers of another billing system |
+
+**Example:**
+
+```ini
+[CONNECTION]
+UserLog=127.0.0.1
+
+[GAMESERVERS]
+GameServerCount=2
+Game01=Teos
+Game02=Ilios
+
+[BILLING_GBK]
+; no billing server: leave it off (the shipped [BILLING_GUM] section can be deleted, nothing reads it)
+Enable=0
+```
 
 ### 2.7 `ps_dbAgent.ini`, `ps_gameLog.ini`, `ps_userlog.ini`
 
@@ -182,6 +324,26 @@ Confirmed, the trace of each program's reads.
 
 None of the three has a `[CONNECTION]` section: the other programs connect to them. `ps_userLog` reads `ps_userLog.ini` and
 `ps_userlog.ini` (both spellings appear in the program; Windows does not care).
+
+**Examples:**
+
+```ini
+; ps_dbAgent.ini
+[DB]
+GameData=127.0.0.1, PS_GameData, Shaiya, FAFB877F...(the encrypted password)
+
+; ps_userlog.ini
+[DB]
+UserLog=127.0.0.1, PS_UserData, Shaiya, 133D58F3...(the encrypted password)
+
+; ps_gameLog.ini: two pairs of databases; a game server with GameLogDBID=2 writes to the second (inferred)
+[DB]
+DBCount=2
+DBGame01=127.0.0.1, PS_GameLog, Shaiya, 16AF507A...(the encrypted password)
+DBChat01=127.0.0.1, PS_ChatLog, Shaiya, A732A019...(the encrypted password)
+DBGame02=10.0.0.30, PS_GameLog2, Shaiya, ...(the encrypted password)
+DBChat02=10.0.0.30, PS_ChatLog2, Shaiya, ...(the encrypted password)
+```
 
 ## 3. The data files (`Data/`)
 
@@ -226,6 +388,59 @@ told the weather in `0x0451` ([Movement](world.md) section 5).
 **`MapWar.ini`** is read by `ps_gamewar` instead, with the same keys for maps 100 to 108, start positions `…GameStartMapPosWar`, and
 `GateKeeperLvMin`/`Max` ([United war server](gamewar.md) section 2).
 
+**Example: four kinds of map**, from the shipped file (the notes on `;` lines are added here):
+
+```ini
+[BASE]
+MapCount = 68
+; three start spots for Humans, one picked at random for each new character
+HUGameStartMapPos = (1, 577.98, 78.56, 1762.12) (1, 580.10, 78.56, 1760.00) (1, 575.40, 78.56, 1764.30)
+
+[DEFAULT_SET_ZONE]
+; what a map gets when its own section leaves these keys out
+MapType = F
+RebirthMapPos = -1, 0, 0, 0
+WeatherState = 0
+WeatherRate = 30
+WeatherPower = 2
+WeatherDelay = 3
+WeatherNoneDelay = 30
+
+; a field with light rain: a 30 % chance every 60 minutes, lasting 10 minutes
+[SET_ZONE_18]
+MapType = F
+WeatherState = 1
+WeatherRate = 30
+WeatherPower = 1
+WeatherDelay = 10
+WeatherNoneDelay = 60
+
+; a field where each faction comes back from death at its own spot
+[SET_ZONE_47]
+MapType = F
+RebirthMapPos1 = 47, 125.58, 8.4, 454.08
+RebirthMapPos2 = 47, 571.37, 6.4, 194.08
+
+; the auction house: a dungeon where nobody is an enemy
+[SET_ZONE_42]
+MapType = D
+WarType = P
+
+; a party instance, open Monday to Saturday from 21:00 for one hour (day 0 = Sunday),
+; at least 18 party members to enter, at most 30 per zone, an empty zone kept 2 minutes
+[SET_ZONE_64]
+MapType = F
+CreateType = P
+CreateTime = (1, 21, 1)(2, 21, 1)(3, 21, 1)(4, 21, 1)(5, 21, 1)(6, 21, 1)
+CreateMinUser = 18
+EnterMaxUser = 30
+ExpireTime = 2
+RebirthMapPos1 = 47, 509.47, 7.3, 1525.32
+RebirthMapPos2 = 47, 1404.15, 10.3, 308.92
+```
+
+(The three Human start spots are made up; the shipped file has one.)
+
 ### 3.2 `Obelisk.ini` (`ObeliskWar.ini`)
 
 Confirmed, `CMap::LoadObelisk` 0x427300; the full key list is [Obelisks](obelisks.md) section 11.1.
@@ -242,6 +457,23 @@ comment**. It holds, per `[zone_N]` map:
 
 The limits, the off-by-one and the bugs are in that section.
 
+**Example:** the obelisk of map 18 with its four guard groups, and the first boss group (the comments are the file's own, translated).
+
+```text
+[zone_18]
+    // the obelisk: where it stands, its monster while neutral / Light / Fury, then who holds it at start (1 Light, 2 Fury, 0 nobody)
+    [Obelisk_001] = (560.34,2.20,540.20),(710, 712, 711),0
+        // a guard group: centre and radius 3, the guard while neutral / Light / Fury, 2 of them
+        [Mob] = (568.00,2.18,547.99,3),(713, 715, 714),2
+        [Mob] = (551.08,2.39,531.39,3),(713, 715, 714),2
+
+// a boss group on map 19: 2 stages, respawn 604800 s (7 days), it opens map 19's portal 1001
+// the boss stands at (229.43, 1, 1031.10): 1974 first, 1977 when that one falls
+[bothmob_001, (19, 2, 604800, (19,1001))]  =  (229.43, 1, 1031.10),(1974, 1977)
+    // a follower: one monster per stage and one more (0 = none), radius 5, 1 of them
+    [Mob]  = (237.85,1,1022.68,5),(0, 1980, 0), 1
+```
+
 ### 3.3 `ItemCreate.ini`
 
 Confirmed, `CItemDrop::InitItemCreate` 0x4be840 ([Where items come from](item-origins.md) section 5.1).
@@ -251,6 +483,19 @@ The box and pocket contents (items with `bySpecial` 42). Own parser: `[ItemCreat
 that grade. Grades 0 to 1024; weight above 0; a grade with no items gives nothing; a grade given twice adds its weight to the first. The
 box's `ReqVg` column (`shVG`) names its set; a box naming a set that is missing or empty gives an error and is kept ([Where items come
 from](item-origins.md) section 5.2). Shipped: sets 1 to 68.
+
+**Example:** set 19, the Fortune Bag, from the shipped file. The chances are the weights over their total (189): grade 1011 about
+53 %, 1012 26 %, 1013 13 %, 1014 6 %, 1015 1 %. A box whose `ReqVg` is 19 opens with this set. (In the shipped data those five grades hold no items, so this bag gives nothing.)
+
+```text
+// lines starting with // or -- are comments; grade, then weight
+[ItemCreate_19]
+	1011	100
+	1012	50
+	1013	25
+	1014	12
+	1015	2
+```
 
 ### 3.4 `ItemEnchant.ini`
 
@@ -267,6 +512,25 @@ A missing key reads **0**. When the file cannot be opened, the built-in tables s
 **`/reitemenh` has a bug**: it writes the weapon value into the defence slot wherever the two differ, so after a reload armour uses
 the weapon row. Restart instead. The shipped `PSM_Client/Bin/Data` copy (99 % everywhere) is a private-server edit; the
 `ShaiyaServerPatch` copy is the original's.
+
+**Example:** the chance is in **millionths** (900000 = 90 %; compared with the roll `% 1000000`, [Lapis](lapis.md) section 5), the
+add value in points. `WeaponStep00` is the chance of going from step 0 to step 1.
+
+```ini
+[LapisianEnchantPercentRate]
+; 0 -> 1 succeeds 90 % of the time, 19 -> 20 0.02 %; nothing goes past 20
+WeaponStep00=900000
+WeaponStep01=800000
+WeaponStep19=200
+WeaponStep20=0
+DefenseStep00=990000
+
+[LapisianEnchantAddValue]
+; a +1 weapon has 7 more attack, a +20 one 311
+WeaponStep01=7
+WeaponStep20=311
+DefenseStep01=5
+```
 
 ### 3.5 `SequenceItemCreate.ini`
 
@@ -285,6 +549,46 @@ When a monster with money (`wMoney` > 0) dies, the groups are tried in order and
 even when its grade is 0. Shipped: 7 groups, from every 30,000,001st monster to every 16,001st (a Weapon or Armor Lapisia); an eighth
 section exists but `COUNT = 7` skips it. The drop is logged with make type `'V'` and game log record `0x0A06`.
 
+**Example:** two of the shipped groups. The monster made as the 32,002nd (2 × 16,001), if it is of level 25, drops an item of grade
+394; at level 75 it drops nothing (`GRADE_7=0`).
+
+```ini
+[SEQUENCE_GROUP_COUNT]
+COUNT=2
+
+; every 30,000,001st monster
+[SEQUENCE_GROUP_1]
+SEQUENCE=30000001
+; levels 1-9, 10-19, 20-29 ...
+GRADE_0=125
+GRADE_1=125
+GRADE_2=39
+GRADE_3=39
+GRADE_4=39
+GRADE_5=39
+GRADE_6=39
+GRADE_7=0
+GRADE_8=0
+GRADE_9=0
+
+; every 16,001st monster: a Weapon or Armor Lapisia for levels 1 to 69
+[SEQUENCE_GROUP_2]
+SEQUENCE=16001
+GRADE_0=394
+GRADE_1=394
+GRADE_2=394
+GRADE_3=394
+GRADE_4=394
+GRADE_5=394
+GRADE_6=394
+GRADE_7=0
+GRADE_8=0
+GRADE_9=0
+```
+
+The groups are tried in order, so put the rarest (the largest `SEQUENCE`) first: a monster whose id is a multiple of both counts takes
+the first one only.
+
 ### 3.6 `MobID.ini`
 
 Confirmed, `CObjectMgr::InitMobID` 0x40a340, `SaveMobID` 0x40a3c0.
@@ -294,6 +598,13 @@ the counter carries on across restarts: read at start (written as 1 when the fil
 shutdown**. After a crash the ids since the last save are given out again, which repeats sequence drops. The shipped values are only where
 each server's counter stood (EP4.5 1,613,972). Do not edit it while the server runs: the next save overwrites it.
 
+**Example:** the whole file. Starting a new server from 1 is fine; copy the value across when moving a server to another machine.
+
+```ini
+[INIT_MOBID_SET]
+MOB_ID=1613972
+```
+
 ### 3.7 `GuildHouse.ini`
 
 Confirmed, `CGuildMgr::InitGuildHouseIniFile` ([Guild houses](guild-house.md) section 2, the full table).
@@ -302,6 +613,24 @@ The guild house's prices and service levels, Windows functions. Sections `Defaul
 `ShopWeapon`, `ShopDefen`, `General`, `ShopPosion` (sic), `Bank`, `Smith`, `NpcLevel_Light`, `NpcLevel_Dark`. The keys are `KeepEtin`
 and `UpgradeEtin` (the Etin per level), the `…DecreRate` price factors and `PermitSlot` (the bank's slots per level), as comma lists.
 **A missing key keeps the built-in value**; a list is cut to its table's length. Gatekeeper level 3's rate is never read from the file.
+
+**Example:** from the shipped file (the notes on `;` lines are translated from its Korean ones).
+
+```ini
+[DefaultSet]
+; the price of a guild house
+HouseBuyMoney=50000000
+; its basic upkeep, in Etin
+HouseKeepEtin=2000
+
+[GateKeeper]
+; upkeep per level 1, 2, 3
+KeepEtin=200, 500, 800
+; the Etin to reach level 1, 2, 3
+UpgradeEtin=1000, 1500, 2000
+; the price cut on teleports per level (0 = full price)
+MoveDecreRate=0.0, 0.0, 0.0
+```
 
 ### 3.8 `mob_ai.ini` and `Data/AI/*`
 
@@ -313,6 +642,17 @@ so keep them in order with no gaps; 0 to 9 are `ai/empty` placeholders (those nu
 state machine) and `.ah` (the state handlers). **One file that fails to load stops the server's start.** Names are matched without case on
 Windows. A monster definition's `AI` column (10 to 99) picks its line.
 
+**Example:** the start of the file. Each line is the number, a space or tab, and the path without its extension; no comments.
+
+```text
+9 ai/empty
+10 data/ai/sorp1
+11 data/ai/croco1
+```
+
+A monster with `AI = 11` runs `data/ai/croco1.alo`, `.afs`, `.ai` and `.ah`. To add a script as number 37, add line 37 after line 36
+and give the monster `AI = 37`.
+
 ### 3.9 `kr_string.DB`
 
 Confirmed, `CAIStringDB::LoadStringDB` 0x402820.
@@ -322,6 +662,15 @@ sends the text as it is (`0x1109`), so it shows in the client's code page: the s
 Write it in the players' language, or have a Lua script use the client's own lines instead ([Monster speech](mob-speech.md)). EP5.4 reads
 `cn_string.DB` instead.
 
+**Example:** two lines. The number on one line, the text on the next; no comments, no blank lines between pairs.
+
+```text
+1
+Smite the heretics!
+2
+Li laka Amon-Ra
+```
+
 ### 3.10 `Lua/<n>.lua`
 
 Confirmed, `CMob::LuaRegister` 0x4b1310 ([Party instance zones](instances.md) sections 9 to 16).
@@ -330,6 +679,44 @@ A monster whose `AI` is 100 or more runs `.\Data\Lua\<AI>.lua` in a Lua 5.1 stat
 starts with `Mob = LuaMob(CMob)` and defines the hooks (`Init`, `OnAttacked`, `OnAttackable`, `OnNormalReset`, `OnDeath`,
 `OnReturnHome`, `OnMoveEnd`, `WhileCombat`). A missing or failing file is logged and the monster has no script. The file is loaded when
 the monster is created.
+
+**Example:** a whole script, `Data/Lua/130.lua`, for a monster with `AI = 130`. It speaks a client line at half HP, once per fight,
+and leaves a chest when it dies.
+
+```lua
+Mob = LuaMob(CMob)
+
+bSaid = 0
+
+function Init()
+end
+function OnAttacked( dwTime, dwCharID )
+end
+function OnAttackable( dwTime, dwCharID )
+end
+function OnNormalReset( dwTime )
+  bSaid = 0
+end
+function OnReturnHome( dwTime, dwAttackedCount )
+  bSaid = 0
+end
+function OnMoveEnd( dwTime )
+end
+function OnDeath( dwTime, dwAttackedCount )
+  -- one monster 1250 (a treasure box) where it died
+  Mob:LuaCreateMob( 1250, 1, 0.0, 0.0 )
+end
+function WhileCombat( dwTime, dwHPPercent, dwAttackedCount )
+  if ( dwHPPercent <= 50 ) and ( bSaid == 0 ) then
+    -- sysmsg 6403 "You can't win this fight." to the players within 200
+    Mob:LuaSayByIndex( 6403, 200.0 )
+    bSaid = 1
+  end
+end
+```
+
+Define every hook, even empty: a missing one is logged as an error each time it would run ([Party instance zones](instances.md)
+section 14). The functions are listed in section 15 there. The AI number is one byte, so Lua scripts are numbers 100 to 255.
 
 ### 3.11 `Map/<id>.svmap`
 
