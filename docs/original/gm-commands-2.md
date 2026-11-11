@@ -112,8 +112,9 @@ text's last byte, and `CUserQuestionMgr::AddQuestion` (0x448b60) queues a `UserQ
 
 It goes to the **back** of the waiting list `m_listQuestion` (`+4`, count at `+0x24`), and the log connection `g_pClientToLog` gets `0x0401` (the question; not the game log, see the correction in the header). No
 check of the player's state, of how many it has asked or of the queue's size; when the question heap is exhausted (`Alloc` returns null)
-the question is dropped silently. Nobody is told that a question arrived. *Inferred*: only in the world, as the other world families (the
-dispatch in `PacketProcessing` 0x4672de).
+the question is dropped silently. Nobody is told that a question arrived. Only in the world, as the other world families: `PacketProcessing`
+reaches `PacketUQ` only from the state-4 branch with a zone set (0x466fbb, 0x4672de); before that a `0x12xx` packet is dropped without an
+answer (0x4674f8) (confirmed).
 
 ### 3.2 The staff list (`CUserQuestionMgr`)
 
@@ -143,7 +144,10 @@ with **n = the waiting count + 1** (the count before this one was taken) and the
   list (`FindRemoveQuestion`: **any** GM's question, not only the one this GM holds); none → nothing more. Found: the game log gets `0x0402`
   (`F202`: the question's log key and time, now, the kind, the GM's account name, the text) or `0x0403` (`F203`: the same with the typed
   name instead of the kind), and the question is freed. **Nothing is sent to anyone**: not to the GM, not to the asker, not to the named
-  player. The kind's meaning (the three buttons' labels) is **unknown**.
+  player. The kinds, by the label the client's question window shows above the text for the chosen button (`game.exe` 0x4967f0, strings
+  in Korean, not translated in this client): **1 "보류내용"** (held, 0x6ab2b8), **2 "처리결과등록"** (the handling's result, 0x6ab2a8),
+  **3 "삭제내용등록"** (deleted, 0x6ab298); the fourth button, `F203`, is **"전달내용등록"** (passed on, 0x6ab288) (confirmed). The window sends
+  the selected button's number as the kind (0x4962fd, sender 0x5871c0).
 
 ### 3.5 `F204` `/UQCOUNT`
 
@@ -168,9 +172,10 @@ writes a game log record; each failure answers `F501 <op>`.
 in the GM's zone (`EqualZone`) and not dead (`+0x142c` ≠ 1), else `F501 F801`. Then:
 1. every learnt skill's cooldown ends (`CSkill::m_dwResetTime`, `+0x1c` of each of `m_pSkill[m_nNumSkill]`, `+0xac4`/`+0xac0`, set to 0);
    **nothing is sent**: the client's own cooldown display does not change (*inferred*: it keeps refusing the skills until its own timers
-   end);
+   end; live: `docs/testing/live-test-checklist.md` section 65);
 2. every applied skill whose definition has `byTypeEffect` 3 (**the debuffs**; buffs are 4, `docs/original/skills-buffs.md`) gets
-   `m_dwEndTime = 0`: they end at the next pass over the applied skills (*inferred*: with their usual `0x050E`);
+   `m_dwEndTime = 0` (0x473349): they end at the next pass over the applied skills, with their usual `0x0902` to the database agent and
+   `0x050E` (confirmed: `CUser::ChkEndTimeSkill` 0x4865b0 takes off every entry with `m_dwEndTime ≤ now`, 0x4866a5, 0x486775);
 3. `SendRecoverAdd(max HP, max SP, max MP)`: HP, MP and SP full; `0x0505 u32 id, i16 hp, i16 mp, i16 sp` (what was gained) to the players
    within 60 (`CZone::PSendView`) when anything changed;
 4. `F501 0`.
@@ -239,7 +244,7 @@ Confirmed, `PacketAdminCmdD` 0x473970; level ≤ 4.
 | 4 | exp | `+0x13c` |
 | 4 | money | `+0x140` |
 | 2, 2 | stat points, skill points | `+0x138`, `+0x13a` |
-| 6 × 2 | STR, DEX, REC, INT, LUC, WIS | the **totals** (`CUser::m_wStr` … `+0x1220`, `+0x1224`, `+0x1230`, `+0x1228`, `+0x1234`, `+0x122c`; *inferred* totals: the `CUser` copies after `stUserInfo`, which hold the base stats separately) |
+| 6 × 2 | STR, DEX, REC, INT, LUC, WIS | the **totals** (`CUser::m_wStr` … `+0x1220`, `+0x1224`, `+0x1230`, `+0x1228`, `+0x1234`, `+0x122c`; confirmed: the PDB's `m_wStr`, `m_wDex`, `m_wInt`, `m_wWis`, `m_wRec`, `m_wLuc` right after `stUserInfo`, code offset = PDB + 4; `InitEquipment` sets them from the base stats (0x4546b7), `ItemEquipmentAdd` adds the item's (0x454d61), `/set` changes base and total together (0x4723a3, 0x4723b1); read for the sheet at 0x473a78) |
 | 2, 2 | HG, VG | `+0x168`, `+0x16a` |
 | 1, 1, 1 | CG, OG, IG | `+0x16c`, `+0x16d`, `+0x16e` |
 | 1 | k | the number of items below |
@@ -271,7 +276,7 @@ or the ranking battle is pulled out). The GM gets `F501 0` once the moves are st
 | command | wire | goes to | repeat slot |
 |---|---|---|---|
 | `F906` `/gmnotice <text>` | `u8 len, text` | every staff member in the staff list (section 3.2; `SendAdminAll`), the GM included | none |
-| `F907` `/cnotice [s] <text>` | `u16 repeat, u8 len, text` | the GM's view (`CObject::SendViewChat`, as `F101`; *inferred* within 30, the new server's `NORMAL_CHAT_RANGE`) | `dwNormal` |
+| `F907` `/cnotice [s] <text>` | `u16 repeat, u8 len, text` | the GM's view (`CObject::SendViewChat`, as `F101`: within **30**, the range it passes to `CZone::SendView`, 0x4bd4f7, called at 0x4742dc; confirmed; the new server's `NORMAL_CHAT_RANGE`) | `dwNormal` |
 | `F908` `/wnotice <name> [s] <text>` | `name[21], u16 repeat, u8 len, text` (len at +0x19) | that player (`FindUserZone`, in the world; none → `F501 F908`) | `dwTo` (with the player's id) |
 | `F909` `/znotice [s] <text>` | `u16 repeat, u8 len, text` | every player of the GM's zone (`CZone::SendAll`; nothing when the GM is in none, still `F501 0`) | `dwMap` |
 | `F90A` `/bnotice <빛\|어둠> [s] <text>` | `u8 country, u16 repeat, u8 len, text` (len at +5) | every player of that country on the server (`CWorld::SendAllCountry`); **the country is not checked** (2 and above reach nobody) | `dwCountry` (with the country) |
@@ -353,7 +358,9 @@ So questions and answers never reach a database, and a restart loses them (corre
 - Handlers: `F802`/`F803` (337/338, the bags or equipment emptied locally), `F804` and `F709` (339 "Log out by operator", never sent by the
   original), `F80B`/`F80C` (read a `u16`, do nothing; never sent), `F901` (the sheet), `F904`/`F905`/`F90C` (moves), `F906` to `F90B` (notice), `F201`,
   `F204` (344).
-- **Open for the client side**: the labels of the question window's four buttons (what kinds 1 to 3 mean); what the window shows of `F201`'s
+- The labels of the question window's four buttons are settled (section 3.4: held, the handling's result, deleted, passed on; `game.exe`
+  0x4967f0).
+- **Open for the client side** (live: `docs/testing/live-test-checklist.md` section 65): what the window shows of `F201`'s
   second `u32` (the packed time) and of `n`; whether the window clears itself after `F202`/`F203`; whether `F801` changes anything the client
   shows about cooldowns (it is sent nothing); whether `F802`/`F803` empty **all** bags and all 13 equipment slots locally, matching the
   server; whether a `F904`/`F905`/`F90C` for the client's own id on the same map, after the `0x020B` the view gets, moves it twice or once;
@@ -402,9 +409,9 @@ in part 1, instead of the game log.
    restart loses the queue and nobody can read past answers.
 2. **`F203` answers reach the player**: the text goes to the character named in `F203` (not necessarily the asker) when it is in the world,
    as whisper lines from the GM (`F102 u8 0, GM name[21], u8 len, text`, the text cut into pieces of at most 120 bytes, each with its zero);
-   not in the world → only saved. **`F202` delivers nothing** (as the original): its kinds are unknown (section 8), so its text may be a
-   staff note. *Why*: the client's fourth button is plainly "answer to a player", and an answer nobody receives is useless; once the client
-   side names the three buttons, a kind that means "answer" can be delivered the same way.
+   not in the world → only saved. **`F202` delivers nothing** (as the original): its kinds are held (1), the handling's result (2) and
+   deleted (3) (section 3.4), so its text is a staff record. *Why*: the client's fourth button is "passed on", the only one meant for a
+   player, and an answer nobody receives is useless. Whether a kind-2 result should also reach the asker is a decision left open.
 3. **The held question**: `/UQGET` while holding one sends it again (instead of nothing), and a held question answered by another GM no longer
    blocks its holder (the hold is cleared on every connection holding that id). *Why*: a GM who closed the window could otherwise not get
    the question back, and a question answered elsewhere silently blocked the first GM.

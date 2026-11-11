@@ -359,7 +359,8 @@ EP5.4 2011-09-14, modified after linking) were compared with EP4.5, read statica
 
 The guild bank exists: the load error string (EP3 ps_game 0x4e3974), `CGuild::ItemBagToGuildBank` (0x42a6c0, matched by call graph,
 the same 15 calls) with the same refusals of real type 27 and bound items (0x44f44f, 0x44f458), and `GuildMgrSave::DBSaveItem` in EP3
-ps_dbAgent (0x40f770, matched by strings) (confirmed). `guild-bank-bound` is most likely there too (inferred, EP3 ps_game 0x42b170).
+ps_dbAgent (0x40f770, matched by strings) (confirmed). `guild-bank-bound` is there too (confirmed): the `0x0204` branch that takes an item
+out (EP3 ps_game 0x44f4f2 to 0x44f50c) checks only the bag place before `ItemGuildBankToBag` (0x42b170), which reads no item definition.
 
 ### EP5.4
 
@@ -368,4 +369,6 @@ ps_dbAgent (0x40f770, matched by strings) (confirmed). `guild-bank-bound` is mos
   `GuildItemLoad ItemCount=0 …` to the operator link as `0x080E`, and creates no item. EP4.5 never sends `0x0B15`.
 - The rest of the loader is the same: an oversized equipment row is lowered and fixed with `0x0B14`, and an undefined item still crashes
   the server on purpose (EP5.4 ps_game 0x406006) (confirmed).
-- The three moves keep their constants (inferred), and the bound-item swap is most likely still there (inferred, EP5.4 ps_game 0x435bc0).
+- The three moves keep their constants (inferred), and the bound-item swap is still there (confirmed): only the deposit branch refuses real
+  type 27 and `byOG` (EP5.4 ps_game 0x476295, 0x4762a4); the take-out branch (0x47631d to 0x476340) checks the place only, and
+  `ItemGuildBankToBag` (0x435bc0) reads no item definition.

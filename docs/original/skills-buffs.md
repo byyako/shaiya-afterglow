@@ -462,7 +462,7 @@ EP3 ps_game 0x469d68, 0x469d92), Stealth's end without a recompute (0x469dc7) an
 | kind | applied (EP5.4 ps_game) | effect | status |
 |---|---|---|---|
 | buff 96 | byte set at 0x49462d, cleared at 0x494b4d | the skill checks skip the combo prerequisite | confirmed; meaning inferred |
-| buff 97 | 0x494645 to 0x4946d0 | dismounts, then shape 103 and attack stop; removed with shape 0 (0x494a1a); hiding's end removes it too. In the EP6 client shape 103 hides the character from every viewer, like the stealth shape 13 without its exception for the party (EP6 game.exe 0x4e8cdf; the meaning of the flag is inferred) | confirmed |
+| buff 97 | 0x494645 to 0x4946d0 | dismounts, then shape 103 and attack stop; removed with shape 0 (0x494a1a); hiding's end removes it too. In the EP6 client shape 103 hides the character from every viewer, like the stealth shape 13 without its exception for the party (EP6 game.exe 0x4e8cdf; the meaning of the flag is inferred: it needs the EP6 client's drawing code) | confirmed |
 | buff 98 | 0x494639, cleared at 0x494b68 | skills with a state effect fail on the character, from players (0x463a65) and monsters (0x4b6fd5): immunity to state debuffs | confirmed |
 | debuffs 74 to 76 | 0x494d3a to 0x494e43 | one at a time (a new one removes the old type's entries); while one lasts, attacks, skills and item use are refused (0x4789a1 to 0x4790fc) | confirmed |
 | debuffs 78, 79 | 0x494eec, 0x494f0d | new removal calls, not read | confirmed (calls) |
@@ -473,7 +473,9 @@ kinds (EP5.4 ps_game 0x498644, 0x4988af) (confirmed). `AddApplySkill` (EP5.4 ps_
 cast normally and stripped when that check runs (confirmed; when it runs inferred). Damage over time gains type 12, each tick doubling
 the value (EP5.4 ps_game 0x495d48 to 0x495e12), and the cap is 60000 (confirmed). Still as in EP4.5: the player damage-over-time
 addition (EP5.4 ps_game 0x495e2a) and the block-buff end (0x4949b4, 0x4949dd) (confirmed), the save filter (`SendDBAgentCharGetInfo`,
-EP5.4 ps_game 0x47ad70) and the low-HP passives (`ChkHPAbilityApply`, EP5.4 ps_game 0x497050: 180 s, 30 s) (inferred, same calls).
+EP5.4 ps_game 0x47ad70: kinds 3 and 4, only Disguise skipped, 0x47afcc to 0x47afe0) and the low-HP passives (`ChkHPAbilityApply`, EP5.4
+ps_game 0x497050: 180 s, 30 s, the same calls) (confirmed). New: the applied-skill sender skips its `0x0901` to the database agent when the
+skill's id equals `CUser+0x143c` (EP5.4 ps_game 0x4916df); what that field holds was not read.
 
 **Target buffs (new packets).** A client selects a player (`0x0308`) or monster (`0x0309`) target with `u32 id` (6 bytes) or clears
 it (`0x030A`, 2 bytes); the server then sends that target's buffs to everyone watching it: `0x030B` the list, `0x030C` one added,

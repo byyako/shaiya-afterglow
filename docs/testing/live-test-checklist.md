@@ -1775,3 +1775,25 @@ the server. Note what you see in each item's note. ProbeHero and its account; fo
 - [ ] **A diagonal run** (`docs/original/move-check.md` section 2a): on flat ground, run with forward and a side key held together
       for about 30 seconds without stopping, then the same straight ahead. Never put back; afterwards note the `average` values of the
       "move window" lines for both runs (the diagonal is expected near 5.22 against 5.0 straight).
+
+## 65. Client facts the static reading left open (`notes/confirm-ledger.md` cluster A2)
+
+For two real clients: TestVail (a level-1 GM) and TestRanger, as in section 38. These are facts about the client that the code could not
+settle; the server side of each is in the page named. Note what you see in each item's note.
+
+- [ ] **Staff moves and sets** (`docs/original/gm-commands.md` section 11): TestVail `/visible off` (`0x051D` with 13) while TestRanger and a
+      second GM look on: note who still sees TestVail. TestVail `/bmove` to a point on the same map, then to another map: the character
+      should land on the ground both times (the server sends y 0) and nothing on screen should stay half done. `/set` TestRanger's exp
+      (stat 16) and level (stat 1): note what TestRanger's level and exp bar show, and whether the level-up effect plays.
+- [ ] **`/cure` and skill cooldowns** (`docs/original/gm-commands-2.md` section 4.1): TestRanger uses a skill with a long cooldown; TestVail
+      `/cure TestRanger` at once. Note whether TestRanger's skill bar still shows the cooldown and whether the client refuses the skill until
+      its own timer ends.
+- [ ] **The question window** (`docs/original/gm-commands-2.md` section 8): TestRanger `/request GM test`; TestVail `/UQGET`. Note what the
+      window shows of the question's time and of the waiting count, then answer with each of the first three buttons in turn (one question
+      each) and note whether the window clears itself.
+- [ ] **A guild-bank take-out onto a bound item** (`docs/original/community-fixes.md`, `guild-bank-bound`): TestRanger, in a guild house
+      with the keeper in view, drags an item from the guild bank onto a bag place that holds a bound item. Note whether the client lets the
+      drop happen at all (the server refuses the swap).
+- [ ] **A rune right after a skill** (`docs/original/community-fixes.md`, `rune-skill-cut`): TestRanger uses a skill with a long animation and
+      at once a recall rune, then steps to cancel the rune's cast. Note whether the skill's animation is cut short (the server refuses the
+      rune within 3 s of a skill, item-use deviation 4, so expect no cut).

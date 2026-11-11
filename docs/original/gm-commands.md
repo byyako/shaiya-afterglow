@@ -188,7 +188,7 @@ above 18 → `F501 F701`. A refused value → `F501 F701`. Otherwise the change,
 | stat | limit (else refused) | what changes, besides the stored value | ps_dbAgent |
 |---|---|---|---|
 | 0 grow | ≤ 3; 0 (easy) only up to level 30 | `CUser::LevelUp(target)` (the level-up announcements, below) | `SendDBGrow` |
-| 1 level | ≤ 60; ≤ 30 in easy mode; not the current level | exp = `GetExp(grow, level − 1)` (the level's start, *inferred*), `F701 16 exp` to the target, `LevelChange` (the base maxima of the new level by job and mode; **no stat or skill points given or taken**, 0x48b0e0), `LevelUp`, then `F701` with the job's main stat and its value — **the GM's job** (`+0x134` of the GM: 0 STR(5), 1 REC(7), 2 DEX(6), 3 LUC(9), 4 INT(8), 5 WIS(10)) | `SendDBLevel`, `SendDBExp` |
+| 1 level | ≤ 60; ≤ 30 in easy mode; not the current level | exp = `GetExp(grow, level − 1)` (the level's start, confirmed: `CGameData::GetExp` 0x458180 is the table entry `grow × 61 + level`, called with `level − 1` at 0x47208a; the stat-16 case below takes `GetExp(grow, n)` as the end of level `n`, 0x4721fd), `F701 16 exp` to the target, `LevelChange` (the base maxima of the new level by job and mode; **no stat or skill points given or taken**, 0x48b0e0), `LevelUp`, then `F701` with the job's main stat and its value — **the GM's job** (`+0x134` of the GM: 0 STR(5), 1 REC(7), 2 DEX(6), 3 LUC(9), 4 INT(8), 5 WIS(10)) | `SendDBLevel`, `SendDBExp` |
 | 2 money | none | — | `SendDBMoney` |
 | 3 stat points, 4 skill points | ≤ 0x6FFF | — | `SendDBStatPoint` / `SkillPoint` |
 | 5 STR, 6 DEX, 7 REC, 8 INT, 9 LUC, 10 WIS | ≤ 0x6FFF and not the current value | the base stat and the total change by the difference; `SetAttack`. DEX, REC, WIS also add 5 × the difference to max SP, HP, MP and send them with a fill (`SendMaxSP`/`HP`/`MP`, `SendRecoverAdd`) — **to the GM**, not the target (0x47244f: `esi` is reloaded with the GM) | `0x0610 u32 char, u8 which (1 STR, 2 DEX, 3 INT, 4 WIS, 5 REC, 6 LUC), u16 value` |
@@ -244,7 +244,12 @@ All need the GM in a zone.
 ### 7.5 The server: `F706`, `F707`, `F708`, `F709`
 
 - **`F706`** `/server on`, **`F707`** `/server off`: `SAcceptor::StartAcception` / `StopAcception` (new connections accepted or not), and
-  `0x0204 u8 4, u8 server id, u8 accepting` (5) to the session manager (`g_pClientToMgr`; *inferred*: so the login list shows it). `F501 0`.
+  `0x0204 u8 4, u8 server id, u8 closed` (5) to the session manager (`g_pClientToMgr`): the last byte is **1 after `/server off` and 0 after
+  `/server on`** (it is set when the acceptor's flag is 0, `sete` at 0x472f19 and 0x472f81). The session server stores it for that server
+  (`CServerList::GameStatus`, ps_session 0x408740, keyed by the link's own server id, not the packet's), puts its own id in byte 3 and sends
+  the 5 bytes to every login server and admin link (ps_session 0x40325b to 0x403290); the login server writes the byte as the server's
+  status in its list (`CServerList::SetStatus`, ps_login 0x407280), the status the `0xA201` list shows (`SendList` 0x407328) (confirmed).
+  The `4` is read by nobody. `F501 0`.
 - **`F708`** `/shutdown`: `F501 F708` only.
 - **`F709`** `/akick`: `char name[21]` = an **account** name (`CWorld::FindUserBill`, keyed by `+0x5794`). Found → that connection is closed
   (`Close(9)`, no packet) and `F501 0`; else `F501 F709`.
@@ -287,8 +292,11 @@ when the new-server check is on; not covered.
 | `FA11` `/cmove` | `u16 map` (`0xFFFF` = current) | the map's bind point for the GM's country (`CMap::GetBindPos`) | none (no `F501` error path) | −1 when the map has a `CreateType` |
 | `FA12` `/gmove` | `f32 x, f32 z, u16 map, char name[25]` (37) | x, y 0, z | x, z in bounds; then by `CreateType`: **3 (party maps)**: `name` is a *character*, online, in a party → its party; **5 (ranking map)**: `name` a guild (`CGuildMgr::FindGuild`) and the map's battle open (`CMap::IsGuildRankMapOpenTime`) → that guild; **6 (house maps)**: a guild with ranking < 31, a house bought (`+0x55`) and in use (`+0x54` 1) → that guild; **any other type (0, 1, 2, 4) → `F501 FA12`** | the party's or guild's id |
 
-`+0x54c8` is read for staff by `CWorld::GetZoneByMapID` and `CUser::ZoneEnterUserMove` when they enter a map with a `CreateType`: the zone of
-that party or guild (*inferred*: the GM joins its instance zone; an unknown or −1 choice gives the usual zone pick).
+`+0x54c8` is read for staff (level ≤ 10) by `CWorld::GetZoneByMapID` (0x413df0) on maps of `CreateType` **3, 5 and 6**: when it is not 0
+it is the zone's key in place of the party's or guild's id (0x413f0e, 0x4140ed, 0x4141fc), so the GM joins that instance zone, skipping the
+ranking map's open-time check and the house check; a key with no zone yet gets a new, empty zone of that key. Type 4 has no staff path.
+**−1 is not 0**, so a GM sent there by `FA0A`/`FA11` gets the zone keyed −1 (one zone shared by such GMs), not the usual pick.
+`CUser::ZoneEnterUserMove` clears `+0x54c8` to 0 once the GM is in a zone of those types (0x44b91e, 0x44b937) (confirmed).
 
 ### 8.4 Listening: `FA0B`, `FA0C`
 
@@ -401,16 +409,16 @@ Names are zero-padded; the server writes a zero at the name's last byte before u
 
 ## 10. The database calls
 
-Confirmed, in ps_game; ps_dbAgent's side for `0x0305` only.
+Confirmed, in ps_game; ps_dbAgent's side for `0x0305` and the `0x06xx` messages (`CUser::PacketUserSetStatus` 0x405b00).
 
 | op | from | to ps_dbAgent | ps_dbAgent |
 |---|---|---|---|
 | `0x0305` | `F601`, `F602` | `u16 status, char account[32]` | `EXEC usp_Save_User_Status_E '<account>', <status>` (0x42a2cd) |
 | `0x0601` | `LevelUp` | the character's level, exp, points, stats (34) | saves them |
-| `SendDBGrow`, `SendDBLevel`, `SendDBExp`, `SendDBMoney`, `SendDBStatPoint`, `SendDBSkillPoint` | `F701` | one value each | *inferred*: the column |
-| `0x0610` | `F701` 5 to 10 | `u32 char, u8 which, u16 value` | *inferred*: the base stat |
-| `0x0605` | `F701` 11 to 15 | `u32 char, u8 kind (1 HG, else 2), u16 value` | *unknown*: kind 2 for VG, CG, OG and IG alike |
-| `0x060C` | `F701` 17, 18 | `u32 char, u8 0 kills / 1 deaths, u32` | *inferred* |
+| `SendDBGrow` `0x060D`, `SendDBLevel` `0x060A`, `SendDBExp` `0x0602`, `SendDBMoney` `0x0603`, `SendDBStatPoint` `0x060E`, `SendDBSkillPoint` `0x060F` | `F701` | `u32 char, u32 value` (10) | the agent's copy of the value (`CUser::PacketUserSetStatus` 0x405b00), saved with the character by `usp_Save_Char_Info_E` (`DBCharacter::SaveCharacter` 0x42337c): `Level`, `Exp`, `Money`, `StatPoint`, `SkillPoint`. **The grow mode is not a column of that save**: it only feeds `SaveMaxGrow` (0x4200c0, the account's `MaxGrow`), so a `/set` grow is lost at the next login (confirmed) |
+| `0x0610` | `F701` 5 to 10 | `u32 char, u8 which, u16 value` | the base stat (confirmed: ps_dbAgent table 0x4060e0, which 1 to 6 → `Str`, `Dex`, `Int`, `Wis`, `Rec`, `Luc` of the save) |
+| `0x0605` | `F701` 11 to 15 | `u32 char, u8 kind (1 HG, else 2), u16 value` | the agent reads kind 1 to 5 as `Hg`, `Vg`, `Cg`, `Og`, `Ig` (ps_dbAgent 0x405c1a, table 0x4060cc), but `ps_game` sends 2 for all four of VG, CG, OG and IG (0x4727a8, 0x472804, 0x47285a), so **a `/set` of CG, OG or IG is saved as the character's VG** and the CG, OG or IG change itself is not saved (confirmed) |
+| `0x060C` | `F701` 17, 18 | `u32 char, u8 0 kills / 1 deaths, u32` | `K1` (0) and `K2` (1) of the save (confirmed: ps_dbAgent 0x405d4c, `+0x80` + 4 × the kind) |
 | `0x0B09` | `FA13` | `u32 guild, u32 char, u8 rank` | the member's rank (`docs/original/guild.md` section 7) |
 | `0x0B0B` | `FA15` | `u32 guild, u32 points` | the guild's points |
 | `0x0701`, item removal | `F702`, `F703` | as `ItemCreate` / `ItemRemove` | as for any new or removed item |
@@ -427,7 +435,8 @@ Confirmed, in ps_game; ps_dbAgent's side for `0x0305` only.
 - **Open for the client side**: whether `0x051D` with 13 hides the character for every viewer (and what a staff viewer sees); whether
   a same-map move answered with `0x020B` only (no `FA0A`) leaves anything undone in the client (deviation 6 below); whether `0x020B` to
   another map with y 0 puts the character on the ground; what `F701` with stat 16 (exp) and stat 1 change on screen (level, bar); whether
-  the level-up packet `0x051E` after `/set level` is shown as a level-up.
+  the level-up packet `0x051E` after `/set level` is shown as a level-up. These need a running client (live: `docs/testing/live-test-checklist.md`
+  section 65).
 
 ## 12. Original oddities
 

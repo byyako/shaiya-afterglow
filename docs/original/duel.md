@@ -333,4 +333,5 @@ trades or shops, the request to oneself) much as the new server does (section 7)
 oneself instead of answering. **The stake count guard is fixed**: `ExchangePvP` (EP5.4 ps_game 0x48b950) takes
 the partial-stack path only when the offered count is below the count held (`jb`, EP5.4 ps_game 0x48bacd; EP4.5 `jne` 0x47ccbe), so a
 stack that shrank is handed over whole (confirmed); the trade keeps the old test (EP5.4 ps_game 0x47e81a). Bound items can still be
-staked: no stake check reads the bound flag (inferred from the checks present, EP5.4 ps_game 0x48c565 to 0x48c5c1).
+staked: no stake check reads the bound flag (confirmed: the checks from EP5.4 ps_game 0x48c548 to the store at 0x48c634 read the real
+type, the count and the slot only).

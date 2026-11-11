@@ -269,6 +269,14 @@ byAdminLevel, char szCmdName[32]`), `CMDTB` adds `char szTargetName[21]`, `CMDTC
 UserID, UserUID, CharID, CharName, MapID, position (level and exp 0), ActionTime the log server's clock; V1 the staff level; T1 the command's
 name; T2 the target (`0x0C02`, `0x0C03`); T3 the detail (`0x0C03`).
 
+Every command that writes one has its own name, a string the handler passes to `CUser::SendLogAdmin` (49 calls in `PacketAdminCmdA` to `E`,
+0x471f27 to 0x47553d; confirmed), in the order of the handlers: `AdminLevel`, `SetStatus`, `ItemCreate`, `ItemRemove`, `MobCreate`,
+`MobRemove`, `PickMobRemove`, `NpcCreate`, `NpcRemove`, `ServerOpen`, `ServerLock`, `UserKick`, `Cure`, `CureEventOn`, `CureEventOff`,
+`BagClear`, `EqClear`, `CharKick`, `QuestAdd`, `QuestRemove`, `CharInfo`, `MoveChar`, `MoveCharZone`, `MoveParty`, `NoticeAdmin`,
+`NoticeNormal`, `NoticeTo`, `NoticeMap`, `NoticeCountry`, `NoticeAll`, `VisibleOFF`, `VisibleOn`, `AttackDisable`, `AttackEnable`,
+`CountryCall`, `MarketItemRetrieval`, `MarketSearch`, `NoticeWarning`, `FindChar`, `MoveTo`, `MoveZone`, `MoveInsZone`, `ListenChatOn`,
+`ListenChatOff`, `DisableChat`, `DisableChatOff`, `DisableMove`, `DisableMoveOff`, `MoveMap`.
+
 ### 3.9 Mini-games (`0x0Dxx`, `WriteLogGamble`)
 
 `CMiniGame::GameEnter` `0x0D01` (190), `GameExit` `0x0D02` (191), `SendGameLogChgMoney` `0x0D03`, `SendGameLogSlotRun` `0x0D04`,
@@ -455,8 +463,8 @@ The plan the code was written from; section 11 records where the code differs fr
    - 3.7: `guild.rs` / `zone/guild.rs`: create, disband, join request, join (all three ways), leave, expel and member deleted (deviation 3),
      house NPC upgrades (`0x0B09`), battle points (`add_battle_points`, `0x0B0B`).
    - 3.8: every staff command (`server/admin.rs` `log` already sits at each): `0x0C01` without a target, `0x0C02` with one, `0x0C03` with a
-     detail; T1 the command's name as the original's `szCmdName` (use the command's opcode name, e.g. `"FA0A"`, where the original's text is
-     unknown, and say so in "Built").
+     detail; T1 the command's name as the original's `szCmdName` (section 3.8 lists them; every logged command has one, so the opcode
+     name, e.g. `"FA0A"`, is needed only for a command the original does not log).
    - 3.10: duels (`duel.rs`, `server/duel.rs`): win/lose (`0x0E01`/`0x0E02`), cancels (`0x0E03` for both, with the reason).
    - 3.11: `party.rs` users: join (`0x0F01`), leave, kick, break-up (`0x0F02`), with the party id.
 6. **Tests** beside the code they touch (one or two per subsection, through `GameLog::memory`): a pick-up of a monster drop writes
@@ -581,14 +589,18 @@ The EP3 `ps_gameLog.exe` (linked 2007-12-07) and the EP5.4 one (a VS 2003 build 
 - The same queueing and writers, the same 74-byte header (EP3 ps_gameLog `GetGameLogMainQuery` 0x401810; confirmed).
 - Fewer records (confirmed, writers' jump tables and format strings): 12 character, 25 item and 7 keep types (EP4.5 16, 47, 12); no party
   group `0x0Fxx` (rejected as "Error Packet"); no market records, no `0x030D`–`0x0310`; the gem text has no craft name.
-- The shipped EP3 `PS_GameLog` has no `ActionLog` table; `usp_Insert_Action_Log_E` lives in `PS_GameData` there, so `DBGame01` must
-  point at `PS_GameData` (inferred).
+- The shipped EP3 `PS_GameLog` has no `ActionLog` table and no procedure of its own (only `UserLog` and the `dt_*` tools);
+  `usp_Insert_Action_Log_E` lives in `PS_GameData` there, and EP3 ps_gameLog's statements name no database (`EXEC usp_Insert_Action_Log_E
+  ...`), so `DBGame01` must point at `PS_GameData` for the records to be written. The shipped `ps_gameLog.ini` files (`PSM_Client/Bin/Config`
+  and both `Game00`/`Game01` copies) point it at `PS_GameLog`, where every record fails (confirmed, the configs and `docs/original/db/ep3/`).
 
 ### EP5.4
 
 - **The header is 87 bytes:** `szUserName` is 32 bytes, so every field after it moved by 13 (EP5.4 ps_game `SetGameLogMain` 0x467f60;
   EP5.4 ps_gameLog 0x401830 reads `dwCharID` at 0x26 … `dwTime` at 0x53; confirmed). The staff records' user name grew from 16 to 32
-  bytes. An EP4.5 `ps_game` and an EP5.4 `ps_gameLog` do not fit together (inferred).
+  bytes. An EP4.5 `ps_game` and an EP5.4 `ps_gameLog` do not fit together (confirmed): EP4.5 `SetGameLogMain` (0x45b0d0) writes the
+  character id at 0x19, its name at 0x1d, the level at 0x32, the map at 0x38, the position from 0x3a and the time at 0x46, where EP5.4
+  ps_gameLog reads the character id at 0x26 and the time at 0x53 (0x40184c to 0x401880).
 - New record `0x0430`, action 239: the header, an item block, a `u16` and a text (EP5.4 ps_gameLog case 0x4038df; confirmed). It is built
   in `CUser::ItemUse` (EP5.4 ps_game 0x4745ad); what it records is not settled.
 - `0x0307` lost `firstmoney=`; `0x0803` no longer stores the other side's address (confirmed). `0x030E`–`0x0310` were not found as

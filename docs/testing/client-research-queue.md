@@ -82,6 +82,12 @@ it in the server spec it names.
     which code reads those parts (a day and night cycle, a calendar on screen, timed events), and does a clock that starts at 0 at every
     server start (the new server's) look wrong anywhere? What it changes: whether the new server should keep the clock across restarts as
     the original does. A live test cannot answer it without knowing where to look.
+35. **How long a world notice (`0xF106`) the client survives** (from `docs/original/operator-console.md` section 10, cluster A2 of
+    `notes/confirm-ledger.md`). The reader (`0x57eb00`) takes the `u16` length and copies that many bytes into a 2000-byte stack buffer with
+    no check, then `0x5533a0` copies the text to its end into the global at `0x702478` and prints 356 "[Notice] <b>". The client's code also
+    uses `0x702878` (1024 bytes on), `0x702880` and `0x702a80` (1544 bytes on). Which of these belong to the same buffer, and so how long a
+    notice can be before it overwrites something else? What it changes: the new server lets `F106` carry up to 1999 bytes; it should cap
+    the text below whatever the answer is. A live test with a 1500-byte notice would show a crash, not which variable it hit.
 
 ## Answered
 

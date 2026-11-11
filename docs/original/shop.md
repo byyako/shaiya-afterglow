@@ -109,8 +109,8 @@ of this note, read statically like the rest of the note; overview in [`ep3.md`](
 ### EP3
 
 - **The same buying and selling** (`PacketShop` EP3 ps_game 0x451810, matched by dispatch, `0x0702` and `0x0703`). The buy price is the
-  same 32-bit product ([`npc-shop-price-wrap`](community-fixes.md#npc-shop-price-wrap); `imul` at EP3 ps_game 0x451e70, inferred to be
-  the same path as EP4.5 0x46b55e).
+  same 32-bit product ([`npc-shop-price-wrap`](community-fixes.md#npc-shop-price-wrap); `imul` at EP3 ps_game 0x451e70: the count times
+  the item's buy price, compared only with the gold, 0x451e7f, as EP4.5 0x46b55e to 0x46b56f; confirmed).
 - **The guild-house discount** also calls `CGuild::EnableGuildHouse` in EP3; EP4.5 does not call it there (confirmed at call level).
 - Data (confirmed, `NpcQuest.SData`): EP4.5 adds 76 merchants, and 8 shared merchants differ (EP4.5 adds items of types 28, 44 and 100).
 

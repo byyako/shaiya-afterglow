@@ -47,9 +47,13 @@ The only populated database is `PS_GameDefs`; the rest are empty schemas, which 
 | `BaseItemsDefs` | 24 | 9 | starting equipment per family and job |
 | `ProductList` | 84 | 52 | item mall products |
 
-The stored procedures `usp_Read_*_R` (and `*_R2`, `usp_Read_MobMaxID_R`, `usp_Read_SkillMaxID_R`, `usp_Read_WorldInfo_E`) are the
-queries `ps_game` almost certainly runs at start-up to load these tables (inferred from the names; not yet confirmed in the binary). They show which columns the server actually uses and in which order.
-The `*_R2` variants are probably the newer column set.
+The stored procedures `usp_Read_*_R` are the queries `ps_game` runs at start-up to load these tables (confirmed): `InitDB` (0x403f0a)
+calls `CGameData::LoadData` (0x4bf320), which runs `LoadStatus`, `LoadExp`, `LoadConstItem`, `LoadBaseItem`, `LoadConstSkill`,
+`LoadConstMobSkill`, `LoadConstMob`, `LoadConstMobItem` and `LoadProductList` in that order, each with its `usp_Read_*_R` (the item, mob and
+skill loaders also with `usp_Read_MobMaxID_R`, `usp_Read_MobSkillMaxID_R`, `usp_Read_SkillMaxID_R`). They show which columns the server
+actually uses and in which order. The `*_R2` variants take an id: they are the console's one-row reloads (`CGameData::ReLoadConst*`, called
+only from `CServerApp::OnConsoleCommand`, for example 0x40372e), not a newer column set. `usp_Read_WorldInfo_E` is `ps_dbAgent`'s, not
+`ps_game`'s.
 
 ## `PS_GameData` (runtime state, the main persistence schema)
 
@@ -62,7 +66,11 @@ Characters (`Chars`, 52 columns, plus `CharBacks`, `_DeletedChars`, `_CreatedCha
 ## `PS_UserData` (accounts)
 
 `Users_Master`, `Users_Detail`, `Users_Block`, `Users_Deleted`, `UserLoginStatus` and logs for login, leave, online time, pause, block and
-point charges. This is probably where the login server authenticates and where the 16-byte session identity is kept (inferred from the table names).
+point charges. This is where the login server authenticates (confirmed: `ps_login.ini` names `PS_UserData`, and `GetUserMD5`, ps_login
+0x406e50, runs `usp_try_gamelogin_korea` there). The session identity kept in it is the **64-bit** session id the login server passes
+(`%I64d`; `UserLoginLog.SessionID`, `UserLoginStatus.LoginSession`, both `bigint`); the 16-byte identity goes to the session server in
+`0x701` ([`ps_login.md`](ps_login.md) section 6), not to the database. What the unshipped `_korea` procedure writes is not known; the
+shipped `_Taiwan` one logs the session id.
 The password column format (plain, hashed, or the same encryption the ini files use) has not been checked yet.
 
 ## Next
@@ -75,7 +83,9 @@ The password column format (plain, hashed, or the same encryption the ini files 
 
 Source: the original files' `Docs/GuideToShaiyaConfiguration.pdf` (the configuration guide) (ProfNerwosol, 17 pages, mostly EP4 and later). The whole guide has been read; the
 full write-up (all item fields, action types, GM commands and permission tiers, map list) is in `docs/original/community-guide-notes.md`.
-These are community findings, not verified against the binaries.
+These are community findings, not verified against the binaries here (not worth it on this page: each needs its column traced through
+`CGameData::LoadConstItem` 0x4c6420, which reads the columns into locals before filling `stItemInfo`; [`lapis.md`](lapis.md) confirms
+`reqluc`, `reqvg` and `effect1` to `effect4` by their uses).
 
 - `Items.Reqluc` (smallint): the item ID used to enhance the item. IDs above 32767 are stored minus 65536 (for example 44068 is -21468).
 - `Items.ReqDex`: item name colour (0 white, 1 worship, 2 dread, 3 legendary, 4 goddess, 5 special, 7 consumable). Also used for sorting.
@@ -235,12 +245,17 @@ where EP4.5 has `PS_StatData` and `PS_Statics`.
 - `PS_GameData`: `Chars.K1` defaults to 0 (EP4.5 120000); `usp_Read_User_MaxGrow_R` returns the stored value where EP4.5 returns a
   constant 3, and EP5.4 stores 3 at country choice instead; the cash-point read goes through a linked server; `usp_Save_Char_Name_E`
   has its commit commented out, and since `BEGIN TRANSACTION` is commented out in both builds, neither renames atomically (EP4.5's lone
-  `COMMIT` fails unless the caller holds a transaction, inferred).
+  `COMMIT` fails unless the caller holds a transaction: the caller holds none, since ps_dbAgent's `DBCharacter::RenameCharacter`
+  (0x41d6a0) runs it on a pool connection in autocommit, which `SDatabase::Connect` sets (0x43ef08) and only `BeginTrans` (0x43e730) turns
+  off, and the rename never calls it (confirmed); that SQL Server then raises its "no corresponding BEGIN TRANSACTION" error after the updates
+  have been written is its documented behaviour, not run here. The EP4.5 backup holds two texts of the procedure, one with that `COMMIT`
+  and one with it commented out; which is the current one was not settled).
 - `PS_GameDefs`: `ProductList.RowID` became `IDENTITY`; more rows (items 16,047 → 19,572, skills 1,333 → 3,738, monsters 2,747 → 3,088).
 - `PS_ChatLog.ChatLog.ChatData` is char(100) (EP4.5 char(10)).
 - The EP5.4 `ps_dbAgent` calls four item-mall procedures that no shipped backup has (`usp_Save_User_BuyPointItems2`,
   `usp_Read_User_CashPoint_UsersMaster`, `usp_Save_User_GiftPointItems2`, `usp_Rollback_User_GiftPointItems`), so that pack's item mall
-  cannot have worked with its own databases (inferred). `usp_Rollback_User_GiftPointItems` runs when billing refuses a gift and the target account is not loaded in the agent (`0x0E09`, EP5.4 ps_dbAgent 0x407f71 → 0x423b90; confirmed).
+  cannot have worked with its own databases (confirmed: the purchase save `SaveBuyPointItem`, EP5.4 ps_dbAgent 0x422c50, is its only
+  purchase statement, 0x422e7d, and no procedure list of the three packs has the four). `usp_Rollback_User_GiftPointItems` runs when billing refuses a gift and the target account is not loaded in the agent (`0x0E09`, EP5.4 ps_dbAgent 0x407f71 → 0x423b90; confirmed).
 
 ### What operators should know
 

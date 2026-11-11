@@ -79,7 +79,7 @@ this machine.
 Ten SQL Server backups in MTF format ("TAPE" header), all taken 2010-03-12 on a host named `SHAIYA`
 with original file paths `D:\SHAIYA_SERVER\DATABASE\*.mdf`:
 
-| database | size | purpose (inferred from the name, except GameDefs/UserData/GameData which the configs confirm) |
+| database | size | purpose (confirmed by the server configs for GameDefs, UserData, GameData, ChatLog and GameLog: `ps_game.ini`, `ps_dbAgent.ini`, `ps_login.ini`, `ps_userlog.ini`, `ps_gameLog.ini`; the others inferred from the name: no server config of the pack names them) |
 |---|---|---|
 | `PS_GameDefs` | 7.5 MB | game definitions (items, mobs, skills, maps, NPCs, quests): the key one for the rewrite |
 | `PS_UserData` | 6.4 MB | accounts and sessions |
@@ -116,9 +116,16 @@ Only text files were read, to settle the version question:
 
 ## Open items
 
-- Restore the backups. Needs a SQL Server container (accepts Microsoft's licence; Developer edition is free).
-- Settle the client/server version match once `game.exe` is read.
-- Run the first Ghidra analysis (`ps_login.exe`) to answer the encryption question.
+All three are settled:
+
+- Restoring the backups: done (`tools/restore_backups.sh`; the structure of all ten is in [`db/`](db/README.md)).
+- The client/server version match: the client sends `0x10042600` in its server select (`game.exe` 0x4dcce6, built at 0x5868ee), which
+  reads as the date 2010-04-26, the file date of `game.exe` (the reading as a date is inferred). Every shipped `ps_game.ini` has
+  `GameVersion=0x00000000` (one leftover `PSMServer_Config.ini` copy has `0x09072200`), and the login server's version check starts switched
+  on, so the original as shipped refuses this client's select with `0xFD` until an operator types `/vchkoff` or sets the version
+  ([`ps_login.md`](ps_login.md) section 16; confirmed).
+- The encryption question: answered, AES-128 in counter mode with a standard `AES_encrypt` (ps_login 0x40cf00, `Te0` at 0x447f78;
+  [`ps_login.md`](ps_login.md) section 4).
 
 ## The "Omega" pack (`Server/New Files/OmegaFiles`)
 

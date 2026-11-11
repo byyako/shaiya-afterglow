@@ -581,11 +581,15 @@ fix already known for any of these bugs.
   0x47d052). Equal still moves the whole item and smaller still splits, as
   before. This matches the new server's trade deviation 7.
 - **What triggers it:** most item actions end a trade first (`CancleActionExc`)
-  or empty an offered slot (`ExchangeItemRemove`), and no concrete path that
-  lowers an offered count mid-trade was confirmed. Delayed item use (a
-  consumption that happens after its own cancel, such as
-  `CUser::UpdateResetPosition`) is a candidate, inferred and not tried. The guard
-  closes the wrap whatever the path.
+  or empty an offered slot (`ExchangeItemRemove`). One path is in the code
+  (confirmed, not tried): a recall or movement rune's move is carried out 5 s
+  after the use, by `CUser::UpdateResetPosition`, which takes the rune with
+  `CUser::ItemUseNSend` (0x48d73f, 0x48d980, 0x48db6f, 0x48dd55); that lowers the
+  stack's count (0x465250) without looking at a trade, and `PacketExchange`
+  neither reads nor cancels a pending move (only `PacketPC`, `UpdateAttack` and
+  `StatusCastingStop` call `CancleMove`). So a stack of runes offered in a trade
+  opened during the cast is one short when the exchange runs. Trying it against
+  the original is not worth it: the guard closes the wrap whatever the path.
 - **Status:** verified in disassembly and emulation (both sites; equal,
   smaller, larger and boundary counts; the original goes on to split where the
   patch skips). **Credit:** Shaiya Afterglow analysis (docs/original/trade.md sections
@@ -616,12 +620,18 @@ fix already known for any of these bugs.
 - **Trade, half-written exchanges:** each item and the money go to ps_dbAgent as
   separate messages. Making them one transaction is a change to the database
   agent's protocol; not patchable here.
-- **Trade, both pressing ready at once** (inferred in docs/original/trade.md
-  section 6): not reachable as far as the code shows. The network threads only
+- **Trade, both pressing ready at once** (docs/original/trade.md section 6): not
+  reachable (confirmed). The network threads only
   queue packets (`SSyncQueueBuffer` at `CUser+0x7c`). The zone's world thread
   handles them one after another (`CWorldThread::Update` → `CZone::UpdatePackets`
   → `CUser::UpdatePackets` → `OnRecv`, under the thread's lock), and two traders
-  are always in one zone. *Inferred:* a zone belongs to one world thread.
+  are always in one zone: the partner is found in the requester's zone
+  (`CZone::FindUser`, 0x46ece0) and leaving the zone resets both sides'
+  exchange (`CUser::LeaveZone` 0x44af6e to 0x44b01a). A zone belongs to one
+  world thread (confirmed): each zone is put on exactly one thread's list, at
+  start (`CServer::InitWorldThread` 0x406b4c to 0x406c5e) or when an instance
+  zone is made (`CServer::AddWaitZone` 0x406880, round robin, taken in by
+  `CWorldThread::Update` 0x4073b8), and leaves it only when freed (0x407b97).
 - **The game log server:** no second patcher. Of what `ps_game` sends, every
   client-controlled text is now filtered or escaped: chat by the log writer
   (`'` → `_`), the whisper target by being the found player's own name, GM details

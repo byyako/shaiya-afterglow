@@ -58,8 +58,8 @@ In outline (confirmed unless marked; the detail is in each system note):
 - **Combat.** Five elements (a 5 × 5 table, the top-left of EP4.5's 9 × 9), no absorption; the lapis `exp` column adds a percentage
   to experience gained (EP3 ps_game 0x44018b, 0x442133). Buff kinds 94 and 95 (element buffs) came with EP4.5. Skill records are 156
   bytes (EP4.5: 160). [`combat.md`](combat.md), [`lapis.md`](lapis.md).
-- **Monsters.** No Lua scripted monsters (no Lua library at all). Guards lack the 5-second one-guard-per-target lock (inferred from
-  the missing constants). [`scripted-mobs.md`](scripted-mobs.md), [`guards.md`](guards.md).
+- **Monsters.** No Lua scripted monsters (no Lua library at all). Guards lack the 5-second one-guard-per-target lock (confirmed: their
+  target search reads no clock). [`scripted-mobs.md`](scripted-mobs.md), [`guards.md`](guards.md).
 - **Items.** No enchanting and no crafted stats: there is no `0x0805` handler, no enchant table, and the equipment code has no crafted
   values loop. The warehouse's second part starts at slot 40 (EP4.5: 120). Helmets and cloaks are refused in drops and boxes (EP3
   ps_game 0x48763a, 0x44db80), which is what `community-fixes.md` describes as "helmets and cloaks never drop". No item specials 59, 64
@@ -93,8 +93,8 @@ The pack's `PSM_Data/` holds ten databases as SQL Server 2000 data files (databa
   case (`CHARS`, `charitems`, `UserMaxgrow`), fewer tables (`PS_GameData` 27 against 54, `PS_Billing` 3 against 16).
 - **`PS_GameDefs` is a stub**: its tables have one placeholder column each and no rows, so EP3's game definitions are not in the pack.
   `OMG_GameWeb` and `PS_Monitor` are empty.
-- **The login procedure accepts any password** (confirmed in the file; not checked by a second reader): in `usp_Try_GameLogin_Taiwan`
-  the password check is commented out and the result preset to success. Don't use this database for anything reachable.
+- **The login procedure accepts any password** (confirmed in the file, read twice: the second time in the raw `PS_UserData_Data.MDF`,
+  byte 839365): in `usp_Try_GameLogin_Taiwan` the password check is commented out and the result preset to success. Don't use this database for anything reachable.
 - The item-mall delivery procedure `usp_Insert_Product_User_E` is in clear text here (EP4.5 and EP5.4 encrypt it): one transaction,
   a 240-slot cap, and an order number as the key.
 

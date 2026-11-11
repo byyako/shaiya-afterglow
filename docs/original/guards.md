@@ -263,7 +263,8 @@ builds are carried over from EP4.5 (matched by the call graph and constants, as 
 ### EP3
 
 - `CNpc::FindTarget` (EP3 ps_game 0x494270) lacks the two `now + 5000` stores and four state tests of EP4.5's (confirmed: no `0x1388`
-  there), so the 5-second "one guard per target" lock of section 5 is new in EP4.5 (inferred; the EP3 loop was not read).
+  there), so the 5-second "one guard per target" lock of section 5 is new in EP4.5 (confirmed: EP3's `FindTarget`, 0x494270 to
+  0x494756, reads no clock, and no `0x1388` appears anywhere from 0x489161 to 0x499940 of EP3 ps_game, the whole guard code).
 - `CNpc::Chase` (EP3 ps_game 0x4949a0) and `CNpc::ReturnHome` (0x494ed0) are nearly identical to EP4.5's (confirmed).
 
 ### EP5.4

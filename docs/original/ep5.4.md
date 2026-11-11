@@ -52,7 +52,10 @@ How the modified programs were changed (confirmed unless marked):
   one changes the quote character of the login query's user name and password. [`ps_login.md`](ps_login.md), Other episodes.
 - **`ps_game`**: three conditional jumps made unconditional (EP5.4 ps_game 0x47b54e, 0x47b608, 0x47c134; `ps_gamewar` has the
   original jumps). They switch off the new check that a character's race belongs to the account's faction, at the character list and
-  at loading. The `.rsrc` size fields were raised from 0x1b4 to 0x200. A fourth jump (EP5.4 ps_game 0x487fc7, `jne` → `jmp`) lets an item-mall purchase through when the billing link is down (inferred), the string table name `data/de_string.DB` became `data/cn_string.DB` (0x56f414), and the 19 level bounds of 80 are 70 in `ps_gamewar` (very likely edits too, inferred). Even with all these put back the checksum does not match (0x18d10e against 0x18530a), so at least one more edit was not located. [`enter-world.md`](enter-world.md), Other episodes.
+  at loading. The `.rsrc` size fields were raised from 0x1b4 to 0x200. A fourth jump (EP5.4 ps_game 0x487fc7, `jne` → `jmp`) lets an item-mall purchase through when the billing link is down (confirmed: the
+compare before it, 0x487fc1, reads the billing state that the session server's `0x105` sets, 0x4069cf; the skipped branch answers the
+purchase with a failure, 0x487fc9 to 0x487fdb), the string table name `data/de_string.DB` became `data/cn_string.DB` (0x56f414), and the 19 level bounds of 80 are 70 in `ps_gamewar` (very likely edits too, inferred: that they were changed after linking cannot be read
+from the file itself). Even with all these put back the checksum does not match (0x18d10e against 0x18530a), so at least one more edit was not located. [`enter-world.md`](enter-world.md), Other episodes.
 - **`ps_dbAgent`**: the character save statement's format string at EP5.4 ps_dbAgent 0x487888 was rewritten in place, same length.
   One more small change (a word-sum difference of 0x100, one byte +1 at an odd offset) was not located; it is not in a string.
 
@@ -67,8 +70,10 @@ The detail is in each system note. In outline (confirmed unless marked):
   passes 100 packets is closed and logged (EP4.5: 1000, no log). [`ps_game.md`](ps_game.md), [`protocol-notes.md`](protocol-notes.md).
 - **Characters and combat.** Level cap 70, but 19 level checks use 80, where `ps_gamewar` of the same day has 70, so they were very
   likely raised after linking. Read literally, a level-70 character still gains experience and then rises one level per gain up to 80,
-  with thresholds read from the wrong table row (the path is confirmed, the outcome inferred). The status table has no rows past 60, so
-  levels 61 to 70 come without HP, SP and MP growth (inferred). Skills of nine levels. Skill damage types 6 to 12, ability types 47
+  with thresholds read from the wrong table row (the path is confirmed, the outcome inferred: it needs a run of the EP5.4 server, not worth
+  it for a build the new server does not copy). The status table has no rows past 60 (confirmed: `StatusDefs` has 360 rows, levels 1 to 60
+  for six jobs, `docs/original/db/ep5.4/`), so levels 61 to 70 come without HP, SP and MP growth (inferred: the code that reads those rows
+  for a level above 60 was not read). Skills of nine levels. Skill damage types 6 to 12, ability types 47
   to 49, buff kinds 96 to 98, debuff kinds 74 to 76. Damage cap 60000 (EP4.5: 30000). [`stats.md`](stats.md), [`combat.md`](combat.md),
   [`skills-use.md`](skills-use.md), [`skills-buffs.md`](skills-buffs.md).
 - **Movement.** A new move check: steps of at most 30 units, windows judged after 6 steps and 3 s, a failed player moved back,
@@ -89,10 +94,11 @@ The detail is in each system note. In outline (confirmed unless marked):
 
 - **`ps_session`** (unmodified): the core is unchanged. New are the PayLetter billing link, a broadcast of the billing link's state
   (`0x105`), 16 random bytes sent to each game server (`0x108`: the game server's XOR seed for the run, which it builds its XOR table from and sends
-to the clients in `0xA301`; EP5.4 ps_game 0x406a14, 0x464ca0, 0x413d6d; confirmed), and two relays (`0x818`, the all-server `/mmake`; `0x81B`). Without `[PAYLETTER]` it never answers a purchase (`0x1B02`) (inferred). It takes EP3's
+to the clients in `0xA301`; EP5.4 ps_game 0x406a14, 0x464ca0, 0x413d6d; confirmed), and two relays (`0x818`, the all-server `/mmake`; `0x81B`). A purchase (`0x1B02`) is passed to the PayLetter link without a check (EP5.4 ps_session 0x403ee8 to 0x403fe0; confirmed); each request is kept with a deadline 30 s on (0x403f45 to 0x403f50), and what reads that deadline was not traced, so that without `[PAYLETTER]` a purchase is never answered stays inferred. It takes EP3's
   0x63-byte `0x701` from `ps_login`. [`ps_login.md`](ps_login.md), Other episodes.
 - **`ps_dbAgent`**: the same message set, with `0x0E09` (billing refused: drop the purchase or roll the gift back) and `0x0E0A` (billing confirmed) now handled; the item-mall procedures renamed (`*2`, `*_UsersMaster`), and four of them exist in no
-  database of the pack, so the shipped item mall can't have worked with its own databases (inferred). Saved positions are checked for
+  database of the pack, so the shipped item mall can't have worked with its own databases (confirmed: `SaveBuyPointItem` (EP5.4 ps_dbAgent
+  0x422c50, the statement at 0x422e7d) is the only purchase statement, and none of the three packs' databases has the procedure). Saved positions are checked for
   NaN. Saving is still a per-user 15-minute timer. [`database-notes.md`](database-notes.md), Other episodes.
 - **`ps_gameLog`**: EP4.5's code reading the 87-byte EP5.4 record header (the user name grew from 19 to 32 bytes), so EP4.5 and EP5.4
   game and log servers can't be mixed. [`game-log.md`](game-log.md), Other episodes.
@@ -110,7 +116,8 @@ version 539 (SQL Server 2000), which SQL Server 2022 refuses. All ten are descri
   that they were removed. Seven procedure texts differ from EP4.5's.
 - **`PS_GameDefs` rows**: Items 16047 → 19572, Skills 1333 → 3738 (1,955 of them junk rows with id 0), Mobs 2747 → 3088, MobItems
   24723 → 27792, ExpDefs 240 → 280, ProductList 84 → 249.
-- **A backdoor trigger** (confirmed in the file; not checked by a second reader): `PS_ChatLog` has a trigger on its chat table,
+- **A backdoor trigger** (confirmed in the file, read twice: the second time in the raw `PS_ChatLog_Data.MDF`, byte 781473): `PS_ChatLog`
+  has a trigger on its chat table,
   created 2010-08-07, that gives an account elevated rights on certain chat lines and can run operating-system commands. Every chat
   line the game server logs reaches that table. Anyone restoring these files should drop the trigger and leave `xp_cmdshell` off.
   [`database-notes.md`](database-notes.md), Other episodes.
@@ -147,7 +154,7 @@ code reads directly). EP6 is later than EP5.4: agreement supports the EP5.4 read
 | `0x0527`, `0x0520`, `0x0B1B` echo, `0x2609`, `0xF603` in and out | 0x5dec40, 0x5e1e10, 0x5f1b50, 0x5e9360, 0x5e68c0 and 0x5ef63c | holds |
 | `0x0115` server time | the payload is one u32 (0x599c8f); the time the client compares it with is its own clock | holds, with a smaller payload than first read |
 | skill levels | the EP6 lookup accepts levels 1 to 15 (0x46cdcc); the EP5.4 decompilation's checks against 9 | differs in EP6; nine levels for EP5.4 rest on the decompilation |
-| shape 103 (buff 97) | the highest case of the shape switch (0x4e8b39); it hides the character from every viewer (0x4e8cdf) | known in EP6; "hidden" is inferred from the flag |
+| shape 103 (buff 97) | the highest case of the shape switch (0x4e8b39); it hides the character from every viewer (0x4e8cdf) | known in EP6; "hidden" is inferred from the flag (it needs the EP6 client's drawing code, which this read of the EP4.5 client cannot give) |
 
 All addresses in this table are in the EP6 `game.exe`. To confirm these for EP5.4 itself, an original EP5.4 `game.exe` would be needed:
 the decompilation's addresses refer to one.

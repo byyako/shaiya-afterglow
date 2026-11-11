@@ -318,9 +318,15 @@ reads as "disconnected" and "restricted"; the rules give termination and blocked
 
 Confirmed, in `game.exe`.
 
-The `0xA202` version field is the constant `0x10042600`, a literal in the code that builds the packet. For this US build it never changes.
-The original server only compares it when a global check is switched on and the server entry has a version; `0xFFFFFFFF` means "any".
-The new server mirrors that: `LOGIN_CHECK_VERSION` (off by default) and `LOGIN_GAME_VERSION` (unset means any).
+The `0xA202` version field is the constant `0x10042600`, a literal in the code that builds the packet (`game.exe` 0x4dcce6, sent by
+0x5868d0). For this US build it never changes. The original server compares it when its global check is on, the client's value is not
+`0xFFFFFFFF` and the server entry has a version other than `0xFFFFFFFF` (`CServerList::EnableVersion` 0x407530). **The check starts on**
+(`g_bVersionChk`, 0x44f488, is 1 in the file; only the console words `/vchkon` and `/vchkoff` change it, 0x405ecc, 0x405ee6), and the entry's
+version is the game server's `GameVersion` (`ps_game.ini`, read at ps_game 0x404301, sent in `0x0805` at 0x40a03d; ps_session passes it on
+in `0x0202`, 0x403668; `CServerList::AddServer` 0x407229). The shipped `ps_game.ini` files all have `0x00000000`, so the original as shipped
+answers this client's select with `0xFD` until an operator types `/vchkoff`, or `/vchg` with the client's value (confirmed).
+The new server mirrors the check: `LOGIN_CHECK_VERSION` and `LOGIN_GAME_VERSION` (unset means any); its check is off by default,
+where the original's starts on.
 
 ## 17. Other episodes
 

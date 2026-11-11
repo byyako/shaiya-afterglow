@@ -152,7 +152,7 @@ client.
 - **Symptom:** a deposit into the guild bank refuses bound and quest items, but taking an item out onto a bag place that is already
   taken swaps the two, and the bag's item goes into the bank without those checks. Another member can then take it out.
 - **To reproduce:** with a bound item in the bags, take an item out of the guild bank onto the bound item's place (`0x0204` from bag
-  255 to that place; whether the normal client allows that drop was not checked).
+  255 to that place; whether the normal client allows that drop was not checked: live, `docs/testing/live-test-checklist.md` section 65).
 - **Where:** `CGuild::ItemGuildBankToBag` 0x42fea0, the swap from 0x42fff1 (see [Guild bank](guild-bank.md)).
 - **Fix:** kit [`guild-bank-bound`](../server-patches.md#guild-bank-bound), verified in disassembly and emulation: the swap applies the
   deposit's checks; a refused swap changes nothing and answers nothing, as a refused deposit.
@@ -267,7 +267,7 @@ client.
 - **Fix:** community fix in `ps_gametablas.CT`, "Fix drop of helmets and capes", by **Eric-Dutra16** and **andr3y_you96**. Whether it
   is a bug or a choice is up to the server.
 
-- **New server:** **open**: a design choice when drops are built
+- **New server:** **open**: a design choice when drops are built (a decision for the server, not a fact the code can settle)
 
 ## Skills and buffs
 
@@ -277,7 +277,7 @@ client.
 - **To reproduce:** use a skill, then the rune at once.
 - **Where:** `CUser::ItemUse` 0x465630 (see [Using items](item-use.md)). On the server side, the rune's casting is free when
   it is cancelled by a step, so it can be repeated without end; the server still spaces skills by the attack speed, and the gain is
-  the client's skill animation cut short (client side, not checked).
+  the client's skill animation cut short (client side, not checked: live, `docs/testing/live-test-checklist.md` section 65).
 - **Fix:** community fix `Ep4 Skillcut Fix.CT` by **Cups** (2018), written for this build: it stores the time of the last skill or buff
   use and ignores the rune for 3 seconds after it. Kit: not built. The same rule needs the time of the last skill kept per player, and no field of the player object is
   proven unused; stopping the rune while the next attack time has not come would also stop it after every normal blow.
@@ -459,8 +459,10 @@ client.
 
 - **Symptom:** when a monster gives up a chase and goes home, the speed change sent to the players around (`0x0609`) is built on the
   stack without the monster's id, so it carries whatever the stack held.
-- **To reproduce:** pull a monster until it gives up and runs home; its speed is not updated on the screens around (what the client
-  does with the leftover id was not checked).
+- **To reproduce:** pull a monster until it gives up and runs home; its speed is not updated on the screens around (the client looks
+  the leftover id up among the monsters it knows and changes nothing when there is none, so the
+  speed change is lost; if the leftover happens to be the id of another monster in view, that one gets the speeds; `game.exe` 0x57cd30
+  reads the packet, 0x54f2b0 (its handler table 0x6a5c20, slot +0x1e0) finds the monster (0x447900) and writes `+0xb4`/`+0xb5`; confirmed).
 - **Where:** `CMob::SendSpeed` 0x4906d0 writes only the opcode and the two speeds; called from `CMob::ResetAttack` (see
   [Monsters fighting back](mob-fight.md)).
 - **Fix:** kit [`mob-speed-id`](../server-patches.md#mob-speed-id), verified in disassembly: the packet carries the monster's id.
@@ -636,7 +638,7 @@ bug was looked up again in this build.
 - **Shen1l:** `Shen1l_Bugfix.CT`, scripts for a later build (it patches `pet.dll`, which EP4.5 does not have); nothing in it maps onto
   this build.
 - **Forum reports that could not be verified.** Searches of elitepvpers and RageZone turned up fixes and bug reports that the forums would
-  not open in full, so they are listed unconfirmed: a "Multibuff / DEX / 4× WIS" patched `ps_game` (BlackoutDude, 2015) with no visible
+  not open in full, so they are listed unconfirmed (nothing in the binaries can settle what a closed thread claimed): a "Multibuff / DEX / 4× WIS" patched `ps_game` (BlackoutDude, 2015) with no visible
   details; the "enchant overflow" crash and nubness's fix (2016), said there to be for the EP4.5 `ps_game.exe`, but the exact packet was
   never published; a packet-based dupe via a fixed `ps_dbAgent.exe` (LPH / lilprohacker), reported by others as not actually stopping the
   dupe; a friend-request crash and "same ItemUID" duplication named in a bug-request thread. None of these was reproduced or confirmed
@@ -657,43 +659,43 @@ named. The post-link changes to EP5.4 `ps_game` apply none of these fixes.
 
 | fix | EP3 | EP5.4 |
 |---|---|---|
-| `npc-shop-price-wrap` | present (inferred, same 32-bit `imul` at 0x451e70) | present (confirmed, 0x479871) |
+| `npc-shop-price-wrap` | present (confirmed: count × buy price in one 32-bit `imul` at 0x451e70, then only the gold compare, 0x451e7f, as EP4.5 0x46b55e) | present (confirmed, 0x479871) |
 | `npc-shop-range` | present (confirmed, `CZone::FindNpc` 0x413b20) | present (confirmed: the NPC is found anywhere in the zone, case 0x4796ae) |
-| `myshop-visit-cleanup` | present (confirmed, 0x43668e) | not checked |
+| `myshop-visit-cleanup` | present (confirmed, 0x43668e) | fixed (confirmed: `CUser::LeaveZone` 0x455f43 → 0x486fe0 takes the leaver off **the seller's** list, 0x487012) |
 | `myshop-price-wrap` | present (confirmed, 0x45e4dc) | present (confirmed, 0x4878a8); a new check refuses a sale that would overflow the seller's gold (0x4878e8) |
-| `bound-trade` | present (confirmed, `ExchangeItemAdd` 0x455bf0) | present (inferred) |
-| `bound-duel` | present (confirmed, 0x462a46) | present (inferred: the stake checks read only real type, count and slot, 0x48c565–0x48c5c1) |
-| `bound-shop` | present (confirmed, 0x45e288) | present (inferred from the compares in the place case of `PacketMyShop` 0x487370) |
-| `guild-bank-bound` | present (inferred, 0x42b170) | present (inferred, 0x435bc0) |
+| `bound-trade` | present (confirmed, `ExchangeItemAdd` 0x455bf0) | present (confirmed: the offer case checks real type 27 and the count only, 0x47dd82 to 0x47dd95, never `byOG`) |
+| `bound-duel` | present (confirmed, 0x462a46) | present (confirmed: the stake checks read only real type, count and slot, 0x48c565–0x48c5c1) |
+| `bound-shop` | present (confirmed, 0x45e288) | present (confirmed: the place case 0x4875c6 to 0x48767b never reads the item's definition) |
+| `guild-bank-bound` | present (confirmed: only the deposit branch refuses real type 27 and `byOG`, 0x44f44f, 0x44f458; the take-out 0x42b170 reads no item definition) | present (confirmed, the same: 0x476295, 0x4762a4; take-out 0x435bc0) |
 | `cloak-lapis` | present (confirmed, 0x4490c5) | present (0x46cae3) |
 | `cloak-lapisia` | cannot occur (no `0x0805`) | present (0x46c9f5) |
 | `enchant-material-bounds` | cannot occur | fixed (0x46cbf5–0x46cc04) |
 | `enchant-seed` | cannot occur | present (0x46ccf9) |
 | `remake-distinct` | cannot occur | fixed (0x46da24) |
-| `blacksmith-range` | present (inferred, `PacketGem` 0x452610) | present (inferred) |
+| `blacksmith-range` | present (confirmed: no NPC lookup from `PacketGem` 0x452610 or its four handlers; `CZone::FindNpc` 0x413b20 is called only by the NPC, shop, main-interface and quest code) | present (confirmed, the same: `PacketGem` 0x479f90 and its ten handlers; `CZone::FindNpc` 0x41e460) |
 | `op-exclusive` | present (confirmed, 0x449537) | partly: a new item special 69 hammer links for sure (0x46e776); the 2000 % hammers are still capped |
 | `repair-shield-slot` | present (confirmed, 0x44c0c8) | present (confirmed, 0x47208e) |
 | `helmet-cloak-drop` | the EP3 behaviour: drops and boxes refuse real types 16 and 24 (confirmed, 0x48763a, 0x44db7a) | not located; boxes refuse real type 24 only (0x473bbd) |
-| `rune-skill-cut` | not checked | not checked |
+| `rune-skill-cut` | present (confirmed: `CancleMove` 0x46e090 still frees the reuse group, 0x46e0c7); whether `ItemUse` adds a wait after a skill was not read | present (the same: 0x49ae40, 0x49ae77); `ItemUse` not read |
 | `learn-skill-level` | present (confirmed, 0x468fcf) | present (confirmed, 0x49354f) |
 | `stealth-equip` | present (confirmed: three shape tests each in `ItemEquipmentAdd` 0x43f590 and `ItemEquipmentRem` 0x43fa30; Stealth's end 0x469dc7 recomputes nothing) | gone: the shape tests were removed (confirmed) |
 | `time-damage-player` | present (confirmed, 0x46ae55) | present (confirmed, 0x495e2a) |
-| `low-hp-rows` | present (confirmed, `ChkHPAbilityApply` 0x46b8f0) | unchanged (inferred, 0x497050) |
+| `low-hp-rows` | present (confirmed, `ChkHPAbilityApply` 0x46b8f0) | `ChkHPAbilityApply` unchanged (confirmed: 0x497050, 180 s and 30 s, the same calls), but the `0x0901` sender now skips a skill whose id equals `CUser+0x143c` (0x4916df), a field not read, so whether the rows still pile up is inferred |
 | `block-buff-end` | present (confirmed, 0x469d68, 0x469d92) | present (confirmed, 0x4949b4, 0x4949dd) |
 | `fire-thorns-aggro` | present (confirmed, 0x43bd68) | present (confirmed, 0x4580d0) |
-| `illusion-save` | present (inferred: the save filter 0x4532d2 has no exception at all) | present (inferred, 0x47ad70) |
-| `illusion-newcomers` | different: EP3 has no `0x0524`, so no observer gets the monster (inferred) | not checked |
+| `illusion-save` | present (confirmed: the save filter takes every kind-3 and kind-4 entry, Disguise too, 0x4532c6 to 0x4532dc) | present (confirmed: only `wChangeType` 100, Disguise, is skipped, 0x47afcc to 0x47afe0) |
+| `illusion-newcomers` | different (confirmed): EP3 has no `0x0524` anywhere and its `SendShape` (0x4677c0) always sends `0x051D`, so no observer gets the monster | present (confirmed: `SendMoveUser` 0x426060 and `SendCellInfoEnter` 0x42a410 send `0x051D` only; `SendShape` 0x4913e0 has the `0x0524` branch) |
 | `party-kick-leader` | present (confirmed, `CParty::ExpelUser` 0x432dc0, 0x432e51) | partly fixed: the leader's index moves down (confirmed, 0x450324); the loot turn does not |
 | `party-exp-levelup` | cannot occur: no full-party bonus (confirmed, `AddExpFromUser` 0x442070) | present (confirmed, 0x46517b) |
-| `quest-full-bags` | not checked | not checked |
+| `quest-full-bags` | present (confirmed: the start items ignore `QuestAddItem`'s result, 0x463e81 to 0x463ec5; the reward path as EP4.5, 0x46426c) | present (confirmed, the same: 0x48db62 to 0x48dba6, 0x48df70) |
 | `quest-end-npc` | present (confirmed, 0x4645bc) | present (confirmed, 0x48e6c6, 0x48e754) |
 | `quest-npc-range` | present (confirmed, `CZone::FindNpc` 0x413b20) | present (confirmed, `CZone::FindNpc` 0x41e460 has no distance) |
 | `gatekeeper-logout` | present (confirmed, 0x44fd9f) | present (confirmed, 0x476db0) |
 | `mob-speed-id` | present (confirmed, `CMob::SendSpeed` 0x4745f0) | present (confirmed, 0x4a1050) |
-| `nan-pos` | present (inferred: `CMap::IsSafePos` 0x412190 is identical to EP4.5's) | fixed: `0x0501` and `0x0220` refuse non-finite positions (confirmed, 0x478514, 0x477555); EP5.4 ps_dbAgent also zeroes a non-finite position before saving (confirmed, EP5.4 ps_dbAgent 0x427160) |
-| `chat-markup-filter` | present (inferred: the same relaying handlers, no filter seen) | not checked |
+| `nan-pos` | present (confirmed: `CMap::IsSafePos` 0x412190 to 0x4121e2 is EP4.5's 0x415360 instruction for instruction, the same 0.0 constant) | fixed: `0x0501` and `0x0220` refuse non-finite positions (confirmed, 0x478514, 0x477555); EP5.4 ps_dbAgent also zeroes a non-finite position before saving (confirmed, EP5.4 ps_dbAgent 0x427160) |
+| `chat-markup-filter` | `PacketChatE` 0x4566c0 relays unchecked (confirmed: no test for `<`, only the relay calls); the other relays not read | `PacketChatE` 0x47f400 the same (confirmed; its extra calls are `memcpy` and the stack check); the other relays not read |
 | `exchange-count-guard` | present (confirmed, 0x455e37) | fixed for duel stakes (confirmed, 0x48bacd); present in the trade (confirmed, 0x47e81a) |
-| `trade-other` | present (inferred, `PacketExchange` 0x454fb0) | fixed: trading with oneself, or while in a duel or with a shop open, is refused (0x47de00) |
+| `trade-other` | the request is EP4.5's (confirmed: the partner found in the requester's zone, no self test, 0x454fe7 to 0x455038); the answer path and the saving order not read | fixed: trading with oneself, or while in a duel or with a shop open, is refused (0x47de00) |
 | `character-name-filter`, `guild-text-filter`, `gift-target-filter` | present (confirmed: EP3 ps_dbAgent writes the same names into `'%s'` unescaped) | present (confirmed: the EP5.4 ps_dbAgent statements are unchanged; the guild remark still refuses only `'`, 0x485c63, and creation checks nothing) |
 | `gm-notice-filter`, `gm-target-filter`, `game-log-texts` | present (confirmed: EP3 ps_gameLog escapes only chat) | present (confirmed: EP5.4 ps_gameLog escapes only chat) |
 

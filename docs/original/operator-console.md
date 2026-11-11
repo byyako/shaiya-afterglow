@@ -349,8 +349,11 @@ Steps 1 to 7 of section 6 as planned, with these points:
   chat for a level in `1..=console_level`; answers are `0x1102` whispers from `Server`, cut at 120 bytes.
 - **The tool** (`crates/login-server/src/bin/console.rs`) and `main.rs`'s listener: as step 6. The reply is cut to 7900 bytes with a
   final `...` line. The tool needs two pool connections (the listener keeps one).
-- **`F106`**: `shaiya_proto::admin::world_notice` (`u16 len` counting the zero, 1 to 1999 bytes of text). **Unverified in the client**
-  (live test 51).
+- **`F106`**: `shaiya_proto::admin::world_notice` (`u16 len` counting the zero, 1 to 1999 bytes of text). The client's reader is confirmed
+  (`game.exe` 0x57eb00): it reads the `u16` and then that many bytes into a 2000-byte buffer on its stack without checking the length, and
+  hands the text to 0x5533a0 (its handler table 0x6a5c20, slot +0x2d4), which copies it to the end of the string into the global at
+  0x702478 and prints it as 356 "[Notice] <b>" (chat type 8). *Inferred:* how long a text the client survives there (the next address its
+  code uses is 0x702878, 1024 bytes on; `docs/testing/client-research-queue.md` entry 35); what it shows is for live test 51.
 - **Tests:** 7 in `console.rs`, `config` (range checks), `switches`, `combat` (rates 1, 2, 0 and 1.5), `pvp::counted`, `zone`
   (`has_applied_skill`), `pg` (the NOTIFY payloads), the tool (reply matching), `shaiya-proto` (`world_notice`), `game_flow`
   (`a_level_one_gm_types_console_commands_with_a_dot`, `a_higher_level_gms_dot_line_is_ordinary_chat`, the shop switch inside
@@ -360,7 +363,8 @@ Steps 1 to 7 of section 6 as planned, with these points:
   listens for).
 - **Docs:** README (settings, the tool, test count), `docs/original/pvp.md` and `docs/original/lapis.md` (`NEW_SERVER` not built by decision),
   `docs/testing/live-test-checklist.md` section 51.
-- **Not built / unverified:** the data reloads other than the one below (section 9); the manager's shared-memory commands.
+- **Not built:** the data reloads other than the one below (section 9); the manager's shared-memory commands (`console.rs` has the one
+  `reload` word, and nothing in the new servers reads shared memory).
 - **`reload` and `restart` (`docs/plans/done/data-editing.md` section 7)**: `GameData.live` is a
   `RwLock<Arc<Live>>` holding the monsters (`MobDefs`) and the drop tables (`DropTables`); `GameData::live()` hands out a snapshot that
   the caller keeps for the whole operation (a hit, a kill, a pass of `mob_updater`), `set_live` swaps. `pg::load_live(pool, &items, &skills)`
@@ -405,7 +409,8 @@ Read in `InitConsoleCommand` (EP5.4 ps_game 0x4090c0, matched by the string `/ex
   closed, EP5.4 ps_game 0x409e23), `/disablegift` (`g_bDisableShop` = 3), `/servertime <hour> <min>`, `/addsr <f>`, `/resetstatcnt`,
   `/resetskillcnt`, and timed events with a start hour, a period and "once" or "keep": `/killcnt`, `/killupmap`, `/expupcamp`,
   `/expupmap`, `/gemmix`, `/gemext`, `/enchant`, each with a reset word. "keep" stores the event in `.\data\ServerCmd.ini`, which is
-  re-read at start; no such file is shipped. What each value changes in play is inferred from the names and the readers' places.
+  re-read at start; no such file is shipped. What each value changes in play is inferred from the names and the readers' places (not
+  worth reading here: EP5.4 only, and the new server copies none of these words).
 - `SConsole::AddCommand` takes a fifth argument, "may also be run from the game". Level-1 staff type such commands in the game with
   `0xF603` (`u8 len`, text); the result goes to every staff member as `0xF603` and to the session link as `0x080E` (EP5.4 ps_game 0x40c810,
   0x407b50; confirmed). Kick, notice, shutdown and the shop switches stay console-only.
