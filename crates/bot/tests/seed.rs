@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use bot::scenario::pvp_battle::{Battle, Config, State};
 use bot::seed::{self, Defs, Options, Refused};
+use bot::world::distance;
 use game_server::backend::{CharacterStore, Faction, PlayCharacter};
 use game_server::combat::class_stat;
 use game_server::creation::starting_stats;
@@ -307,18 +308,19 @@ async fn all_twelve_pairs_are_made_and_a_template_copies_them() {
             let defs = Defs::load(&pool).await.unwrap();
             let seeded = seed::seed(&pool, &defs, &Options::new(&prefix, 12, PASSWORD)).await.unwrap();
             let store = PgBackend::new(pool.clone(), Duration::from_secs(7200));
-            println!("faction class race  weapon range gear skills  hp/mp/sp");
+            println!("faction class race  weapon type range gear skills  hp/mp/sp");
             let mut pairs = std::collections::BTreeSet::new();
             let mut loaded = Vec::new();
             for line in &seeded.bots {
                 let l = load(&pool, &store, line).await;
                 check_loaded(&pool, &defs, line, &l).await;
                 println!(
-                    "{:>7} {:>5} {:>4} {:>7} {:>5} {:>4} {:>6}  {:?}",
+                    "{:>7} {:>5} {:>4} {:>7} {:>4} {:>5} {:>4} {:>6}  {:?}",
                     line.country,
                     line.job,
                     line.family,
                     line.weapon.unwrap(),
+                    line.weapon.unwrap() / 1000,
                     line.range,
                     line.gear,
                     line.skills,
@@ -363,6 +365,82 @@ async fn all_twelve_pairs_are_made_and_a_template_copies_them() {
         }
     };
     with_cleanup(&pool, &[&prefix, &copies], body).await;
+}
+
+#[tokio::test]
+async fn a_seeded_archer_fights_from_its_reach() {
+    let Some(pool) = test_pool().await else { return };
+    let prefix = throwaway_prefix();
+    let body = {
+        let (pool, prefix) = (pool.clone(), prefix.clone());
+        async move {
+            let defs = Defs::load(&pool).await.unwrap();
+            let seeded = seed::seed(&pool, &defs, &Options::new(&prefix, 12, PASSWORD)).await.unwrap();
+            // Bot 7 is the Light archer (class 3), bot 2 a Fury fighter, who only stands there and is killed.
+            let (archer_line, victim_line) = (&seeded.bots[6], &seeded.bots[1]);
+            assert_eq!((archer_line.country, archer_line.job), (0, 3));
+            let weapon_type = archer_line.weapon.unwrap() / 1000;
+            assert!([11, 13, 14].contains(&weapon_type), "the archer has a bow, not {weapon_type}");
+            assert!(archer_line.range > 10, "a bow reaches far: {}", archer_line.range);
+            let store = PgBackend::new(pool.clone(), Duration::from_secs(7200));
+            let backend = Arc::new(MemoryBackend::default());
+            let mut users = Vec::new();
+            let mut ids = Vec::new();
+            for (i, line) in [archer_line, victim_line].into_iter().enumerate() {
+                let mut l = load(&pool, &store, line).await;
+                l.play.map = 1;
+                l.play.position = [580.0 + 35.0 * i as f32, 78.56, 1762.12];
+                if i == 1 {
+                    l.play.health[0] = 40;
+                }
+                ids.push(l.play.id);
+                users.push(l.user);
+                backend.add_session(l.user, session([i as u8 + 1; 16], Some(SERVER_ID), LOCAL));
+                backend.add_character(l.user, SERVER, 0, l.faction, l.play);
+            }
+            let data = GameData {
+                items: pg::load_item_defs(&pool).await.unwrap(),
+                skills: pg::load_skill_defs(&pool).await.unwrap(),
+                status: pg::load_status_table(&pool).await.unwrap(),
+                exp: pg::load_exp(&pool).await.unwrap(),
+                ..data()
+            };
+            let (addr, _ctx) = start_with_data(backend.clone(), config(true), data).await;
+            let mut archer = bot_in_world(addr, users[0], [1; 16]).await;
+            // The victim stands there, a connection nobody reads; the archer is played alone.
+            let mut victim = bot_in_world(addr, users[1], [2; 16]).await;
+            let mut battle = Battle::new(Config {
+                point: [580.0, 1762.0],
+                radius: 0.0,
+                steps_per_sec: 4.0,
+                skill_every: Duration::from_secs(3600),
+                weapon_range: archer_line.range,
+                ..Config::default()
+            });
+            let started = [580.0f32, 1762.0];
+            let play = async {
+                // Until the first blow lands: how far from the victim is the archer then?
+                drive(&mut archer, &mut battle, |bot, _| !bot.metrics.attack_round_trip.is_empty()).await;
+                let gap = distance(archer.world.position, archer.world.players[&ids[1]].position);
+                drive(&mut archer, &mut battle, |bot, _| bot.metrics.kills >= 1).await;
+                gap
+            };
+            let gap = tokio::time::timeout(Duration::from_secs(60), play).await.expect("the archer kills the victim within 60 s");
+            let reach = archer_line.range as f32 + 2.3;
+            println!(
+                "archer {} range {} first blow at {gap:.1} (start 35.0, reach {reach})",
+                archer_line.weapon.unwrap(),
+                archer_line.range
+            );
+            assert!(gap > 10.0 && gap <= reach + 1.5, "the first blow came from {gap} away: a bow's reach is {reach}, a sword's under 4");
+            assert!(archer.world.position[0] - started[0] < 35.0, "it did not walk up to the victim");
+            assert_eq!((archer.metrics.kills, archer.metrics.refusals, archer.metrics.protocol_errors), (1, 0, 0));
+            assert!(!battle.milestones.unarmed);
+            archer.leave(Duration::from_secs(2)).await;
+            victim.leave(Duration::from_secs(2)).await;
+        }
+    };
+    with_cleanup(&pool, &[&prefix], body).await;
 }
 
 fn is_refused(error: &anyhow::Error) -> bool {

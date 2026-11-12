@@ -219,7 +219,7 @@ fn new_item(def: &ItemDef, bag: u8, slot: u8, count: u8) -> NewItem {
 }
 
 /// The item for each equipment slot: of the definitions `Inventory::can_equip` accepts for this wearer, the one with the highest
-/// `reqlevel` (ties: the lowest item id), at its definition's quality and with no gems.
+/// `reqlevel` (ties: for the weapon the longest `range`, so a bow beats a sword of its level; then the lowest item id), at its definition's quality and with no gems.
 pub fn pick_gear(items: &ItemDefs, wearer: &Wearer) -> Vec<NewItem> {
     let mut inventory = Inventory::new(&[]);
     let mut gear = Vec::new();
@@ -227,7 +227,7 @@ pub fn pick_gear(items: &ItemDefs, wearer: &Wearer) -> Vec<NewItem> {
         let best = items
             .iter()
             .filter(|def| def.item_id != 0 && inventory.can_equip(items, def, slot, wearer))
-            .max_by_key(|def| (def.level, Reverse(def.item_id)));
+            .max_by_key(|def| (def.level, if slot == WEAPON_SLOT { def.range } else { 0 }, Reverse(def.item_id)));
         if let Some(def) = best {
             let item = new_item(def, 0, slot, 1);
             inventory.apply(&SlotChange::Insert(item));
