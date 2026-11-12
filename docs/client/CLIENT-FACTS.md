@@ -349,6 +349,26 @@ Read in `game.exe` (decompiles and disassembly), October 20 and 21, 2026.
   24 on-screen login keyboard, 25/26 target HP % (pairs with `0x0608`), 46 auto-dismount (uses `0x0216`), 5, 8, 23, 43, 45, 62
   (client-only).
 
+## Watch: HP, MP and SP above 65,535 (and current values above 32,767)
+
+Found 2026-11-11 while testing the EP5.4 decomp client. Nothing is broken today; this is a limit to keep in mind when item, buff or
+lapis stats are raised.
+
+- **The wire is 16-bit for this client.** Max HP/MP/SP travel as `u16` in `0x0105` and `0x050B`, current values as `u16` in `0x0301`,
+  `0x0302`, `0x0505`, `0x051F`, `0x0521` and the party and union packets (`0x0B01`/`0x0B04`/`0x0B0B`/`0x0B0C`, `0x0C01`/`0x0C03`/
+  `0x0C08`/`0x0C0A`/`0x0C0C`/`0x0C0D`). On the original servers a value above 65,535 rolled over in the client (70,000 shows as 4,464);
+  EP5 widened all of these fields to `u32` to fix that.
+- **The server clamps instead of rolling over.** `crates/game-server/src/stats.rs` `Totals::max_health` clamps to 65,535 before sending,
+  and current health is kept as `u16`, so a character whose gear adds up past 65,535 silently plays at 65,535. No wrong display, but
+  the extra HP is lost.
+- **The save is lower still: 32,767.** `crates/game-server/src/pg/character.rs` (`save_position`, `save_stat_reset`, `save_progress`)
+  cut current HP/MP/SP to `i16::MAX` because `characters.hp`/`mp`/`sp` are `smallint` (`db/migrations/0005_characters.sql`). A
+  character above 32,767 current HP is saved at 32,767 and logs back in below full. This can bite before the 65,535 limit does.
+- **The way out (if stats ever need it):** 32-bit current and max health in the server and the database, and a per-session wire width.
+  The 2010 client can only read 16 bits (unless `fixes.dll` patches those readers), so it keeps `u16`; the EP5.4 decomp client is
+  being taught to read either width, chosen by the client version it sends at server select (`0x10042600` = 16-bit). The game
+  server would need that version from the login server (the `0xA301` hop does not carry it).
+
 ## Open questions
 
 - **Live** checks not done: `0x0802` with the 33-byte answer, the NPC-13 "chances left" counts, F501 failure codes, the word filter on
