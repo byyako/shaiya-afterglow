@@ -387,3 +387,34 @@ what limits each; the bottlenecks found are fixed or listed.
   named player and follows them, for the two-client items of `docs/testing/live-test-solo.md`.
 - **Bot-only scenarios**: checklist items that need no eyes (an answer packet and a database row), run as a test command.
 - **The soak test**: hundreds of bots spread over the maps, hours long, for the 1.0 capacity figure.
+
+## 15. The Sonnet build prompt (one part at a time)
+
+Parts 1 to 4 are built by a Sonnet subagent each, started by Opus from this prompt with `<N>` filled in (the maintainer's choice,
+2026-11-12); Opus reviews each part (the diff, the tests, the spec's section for it) before the next starts. Parts 5 and 6 run against the server the maintainer plays on and are done with
+the maintainer, not delegated.
+
+```
+Build part <N> of the test bots in /media/drive0/projects/shaiya-afterglow (branch main), from docs/plans/test-bots.md section 13,
+part <N> only. Read the spec whole first (sections 2 to 8 hold the facts and the layouts; section 12 the risks), then the code each
+section names before you change or copy it: crates/game-server/examples/game_probe.rs, crates/game-server/tests/common/mod.rs,
+shaiya-proto (world.rs, combat.rs, skill.rs, game.rs, login.rs), shaiya-crypto, and for part 2 game_server::creation, ::inventory
+(can_equip), ::stats and pg/character.rs; for part 4 sync.rs, outbox.rs, server.rs (the world loop), server/tasks.rs (mob_updater),
+config.rs. Where the spec and the code disagree, the code is right: follow it, and list each disagreement in your report with the file
+and line. Where a choice is not the spec's to make, take the smaller one and list it.
+
+The machine: 4 cores, 7.6 GB, short on memory. Run one cargo command at a time, never two in parallel. The tests: cargo test -p <crate>
+while working; at the end of the part cargo test --workspace once (about 25 minutes). The PostgreSQL tests use TEST_DATABASE_URL from
+.env (the test database, port 5434); never point anything at DATABASE_URL, which is the game the maintainer plays (newshaiya, 5433).
+Parts 1 to 4 test against the in-process server (the memory backend, as tests/common does) and the test database only.
+
+Before each commit: cargo fmt --all and cargo clippy --workspace --all-targets -- -D warnings clean (CI enforces both). Stage the paths
+you changed by name. Commit messages: "Bots <N>: <what>", the project's style (a plain sentence, what and why; see git log).
+Commits carry no AI trailer and no mention of AI (no Co-Authored-By, no session lines), in the message or the code.
+
+Do not, without the maintainer: push; start, stop or restart the login, game or data editor servers (they serve the maintainer's game);
+run bot seed, unseed or swarm against DATABASE_URL or port 30800/30810; change .env or config/game.toml; touch other repositories.
+
+Finish with a report: the commits; the tests added and the workspace test count; every place you departed from the spec, with why;
+what is not tested; anything part <N+1> must know.
+```
