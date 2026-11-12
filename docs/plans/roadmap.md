@@ -182,8 +182,8 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
   `ext lint`, the tests' fixtures, `main` at `0.4.0-dev`; the new repository is at `../shaiya-afterglow-extensions`, to be created on
   GitHub and pushed when the maintainer says.
 - **The test bots, first as a PvP battle of 200 to 300 players** (`docs/plans/test-bots.md`), to find out whether the server and the 2010
-  client cope; the bots load the server, the maintainer's real client stands in the battle. Specified in full, not built; one question
-  is open (Q1: one game server and checkout on the dev box, or the live/drill split). This replaces the shelved "Test bots and a load test" below.
+  client cope; the bots load the server, the maintainer's real client stands in the battle. Specified in full, not built; Q1 decided
+  (one checkout and game server on the dev box; the second database only for `cargo test`, `TEST_DATABASE_URL`). This replaces the shelved "Test bots and a load test" below.
 
 ## Frozen or later (not scheduled)
 

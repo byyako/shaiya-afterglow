@@ -31,15 +31,13 @@ build on the same crate and are sketched in section 14.
    Frontier (map 18) is the default (section 5.1).
 6. **Classes and gear** matter only so far as the bots can move, fight and use skills: all six classes of each faction in equal numbers,
    level 60, ordinary gear (no enchants, no lapis), so that nobody dies in one hit or never dies.
-7. **The maintainer's own account** is `player1` with the character TestVail, made a GM (status 16) on the database the test runs
-   against, so they can join the battle or watch it freely.
+7. **The maintainer's own account** is `player1` with the character TestVail, a GM (status 16) on the game's database since
+   2026-11-12, so they can join the battle or watch it freely.
 
-**Open (Q1): one server or two.** The dev box today runs the game the maintainer plays from a second checkout
-(`../shaiya-afterglow-live`, database `newshaiya`), and this checkout's database (the drill) serves the test suite and rehearsals. The
-maintainer questioned the split (only they play; anyone else downloads a release). Assumed below: **one checkout, one game server, the
-maintainer's database; the drill database stays only for `cargo test`.** Then the bots run against the server the maintainer plays on, and
-section 10's "test window" is just the run's settings. If the split stays, a run stops the live servers and starts the drill's on the
-standard ports instead (section 10.3). Nothing else in this spec changes.
+8. **One checkout, one game server (Q1, decided the same day).** The dev box runs the game the maintainer plays from this checkout
+   (`.env`'s `DATABASE_URL`, database `newshaiya`); the second database (`shaiya-afterglow-ext1`) is only for `cargo test`, through
+   `TEST_DATABASE_URL`. The bots run against the server the maintainer plays on; section 10's run is just its settings. The old second
+   checkout (`../shaiya-afterglow-live`) is retired.
 
 ## 2. What exists to build on
 
@@ -321,7 +319,7 @@ one-line way to apply them and to put them back.
 The dev box's wall display (tmux window `shaiya`, `~/.local/bin/shaiya-status.sh`) shows the servers, players online, load, memory and
 the last `stats` line; it is the monitor during a run.
 
-### 10.2 One server (the assumption of Q1)
+### 10.2 A run
 
 1. Settings of section 9 in; restart the game and login servers.
 2. `bot seed --count N` (players may be online; only bot rows change).
@@ -331,10 +329,6 @@ the last `stats` line; it is the monitor during a run.
    (section 11), into `docs/testing/load-pvp.md`.
 6. Settings back; restart.
 
-### 10.3 Two servers (if Q1 keeps the split)
-
-As 10.2, but before step 1 the live login and game servers are stopped and the drill's started on 30800 and 30810 (its `servers` row
-pointing at the LAN address), and after step 6 the reverse. `player1` is a GM on the drill already (decision 7).
 
 ## 11. The runs
 

@@ -25,7 +25,7 @@ struct TestDb {
 impl TestDb {
     async fn create() -> Option<Self> {
         dotenvy::dotenv().ok();
-        let Ok(url) = std::env::var("DATABASE_URL") else {
+        let Ok(url) = std::env::var("TEST_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL")) else {
             eprintln!("DATABASE_URL not set: skipping the PostgreSQL tests");
             return None;
         };
@@ -1899,7 +1899,7 @@ async fn item_writes_return_the_rows_they_touch() {
 async fn script_values_are_written_coalesced_deleted_and_cascade() {
     use game_server::script::store::Store;
     dotenvy::dotenv().ok();
-    let Ok(url) = std::env::var("DATABASE_URL") else {
+    let Ok(url) = std::env::var("TEST_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL")) else {
         eprintln!("DATABASE_URL not set: skipping the PostgreSQL tests");
         return;
     };

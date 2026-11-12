@@ -344,8 +344,12 @@ after an install. The format, the checks and the commands are in `docs/plans/ext
 ```bash
 cargo fmt --all                                         # rustfmt.toml: width 140
 cargo clippy --workspace --all-targets -- -D warnings   # no warnings allowed
-cargo test --workspace          # the PostgreSQL tests use DATABASE_URL from .env and skip themselves without it
+cargo test --workspace          # the PostgreSQL tests use TEST_DATABASE_URL, else DATABASE_URL, from .env; without either they skip
 ```
+
+The PostgreSQL tests create and drop scratch schemas in their database. On a machine where `DATABASE_URL` is the server you play on, set
+`TEST_DATABASE_URL` in `.env` to a separate database (a second container from `compose.yaml` with its own `PG_CONTAINER`, `PG_PORT` and
+`PG_VOLUME`, loaded by `tools/setup.sh`), so the tests never touch the game.
 
 CI (`.github/workflows/ci.yml`) runs the same three on every push and pull request (`cargo fmt --all -- --check` there), with the tests
 against an empty PostgreSQL 16: the tests that need the imported `defs` or `world` skip themselves without them, so only a local run

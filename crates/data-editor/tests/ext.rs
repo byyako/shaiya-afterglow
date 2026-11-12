@@ -773,7 +773,7 @@ async fn check_lists_what_an_install_would_change_and_writes_nothing() {
 #[tokio::test]
 async fn the_builtin_group_counts_are_the_client_schemas_when_it_exists() {
     dotenvy::dotenv().ok();
-    let Ok(url) = std::env::var("DATABASE_URL") else { return };
+    let Ok(url) = std::env::var("TEST_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL")) else { return };
     let pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(&url).await.unwrap();
     let exists: bool = sqlx::query_scalar("SELECT to_regclass('client.items') IS NOT NULL").fetch_one(&pool).await.unwrap();
     if !exists {

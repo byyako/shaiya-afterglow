@@ -34,7 +34,8 @@ repository; do not work around it.
   ```
   CI runs the same, plus `python3 tools/check_links.py`.
 - **Tests with the change.** A rule gets a unit test with the numbers of its analysis note; a behaviour that crosses the network gets a
-  test in the crate's `tests/`. The PostgreSQL tests use `DATABASE_URL` and skip themselves without it.
+  test in the crate's `tests/`. The PostgreSQL tests use `TEST_DATABASE_URL`, else `DATABASE_URL`, and skip themselves without either (README, "Development": keep
+  them off a database you play on).
 - **Docs with the change.** Settings go in `docs/server/settings.md`, a deviation in `docs/server/deviations.md`, what only a real client
   can show as an item in `docs/testing/live-test-checklist.md`. Run `python3 tools/check_links.py` after moving or renaming a file.
 - Comments cite the analysis note by file name and section number; keep them current.
