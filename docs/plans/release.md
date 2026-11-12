@@ -121,7 +121,7 @@ Build:
    - Follow the README word for word (the compose path or `tools/setup.sh`, then the account and the server entry with `127.0.0.1`).
    - Before starting the drill's servers, check nobody is on the dev server (`target/release/console 1 info` from the dev tree; with a
      player online, stop and ask), stop the dev login and game servers, start the drill's (its `tools/*.sh`), run `probe` and
-     `game_probe` to the character screen, create a character with `game_probe ... create Drill`, stop the drill's servers, start the
+     `bot probe` to the character screen, create a character with `bot probe ... create Drill`, stop the drill's servers, start the
      dev servers again (output redirected) and check their logs.
    - Clean up: `docker compose -p drill down -v` (drill volumes only), remove the scratch clone.
    - Every place where the README, `.env.example` or a script was wrong or unclear is fixed in the main tree; the drill is repeated

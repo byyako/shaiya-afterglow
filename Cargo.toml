@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/shaiya-crypto", "crates/shaiya-proto", "crates/login-server", "crates/game-server", "crates/data-editor"]
+members = ["crates/shaiya-crypto", "crates/shaiya-proto", "crates/login-server", "crates/game-server", "crates/data-editor", "crates/bot"]
 
 [workspace.package]
 edition = "2024"

@@ -214,7 +214,7 @@ To check the server without a client:
 
 ```bash
 cargo run --release -p login-server --example probe -- 127.0.0.1:30800 myname secret123            # login and server list
-cargo run --release -p game-server --example game_probe -- 127.0.0.1:30800 myname secret123 1      # also the character screen
+cargo run --release -p bot -- probe 127.0.0.1:30800 myname secret123 1                            # also the character screen
 ```
 
 ## Running the servers
@@ -370,7 +370,8 @@ How a feature is built: the original's behaviour is read from the binaries first
 | `crates/shaiya-crypto` | the RSA key exchange, session key derivation and the AES-CTR stream |
 | `crates/shaiya-proto` | packet framing and the packet layouts |
 | `crates/login-server` | the login server, the operator tools (`create_account`, `servers`, `console`, `mall`) and the `probe` client |
-| `crates/game-server` | the game server and the `game_probe` client |
+| `crates/game-server` | the game server |
+| `crates/bot` | the test bots: `bot probe` (the character-screen client), the PvP battle loop (`docs/plans/test-bots.md`) |
 | `crates/data-editor` | the data editor, its page and command line |
 | `db/migrations` | the PostgreSQL schema of the servers (`public`, `edits`), applied at start |
 | `db/defs`, `db/world`, `db/client` | the schemas of the imported game definitions, world files and client data files |

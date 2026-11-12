@@ -192,7 +192,7 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
   catalogue waves, 4.8 the author kit, 4.9 per-player loot. The client research entries 9 to 12 (`docs/testing/client-research-queue.md`)
   belong to it.
 - **Test bots and a load test** (shelved with the old step 1c; kept because the bot is also the base of a load and soak test). **Goal**: a
-  protocol-level bot grown from `crates/game-server/examples/game_probe.rs` (which stops at the character screen) into its own crate or
+  protocol-level bot grown from `game_probe` (now `bot probe` in `crates/bot`, which stops at the character screen) into its own crate or
   binary. It logs in through the login server as the real client does, enters the world and plays a scripted role (walk to a point, send
   or accept trade, party, guild and duel invites, attack a target, use a skill, chat, sit, die and come back), sending only the client's
   packets as documented in `docs/`, so it goes through the same code a player does. **Two uses**: a partner mode driven from the terminal

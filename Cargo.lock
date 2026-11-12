@@ -220,6 +220,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot"
+version = "0.4.0-dev"
+dependencies = [
+ "anyhow",
+ "game-server",
+ "rand 0.9.5",
+ "sha2 0.11.1",
+ "shaiya-crypto",
+ "shaiya-proto",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
