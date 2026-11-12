@@ -1,6 +1,6 @@
 # Test bots and the PvP swarm (spec and build plan)
 
-**Specified 2026-11-12 (first draft and this full version the same day); parts 1 and 2 built** (`crates/bot`: link, login, enter, world,
+**Specified 2026-11-12 (first draft and this full version the same day); parts 1 to 3 built** (`crates/bot`: link, login, enter, world,
 metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 settled, where the code corrected the spec:
 
 - **Leaving needs sitting**: the server ignores `0x0107` from a standing player (`server.rs`, `OP_LOGOUT_TO_SELECT`), so a bot sends
@@ -25,7 +25,22 @@ Part 2 built (`bot seed`, `bot unseed`, the generator, the guards; 4 database te
 - Quick slots take the skill **id** (bag 100), as real characters' rows do; `0x0511` takes the skill's `number`.
 - Accounts are written inside each bot's transaction with `login_server::accounts::hash_password`; `--server` (default 1) is new.
 - **For the swarm**: a bot's reach is `seed::Defs::attack_range` (`combat::gear(...).range`: the weapon plus accessories, lapis and
-  passives), its skill rules `SkillDefs::get(id, level)`; bot number to faction and class is `seed::bot_kind(n)`. Unshelves "Test bots and a load test"
+  passives), its skill rules `SkillDefs::get(id, level)`; bot number to faction and class is `seed::bot_kind(n)`.
+
+Part 3 built (`bot swarm`, `report.rs`, `echo.rs`; a 20-bot in-process test and a test of the real login path through an in-process
+login server on the test database). What it settled:
+
+- **Cost** (debug build, in process): 100 bots took 60 % of a core and the server 83 %; 200 bots 101 % and 137 %, about 0.1 MB a bot,
+  all logged in and out cleanly, step echo p95 149 ms. 300 bots fit on this box; the server, not the bots, is the larger cost.
+- **The attack round trip measures the game, not the network**: from `0x0502` to the first blow is about 0.6 to 1 s at no load,
+  because the first blow waits for the attack interval. The latency figures are the **step echo** and (part 4) the **attack
+  acknowledgement**, `0x0502` to the server's immediate `0x0212` when the bot was not fighting.
+- **Leaving** retries: a dead bot comes back first (no `0x0107` for the dead), and a hit while sitting stands the bot up and cancels the
+  logout (`ZoneEvent::StoodUp`), so it sits and asks again; the swarm waits 30 s for the server's 10 s `logout_secs`.
+- Skills used: one named target, built, no `prev_skill`, the worn weapon's; reach is the gear's range plus the skill's `attack_range`
+  (as `skill_tick`). DESPERATE (kind 23) skills are left out: they kill the caster.
+- A bot that loses its connection is counted with its reason and does not reconnect. `--count` is 1 to 1000; `--at` on another map than
+  the bots' is refused. The report records the bot build and client version, the login server's list and the game address. Unshelves "Test bots and a load test"
 (`docs/plans/roadmap.md`, "Frozen or later"). The first use is a **battle of 200 to 300 players**, to find out whether the server and the
 2010 client cope with high-scale PvP. The later uses (a partner bot for the two-client checklist items, bot-only scenarios, a soak test)
 build on the same crate and are sketched in section 14.
@@ -370,8 +385,9 @@ Ten minutes of battle each, from the last login. **What the maintainer notes** i
 the frame rate (the client's own counter if it has one, otherwise by feel); stutter when the crowd comes into view; whether attacks and
 skills land late; freezes or a crash; whether it was dropped (the server logs an `outbox_limit` close for its connection).
 
-**Holding**, to be confirmed after R1 gives a baseline: the p95 action round trip under 250 ms, the step echo under 500 ms, no connection
-closed by the server, the monster pass inside its period, and the real client playable.
+**Holding**, to be confirmed after R1 gives a baseline: the p95 attack acknowledgement under 250 ms, the p95 step echo under 500 ms, no
+connection closed by the server, the monster pass inside its period, and the real client playable. (The attack round trip to the first
+blow is reported too, but it includes the attack interval, so it is compared with R1's figure, not with a fixed limit.)
 
 ## 12. Risks
 
