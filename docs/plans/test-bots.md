@@ -1,6 +1,6 @@
 # Test bots and the PvP swarm (spec and build plan)
 
-**Specified 2026-11-12 (first draft and this full version the same day); part 1 built** (`crates/bot`: link, login, enter, world,
+**Specified 2026-11-12 (first draft and this full version the same day); parts 1 and 2 built** (`crates/bot`: link, login, enter, world,
 metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 settled, where the code corrected the spec:
 
 - **Leaving needs sitting**: the server ignores `0x0107` from a standing player (`server.rs`, `OP_LOGOUT_TO_SELECT`), so a bot sends
@@ -12,7 +12,20 @@ metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 
 - **`0x0511`'s number** is the `number` field of the skill's `0x0108` entry, not its place in the list. The game connection's keys are
   `game_session_keys` (the hashed login IV). `0x0301` is not sent; `0x0303` is asked once per player id per session.
 - **Every bot needs a weapon in bag 0** (an unarmed bot gets result 7 and only walks), and characters fight sooner from level 10 up;
-  a death above level 10 can drop an item. Rebirth kind 2 needs the map's binds, or the dead bot comes back where it fell. Unshelves "Test bots and a load test"
+  a death above level 10 can drop an item. Rebirth kind 2 needs the map's binds, or the dead bot comes back where it fell.
+
+Part 2 built (`bot seed`, `bot unseed`, the generator, the guards; 4 database tests on `TEST_DATABASE_URL`). What it settled:
+
+- **The twelve pairs** (level 60, normal mode, map 18 in the faction's rebirth box): fighters and defenders a level-56 one-hander and a
+  shield (13 slots); rangers type 9, mages and priests type 10 (range 1); **archers a type 13 bow, range 25**, the only ranged bots (a
+  weapon tie goes to the longer range, then the lower id). 33 to 37 skills each. A bow needs nothing else: there are no arrows (the
+  `arrow` column is a skill's aggro).
+- `Inventory::can_equip` checks no stat requirement, so every stat point goes to the class's main stat; levelling's +1 to the class stat
+  is included. The level cap is `combat::max_level(grow)`. Learning has no prerequisite check, so every learnable skill is learnt.
+- Quick slots take the skill **id** (bag 100), as real characters' rows do; `0x0511` takes the skill's `number`.
+- Accounts are written inside each bot's transaction with `login_server::accounts::hash_password`; `--server` (default 1) is new.
+- **For the swarm**: a bot's reach is `seed::Defs::attack_range` (`combat::gear(...).range`: the weapon plus accessories, lapis and
+  passives), its skill rules `SkillDefs::get(id, level)`; bot number to faction and class is `seed::bot_kind(n)`. Unshelves "Test bots and a load test"
 (`docs/plans/roadmap.md`, "Frozen or later"). The first use is a **battle of 200 to 300 players**, to find out whether the server and the
 2010 client cope with high-scale PvP. The later uses (a partner bot for the two-client checklist items, bot-only scenarios, a soak test)
 build on the same crate and are sketched in section 14.
