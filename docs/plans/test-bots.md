@@ -1,6 +1,6 @@
 # Test bots and the PvP swarm (spec and build plan)
 
-**Specified 2026-11-12 (first draft and this full version the same day); parts 1 to 3 built** (`crates/bot`: link, login, enter, world,
+**Specified 2026-11-12 (first draft and this full version the same day); parts 1 to 4 built** (`crates/bot`: link, login, enter, world,
 metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 settled, where the code corrected the spec:
 
 - **Leaving needs sitting**: the server ignores `0x0107` from a standing player (`server.rs`, `OP_LOGOUT_TO_SELECT`), so a bot sends
@@ -40,7 +40,28 @@ login server on the test database). What it settled:
 - Skills used: one named target, built, no `prev_skill`, the worn weapon's; reach is the gear's range plus the skill's `attack_range`
   (as `skill_tick`). DESPERATE (kind 23) skills are left out: they kill the caster.
 - A bot that loses its connection is counted with its reason and does not reconnect. `--count` is 1 to 1000; `--at` on another map than
-  the bots' is refused. The report records the bot build and client version, the login server's list and the game address. Unshelves "Test bots and a load test"
+  the bots' is refused. The report records the bot build and client version, the login server's list and the game address.
+
+Part 4 built (`monitor.rs`, `Relock`, `stats_every`, `console stats`; the bots' `attack_ack`). What it settled, where the code corrected the spec:
+
+- **The counters are process-wide statics** (`game_server::monitor`), not `Context` fields: `Relock::guard` and the outboxes have no context.
+  The traffic counts every frame `Connection::next_packet` returns and every packet `Connection::send` writes (replies as well as the
+  outbox's), not only the outbox's drain. `outbox_sum` is a gauge kept by the outbox itself (a connection that ends gives its queue back);
+  `outbox_max` is the most one outbox held since the last line; `outbox_closed` counts the two `outbox_limit` closes of `world_loop`.
+- **The line is `key=value` text** (`Figures`'s `Display`), the same for the log and `console <id> stats`; the console and the periodic
+  line share one sampler, so a console call shortens the next line's interval (rates use the real elapsed time). `secs=` is that interval.
+- **The lock table**: 128 slots keyed by a hash of the type name, claimed by compare-exchange, plus an `other` slot; names are kept
+  short (module paths removed) in the slot itself, so nothing allocates. `lock_worst` ranks by the wait in the interval and shows
+  `name wait_ms/count max max_ms`; the `maps` and `mobs` mutexes of `Zones` are shown by those names, every other by its short type
+  (`HashMap<u32, Bans>`). An uncontended `guard` measured 69.4 ns before and 71.3 ns after (debug build, 20 M lock-unlock pairs).
+- **The monster pass** is timed on every wake of `mob_updater` (with `smooth_chase` those are 100 ms ticks, four of five only move
+  monsters), so `mob_pass_avg_ms` is across all wakes and `mob_period_ms` is the tick (500, or 100 with smoothing); read the maximum.
+- **The attack acknowledgement** is stamped at every `0x0502` the bot sends and ended by the next `0x0212`; the first result for the bot's
+  attacks, or a skill sent, drops an unanswered stamp (a bot already fighting is not acknowledged). The report's schema stays 1 with a
+  new `attack_ack_ms` beside `attack_rtt_ms`.
+- The status board (`~/.local/bin/shaiya-status.sh`) is outside the repository and not changed.
+
+Unshelves "Test bots and a load test"
 (`docs/plans/roadmap.md`, "Frozen or later"). The first use is a **battle of 200 to 300 players**, to find out whether the server and the
 2010 client cope with high-scale PvP. The later uses (a partner bot for the two-client checklist items, bot-only scenarios, a soak test)
 build on the same crate and are sketched in section 14.
