@@ -63,6 +63,7 @@ pub fn config(check_ip: bool) -> Config {
         connects_per_minute: 1000,
         write_timeout: Duration::from_secs(20),
         outbox_limit: 4 * 1024 * 1024,
+        stats_every: Duration::ZERO,
         chat_per_sec: 0,
         chat_burst: 0,
         packets_per_sec: 0,

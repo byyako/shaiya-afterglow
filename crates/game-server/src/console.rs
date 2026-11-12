@@ -44,6 +44,8 @@ pub enum Command {
     KillCount(bool),
     Zones,
     Map(u16),
+    /// `stats`: the figures of the `stats` line over the time since the last one.
+    Stats,
 }
 
 /// A command's help: the word, its usage, what it does in one sentence, an example (without the dot).
@@ -54,7 +56,7 @@ struct Entry {
     example: &'static str,
 }
 
-const TABLE: [Entry; 19] = [
+const TABLE: [Entry; 20] = [
     Entry { word: "help", usage: "help [command]", sentence: "lists the commands, or tells how one is used.", example: "help kick" },
     Entry {
         word: "info",
@@ -139,6 +141,12 @@ const TABLE: [Entry; 19] = [
     },
     Entry { word: "zones", usage: "zones", sentence: "counts the instance zones now open.", example: "zones" },
     Entry { word: "map", usage: "map <id>", sentence: "shows the players and monsters in each zone of a map.", example: "map 1" },
+    Entry {
+        word: "stats",
+        usage: "stats",
+        sentence: "shows traffic, outboxes, the monster pass, lock waits, saves and memory since the last stats line or call.",
+        example: "stats",
+    },
 ];
 
 /// The exit status of a `restart` (`quit` ends with 0): `docs/server/deploy.md`'s service units and `tools/game-server.sh` start the server
@@ -276,6 +284,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
             _ => bad(),
         },
         "zones" if rest.is_empty() => Ok(Command::Zones),
+        "stats" if rest.is_empty() => Ok(Command::Stats),
         "map" => match first.map(str::parse::<u16>) {
             Some(Ok(map)) if second.is_none() => Ok(Command::Map(map)),
             _ => bad(),
@@ -327,6 +336,7 @@ mod tests {
             ("killcount off", Command::KillCount(false)),
             ("zones", Command::Zones),
             ("map 1", Command::Map(1)),
+            (".stats", Command::Stats),
         ];
         for (line, command) in cases {
             assert_eq!(parse(line), Ok(command), "{line}");
@@ -371,6 +381,7 @@ mod tests {
             "rules now",
             "notice",
             "info now",
+            "stats now",
             "close now",
             "help a b",
         ] {
@@ -386,7 +397,7 @@ mod tests {
     #[test]
     fn help_lists_every_command_and_explains_each() {
         let all = help();
-        assert_eq!(all.len(), 19);
+        assert_eq!(all.len(), 20);
         assert!(all.contains(&"exp <factor> | exp off".to_owned()));
         let lines = help_for("exp").unwrap();
         assert_eq!(lines[0], "usage: exp <factor> | exp off");

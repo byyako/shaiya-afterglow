@@ -28,6 +28,9 @@
 # Bytes of packets queued for one connection before it counts as not keeping up and ends.
 # outbox_limit = 4194304
 
+# Seconds between the stats lines (info, target stats: traffic, outboxes, the monster pass, lock waits, saves, memory). 0 logs none.
+# stats_every = 0
+
 # Lines a second for the chat channels without a cooldown; extra lines are dropped. 0 turns the limit off.
 # chat_per_sec = 3
 

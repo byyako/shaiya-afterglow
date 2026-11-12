@@ -6513,3 +6513,48 @@ async fn a_pet_leaves_a_drop_that_does_not_fit_on_the_ground_and_the_owner_hears
     assert_eq!(after[0].expires, before[0].expires, "untouched: its lifetime is not renewed (no put-back)");
     assert!(backend.stored(id).unwrap().1.iter().all(|i| !(i.item_type == 5 && i.type_id == 2)));
 }
+
+#[tokio::test]
+async fn the_console_answers_stats_with_the_figures_of_the_stats_line() {
+    use game_server::game_log::Header;
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    // Something to count: the client's pings and the answers to them.
+    for _ in 0..3 {
+        client.write(shaiya_proto::encode(0x0003, &[])).await;
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let answer = game_server::server::console::line(&ctx, "stats", "test", Header::none(), 0).await;
+    assert_eq!(answer.len(), 1, "one line, as the stats line is");
+    let line = &answer[0];
+    for field in [
+        "secs=",
+        "players=1 ",
+        "connections=1 ",
+        "in_pps=",
+        "in_bps=",
+        "out_pps=",
+        "out_bps=",
+        "outbox_max=",
+        "outbox_sum=",
+        "outbox_closed=",
+        "mob_pass_max_ms=",
+        "mob_pass_avg_ms=",
+        "mob_period_ms=",
+        "lock_wait_ms=",
+        "lock_waits=",
+        "lock_worst=\"",
+        "saves_queued=",
+        "game_log_dropped=",
+        "rss_mb=",
+        "workers=",
+    ] {
+        assert!(line.contains(field), "{field} missing from {line}");
+    }
+    assert!(!line.contains("in_pps=0 "), "the entry and the pings were counted: {line}");
+    // The second answer starts from the first: its interval is only what came after.
+    let again = game_server::server::console::line(&ctx, "stats", "test", Header::none(), 0).await;
+    assert!(again[0].starts_with("secs=0."), "{}", again[0]);
+}

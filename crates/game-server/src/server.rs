@@ -81,7 +81,7 @@ use tasks::Save;
 pub use tasks::{
     MOB_UPDATE_INTERVAL, flush_saves, flush_writers, heartbeat, kill_count_changes, load_closed_quests, load_kill_counts, load_market,
     load_mob_id, load_obelisk_owners, load_open_questions, market_pass, mob_updater, obelisk_events, ranking_clock, rules_clock,
-    save_mob_id, save_mob_ids, serve, shut_down, start_friends, start_guilds, start_saves,
+    save_mob_id, save_mob_ids, serve, shut_down, start_friends, start_guilds, start_saves, stats_figures, stats_line,
 };
 
 use crate::zone::{
@@ -197,6 +197,8 @@ pub struct Context<S> {
     pub quit_now: tokio::sync::Notify,
     /// The queue of the obelisk and kill-count saves once `start_saves` runs; until then they are written where they are asked for.
     saves: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Save>>>,
+    /// Turns the counters of `monitor` into the figures of the `stats` line and the console's `stats`.
+    sampler: Mutex<crate::monitor::Sampler>,
     /// Tests only: the character whose next ping panics inside a zone lock (`docs/server/audit.md` R5); 0 for none.
     #[doc(hidden)]
     pub test_panic: std::sync::atomic::AtomicU32,
@@ -271,6 +273,7 @@ impl<S> Context<S> {
             quit_cancel: tokio::sync::Notify::new(),
             quit_now: tokio::sync::Notify::new(),
             saves: Mutex::new(None),
+            sampler: Mutex::new(crate::monitor::Sampler::new(Instant::now(), crate::monitor::counters(), crate::monitor::locks())),
             test_panic: std::sync::atomic::AtomicU32::new(0),
             restart: AtomicBool::new(false),
             settings_in_force: Vec::new(),
@@ -349,6 +352,7 @@ impl Connection {
         } else if let Some(cipher) = &mut self.send {
             cipher.apply(&mut packet[2..]);
         }
+        crate::monitor::counters().frame_out(packet.len());
         self.write(&packet).await
     }
 
@@ -401,6 +405,7 @@ impl Connection {
                     if let Some(cipher) = &mut self.recv {
                         cipher.apply(&mut packet[2..]);
                     }
+                    crate::monitor::counters().frame_in(packet.len());
                     if self.flood.packet(Instant::now()) {
                         tracing::warn!(peer = %self.peer, "the client has sent more than its packets a second for {:?}: disconnected", FLOOD_GRACE);
                         bail!("too many packets");
@@ -1533,6 +1538,7 @@ async fn world_loop<S: Backend>(
         let due = state.logout.map(|(_, due)| due);
         let attack_due = state.target.map(|_| state.next_attack);
         if inboxes.packets.overflowed() {
+            crate::monitor::counters().outbox_limit_close();
             bail!("the packets queued for the client passed {} bytes", ctx.config.outbox_limit);
         }
         let next = tokio::select! {
@@ -1541,6 +1547,7 @@ async fn world_loop<S: Backend>(
             Some(packet) = inboxes.packets.recv() => {
                 // More than the queue holds was dropped: this connection does not keep up (R1).
                 if inboxes.packets.overflowed() {
+                    crate::monitor::counters().outbox_limit_close();
                     bail!("the packets queued for the client passed {} bytes", ctx.config.outbox_limit);
                 }
                 conn.send(packet).await?;

@@ -333,9 +333,13 @@ pub fn start_saves<S: Backend>(ctx: &Arc<Context<S>>) {
     let writing = ctx.clone();
     tokio::spawn(async move {
         while let Some(save) = queue.recv().await {
+            let monitored = !matches!(save, Save::Flush(_));
             // A panic in one write costs that write, not the queue.
             if let Err(panic) = crate::supervise::catch(write_save(&writing.store, writing.config.server_id, save)).await {
                 tracing::error!(%panic, "a save panicked");
+            }
+            if monitored {
+                crate::monitor::counters().save_done();
             }
         }
     });
@@ -346,7 +350,10 @@ async fn save<S: Backend>(ctx: &Context<S>, save: Save) {
     let queue = ctx.saves.guard().clone();
     match queue {
         Some(queue) => {
-            let _ = queue.send(save);
+            let monitored = !matches!(save, Save::Flush(_));
+            if queue.send(save).is_ok() && monitored {
+                crate::monitor::counters().save_queued();
+            }
         }
         None => write_save(&ctx.store, ctx.config.server_id, save).await,
     }
@@ -433,7 +440,9 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
     // (`docs/original/chase-smoothing.md` deviation 2).
     let smooth = ctx.config.smooth_chase;
     ctx.zones.set_smooth_chase(smooth);
-    let mut tick = tokio::time::interval(if smooth { crate::pacing::TICK } else { MOB_UPDATE_INTERVAL });
+    let period = if smooth { crate::pacing::TICK } else { MOB_UPDATE_INTERVAL };
+    crate::monitor::counters().set_mob_period(period);
+    let mut tick = tokio::time::interval(period);
     let mut total = 0;
     let (mut steps, mut ticks) = (0, 0);
     let mut half = false;
@@ -441,6 +450,8 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
     let mut fine = 0u32;
     loop {
         tick.tick().await;
+        // Timed to the end of the pass, whichever way it ends (`monitor::PassTimer`).
+        let _timed = crate::monitor::PassTimer::start();
         let now = Instant::now();
         // One snapshot per pass: a `reload` takes effect with the next.
         let live = ctx.data.live();
@@ -506,5 +517,31 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
         if spawned > 0 {
             tracing::debug!(spawned, total, "monsters spawned");
         }
+    }
+}
+
+/// The figures of the `stats` line over the time since the last one (this task's or the console's).
+pub fn stats_figures<S>(ctx: &Context<S>) -> crate::monitor::Figures {
+    let gauges = crate::monitor::Gauges {
+        players: u32::from(ctx.players.load(Ordering::Relaxed)),
+        connections: ctx.config.max_connections.saturating_sub(ctx.connections.available_permits()),
+        game_log_dropped: ctx.game_log.dropped(),
+        rss_mb: crate::monitor::rss_mb(),
+        workers: tokio::runtime::Handle::try_current().map_or(0, |h| h.metrics().num_workers()),
+    };
+    ctx.sampler.guard().sample(Instant::now(), crate::monitor::counters(), crate::monitor::locks(), gauges)
+}
+
+/// Logs the `stats` line every `stats_every` (`docs/plans/test-bots.md` section 7); `main` starts it when the setting is above 0.
+pub async fn stats_line<S: Backend>(ctx: Arc<Context<S>>) {
+    let every = ctx.config.stats_every;
+    if every.is_zero() {
+        return;
+    }
+    let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tick.tick().await;
+        tracing::info!(target: "stats", "{}", stats_figures(&ctx));
     }
 }

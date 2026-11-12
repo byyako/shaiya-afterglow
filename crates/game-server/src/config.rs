@@ -85,6 +85,8 @@ pub struct Config {
     pub write_timeout: Duration,
     /// Bytes of packets queued for one connection before it counts as not keeping up and ends (R1).
     pub outbox_limit: usize,
+    /// How often the `stats` line is logged (`docs/plans/test-bots.md` section 7); zero, the default, logs none.
+    pub stats_every: Duration,
     /// The chat channels without a cooldown: lines a second a connection may say, and the burst; the rest are dropped (R4).
     pub chat_per_sec: u32,
     pub chat_burst: u32,
@@ -195,6 +197,13 @@ pub const SETTINGS: &[Setting] = &[
         Kind::Number,
         "Bytes of packets queued for one connection before it counts as not keeping up and ends.",
         uint::<usize>,
+    ),
+    s(
+        "stats_every",
+        "0",
+        Kind::Number,
+        "Seconds between the stats lines (info, target stats: traffic, outboxes, the monster pass, lock waits, saves, memory). 0 logs none.",
+        uint::<u64>,
     ),
     s(
         "chat_per_sec",
@@ -763,6 +772,7 @@ impl Config {
             connects_per_minute: number::<u32>(values, "connects_per_minute")?,
             write_timeout: secs("write_timeout_secs")?,
             outbox_limit: number::<usize>(values, "outbox_limit")?,
+            stats_every: secs("stats_every")?,
             chat_per_sec: number::<u32>(values, "chat_per_sec")?,
             chat_burst: number::<u32>(values, "chat_burst")?,
             packets_per_sec: number::<u32>(values, "packets_per_sec")?,
@@ -1197,6 +1207,7 @@ mod tests {
             connects_per_minute: 30,
             write_timeout: Duration::from_secs(20),
             outbox_limit: 4_194_304,
+            stats_every: Duration::ZERO,
             chat_per_sec: 3,
             chat_burst: 5,
             packets_per_sec: 100,
@@ -1533,6 +1544,18 @@ message = \"Too far apart.\"
             let message = format!("{:#}", check_setting(start_up, "1").unwrap_err());
             assert!(message.contains("not a game setting"), "{start_up:?}: {message}");
         }
+    }
+
+    #[test]
+    fn stats_every_is_off_by_default_and_reads_seconds() {
+        let (config, all) = resolved(&Sources::default()).unwrap();
+        assert_eq!(config.stats_every, Duration::ZERO);
+        assert_eq!(value(&all, "stats_every").default, "0");
+        let sources = Sources { file: Some(file("stats_every = 10\n")), ..Sources::default() };
+        let (config, all) = resolved(&sources).unwrap();
+        assert_eq!((config.stats_every, value(&all, "stats_every").layer.clone()), (Duration::from_secs(10), Layer::File));
+        assert!(check_setting("stats_every", "5").is_ok() && check_setting("stats_every", "-1").is_err());
+        assert!(check_setting("stats_every", "often").is_err() && check_setting("stats_every", "1.5").is_err());
     }
 
     #[test]

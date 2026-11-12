@@ -53,9 +53,16 @@ impl Outbox {
             self.shared.overflowed.store(true, Ordering::Relaxed);
             return Err(SendError(packet));
         }
-        self.sender.send(packet).inspect_err(|_| {
-            self.shared.queued.fetch_sub(len, Ordering::Relaxed);
-        })
+        match self.sender.send(packet) {
+            Ok(()) => {
+                crate::monitor::counters().outbox_added(len, queued);
+                Ok(())
+            }
+            Err(error) => {
+                self.shared.queued.fetch_sub(len, Ordering::Relaxed);
+                Err(error)
+            }
+        }
     }
 
     /// Bytes waiting in the queue.
@@ -65,22 +72,34 @@ impl Outbox {
 }
 
 impl OutboxInbox {
+    fn taken(&self, len: usize) {
+        self.shared.queued.fetch_sub(len, Ordering::Relaxed);
+        crate::monitor::counters().outbox_removed(len);
+    }
+
     /// The next packet; `None` once every sender is gone and the queue is empty.
     pub async fn recv(&mut self) -> Option<Vec<u8>> {
         let packet = self.receiver.recv().await?;
-        self.shared.queued.fetch_sub(packet.len(), Ordering::Relaxed);
+        self.taken(packet.len());
         Some(packet)
     }
 
     pub fn try_recv(&mut self) -> Result<Vec<u8>, TryRecvError> {
         let packet = self.receiver.try_recv()?;
-        self.shared.queued.fetch_sub(packet.len(), Ordering::Relaxed);
+        self.taken(packet.len());
         Ok(packet)
     }
 
     /// A packet was dropped because the queue was over its limit: the connection is not keeping up.
     pub fn overflowed(&self) -> bool {
         self.shared.overflowed.load(Ordering::Relaxed)
+    }
+}
+
+/// What a connection that ended left in its queue goes out of the server-wide count of queued bytes (`monitor`).
+impl Drop for OutboxInbox {
+    fn drop(&mut self) {
+        crate::monitor::counters().outbox_removed(self.shared.queued.load(Ordering::Relaxed));
     }
 }
 

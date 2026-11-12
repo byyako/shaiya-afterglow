@@ -84,6 +84,7 @@ async fn carry_out<S: Backend>(ctx: &Context<S>, command: Command) -> Vec<String
             let (party, guild) = ctx.zones.instance_counts();
             vec![format!("instance zones: party {party}, guild house {guild}, total {}", party + guild)]
         }
+        Command::Stats => vec![stats_figures(ctx).to_string()],
         Command::Map(map) => {
             let zones = ctx.zones.map_report(map);
             if zones.is_empty() {

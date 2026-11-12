@@ -32,6 +32,7 @@ pub mod mini_game;
 pub mod mob_ai;
 pub mod mob_lua;
 pub mod mobs;
+pub mod monitor;
 pub mod move_check;
 pub mod my_shop;
 pub mod obelisk;

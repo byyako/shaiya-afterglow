@@ -151,6 +151,13 @@ enforced with `LOGIN_CHECK_VERSION=true`.
 The two servers do not depend on each other: both only need PostgreSQL. The game server reports itself through the database (a heartbeat every
 5 s), and the login server lists it as open while the heartbeat is recent. Logs go to the journal.
 
+**Monitoring.** Set `stats_every = 10` (seconds) in the settings file for one `stats` line at that interval in the journal
+(`journalctl -u shaiya-afterglow-game | grep stats`; it is an `info` line, so `RUST_LOG=info` keeps it): packets and bytes a second, the
+outboxes (`outbox_max` close to `outbox_limit` means a client that does not keep up), the monster updater's longest pass against its
+period, `lock_wait_ms` and `lock_worst` (the lock types the server waited on longest; many milliseconds a second there is a bottleneck),
+`saves_queued`, `rss_mb`. `console <id> stats` prints the same figures at any time without the setting, over the time since the last line
+or call.
+
 `/etc/systemd/system/shaiya-afterglow-login.service`:
 
 ```ini

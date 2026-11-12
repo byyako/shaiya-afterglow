@@ -12,6 +12,15 @@
   with a warning at start and `needs server …` in `ext list`. A development build counts as its release (`main` is now `0.4.0-dev`).
 - The engine's tests read frozen copies of the extensions they use, in `tests/fixtures/extensions/`.
 
+**The stats line** (`docs/plans/test-bots.md` section 7; the test bots' measuring instrument, useful to any operator)
+- New setting `stats_every` (seconds, default 0 = none): every that many seconds one `info` line with target `stats` and the figures of the
+  interval: players and connections, packets and bytes a second in and out, the outboxes' largest and total queue and the connections
+  closed for `outbox_limit`, the longest and average pass of the monster updater and its period, the time spent **waiting for locks**, how
+  often, and the three lock types waited on longest, the save queue, dropped game-log records, resident memory and tokio workers. The
+  console's `stats` command answers with the same figures.
+- The counters are atomics and always on. `Relock::guard` (and the `RwLock` pair) tries the lock first and times only a lock it has to
+  wait for, into a lock-free table by type; a free lock costs the same as before, and a poisoned lock recovers as before.
+
 **Pets** (extensions chunk 4; `docs/plans/ext-4-pets.md`, `docs/server/pets.md`)
 - The `pets` extension (in the extensions repository, not installed by `tools/setup.sh`): a Capture Net (100/227) catches the weakest monster that is
   fighting the user at 30% HP or less into a Pet Egg (100/228, the monster in its craft name); the egg calls a small, unclickable copy of
