@@ -13,8 +13,9 @@ On other pages: the administrator's item command (`CUser::PacketAdminCmdB`, the 
 
 ## In short
 
-- **Every item remembers how it was made.** A one-letter *make type* says where it came from: `D` a monster's drop, `S` a box, `C`
-  a remake, `B` bought, `Q` a quest reward, and so on. This matters later: bought items cannot be given new stats or remade, and quest
+- **Every item remembers how it was made.** A one-letter *make type* says where it came from: `D` a monster's drop, `V` a sequence drop,
+  `S` a box or a GM's item, `C` a remake, `B` bought from an NPC or the billing storage, `X` the item mall, `T` traded or from a personal
+  shop, `U` a stack split on the ground, `G` lapis taken out, `Q` a quest reward (the full list: section 1). This matters later: bought items cannot be given new stats or remade, and quest
   rewards cannot be changed at all.
 - **Dropped items come with random stats.** Craftable items from monsters and boxes get random bonuses (STR, DEX, HP and so on). Each
   bonus is the smallest of three random draws, so low values are much more common than high ones. Bought items get none.
@@ -50,16 +51,33 @@ Confirmed, the callers of `CItem::Init` 0x4b9f80 and of the two functions below.
 `CItem::Init(type, type id, count, make time, make type)` sets the type, type id and count, the quality to the definition's `wQuality`, no
 gems, and **clears only the craft name's first byte** (an empty name). Then, depending on where the item comes from:
 
-| made by | make type | craft name |
+**Every make type**, from every write of `m_byMakeType` (`+0x68`) in `ps_game` and every call of `CItem::Init` (confirmed: a scan of
+the whole image for both; the other writes at `+0x68` are other structures). The letter is one byte; the database keeps it in the
+`MakeType` column of `CharItems`, `UserStoredItems`, `GuildStoredItems` and the market tables, which the procedures' own comment calls
+"획득방법", *how it was obtained*.
+
+| make type | made by (address) | craft name |
 |---|---|---|
-| a monster's drop (`CMob::ItemDrop` 0x4a65a0) | `'D'` | **`CreateCraftExpansion`**: random stats (section 3) |
-| a box (`CUser::ItemCreate` 0x45ede0, section 5) | `'S'` | **`CreateCraftExpansion`** |
-| one item from three (`CUser::ItemRemake`) | `'C'` | **`CreateCraftExpansion`** (built, `docs/original/lapis.md` section 7) |
-| buying from a merchant (`CUser::PacketShop` 0x46af10, both places that make an item) | **`'B'`** | **`InitCraftExpansion`**: zeros (section 2) |
-| part of a stack dropped (`CUser::ItemDrop`), lapis taken out (`ItemGemRemovePos`) | `'U'`, `'G'` | `InitCraftExpansion` (built; the new server gives them no name, see section 6) |
-| a quest reward (`CQuest`) | `'Q'` | empty (built) |
-| a trade's split stack | `'T'` | the giver's (built, `docs/original/trade.md`) |
-| item mall, point shop, personal shop, market | `'B'`, `'X'`, `'T'`, … | `InitCraftExpansion` (personal shop and market: `docs/original/personal-shop.md` section 7, `docs/original/auction.md` section 15; item mall and point shop: make type `'X'` or `'B'`, `docs/original/item-mall.md`) |
+| **`D`** (0x44) | a monster's drop (`CMob::ItemDrop` 0x4a665e), and the gold it drops (0x4a6489, an item of type 26 with no definition) | **`CreateCraftExpansion`**: random stats (section 3) |
+| **`V`** (0x56) | a **sequence drop** (`CMob::ItemDrop` 0x4a66e7 writes it over the `D`; `docs/original/quest-drops.md` section 4) | as a monster drop |
+| **`S`** (0x53) | a box or pocket (`CUser::ItemCreate` 0x45ef18, from `CUser::ItemUse`, section 5), and the GM's item command (`CUser::PacketAdminCmdB`, the other caller; `docs/original/gm-commands.md` section 7) | **`CreateCraftExpansion`** |
+| **`C`** (0x43) | one item from three (`CUser::ItemRemake` 0x460a30) | **`CreateCraftExpansion`** (built, `docs/original/lapis.md` section 7) |
+| **`B`** (0x42) | buying from a merchant (`CUser::PacketShop` 0x46b8c4, 0x46bb38), and taking an item from the billing storage (`CUser::PacketBilling` 0x457c90) | **`InitCraftExpansion`**: zeros (section 2) |
+| **`X`** (0x58) | the item mall and point shop (`CUser::PacketPoint` 0x47a237, 0x479b5d; `docs/original/item-mall.md` sections 3 and 6) | `InitCraftExpansion` |
+| **`T`** (0x54) | a trade's split stack (`CUser::ExchangeItemAdd` 0x46fce0; `docs/original/trade.md`), a duel stake taken from a stack (`CUser::ExchangePvP` 0x47cec4; `docs/original/duel.md` section 4), and buying from a personal shop (`CUser::PacketMyShop` 0x479356; `docs/original/personal-shop.md` section 7) | the giver's for a trade; none for a duel stake or a personal-shop purchase (the new server keeps the giver's: trade deviation 3) |
+| **`U`** (0x55) | part of a stack put on the ground: dropped by the player (`CUser::ItemDrop` 0x45d150, `ItemDropByUser` 0x45a575; `docs/original/item-drop.md`), or a duel's stakes laid down (`CUser::ItemDropPvP` 0x47c9cd) | `InitCraftExpansion` (built; the new server gives them no name, section 6) |
+| **`G`** (0x47) | lapis taken out of an item: one (`CUser::ItemGemRemovePos` 0x463989) or all (`ItemGemRemoveAll` 0x4626c9) | `InitCraftExpansion` |
+| **`Q`** (0x51) | a quest reward (`CUser::QuestAddItem` 0x47e837) | empty (built) |
+| (kept) | an item bought on the market keeps the registered item's own letter (`CUser::PacketMarket` 0x477d41); a stack split between bags keeps the stack's (`CUser::ItemBagToBag` 0x45becd); items loaded from the database keep theirs (`CUser::PacketUserDBSetInfo`, the guild bank and the market, `CClientToDBAgent::PacketGuild`, `PacketMarket`) | as stored |
+| 0 | a new item object before it is filled (`CObjectMgr::CreateItem` 0x40a55f) | |
+
+Items the GM tool (`PSGMTool.exe`) writes straight into the database get whatever letter the tool sends (`usp_Inven_Insert`,
+`usp_Store_Insert`: `@MakeType varchar(5)`). The operators' statistics procedure `up_xu_shaiya_item_maketype_sel` (`PS_Statics`)
+lists every **`V`** item in the bags and warehouses of three game databases, so the sequence drops were watched by their letter.
+
+**Where the letter is checked** (confirmed: every compare of `+0x68` with a letter): only `CUser::ItemCompose` 0x460613 (`'Q'`),
+`ItemRemake` 0x46098f, 0x4609ad (`'Q'`, `'B'`) and `ItemConsider` 0x4610d4 (`'Q'`, `'B'`). The game log's item block carries no make
+type ([The game log](game-log.md) section 2).
 
 The gold a monster drops is an item without a definition (`m_pInfo` 0): `CMob::ItemDrop` 0x4a645b calls `CreateCraftExpansion` on it too, which
 returns at once.
