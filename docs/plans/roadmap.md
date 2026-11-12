@@ -178,10 +178,12 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
 ## Next (decided 2026-11-12)
 
 - **The extensions leave this repository** (`docs/plans/extensions-split.md`): the folders under `extensions/` move to their own repository
-  and release; the server keeps the extension system and the engine work. Specified, not built; the maintainer settled its questions, one (release tags) is open.
+  and release; the server keeps the extension system and the engine work. **Built** 2026-11-12: `extension.toml`'s `server` range,
+  `ext lint`, the tests' fixtures, `main` at `0.4.0-dev`; the new repository is at `../shaiya-afterglow-extensions`, to be created on
+  GitHub and pushed when the maintainer says.
 - **The test bots, first as a PvP battle of 200 to 300 players** (`docs/plans/test-bots.md`), to find out whether the server and the 2010
-  client cope; the bots load the server, the maintainer's real client stands in the battle. Specified, not built; its questions were settled
-  the same day. This replaces the shelved "Test bots and a load test" below.
+  client cope; the bots load the server, the maintainer's real client stands in the battle. Specified in full, not built; one question
+  is open (Q1: one game server and checkout on the dev box, or the live/drill split). This replaces the shelved "Test bots and a load test" below.
 
 ## Frozen or later (not scheduled)
 

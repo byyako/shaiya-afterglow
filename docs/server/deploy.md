@@ -73,7 +73,7 @@ pg_restore -h 127.0.0.1 -U shaiya -d shaiya --no-owner gamedata.dump
 ```
 
 Or skip the dump: with the original files on the VPS, `tools/setup.sh <PSM_Data> <PS_Game/Data>` (from a checkout) imports them there
-(`--extension extensions/kill-boost` installs the Kill Boost Stones on the way).
+(`--extension ../shaiya-afterglow-extensions/kill-boost` installs the Kill Boost Stones on the way).
 
 The migrations do not touch `defs` or `world`, so the order of this step and the first start does not matter (migration 0031 creates the
 empty `content` schema, which the restore then fills). To update the game data later, stop the game server and either restore a new
@@ -242,7 +242,8 @@ nsh console 1 restart 5                # spawns, obelisks, boss groups and porta
   end with it when `target/release/data-editor` exists), `data-editor apply` writes the edits alone into tables that already hold the rest.
   `data-editor content check` proves the live tables are exactly that (it names every row that was changed by hand), `content status` says
   what is imported and installed, `content origin <table> <key>` shows the layers of one row.
-- **Extensions** (`extensions/` in the repository and in the release tarball): `data-editor ext list`, `ext install <folder>`, `ext upgrade <folder>`,
+- **Extensions** (their own repository, `byyako/shaiya-afterglow-extensions`, and its releases; take the one with your server's minor
+  version and copy or clone it to the VPS): `data-editor ext list`, `ext install <folder>`, `ext upgrade <folder>`,
   `ext disable <name>` / `ext enable <name>` and `ext remove <name>`. Installing writes the extension's rows into `defs` (items and skills; drop
   chances) and keeps them in the database, so a server runs, and the extension can be removed, without its folder; restart the game servers
   afterwards. Removing puts every row back to the original and is refused while players hold the extension's items or skills, or other data

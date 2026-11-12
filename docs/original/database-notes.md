@@ -134,7 +134,7 @@ python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.col
   `ext_<name>` per installed extension that has migrations. Which origin a row has is in `content.ext_rows` (an extension owns it) and in
   `edits.fields` / `edits.rows` (an edit changed it), not in a column.
 - **The server's own rows are an extension.** The three Kill Boost Stones 100/212 to 214 and their buffs 200/1 to 3 (once
-  `additions.sql`, now `extensions/kill-boost`, installed with `data-editor ext install extensions/kill-boost`) change rows that
+  `additions.sql`, now `../shaiya-afterglow-extensions/kill-boost`, installed with `data-editor ext install ../shaiya-afterglow-extensions/kill-boost`) change rows that
   exist in the originals as empty placeholders; they are not in the originals, so an import never brings them back, and an install or a
   rebuild writes them (`docs/original/operator-console.md` decision 3, `docs/plans/done/client-patches.md`).
 - **The `edits` schema** (migration `0030_data_edits.sql`, `docs/plans/done/data-editing.md` section 3): the data editor's draft, change sets, log,

@@ -1,7 +1,23 @@
 # Extensions split: the content leaves the server repository (spec and build plan)
 
-**Specified 2026-11-12; not built.** The server repository keeps the extension *system* and the engine work any extension needs; the
-extensions themselves (the folders under `extensions/`) move to a repository of their own and are released on their own.
+**Specified and built 2026-11-12** (steps 1 to 7; the new repository is local at `../shaiya-afterglow-extensions`, not yet created on
+GitHub or pushed). The server repository keeps the extension *system* and the engine work any extension needs; the extensions themselves
+(the folders that were under `extensions/`) moved to a repository of their own and are released on their own. What the build settled:
+
+- **`main` is `0.4.0-dev`** (it was `0.3.0` while carrying 0.4.0's engine). For a `server` range a development build counts as its release
+  (`game_server::version::running`), so `>=0.4.0, <0.5.0` takes `main` now and the 0.4.0 release later; the release cut sets `0.4.0`. A
+  side effect: `tools/setup.sh` without Rust on `main` now asks for `v0.4.0-dev` and stops, instead of fetching 0.3.0's binaries, which do
+  not match `main`'s migrations.
+- **`ext check` needs a database** (it rehearses the install in a transaction), so section 5's CI could not use it. **`data-editor ext
+  lint <folder>`** is new: the manifest and its range, the rows, the monster records and the scripts' dry run, no database, exit 2 on a
+  refusal. The new repository's CI builds the data editor from the server repository at `SERVER_REF` (`main` until a 0.4 tag exists;
+  no release has `ext lint` yet) and lints every folder.
+- **Every extension gained a patch version** with its range (adding a key changes the manifest; an upgrade records the range): 1.0.1, and
+  kill-boost 1.1.1. Checked on the drill: `ext check` on all ten (nine as upgrades, golden-hunt as an install), and `ext upgrade` of
+  welcome to 1.0.1 from the new path; `ext list` shows `needs server …` for a stored range that leaves the build out.
+- Section 4's Q4 is settled as assumed: the repository's releases follow the server's minor version (`v0.4.0` for server 0.4).
+- The source commit of the folders is `accbb9f`; the eight the tests read are in `tests/fixtures/extensions/` (identical to that commit).
+- `docs/plans/taming.md` is `ideas/taming.md` there; `golden-hunt` was first committed there.
 
 ## 1. The maintainer's decisions (2026-11-12)
 
@@ -16,7 +32,7 @@ extensions themselves (the folders under `extensions/`) move to a repository of 
    (`docs/server/deviations.md` section 1 names it among the settings that turn on what the original lacks, and patch 109 carries its
    rows), so those pages change to point at the new repository.
 
-Still open: Q4 (section 4), how the new repository tags its releases.
+Q4 (section 4), how the new repository tags its releases, was settled by the build (above).
 
 ## 2. The line: engine or content
 

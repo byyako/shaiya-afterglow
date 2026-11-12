@@ -5681,9 +5681,9 @@ async fn a_stat_rune_changes_only_the_stats_it_names_and_is_kept_when_none_is_th
 
 // ------------------------------------------------------------------------------------------------ the reference extensions (step 8)
 
-/// The effects of the items in `extensions/<folder>/rows.toml`, as `ext install` stores them (item id, the effect as written).
+/// The effects of the items in `tests/fixtures/extensions/<folder>/rows.toml`, as `ext install` stores them (item id, the effect as written).
 fn folder_effects(folder: &str) -> Vec<(u32, serde_json::Value)> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions").join(folder).join("rows.toml");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/extensions").join(folder).join("rows.toml");
     let rows: toml::Table = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     rows["item"]
         .as_array()
@@ -5779,13 +5779,14 @@ async fn a_script_sees_the_effect_and_may_let_it_run_or_keep_the_stone() {
     }
 }
 
-// ------------------------------------------------------------------------------------------------ the bundled extensions (step 9)
+// ------------------------------------------------------------------------------------------- the fixture extensions (step 9)
 
 use game_server::script::event::{Job, Killer, MobInfo, Payload, PlayerRef};
 
-/// Loads the bundled extensions `(folder, option values as the data editor would hold them)` from `extensions/`, as `main` does.
+/// Loads fixture extensions `(folder, option values as the data editor would hold them)` from `tests/fixtures/extensions/`, as `main`
+/// does.
 fn put_extensions(ctx: &TestContext, extensions: &[(&str, &[(&str, serde_json::Value)])]) {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/extensions");
     let mut sources = ScriptSources::default();
     for (folder, values) in extensions {
         let manifest: toml::Table = toml::from_str(&std::fs::read_to_string(root.join(folder).join("extension.toml")).unwrap()).unwrap();

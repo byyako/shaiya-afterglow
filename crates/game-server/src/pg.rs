@@ -587,6 +587,22 @@ pub use heartbeat::{
 };
 use items::ItemRow;
 
+/// The enabled extensions whose `server` range excludes this build: `(name, version, range)`
+/// (`docs/plans/extensions-split.md` section 3.1). A range the data editor accepted always parses; one that does not is skipped.
+pub async fn extensions_for_other_servers(pool: &PgPool) -> Result<Vec<(String, String, String)>> {
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT name, version, manifest->>'server' FROM content.extensions WHERE enabled AND manifest ? 'server' ORDER BY install_seq",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter(|(name, version, range)| {
+            crate::version::parse_range(range).ok().is_some_and(|r| crate::version::refusal(name, version, &r).is_some())
+        })
+        .collect())
+}
+
 /// The item names (`defs.items.itemname`) the auction house's name search reads, by type and type id.
 pub async fn load_item_names(pool: &PgPool) -> Result<HashMap<(u8, u8), Vec<u8>>> {
     let rows: Vec<(i16, i16, String)> = sqlx::query_as("SELECT type, typeid, itemname FROM defs.items").fetch_all(pool).await?;

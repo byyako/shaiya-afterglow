@@ -2,8 +2,18 @@
 
 ## 0.4.0 (unreleased)
 
+**The extensions have their own repository** (`docs/plans/extensions-split.md`)
+- The extension folders moved to `byyako/shaiya-afterglow-extensions`, released for each minor version of the server; this repository
+  keeps the extension system and the engine work the extensions use. The release tarball no longer carries `extensions/`, and
+  `tools/setup.sh` points at the new repository instead of listing bundled folders. `tools/sdata/client_patch.py` no longer needs an
+  `extensions/` folder committed (the ledger records the installed extensions by name and version, as before).
+- `extension.toml` may say which server versions it was written for: `server = ">=0.4.0, <0.5.0"`. `ext check`, `install`, `upgrade` and
+  `scripts` refuse an extension whose range leaves this server out; an installed one that an upgraded server falls outside of still loads,
+  with a warning at start and `needs server …` in `ext list`. A development build counts as its release (`main` is now `0.4.0-dev`).
+- The engine's tests read frozen copies of the extensions they use, in `tests/fixtures/extensions/`.
+
 **Pets** (extensions chunk 4; `docs/plans/ext-4-pets.md`, `docs/server/pets.md`)
-- The `pets` extension (`extensions/pets`, not installed by `tools/setup.sh`): a Capture Net (100/227) catches the weakest monster that is
+- The `pets` extension (in the extensions repository, not installed by `tools/setup.sh`): a Capture Net (100/227) catches the weakest monster that is
   fighting the user at 30% HP or less into a Pet Egg (100/228, the monster in its craft name); the egg calls a small, unclickable copy of
   the monster that follows its owner, never fights, and **fetches the owner's drops** and gold. One pet out per player, kept across map
   changes and logins (`character_pets`), sent back when its egg leaves the bags.

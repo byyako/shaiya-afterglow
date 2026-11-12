@@ -53,5 +53,6 @@ pub mod switches;
 pub mod sync;
 pub mod trade;
 pub mod user_questions;
+pub mod version;
 pub mod world;
 pub mod zone;

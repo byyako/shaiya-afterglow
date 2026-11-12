@@ -2,7 +2,7 @@
 
 A player weakens a monster that is fighting them and uses a **Capture Net** on it. Caught, the monster becomes a **Pet Egg** in the bag;
 used, the egg calls a **small copy of that monster** that follows its owner, is never fought, and **fetches the owner's drops** into the
-bag. The pets are an extension (`extensions/pets`) made of two item effects, two rule points and a set of client-only monster records.
+bag. The pets are an extension (`../shaiya-afterglow-extensions/pets`) made of two item effects, two rule points and a set of client-only monster records.
 With the extension not installed or disabled the server behaves exactly as before. `docs/plans/ext-4-pets.md` is the design; this page is
 how to run it.
 
@@ -12,8 +12,8 @@ how to run it.
 
 ## 1. Install
 
-    target/release/data-editor ext check extensions/pets
-    target/release/data-editor ext install extensions/pets      # then: tools/game-server.sh restart
+    target/release/data-editor ext check ../shaiya-afterglow-extensions/pets
+    target/release/data-editor ext install ../shaiya-afterglow-extensions/pets      # then: tools/game-server.sh restart
 
 Effects are read when the game server starts, so an install, upgrade, enable or disable needs a restart. The extension is not installed
 by `tools/setup.sh`. `ext show pets` prints what it made, the pets' records as one line (`monster_look 1-2473 → 3001-5473, day mapped, 7
@@ -26,7 +26,7 @@ fields set`).
 | 100/227 | Capture Net | `capture` | used on the **weakest monster that is fighting the user** (lowest HP in percent; the nearest on a tie), within `range`, at `below` percent HP or less. A hit makes the egg and uses the net up; a miss uses the net up too ("It broke free!") and the monster goes on fighting |
 | 100/228 | Pet Egg | `pet_egg` | holds one monster. Used, it calls the pet out beside the owner; used again, it sends the pet back. The egg stays. One pet out per player; another egg's pet replaces it |
 
-The keys (all in `extensions/pets/rows.toml`; `docs/server/effects.md` has the tables):
+The keys (all in `../shaiya-afterglow-extensions/pets/rows.toml`; `docs/server/effects.md` has the tables):
 
 - `capture`: `egg` (the item the catch becomes), `below` (default 30), `chance` (`[10, 60]`: the chance in percent at `below` and near death),
   `range` (15), `levels_above` (the monster's level at most the user's plus this), `except` (monster ids never caught).

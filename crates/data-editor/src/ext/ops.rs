@@ -82,11 +82,36 @@ pub fn script_input(
     }
 }
 
+/// `ext lint <folder>`: what `ext check` checks without a database (`read_folder`), as lines; a refusal comes back as `Err`.
+pub fn lint(dir: &Path) -> Result<Vec<String>, String> {
+    let plan = read_folder(dir)?;
+    let m = &plan.manifest;
+    let mut lines = vec![format!(
+        "{} {}: the manifest, {} rows, {} client monster records, {} migrations and {} art files read",
+        m.name,
+        m.version,
+        plan.entries.len(),
+        plan.monster_looks.iter().map(|l| l.ids().len()).sum::<usize>(),
+        plan.migrations.len(),
+        plan.art.len()
+    )];
+    match &m.server {
+        Some(range) => lines.push(format!("server {range}: this is {} (taken)", game_server::version::BUILD)),
+        None => lines.push("warning: extension.toml has no `server` range (like server = \">=0.4.0, <0.5.0\")".to_owned()),
+    }
+    lines.extend(script_lines(&plan));
+    lines.push("not checked here (needs a database: ext check): the rows against defs, the ids against other extensions".to_owned());
+    Ok(lines)
+}
+
 /// Reads and validates what needs no database: the manifest, the rows files, the migrations' names and the art files.
 pub fn read_folder(dir: &Path) -> Result<Plan, String> {
     let manifest_path = dir.join("extension.toml");
     let text = std::fs::read_to_string(&manifest_path).map_err(|e| format!("{}: {e}", manifest_path.display()))?;
     let manifest = Manifest::parse(&text).map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+    if let Some(refusal) = manifest.server_refusal() {
+        return Err(format!("{}: {refusal}", manifest_path.display()));
+    }
     let entries = super::rows::load_rows(dir)?;
     for e in &entries {
         let ranges = match e.kind {
@@ -1411,7 +1436,7 @@ fn first_difference(before: &[(String, Value)], after: &[(String, Value)]) -> Op
 type MonsterLookGroup = (i32, i32, i32, i64, Value, Option<i32>, Option<i32>);
 
 /// One line of `ext list`: name, version, enabled and the counts of rows, client rows, effects, settings, rules and scripts.
-type ListRow = (String, String, bool, i64, i64, i64, i64, i64, i64);
+type ListRow = (String, String, bool, i64, i64, i64, i64, i64, i64, Option<String>);
 
 impl Editor {
     fn read_plan(dir: &Path) -> Result<Plan> {
@@ -1487,6 +1512,9 @@ impl Editor {
         let result = apply_plan(&mut tx, &self.s, &plan, prior).await;
         tx.rollback().await?;
         lines.extend(result?);
+        if plan.manifest.server.is_none() {
+            lines.push("warning: extension.toml has no `server` range (like server = \">=0.4.0, <0.5.0\"); nothing stops it on a server it was not written for".to_owned());
+        }
         lines.push("nothing was written".to_owned());
         Ok(Self::report_lines(&plan, lines))
     }
@@ -1744,7 +1772,8 @@ impl Editor {
                     (SELECT count(*) FROM {c}.ext_item_effects f WHERE f.extension = e.name) + (SELECT count(*) FROM {c}.ext_skill_abilities a WHERE a.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_settings t WHERE t.extension = e.name),
                     (SELECT count(*) FROM {c}.ext_rules q WHERE q.extension = e.name),
-                    (SELECT count(*) FROM {c}.ext_scripts x WHERE x.extension = e.name) FROM {c}.extensions e ORDER BY e.install_seq"
+                    (SELECT count(*) FROM {c}.ext_scripts x WHERE x.extension = e.name), e.manifest->>'server'
+               FROM {c}.extensions e ORDER BY e.install_seq"
         )))
         .fetch_all(&self.pool)
         .await?;
@@ -1755,9 +1784,15 @@ impl Editor {
             "{:<24} {:<10} {:<9} {:>5} {:>7} {:>7} {:>9} {:>6} {:>7}",
             "name", "version", "state", "rows", "client", "effects", "settings", "rules", "scripts"
         )];
-        for (name, version, enabled, r, cl, ef, se, ru, sc) in rows {
+        for (name, version, enabled, r, cl, ef, se, ru, sc, server) in rows {
+            // An extension installed for another server version (`docs/plans/extensions-split.md` section 3.1).
+            let note = server
+                .and_then(|text| game_server::version::parse_range(&text).ok())
+                .filter(|range| game_server::version::refusal(&name, &version, range).is_some())
+                .map(|range| format!("  needs server {range}"))
+                .unwrap_or_default();
             out.push(format!(
-                "{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {ef:>7} {se:>9} {ru:>6} {sc:>7}",
+                "{name:<24} {version:<10} {:<9} {r:>5} {cl:>7} {ef:>7} {se:>9} {ru:>6} {sc:>7}{note}",
                 if enabled { "enabled" } else { "disabled" }
             ));
         }

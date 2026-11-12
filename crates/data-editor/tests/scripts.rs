@@ -344,10 +344,43 @@ async fn the_editor_sets_an_extensions_option_checked_against_its_spec() {
     db.drop().await;
 }
 
-/// `ext check`'s work that needs no database, on every folder of `extensions/`: the manifest, the rows and the dry run of the scripts.
+/// `ext lint` (no database): a fixture without a `server` range is read with a warning; the same folder with a range that leaves this build
+/// out is refused, naming both versions (`docs/plans/extensions-split.md` section 3.1).
 #[test]
-fn every_bundled_extension_passes_check() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
+fn ext_lint_reads_a_folder_and_refuses_a_server_range_that_excludes_this_build() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/extensions/welcome");
+    let lines = data_editor::ext::ops::lint(&fixture).unwrap();
+    assert!(lines[0].starts_with("welcome 1.0.0: the manifest"), "{lines:?}");
+    assert!(lines.iter().any(|l| l.starts_with("warning: extension.toml has no `server` range")), "{lines:?}");
+    assert!(lines.iter().any(|l| l == "  commands: !help, !online, !time"), "{lines:?}");
+
+    let dir = std::env::temp_dir().join(format!("lint-{:08x}", rand::random::<u32>()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for file in ["extension.toml", "main.lua", "README.md"] {
+        std::fs::copy(fixture.join(file), dir.join(file)).unwrap();
+    }
+    let manifest = std::fs::read_to_string(dir.join("extension.toml")).unwrap();
+    let with = |range: &str| {
+        std::fs::write(
+            dir.join("extension.toml"),
+            manifest.replacen("version = \"1.0.0\"", &format!("version = \"1.0.0\"\nserver = \"{range}\""), 1),
+        )
+        .unwrap();
+        data_editor::ext::ops::lint(&dir)
+    };
+    let running = game_server::version::running();
+    let taken = with(&format!(">={running}")).unwrap();
+    assert!(taken.iter().any(|l| l.starts_with(&format!("server >={running}: this is {}", game_server::version::BUILD))), "{taken:?}");
+    let refused = with(">=99.0.0").unwrap_err();
+    assert!(refused.ends_with(&format!("welcome 1.0.0 needs server >=99.0.0; this is {}", game_server::version::BUILD)), "{refused}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// `ext check`'s work that needs no database, on every fixture folder (`tests/fixtures/extensions/`, frozen copies of the
+/// extensions this repository used to carry): the manifest, the rows and the dry run of the scripts.
+#[test]
+fn every_fixture_extension_passes_check() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/extensions");
     let mut scripted = Vec::new();
     for entry in std::fs::read_dir(&root).unwrap() {
         let dir = entry.unwrap().path();

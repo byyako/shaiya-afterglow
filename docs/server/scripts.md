@@ -15,8 +15,8 @@ are not touched (`docs/original/scripted-mobs.md`, `docs/original/instances.md`)
 
 ### Installing a scripted extension
 
-    target/release/data-editor ext check extensions/kill-streak      # compiles the scripts and shows what they register
-    target/release/data-editor ext install extensions/kill-streak
+    target/release/data-editor ext check ../shaiya-afterglow-extensions/kill-streak      # compiles the scripts and shows what they register
+    target/release/data-editor ext install ../shaiya-afterglow-extensions/kill-streak
     target/release/console 1 reload                                  # puts the scripts in force, no restart
 
 `install` and `upgrade` compile the scripts, run their top level once in a state that does nothing (the *dry run*), and copy them into
@@ -24,9 +24,10 @@ the database (`content.ext_scripts`); the game server reads them from there and 
 the scripts (size and SHA-256), the options with their defaults and the data editor's values, and what the dry run registered.
 `disable` and `remove` take an extension's scripts out of force at the next `reload`; `remove` also drops the values the scripts stored.
 
-Four extensions are bundled in `extensions/`, none installed by default: `kill-streak` (streak announcements and bounties), `welcome`
-(a login text, adverts, `!help`, `!online`, `!time`), `boss-rewards` (rewards for a boss group's boss and for player kills),
-`monster-madness` (`!madness` for staff). Each has a `README.md` with its options.
+The extensions repository (`byyako/shaiya-afterglow-extensions`, cloned next to this one as `../shaiya-afterglow-extensions`) has script
+extensions, none installed by default: `kill-streak` (streak announcements and bounties), `welcome` (a login text, adverts, `!help`,
+`!online`, `!time`), `boss-rewards` (rewards for a boss group's boss and for player kills), `golden-hunt` (a timed rare-monster hunt with
+hints) and `monster-madness` (`!madness` for staff). Each has a `README.md` with its options.
 
 ### Options
 
@@ -85,6 +86,7 @@ name = "kill-streak"
 version = "1.0.0"
 title = "Kill streaks and bounties"
 description = "…"
+server = ">=0.4.0, <0.5.0"  # the server versions it was written for (optional; any extension, scripted or not)
 api = 1                     # the Lua API version the scripts are written for; required with `scripts`
 scripts = ["main.lua"]      # 1 to 64 files, loaded in this order into the extension's one Lua state
 
@@ -101,6 +103,12 @@ Script paths are `^[a-z0-9_-]+(/[a-z0-9_-]+)*\.lua$` inside the folder, at most 
 one has 1`) are refused. Option keys are `^[a-z][a-z0-9_]{0,39}$`, at most 64; strings are printable ASCII up to 1,000 bytes; lists up to
 256 entries; `maps` takes ids and `"a-b"` ranges. In Lua, `game.options` is a read-only table of the values in force: `maps` as a set
 (`game.options.maps[35] == true`), lists as arrays.
+
+`server` (any extension may have it, not only a scripted one) is a version range: `ext check`, `ext install`, `ext upgrade` and
+`ext scripts` refuse an extension whose range leaves this server out (`pets 1.0.0 needs server >=0.4.0, <0.5.0; this is 0.3.0`). A
+development build counts as its release (`0.4.0-dev` as 0.4.0). An extension already installed whose range leaves out an upgraded server
+still loads; the game server warns at start and `ext list` marks it `needs server …`. Without the key nothing is checked, and `ext check`
+says so.
 
 One Lua state per extension: its files share globals; extensions never share a state or call each other.
 

@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "data-editor"
-version = "0.3.0"
+version = "0.4.0-dev"
 dependencies = [
  "anyhow",
  "axum",
@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "game-server"
-version = "0.3.0"
+version = "0.4.0-dev"
 dependencies = [
  "anyhow",
  "chrono",
@@ -639,6 +639,7 @@ dependencies = [
  "mlua",
  "proptest",
  "rand 0.9.5",
+ "semver",
  "serde_json",
  "sha2 0.11.1",
  "shaiya-crypto",
@@ -1055,7 +1056,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "login-server"
-version = "0.3.0"
+version = "0.4.0-dev"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1622,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "shaiya-crypto"
-version = "0.3.0"
+version = "0.4.0-dev"
 dependencies = [
  "aes",
  "hex-literal",
@@ -1637,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "shaiya-proto"
-version = "0.3.0"
+version = "0.4.0-dev"
 dependencies = [
  "proptest",
  "tracing",

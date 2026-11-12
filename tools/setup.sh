@@ -244,21 +244,12 @@ Left to do:
 
 Then point the client at the server: python3 tools/patch_client_ip.py <Client folder> ${lan_ip:-<server ip>}
 EOF
-    bundled_extensions
-}
+    cat <<'EOF'
 
-# One line per extension folder of this checkout that is not installed yet, with its manifest's title and description.
-bundled_extensions() {
-    local folder name title description first=1
-    for folder in extensions/*/; do
-        [ -f "$folder/extension.toml" ] || continue
-        name="$(sed -n 's/^name = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
-        if target/release/data-editor ext list 2> /dev/null | grep -q "^$name "; then continue; fi
-        title="$(sed -n 's/^title = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
-        description="$(sed -n 's/^description = "\(.*\)"/\1/p' "$folder/extension.toml" | head -1)"
-        if [ "$first" = 1 ]; then echo; echo "Extensions you can install (each then needs a restart of the game server):"; echo; first=0; fi
-        echo "  target/release/data-editor ext install ${folder%/}   # $title: $description"
-    done
+Extensions (new items, rules, scripts, pets) are in their own repository, https://github.com/byyako/shaiya-afterglow-extensions:
+take the release with the same minor version as this server, then for each one you want
+  target/release/data-editor ext install <its folder>    # and restart the game server
+EOF
 }
 
 if [ "$offer_account" = 0 ] || [ ! -t 0 ]; then

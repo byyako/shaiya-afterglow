@@ -76,6 +76,16 @@ async fn main() -> Result<()> {
     game_server::script::sources::resolve_options(&script_sources)?;
     let pool =
         PgPoolOptions::new().max_connections(config.db_pool).acquire_timeout(config.db_acquire).connect(&config.database_url).await?;
+    // An extension installed for another server version still loads (its effects and rules are checked below); the operator is told.
+    for (name, version, range) in pg::extensions_for_other_servers(&pool).await.context("reading the extensions' server ranges")? {
+        tracing::warn!(
+            extension = %name,
+            %version,
+            needs = %range,
+            server = game_server::version::BUILD,
+            "an enabled extension was written for another server version: check it still works, or upgrade it (data-editor ext upgrade <folder>)"
+        );
+    }
     let creation = CreationData {
         class_base: pg::load_class_base(&pool).await.context("loading the class table")?,
         start: CreationData::original_start_positions(),

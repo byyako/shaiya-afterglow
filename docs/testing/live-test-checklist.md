@@ -1608,7 +1608,7 @@ stricter. Everyday login and play must feel the same.
 
 ## 58. Extensions foundation (the Kill Boost Stones as an extension; `docs/plans/ext-1-foundation.md`)
 
-The dev box now runs from a worktree of the clone, and the Kill Boost Stones come from the extension `extensions/kill-boost` instead of
+The dev box now runs from a worktree of the clone, and the Kill Boost Stones come from the extension `../shaiya-afterglow-extensions/kill-boost` instead of
 `additions.sql`. Nothing in play should change. Part B moved the game server's settings out of the environment: the dev box's six
 (`guild_party_size = 2`, `mini_game`, `slot_payout_percent = 220`, `card_win_chances`, `cross_faction_trade_maps`, `market_maps`) are
 keys of `config/game.toml` in the live worktree, and `kill_boost_skills` comes from the extension (`target/release/game-server config`
@@ -1658,7 +1658,7 @@ reload. `target/release/game-server rules` shows what is in force, and `.rules` 
 
 ## 60. Scripts (extensions chunk 5; `docs/plans/ext-5-lua.md`, `docs/server/scripts.md`)
 
-The four bundled extensions (`extensions/kill-streak`, `welcome`, `boss-rewards`, `monster-madness`) are installed on the live dev box and
+The four script extensions (`../shaiya-afterglow-extensions/kill-streak`, `welcome`, `boss-rewards`, `monster-madness`) are installed on the live dev box and
 **disabled**. Turn one on with `target/release/data-editor ext enable <name>` and `target/release/console 1 reload`; turn it off with
 `ext disable` and `reload`. Options go in `config/game.toml` under `[ext.<name>]` (then `reload`). `target/release/console 1 scripts`
 (or `.scripts` in the game, as staff) shows what runs and any errors; `target/release/game-server config` lists the options with their layers.
@@ -1678,7 +1678,7 @@ The four bundled extensions (`extensions/kill-streak`, `welcome`, `boss-rewards`
 - [ ] `monster-madness`: a staff member of level 1 to 3 types `!madness <monster id> 20 5` in the game: twenty of that monster stand
       around, the zone is told, they fight and drop as ordinary monsters, and after five minutes (or when the last falls) the end is
       announced; `!madness stop` takes them away at once without drops. A player typing `!madness` just speaks.
-- [ ] A typo in a script: copy `extensions/welcome` to a scratch folder, break `main.lua`, run `target/release/data-editor ext scripts
+- [ ] A typo in a script: copy `../shaiya-afterglow-extensions/welcome` to a scratch folder, break `main.lua`, run `target/release/data-editor ext scripts
       <folder>` (it refuses to compile and names file and line), then fix a text and run it again; `target/release/console 1 reload`
       puts the change in force, and a broken file reached by hand makes `reload` answer "reload failed, nothing changed: extension
       welcome: welcome/main.lua:…" while everything keeps running as before.
@@ -1754,7 +1754,7 @@ add it first, from the folder holding the original `Monster.SData`.
        own dropped item stays; with a full bag: one "no room", the item stays on the ground and the pet leaves it.
 8. [ ] **Relog**: log out with the pet out and back in: it comes back. Trade the egg away: the pet goes at once; the other player calls the
        same monster with it.
-9. [ ] **Rules**: `deny pet` on a map (the example in `extensions/pets/extension.toml` or `config/game.toml.example`): the pet hides within
+9. [ ] **Rules**: `deny pet` on a map (the example in `../shaiya-afterglow-extensions/pets/extension.toml` or `config/game.toml.example`): the pet hides within
        5 seconds with the message and returns on leaving; `deny capture` by level refuses the net with its message.
 10. [ ] **Off**: `data-editor ext disable pets`, restart: both items are refused and stay, no pet comes out, nothing else differs.
         `base = 0` (the wild record) on a client without patch 111: a full-size, clickable pet that the server ignores when it is attacked.

@@ -10,7 +10,7 @@ design; this page is how to use them, and (section 6) how to add a new type.
 
 ## 1. The reference extensions
 
-Five folders of `extensions/` use them (the fifth, `pets`, is the subject of `docs/server/pets.md`). None of the new ones is installed by `tools/setup.sh`; each has a README.
+Five extensions of the extensions repository (`byyako/shaiya-afterglow-extensions`, cloned next to this one as `../shaiya-afterglow-extensions`) use them (the fifth, `pets`, is the subject of `docs/server/pets.md`). None is installed by `tools/setup.sh`; each has a README.
 
 | extension | items | what it does |
 |---|---|---|
@@ -23,7 +23,7 @@ Five folders of `extensions/` use them (the fifth, `pets`, is the subject of `do
 Every reference item is **grade 999**, the drop grade no monster drops, so they come only from the item mall, the GM's `/make <type>
 <type id>`, or a script's `give_item`. To use them:
 
-    target/release/data-editor ext install extensions/level-stones      # then: tools/game-server.sh restart
+    target/release/data-editor ext install ../shaiya-afterglow-extensions/level-stones      # then: tools/game-server.sh restart
     target/release/data-editor ext disable level-stones                  # the items stay; they do what their own columns say
 
 Effects belong to **enabled** extensions and are read when the game server starts, so an install, upgrade, enable or disable needs a
@@ -36,7 +36,7 @@ A player sees the item's name and text from the client's own data (`Item.SData`)
 are not in `defs` and not in the client's rows, so `content hashes defs` and the earlier patches do not change.
 
 **Kill Boost Stones from 1.0.0.** The 1.0.0 extension set the setting `kill_boost_skills`; 1.1.0 gives the skill rows `kill_boost`
-abilities instead. Moving is optional (`data-editor ext upgrade extensions/kill-boost`, then a restart); the setting keeps working as a
+abilities instead. Moving is optional (`data-editor ext upgrade ../shaiya-afterglow-extensions/kill-boost`, then a restart); the setting keeps working as a
 shorthand that gives the same abilities at start. Nothing the players see changes.
 
 ## 2. Keeping an item off some maps: `deny item_use`
@@ -124,7 +124,7 @@ after either); the step stays at most 20. `safe = true` means a failure never de
 stay. `"random"` draws each as the smaller of two draws from 0 to the item's top, as the core's rune does; `"max"` makes it the item's top.
 An item with none of the named numbers is refused as the core's rune refuses one (the window's failure, result 1), and the rune stays.
 
-**`capture` and `pet_egg`** (0.4.0; the operator's page is `docs/server/pets.md`, the extension `extensions/pets`) are two halves of one thing. The server checks the links between them when it
+**`capture` and `pet_egg`** (0.4.0; the operator's page is `docs/server/pets.md`, the extension `../shaiya-afterglow-extensions/pets`) are two halves of one thing. The server checks the links between them when it
 starts: a `capture`'s `egg` must be a `pet_egg` item of the same extension; a `pet_egg` row must have `count` 1 (eggs never stack) and, with
 `base` above 0, every `base + m` must lie in the extension's `[ids] monsters`. An effect that fails a link is skipped with a warning naming
 the item and the reason (the item then does what its own columns say, as when an effect no longer suits its row); a `capture` whose egg was

@@ -106,7 +106,7 @@ Server-side working notes moved out of the published client pages; never in the 
   and counting down offline). 200 rather than 327: its levels 1 to 3 are empty in both copies (`skill-monster-sdata-vs-defs.md` lists
   no difference for 200) and no item names it, and below 256 the item's skill byte is the real id. The monsters' 200/100 (Weakening
   Curse, your `NpcSkill.SData` group 199) is untouched; `kill_boost_skills` now takes `id/level`, default `200/1`, so it never
-  counts. Server rows: `extensions/kill-boost` (before 0.3.0: `additions.sql`), applied on the dev database. **For your side, in the first client data patch**
+  counts. Server rows: `../shaiya-afterglow-extensions/kill-boost` (before 0.3.0: `additions.sql`), applied on the dev database. **For your side, in the first client data patch**
   (`docs/plans/roadmap.md` step 1b, which also builds the generator): `Item.SData` 100/212 with skill byte 200, level byte 1, the stack and
   icon of 100/108, a name and description; `Skill.SData` 200 level 1 as above with the name "Kill Boost" (levels 2 and 3 left empty);
   check that 200's levels in your copy are empty before writing them.
@@ -184,7 +184,7 @@ the client rows in `content.client_items` / `client_skills` (what a patch change
 `docs/plans/done/client-patches.md`; the other files follow the same pattern.
 
 **Next:** the first patch has a purpose: the Kill Boost Stone (`Item.SData` 100/212, `Skill.SData` 200 levels 1 to 3, the server's
-rows in `extensions/kill-boost`). Steps 3 to 5 become `docs/plans/roadmap.md` step 1b (client data patches), before the test bots.
+rows in `../shaiya-afterglow-extensions/kill-boost`). Steps 3 to 5 become `docs/plans/roadmap.md` step 1b (client data patches), before the test bots.
 
 ## From item-sdata-vs-defs.md (original "For the server" section, before it was made public)
 

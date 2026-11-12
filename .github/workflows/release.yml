@@ -32,8 +32,8 @@ jobs:
           for bin in login-server game-server servers create_account console data-editor mall; do
             install -m 755 "target/release/$bin" "$name/"
           done
-          # what a machine given only the tarball needs: the bundled extensions and the sample of every game setting
-          cp -r extensions "$name/extensions"
+          # what a machine given only the tarball needs: the sample of every game setting (the extensions have their own repository and
+          # releases, docs/plans/extensions-split.md)
           if [ -f config/game.toml.example ]; then   # exists from the settings work of chunk 1 (part B)
             mkdir "$name/config"
             cp config/game.toml.example "$name/config/"

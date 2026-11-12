@@ -11,8 +11,8 @@ anyhow = "1.0.104"
 argon2 = "0.6.0"
 dotenvy = "0.15.7"
 rand = "0.9"
-shaiya-crypto = { version = "0.3.0", path = "../shaiya-crypto" }
-shaiya-proto = { version = "0.3.0", path = "../shaiya-proto" }
+shaiya-crypto = { version = "0.4.0-dev", path = "../shaiya-crypto" }
+shaiya-proto = { version = "0.4.0-dev", path = "../shaiya-proto" }
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync", "signal"] }
 tracing = "0.1.44"

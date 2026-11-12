@@ -292,7 +292,7 @@ async fn the_server_loads_the_effects_of_enabled_extensions_only() {
 #[tokio::test]
 async fn kill_boost_moves_from_its_setting_to_abilities_without_touching_defs_or_the_client_rows() {
     let Some(db) = seeded(false).await else { return };
-    let real = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions/kill-boost");
+    let real = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/extensions/kill-boost");
     // The 1.0.0 folder, made from the real one: the setting instead of the abilities.
     let old = std::env::temp_dir().join(format!("kb-old-{:08x}", rand::random::<u32>()));
     std::fs::create_dir_all(&old).unwrap();

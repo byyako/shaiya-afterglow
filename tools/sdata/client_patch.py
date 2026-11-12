@@ -768,9 +768,11 @@ def ledger_sql(patch, previous, commit, extensions, dirty, files, patch_sha256=N
 
 
 def cmd_generate(patch, dirty):
-    status = git("status", "--porcelain", "--", "tools/sdata", "db/client", "extensions")
+    # The installed extensions are recorded by name and version in the ledger (content.client_patches.extensions); their folders live
+    # in their own repository (docs/plans/extensions-split.md), so only this repository's inputs must be committed.
+    status = git("status", "--porcelain", "--", "tools/sdata", "db/client")
     if status.strip() and not dirty:
-        sys.exit("uncommitted changes in tools/sdata/, db/client/ or extensions/ (the manifest's commit must describe the "
+        sys.exit("uncommitted changes in tools/sdata/ or db/client/ (the manifest's commit must describe the "
                  "files); commit them, or pass --dirty for a trial run:\n" + status)
     out_dir = PATCHES / f"ps{patch:04d}"
     if out_dir.exists():

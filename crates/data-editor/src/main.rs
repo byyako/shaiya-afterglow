@@ -34,6 +34,7 @@ const USAGE: &str = "usage: data-editor <command>
   content origin <table> <key>       the layers of one row: original, extension, edits
   ext list | show <name>             the installed extensions; one extension's ids, rows, client rows and settings
   ext check <folder>                 everything an install checks, writing nothing
+  ext lint <folder>                  what needs no database: the manifest (and its server range), the rows, the scripts' dry run
   ext install [--skip-installed] <folder>
   ext upgrade <folder>               a folder with a higher version of an installed extension
   ext scripts <folder>               replaces only the scripts and options of the installed extension (same version)
@@ -118,6 +119,13 @@ async fn main() -> Result<()> {
 async fn run(command: &str, mut args: Vec<String>) -> Result<()> {
     if matches!(command, "help" | "-h" | "--help") {
         println!("{USAGE}");
+        return Ok(());
+    }
+    // `ext lint` needs no database (the extensions repository's CI runs it on a machine without one).
+    if command == "ext" && args.first().map(String::as_str) == Some("lint") {
+        let folder = PathBuf::from(args.get(1).context("ext lint needs the extension's folder")?);
+        let lines = data_editor::ext::ops::lint(&folder).map_err(Refused)?;
+        lines.iter().for_each(|l| println!("{l}"));
         return Ok(());
     }
     let by = take_value(&mut args, &["--by"])?.unwrap_or_else(|| "cli".to_owned());
@@ -254,7 +262,7 @@ async fn ext(editor: &Editor, mut args: Vec<String>) -> Result<()> {
         "enable" => print(editor.ext_set_enabled(args.first().context("ext enable needs a name")?, true).await?),
         "disable" => print(editor.ext_set_enabled(args.first().context("ext disable needs a name")?, false).await?),
         _ => bail!(
-            "usage: data-editor ext list | show <name> | check <folder> | install [--skip-installed] <folder> | upgrade <folder> | scripts <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"
+            "usage: data-editor ext list | show <name> | check <folder> | lint <folder> | install [--skip-installed] <folder> | upgrade <folder> | scripts <folder> | remove <name> [--force [--yes]] | enable <name> | disable <name>"
         ),
     }
     Ok(())

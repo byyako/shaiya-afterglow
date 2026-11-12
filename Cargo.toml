@@ -6,7 +6,7 @@ members = ["crates/shaiya-crypto", "crates/shaiya-proto", "crates/login-server",
 edition = "2024"
 # sqlx 0.9 needs 1.94 (README, "What you need")
 rust-version = "1.94"
-version = "0.3.0"
+version = "0.4.0-dev"
 license = "MIT"
 publish = false
 

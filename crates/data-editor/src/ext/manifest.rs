@@ -36,6 +36,8 @@ pub struct Manifest {
     /// The extension's rules (`docs/plans/ext-2-rules.md` section 4.4), by name without the extension's prefix, each as the JSON of its
     /// table; the game server's parser checks them (`ext check`, `ext install`).
     pub rules: BTreeMap<String, Value>,
+    /// The server versions the extension was written for (`docs/plans/extensions-split.md` section 3.1); `None` when it says nothing.
+    pub server: Option<semver::VersionReq>,
     /// The Lua API version the scripts are written for; with `scripts` (section 3.1 of the scripts chunk).
     pub api: Option<u32>,
     /// The script files, in load order.
@@ -49,6 +51,12 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    /// Why this build cannot take the extension (its `server` range excludes it), or `None`.
+    pub fn server_refusal(&self) -> Option<String> {
+        let range = self.server.as_ref()?;
+        game_server::version::refusal(&self.name, &self.version.to_string(), range)
+    }
+
     /// The schema an extension's own tables live in: `ext_` and the name with dashes as underscores (the prefix is a parameter for tests).
     pub fn schema(&self, prefix: &str) -> String {
         format!("{prefix}{}", self.name.replace('-', "_"))
@@ -142,6 +150,7 @@ impl Manifest {
                 "description",
                 "authors",
                 "license",
+                "server",
                 "ids",
                 "settings",
                 "rules",
@@ -163,6 +172,7 @@ impl Manifest {
         let description = string(&table, "description", true)?.unwrap_or_default();
         let _ = strings(&table, "authors")?;
         let _ = string(&table, "license", false)?;
+        let server = string(&table, "server", false)?.map(|text| game_server::version::parse_range(&text)).transpose()?;
 
         let (mut items, mut skills, mut monsters) = (Vec::new(), Vec::new(), Vec::new());
         if let Some(ids_value) = table.get("ids") {
@@ -231,6 +241,7 @@ impl Manifest {
             monsters,
             settings,
             rules,
+            server,
             api,
             scripts,
             options,
@@ -371,6 +382,19 @@ art = [{ member = "Item/Icon/x.dds", file = "art/x.dds" }]
     }
 
     #[test]
+    fn the_server_range_is_read_and_checked_against_this_build() {
+        assert!(Manifest::parse(GOOD).unwrap().server.is_none(), "a manifest without the key says nothing");
+        let with =
+            |range: &str| Manifest::parse(&GOOD.replace("license = \"MIT\"", &format!("license = \"MIT\"\nserver = \"{range}\""))).unwrap();
+        let running = game_server::version::running();
+        let here = with(&format!("={running}"));
+        assert_eq!(here.server.as_ref().unwrap().to_string(), format!("={running}"));
+        assert_eq!(here.server_refusal(), None);
+        let refusal = with(">=99.0.0").server_refusal().unwrap();
+        assert!(refusal.starts_with("kill-boost 1.0.0 needs server >=99.0.0; this is "), "{refusal}");
+    }
+
+    #[test]
     fn a_minimal_manifest_needs_only_the_required_keys() {
         let m = Manifest::parse("format = 1\nname = \"ab\"\nversion = \"0.1.0\"\ntitle = \"t\"\ndescription = \"d\"\n").unwrap();
         assert!(m.items.is_empty() && m.skills.is_empty() && m.settings.is_empty() && m.rules.is_empty());
@@ -477,6 +501,8 @@ doc = "Gold."
             (no_rules().replace("[ids]", "[rules]\nx = 1\n[ids]"), "[rules.x] must be a table"),
             (GOOD.replace("[ids]", "scripts = 1\n[ids]"), "`scripts` must be a list"),
             (GOOD.replace("[ids]", "api = 1\n[ids]"), "`api` without `scripts`"),
+            (GOOD.replace("license = \"MIT\"", "license = \"MIT\"\nserver = \"0.4 or later\""), "is not a version range"),
+            (GOOD.replace("license = \"MIT\"", "license = \"MIT\"\nserver = 4"), "`server` must be a string"),
             (GOOD.replace("items = [", "monsters = [\"1\"]\nitems = ["), "[ids] monsters: monster records 1-1"),
             (
                 GOOD.replace("items = [", "monsters = [\"3001-5473\", \"5000-5500\"]\nitems = ["),

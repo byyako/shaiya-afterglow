@@ -2,8 +2,8 @@
 # Downloads the Linux binaries of a release into target/release/, so that nothing has to be built:
 #   tools/fetch-release.sh [--keep DIR] [tag]        # no tag: the latest release
 # The binaries are the ones tools/setup.sh and the run scripts look for; only the tarball's top-level files go into target/release/
-# (a checkout has its extensions/ and config/ folders already). --keep DIR unpacks the whole tarball into DIR as well (its extensions/
-# and config/game.toml.example, for a machine that has no checkout). The checksum of the download is checked.
+# (a checkout has its config/ folder already). --keep DIR unpacks the whole tarball into DIR as well (its config/game.toml.example, for
+# a machine that has no checkout; releases up to 0.3.0 also carried extensions/). The checksum of the download is checked.
 # The release is built by .github/workflows/release.yml when a version tag is pushed.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -41,7 +41,7 @@ mkdir -p "$root/target/release"
 unpacked="$work/shaiya-afterglow-$tag-linux-x86_64"
 installed=""
 for file in "$unpacked"/*; do
-    [ -f "$file" ] || continue          # the tarball's folders (extensions/, config/) are not binaries
+    [ -f "$file" ] || continue          # the tarball's folders (config/; extensions/ up to 0.3.0) are not binaries
     install -m 755 "$file" "$root/target/release/"
     installed="$installed $(basename "$file")"
 done
@@ -49,6 +49,6 @@ echo "installed into target/release/:$installed"
 if [ -n "$keep" ]; then
     mkdir -p "$keep"
     cp -r "$unpacked"/. "$keep"/
-    echo "the whole tarball is in $keep (extensions/, config/game.toml.example when the release has them)"
+    echo "the whole tarball is in $keep (config/game.toml.example when the release has it)"
 fi
 echo "note: the release matches its own source; if you cloned a different commit, run 'git checkout $tag' so the database migrations agree"

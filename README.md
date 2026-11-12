@@ -38,7 +38,7 @@ tools/setup.sh /path/to/PSM_Data /path/to/PS_Game/Data
 the first time; with no Rust installed it downloads the release's binaries instead), reads the game definitions straight out of the original backup, imports the original data once and builds the game's tables from it, writes
 `config/game.toml`, and then asks for the name and password of your first account and the address your players use, and starts the servers.
 Without the build it takes about a minute. If it stops, it names the step; run it again after fixing the cause (a re-run skips what is
-already imported). `--extension extensions/kill-boost` installs the Kill Boost Stones on the way (below), `--reset` imports corrected original
+already imported). `--extension ../shaiya-afterglow-extensions/kill-boost` installs the Kill Boost Stones on the way (below; the extensions are a separate download), `--reset` imports corrected original
 files again.
 
 Last, point the client at your server: `python3 tools/patch_client_ip.py <Client folder> <server ip>` writes a copy of
@@ -149,7 +149,7 @@ python3 tools/defs/verify.py db/defs/schema.sql docs/original/db/PS_GameDefs.col
 
 The import is made once, into the frozen copy `original_defs`, and ends with `target/release/data-editor content rebuild defs` (the live `defs` table
 is the originals, the installed extensions and your data editor edits, in that order; `docs/original/database-notes.md`). The server's own
-extra rows, the Kill Boost Stones, are an extension: `target/release/data-editor ext install extensions/kill-boost`
+extra rows, the Kill Boost Stones, are an extension: `target/release/data-editor ext install ../shaiya-afterglow-extensions/kill-boost`
 (`docs/server/deviations.md` section 1).
 
 `load_into_postgres.py` decodes the text columns as GBK, the original database's code page, and checks that every value encodes back to
@@ -241,21 +241,27 @@ and the extensions can carry rules too.
 
 **Item effects and skill abilities** are the extensions' other addition: an extension's rows may give an item a named effect (a stone that
 raises the level, a Lapisia that always succeeds, a rune that redraws one number) or a skill an ability (a kill that counts five times),
-and the rules can keep an item off a map (`item_use`). Three reference extensions are in `extensions/`
+and the rules can keep an item off a map (`item_use`). Reference extensions using them are in the extensions repository
 ([`docs/server/effects.md`](docs/server/effects.md), for operators and for authors).
 
-**Pets** (an extension, `extensions/pets`, not installed by default): a Capture Net on a weakened monster that is fighting you makes a Pet
+**Pets** (the `pets` extension of the extensions repository, not installed by default): a Capture Net on a weakened monster that is fighting you makes a Pet
 Egg; the egg calls a small, unclickable copy of the monster that follows you and fetches your drops into the bag. Two rule points keep
 nets and pets off some maps ([`docs/server/pets.md`](docs/server/pets.md)). The players' clients need a data patch for it.
 
 **Scripts**: an extension may carry Lua scripts that react to events (a login, a kill, a timer), answer `!commands` typed in chat, give
 items, gold and buffs, spawn monsters for a while, store values per character, and refuse or change a number at the places the rules are
-asked. Four are bundled in `extensions/` and none is installed by default: kill streaks with bounties, a welcome text with adverts, rewards for
-boss and player kills, and `!madness` for staff. `data-editor ext install extensions/<name>` and `console 1 reload` put one in force;
+asked. The extensions repository has examples, none installed by default: kill streaks with bounties, a welcome text with adverts, rewards
+for boss and player kills, a timed golden-monster hunt, and `!madness` for staff. `data-editor ext install ../shaiya-afterglow-extensions/<name>` and `console 1 reload`
+put one in force;
 `console 1 scripts` shows what runs ([`docs/server/scripts.md`](docs/server/scripts.md), for operators and for authors).
 
 For a public server on a VPS (systemd units, firewall, backups, updates, copying the game data instead of importing it), see
 [`docs/server/deploy.md`](docs/server/deploy.md).
+
+**Where the extensions are**: in their own repository, [`byyako/shaiya-afterglow-extensions`](https://github.com/byyako/shaiya-afterglow-extensions),
+released for each minor version of the server (take the one matching yours). This README and the docs assume it is cloned next to this
+one, as `../shaiya-afterglow-extensions`. Each extension's `extension.toml` says which server versions it works with (`server`), and the
+data editor refuses one written for another version.
 
 ## Operator tools
 
@@ -323,13 +329,13 @@ and `data-editor content check` names every row that was changed by hand.
 ```bash
 target/release/data-editor content status                 # what is imported and installed, and whether a client patch is due
 target/release/data-editor content check                  # the live tables against a rebuild from the originals, extensions and edits
-target/release/data-editor ext install extensions/kill-boost   # an extension: a folder with extension.toml and rows.toml
+target/release/data-editor ext install ../shaiya-afterglow-extensions/kill-boost   # an extension: a folder with extension.toml and rows.toml
 target/release/data-editor ext list | show <name> | check <folder> | upgrade <folder> | enable <name> | disable <name>
 target/release/data-editor ext remove <name>              # every row goes back to the original; refused while players hold its items
 ```
 
 An extension adds to or changes items, skills and drop chances without SQL; the database keeps everything it read, so removing it needs no
-folder. `extensions/kill-boost` (three stones whose buff multiplies player kills) is the first and the example to copy; restart the game servers
+folder. The extensions repository's `kill-boost` (three stones whose buff multiplies player kills) is the first and the example to copy; restart the game servers
 after an install. The format, the checks and the commands are in `docs/plans/ext-1-foundation.md` (sections 5 to 7), the schemas in
 `docs/original/database-notes.md`.
 
