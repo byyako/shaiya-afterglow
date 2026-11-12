@@ -224,7 +224,11 @@ impl Db {
 
     pub async fn drop(self) {
         self.pool.close().await;
-        let admin = PgPoolOptions::new().max_connections(1).connect(&std::env::var("TEST_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL")).unwrap()).await.unwrap();
+        let admin = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("TEST_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL")).unwrap())
+            .await
+            .unwrap();
         let s = &self.s;
         for schema in [&s.defs, &s.world, &s.edits, &s.content, &s.original_defs, &s.original_world, &s.client] {
             run(&admin, format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).await;
