@@ -175,6 +175,14 @@ API and operations (B1, B2) wait; a first run of the install on a fresh machine 
 | Chunk 3 item effects and skill abilities (spec, build) | spec written 2026-11-05 and **built** 2026-11-05 (`docs/plans/ext-3-effects.md`, `docs/server/effects.md`; rehearsed on the drill, then on the live dev box with the Kill Boost Stones upgraded and the three new extensions installed disabled; live-test items in section 61); custom GM status levels moved to wave R3 |
 | Chunk 4 pets (spec, build), release 0.4.0 | spec written 2026-11-07 and **built** (`docs/plans/ext-4-pets.md`, `docs/server/pets.md`; rehearsed on the drill; the dev box rehearsal, client patch 111 and the release 0.4.0 wait for the maintainer; live-test items in section 63) |
 
+## Next (decided 2026-11-12)
+
+- **The extensions leave this repository** (`docs/plans/extensions-split.md`): the folders under `extensions/` move to their own repository
+  and release; the server keeps the extension system and the engine work. Specified, not built; the maintainer settled its questions, one (release tags) is open.
+- **The test bots, first as a PvP battle of 200 to 300 players** (`docs/plans/test-bots.md`), to find out whether the server and the 2010
+  client cope; the bots load the server, the maintainer's real client stands in the battle. Specified, not built; its questions were settled
+  the same day. This replaces the shelved "Test bots and a load test" below.
+
 ## Frozen or later (not scheduled)
 
 - **Phase 4, extensions, rules and pets** (`docs/plans/extensions.md`, unbuilt; the first chunks are now "Next" above): 4.1 foundation (spec `docs/plans/ext-1-foundation.md`),
