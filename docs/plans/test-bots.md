@@ -1,6 +1,18 @@
 # Test bots and the PvP swarm (spec and build plan)
 
-**Specified 2026-11-12 (first draft and this full version the same day); not built.** Unshelves "Test bots and a load test"
+**Specified 2026-11-12 (first draft and this full version the same day); part 1 built** (`crates/bot`: link, login, enter, world,
+metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 settled, where the code corrected the spec:
+
+- **Leaving needs sitting**: the server ignores `0x0107` from a standing player (`server.rs`, `OP_LOGOUT_TO_SELECT`), so a bot sends
+  `0x0506 1`, then `0x0107`, and waits for the reply.
+- **A refused step** is `0x020B` on the bot's own id and then a `0x0502` whose bytes equal result 5 on itself (`world::move_refused`);
+  the bot counts the `0x020B` and swallows that one result-5 packet right after it.
+- **A step does not stop the server's attack** (only a refused or over-long one does), and a second `0x0502` on the same target is
+  ignored; the bot still re-asks after moving, harmlessly. The result codes are `game_server::combat::RESULT_*`.
+- **`0x0511`'s number** is the `number` field of the skill's `0x0108` entry, not its place in the list. The game connection's keys are
+  `game_session_keys` (the hashed login IV). `0x0301` is not sent; `0x0303` is asked once per player id per session.
+- **Every bot needs a weapon in bag 0** (an unarmed bot gets result 7 and only walks), and characters fight sooner from level 10 up;
+  a death above level 10 can drop an item. Rebirth kind 2 needs the map's binds, or the dead bot comes back where it fell. Unshelves "Test bots and a load test"
 (`docs/plans/roadmap.md`, "Frozen or later"). The first use is a **battle of 200 to 300 players**, to find out whether the server and the
 2010 client cope with high-scale PvP. The later uses (a partner bot for the two-client checklist items, bot-only scenarios, a soak test)
 build on the same crate and are sketched in section 14.
