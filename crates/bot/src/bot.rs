@@ -5,21 +5,29 @@ use std::time::{Duration, Instant};
 
 use shaiya_proto::{combat, frame, world};
 
+use crate::echo::{EVERY, Echo};
 use crate::enter::{CharacterScreen, connect_game, enter_world};
 use crate::link::{Link, LinkError};
 use crate::login::Selected;
 use crate::metrics::Metrics;
 use crate::world::{Event, World};
 
+/// `0x0553` kind 2: back to life at the bind position.
+const REBIRTH_KIND: u8 = 2;
+
 pub struct Bot {
     pub link: Link,
     pub world: World,
     pub metrics: Metrics,
+    /// The swarm's step board, when the bot is part of one.
+    pub echo: Option<Echo>,
+    /// Steps taken in all (the counters in `metrics` start again every window).
+    steps_taken: u64,
 }
 
 impl Bot {
     pub fn new(link: Link, world: World) -> Self {
-        Self { link, world, metrics: Metrics::default() }
+        Self { link, world, metrics: Metrics::default(), echo: None, steps_taken: 0 }
     }
 
     /// From a login to a bot in the world: connects to the game server, takes the account's first character and enters.
@@ -45,6 +53,16 @@ impl Bot {
         sent
     }
 
+    /// A step to `(x, z)` is about to be sent: one in ten goes on the swarm's step board.
+    pub fn stamp_step(&mut self, x: f32, z: f32) {
+        self.steps_taken += 1;
+        if self.steps_taken.is_multiple_of(EVERY)
+            && let Some(echo) = &self.echo
+        {
+            echo.board.stamp(echo.slot, x, z, Instant::now());
+        }
+    }
+
     /// The next packet from the server: counted, applied to the world and returned as what it meant. Cancel-safe (see `Link::next`).
     pub async fn receive(&mut self) -> Result<Vec<Event>, LinkError> {
         let packet = match self.link.next().await {
@@ -54,9 +72,14 @@ impl Bot {
                 return Err(error);
             }
         };
+        Ok(self.apply(&packet))
+    }
+
+    /// Counts a packet from the server and applies it to the world.
+    fn apply(&mut self, packet: &[u8]) -> Vec<Event> {
         let now = Instant::now();
-        self.metrics.packet_received(frame::opcode(&packet), packet.len());
-        let events = self.world.handle(&packet);
+        self.metrics.packet_received(frame::opcode(packet), packet.len());
+        let events = self.world.handle(packet);
         let me = self.world.id;
         for event in &events {
             match *event {
@@ -70,6 +93,13 @@ impl Bot {
                     }
                 }
                 Event::Refused => self.metrics.refusals += 1,
+                Event::Moved(id) => {
+                    if let (Some(echo), Some(seen)) = (&self.echo, self.world.players.get(&id))
+                        && let Some(delay) = echo.board.seen(id, seen.position[0], seen.position[2], now)
+                    {
+                        self.metrics.step_echo.record(delay);
+                    }
+                }
                 Event::Attack { result, attacker, target } if attacker == me => self.metrics.attack_result(result, target, now),
                 Event::Skill { caster, .. } if caster == me => self.metrics.skill_outcome(now),
                 Event::Died { id, .. } if id == me => self.metrics.deaths += 1,
@@ -78,7 +108,7 @@ impl Bot {
                 _ => {}
             }
         }
-        Ok(events)
+        events
     }
 
     /// Sends the `0x0303` question for every player that entered the view and has not been asked about.
@@ -89,21 +119,58 @@ impl Bot {
         Ok(())
     }
 
+    /// Reads and applies packets until `done` says so (it sees the bot, each packet's opcode and what the packet meant) or `deadline`
+    /// passes. False on the deadline or when the connection ends.
+    async fn pump(&mut self, deadline: Instant, done: impl Fn(&Self, u16, &[Event]) -> bool) -> bool {
+        loop {
+            let Ok(next) = tokio::time::timeout_at(deadline.into(), self.link.next()).await else { return false };
+            let Ok(packet) = next else { return false };
+            // Still counted as in the world: a blow that lands while the bot sits is part of the fight.
+            let events = self.apply(&packet);
+            if done(self, frame::opcode(&packet), &events) {
+                return true;
+            }
+        }
+    }
+
     /// Leaves as a player does: sits (the server ignores a logout request from a standing player), asks for the character screen with
-    /// `0x0107`, waits up to `within` for its answer and closes.
-    pub async fn leave(&mut self, within: Duration) {
-        let sit = shaiya_proto::encode(world::OP_MOTION, &[world::MOTION_SIT]);
-        if self.send(sit).await.is_ok() && self.send(shaiya_proto::encode(world::OP_LOGOUT_TO_SELECT, &[])).await.is_ok() {
-            let wait = async {
-                while let Ok(packet) = self.link.next().await {
-                    self.metrics.packet_received(frame::opcode(&packet), packet.len());
-                    if frame::opcode(&packet) == world::OP_LOGOUT_TO_SELECT {
-                        return;
-                    }
+    /// `0x0107`, waits for its answer and closes. The server logs a sitting player out after its delay (`logout_secs`, 10 by default),
+    /// and a blow or a skill on the player in the meantime stands it up without a word and cancels the logout, so a bot that is struck sits and
+    /// asks again; a bot that is dead (or dies on the way out) first asks to come back with `0x0553`, as the server sends no answer to
+    /// a dead player. Everything within `within` in all; true when the answer came.
+    pub async fn leave(&mut self, within: Duration) -> bool {
+        let deadline = Instant::now() + within;
+        let mut answered = false;
+        loop {
+            if !self.world.alive {
+                let rebirth = shaiya_proto::encode(combat::OP_REBIRTH_REQUEST, &[REBIRTH_KIND]);
+                if self.send(rebirth).await.is_err() || !self.pump(deadline, |bot, _, _| bot.world.alive).await {
+                    break;
                 }
-            };
-            let _ = tokio::time::timeout(within, wait).await;
+            }
+            let sit = shaiya_proto::encode(world::OP_MOTION, &[world::MOTION_SIT]);
+            if self.send(sit).await.is_err() || self.send(shaiya_proto::encode(world::OP_LOGOUT_TO_SELECT, &[])).await.is_err() {
+                break;
+            }
+            let me = self.world.id;
+            let left = std::sync::atomic::AtomicBool::new(false);
+            let ended = self
+                .pump(deadline, |bot, opcode, events| {
+                    left.store(opcode == world::OP_LOGOUT_TO_SELECT, std::sync::atomic::Ordering::Relaxed);
+                    left.load(std::sync::atomic::Ordering::Relaxed)
+                        || !bot.world.alive
+                        || events.iter().any(|e| {
+                            matches!(e, Event::Attack { attacker: by, target, .. } | Event::Skill { caster: by, target, .. } if *target == me && *by != me)
+                        })
+                })
+                .await;
+            // Only the answer is a logout; a blow or a death that ended the wait sends the bot round again.
+            if !ended || left.load(std::sync::atomic::Ordering::Relaxed) {
+                answered = ended;
+                break;
+            }
         }
         self.link.close().await;
+        answered
     }
 }

@@ -228,6 +228,7 @@ dependencies = [
  "game-server",
  "login-server",
  "rand 0.9.5",
+ "serde_json",
  "sha2 0.11.1",
  "shaiya-crypto",
  "shaiya-proto",

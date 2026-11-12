@@ -478,7 +478,7 @@ pub fn bot_names(prefix: &str, number: u32) -> (String, String) {
     (username, name)
 }
 
-fn check_prefix(prefix: &str) -> Result<()> {
+pub fn check_prefix(prefix: &str) -> Result<()> {
     if prefix.is_empty() || prefix.len() > MAX_PREFIX || !prefix.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return refuse(format!("a prefix is 1 to {MAX_PREFIX} ASCII letters or digits (the account is the prefix and four digits)"));
     }

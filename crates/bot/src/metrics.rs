@@ -47,6 +47,94 @@ impl Samples {
     pub fn max(&self) -> Option<Duration> {
         self.0.iter().max().map(|&m| Duration::from_micros(m))
     }
+
+    /// The samples, in microseconds.
+    pub fn micros(&self) -> &[u64] {
+        &self.0
+    }
+}
+
+/// Buckets to an octave of microseconds: a percentile read from it is within 4.4 % of the true one.
+const PER_OCTAVE: f64 = 16.0;
+
+/// Round trips of many bots kept in a few hundred counters instead of a vector of samples: the swarm's windows add the step echo of
+/// every observer (up to 300 times as many samples as steps), which would not fit in memory for a long run. Counts the samples in
+/// logarithmic buckets of microseconds; the maximum is kept exactly.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Histogram {
+    counts: Vec<u32>,
+    len: u64,
+    max_us: u64,
+}
+
+fn bucket_of(us: u64) -> usize {
+    if us <= 1 { 0 } else { ((us as f64).log2() * PER_OCTAVE).floor() as usize + 1 }
+}
+
+/// The upper edge of a bucket in microseconds.
+fn bucket_top(bucket: usize) -> f64 {
+    if bucket == 0 { 1.0 } else { (bucket as f64 / PER_OCTAVE).exp2() }
+}
+
+impl Histogram {
+    pub fn record_micros(&mut self, us: u64) {
+        let bucket = bucket_of(us);
+        if self.counts.len() <= bucket {
+            self.counts.resize(bucket + 1, 0);
+        }
+        self.counts[bucket] += 1;
+        self.len += 1;
+        self.max_us = self.max_us.max(us);
+    }
+
+    pub fn record(&mut self, took: Duration) {
+        self.record_micros(took.as_micros() as u64);
+    }
+
+    pub fn add_samples(&mut self, samples: &Samples) {
+        for &us in samples.micros() {
+            self.record_micros(us);
+        }
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        if self.counts.len() < other.counts.len() {
+            self.counts.resize(other.counts.len(), 0);
+        }
+        for (mine, theirs) in self.counts.iter_mut().zip(&other.counts) {
+            *mine += theirs;
+        }
+        self.len += other.len;
+        self.max_us = self.max_us.max(other.max_us);
+    }
+
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn max(&self) -> Option<Duration> {
+        (self.len > 0).then(|| Duration::from_micros(self.max_us))
+    }
+
+    /// The `p`th percentile (0 to 100, nearest rank) as the upper edge of its bucket, never above the maximum; `None` without samples.
+    pub fn percentile(&self, p: f64) -> Option<Duration> {
+        if self.len == 0 {
+            return None;
+        }
+        let rank = (((p / 100.0) * self.len as f64).ceil().max(1.0) as u64).min(self.len);
+        let mut seen = 0;
+        for (bucket, &n) in self.counts.iter().enumerate() {
+            seen += u64::from(n);
+            if seen >= rank {
+                return Some(Duration::from_micros((bucket_top(bucket).round() as u64).min(self.max_us)));
+            }
+        }
+        self.max()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -57,6 +145,9 @@ pub struct Metrics {
     pub attack_round_trip: Samples,
     /// From a `0x0511` sent to its outcome.
     pub skill_round_trip: Samples,
+    /// How long after a step of another bot (one in ten is stamped, `crate::echo`) this bot saw it: the delay with which the others see
+    /// a player move.
+    pub step_echo: Samples,
     /// The bot's own `0x0502` results by code (0 hit, 1 critical, 3 miss, 5 out of reach, 7 no weapon, 10 cannot attack).
     pub results: BTreeMap<u8, u64>,
     pub steps: u64,
@@ -121,6 +212,16 @@ impl Metrics {
         if let Some(since) = self.pending_skill.take() {
             self.skill_round_trip.record(now - since);
         }
+    }
+
+    /// Hands over what was counted since the last call, for the swarm's window, and starts counting again. What is still pending (an
+    /// attack waiting for its first blow), the opcodes already warned of and the reason the connection ended stay.
+    pub fn take_window(&mut self) -> Metrics {
+        let (pending_attack, pending_skill) = (self.pending_attack, self.pending_skill);
+        let (warned, disconnect) = (std::mem::take(&mut self.warned), self.disconnect.clone());
+        let taken = std::mem::take(self);
+        (self.pending_attack, self.pending_skill, self.warned, self.disconnect) = (pending_attack, pending_skill, warned, disconnect);
+        taken
     }
 
     /// The figures of one screen.
@@ -230,5 +331,46 @@ mod tests {
         assert!(!m.protocol_error(0x0201));
         assert!(m.protocol_error(0x0501));
         assert_eq!(m.protocol_errors, 3);
+    }
+}
+
+#[cfg(test)]
+mod histogram_tests {
+    use super::*;
+
+    #[test]
+    fn a_histogram_reads_percentiles_within_a_few_percent_and_keeps_the_maximum() {
+        let mut h = Histogram::default();
+        assert_eq!(h.percentile(50.0), None);
+        for ms in 1..=1000 {
+            h.record(Duration::from_millis(ms));
+        }
+        assert_eq!(h.len(), 1000);
+        assert_eq!(h.max(), Some(Duration::from_millis(1000)));
+        for (p, want) in [(50.0, 500.0), (95.0, 950.0), (99.0, 990.0)] {
+            let got = h.percentile(p).unwrap().as_secs_f64() * 1000.0;
+            assert!(got >= want && got <= want * 1.05, "p{p}: {got} for {want}");
+        }
+        // Never above the maximum, and two histograms merge as one.
+        assert_eq!(h.percentile(100.0), Some(Duration::from_millis(1000)));
+        let mut other = Histogram::default();
+        other.record(Duration::from_secs(5));
+        h.merge(&other);
+        assert_eq!((h.len(), h.max()), (1001, Some(Duration::from_secs(5))));
+    }
+
+    #[test]
+    fn taking_a_window_keeps_what_is_still_pending() {
+        let mut m = Metrics::default();
+        let t = Instant::now();
+        m.steps = 4;
+        m.packet_sent(0x0502, 10);
+        m.attack_sent(7, t);
+        let window = m.take_window();
+        assert_eq!((window.steps, window.sent[&0x0502].packets), (4, 1));
+        assert_eq!((m.steps, m.sent.len()), (0, 0));
+        // The blow comes in the next window and is still timed from the attack.
+        m.attack_result(0, 7, t + Duration::from_millis(30));
+        assert_eq!(m.attack_round_trip.max(), Some(Duration::from_millis(30)));
     }
 }

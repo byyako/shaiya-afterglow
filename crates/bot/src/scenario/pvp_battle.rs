@@ -24,8 +24,8 @@ use crate::world::{Event, distance};
 /// The server refuses a step longer than this.
 const MAX_STEP: f32 = 35.0;
 /// The server's reach is the weapon's range plus this (`combat::in_range`); the bot keeps `REACH_MARGIN` inside it.
-const REACH_PLUS: f32 = 2.3;
-const REACH_MARGIN: f32 = 0.5;
+pub const REACH_PLUS: f32 = 2.3;
+pub const REACH_MARGIN: f32 = 0.5;
 /// A step is this share of what the speed allows, so no 5-second window of the move check fails.
 const STEP_SHARE: f32 = 0.9;
 /// How often the bot thinks; steps come at `steps_per_sec`.
@@ -372,6 +372,7 @@ impl Battle {
         let (nx, nz) = (x + dx / span * length, z + dz / span * length);
         let dir = heading(dx, dz);
         // `y` is the last height the server sent for the bot (`0x0105`, `0x0551`, `0x020B`): the server's move check is horizontal.
+        bot.stamp_step(nx, nz);
         bot.send(wp::move_request(&wp::Move { motion: MOTION_RUN, dir, position: [nx, y, nz] })).await?;
         bot.world.stepped(nx, nz, dir);
         bot.metrics.steps += 1;
