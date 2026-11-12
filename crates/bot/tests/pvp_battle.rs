@@ -2,20 +2,18 @@
 //! see each other as enemies, walk toward each other without a refusal, one kills the other, the dead one asks to come back after its
 //! wait, comes back on `0x0551` and walks back to the battle point. No database.
 
-#[path = "../../game-server/tests/common/mod.rs"]
-mod common;
+mod support;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bot::bot::Bot;
-use bot::enter::connect_game;
-use bot::scenario::pvp_battle::{Battle, Config, State, run};
+use bot::scenario::pvp_battle::{Battle, Config, State};
 use bot::world::distance;
-use common::*;
 use game_server::memory::MemoryBackend;
 use shaiya_proto::combat;
 use shaiya_proto::game as g;
+use support::common::*;
+use support::{bot_in_world, drive};
 
 /// An account with one character, made through the character screen as the client does, which then leaves the connection.
 /// Returns the character's id.
@@ -41,18 +39,6 @@ async fn make_character(
     wait_gone(backend, user, Duration::from_secs(2)).await;
     backend.add_session(user, session(identity, Some(SERVER_ID), LOCAL));
     id
-}
-
-async fn bot_in_world(addr: std::net::SocketAddr, user: u32, identity: [u8; 16]) -> Bot {
-    let (link, screen) = connect_game(&addr.to_string(), user, &identity, &LOGIN_KEYS).await.unwrap();
-    Bot::enter_from(link, &screen).await.unwrap()
-}
-
-/// Plays `bot` in slices until `done` says so.
-async fn drive(bot: &mut Bot, battle: &mut Battle, done: impl Fn(&Bot, &Battle) -> bool) {
-    while !done(bot, battle) {
-        run(bot, battle, tokio::time::sleep(Duration::from_millis(40))).await.expect("the connection held");
-    }
 }
 
 #[tokio::test]

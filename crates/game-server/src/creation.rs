@@ -127,7 +127,7 @@ pub fn starting_stats(job: u8, family: u8) -> [u16; 6] {
 
 /// Classes each race may play, in class numbers (fighter 0, defender 1, ranger 2, archer 3, mage 4, priest 5).
 /// Races 0 and 1 belong to faction 0 (Light), races 2 and 3 to faction 1 (Fury).
-const RACE_CLASSES: [[u8; 3]; 4] = [
+pub const RACE_CLASSES: [[u8; 3]; 4] = [
     [0, 1, 5], // human
     [2, 3, 4], // elf
     [2, 4, 5], // vail

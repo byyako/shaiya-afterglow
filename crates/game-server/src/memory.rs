@@ -255,6 +255,47 @@ impl MemoryBackend {
         self.sessions.guard().insert(user_id, session);
     }
 
+    /// Puts a character loaded from another store (the PostgreSQL one, `docs/plans/test-bots.md` section 8.6) on an account, in the slot
+    /// given, with the account's faction, so that it enters the world as it was loaded. The id is the character's own.
+    pub fn add_character(&self, user_id: u32, server_id: u8, slot: u8, faction: Faction, play: PlayCharacter) {
+        let mut equipment_type = [0; 8];
+        let mut equipment_type_id = [0; 8];
+        for item in play.items.iter().filter(|i| i.bag == 0 && i.slot < 8) {
+            equipment_type[usize::from(item.slot)] = item.item_type;
+            equipment_type_id[usize::from(item.slot)] = item.type_id;
+        }
+        let summary = CharacterSummary {
+            slot,
+            id: play.id,
+            level: play.level,
+            family: play.family,
+            grow: play.grow,
+            hair: play.hair,
+            face: play.face,
+            size: play.size,
+            job: play.job,
+            sex: play.sex,
+            map: play.map,
+            stats: play.stats,
+            health: play.health,
+            equipment_type,
+            equipment_type_id,
+            name: play.name.clone().into_bytes(),
+            ..Default::default()
+        };
+        self.factions.guard().insert((user_id, server_id), faction);
+        self.characters.guard().push(StoredCharacter {
+            user_id,
+            server_id,
+            summary,
+            play,
+            delete_pending: false,
+            deleted: false,
+            rename_count: 0,
+            renames: Vec::new(),
+        });
+    }
+
     /// Changes a character's level, as an operator would in the database.
     pub fn set_level(&self, character_id: u32, level: u16) {
         for c in self.characters.guard().iter_mut().filter(|c| c.summary.id == character_id) {
