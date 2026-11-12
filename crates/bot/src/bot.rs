@@ -101,6 +101,7 @@ impl Bot {
                     }
                 }
                 Event::Attack { result, attacker, target } if attacker == me => self.metrics.attack_result(result, target, now),
+                Event::AttackStart => self.metrics.attack_started(now),
                 Event::Skill { caster, .. } if caster == me => self.metrics.skill_outcome(now),
                 Event::Died { id, .. } if id == me => self.metrics.deaths += 1,
                 Event::Died { killer_kind, killer, .. } if killer_kind == combat::KILLER_PLAYER && killer == me => self.metrics.kills += 1,

@@ -133,6 +133,9 @@ fn twenty_bots_ramp_fight_and_log_out_and_the_report_adds_up() {
                 let config = bot_config();
                 let started = server_handle.spawn(start_with_data(backend.clone(), config, data)).await.unwrap();
                 let addr = started.0;
+                // The stats line on the server's runtime, as `main` starts it for `stats_every`; the lines show with --nocapture.
+                let _ = tracing_subscriber::fmt().with_env_filter("stats=info").with_test_writer().try_init();
+                server_handle.spawn(game_server::server::stats_line(started.1.clone()));
 
                 let users: Vec<u32> = who.values().map(|(user, _)| *user).collect();
                 let who = Arc::new(who);
@@ -160,6 +163,15 @@ fn twenty_bots_ramp_fight_and_log_out_and_the_report_adds_up() {
                     server_cpu.as_secs_f64(),
                     100.0 * server_cpu.as_secs_f64() / wall
                 );
+
+                // The server's own figures for the run: the same ones the line carried, read once more (over what came after the last line).
+                let ctx = started.1.clone();
+                let figures = server_handle.spawn(async move { game_server::server::stats_figures(&ctx) }).await.unwrap();
+                println!("stats at the end: {figures}");
+                assert_eq!(figures.workers, 2, "the server's runtime has two workers");
+                assert!(figures.in_pps > 0.0 || figures.secs < 0.5, "the bots' packets were counted: {figures}");
+                assert_eq!(figures.outbox_closed, 0, "no connection was closed for its outbox");
+                assert!(figures.rss_mb > 0 || !std::path::Path::new("/proc/self/statm").exists());
 
                 // The report as the file keeps it.
                 let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("{prefix}.json"));
@@ -213,6 +225,9 @@ fn twenty_bots_ramp_fight_and_log_out_and_the_report_adds_up() {
                 assert_eq!(by_opcode, num(&w["packets"]["rx"]["packets"]));
                 assert!(steady["opcodes"]["0x0501"]["tx_packets"].as_u64().unwrap() > 0 && steady["opcodes"]["0x0502"].is_object());
                 assert!(num(&steady["attack_rtt_ms"]["n"]) > 0 && steady["attack_rtt_ms"]["p50"].is_number());
+                // The acknowledgement (0x0502 to the server's 0x0212): measured, and small on loopback, with no attack interval in it.
+                assert!(num(&steady["attack_ack_ms"]["n"]) > 0, "the attack acknowledgement was measured");
+                assert!(steady["attack_ack_ms"]["p95"].as_f64().unwrap() < 250.0, "{}", steady["attack_ack_ms"]);
                 assert!(num(&steady["step_echo_ms"]["n"]) > 0, "the step echo was measured");
                 assert!(num(&steady["packets"]["rx"]["packets"]) > num(&steady["packets"]["tx"]["packets"]));
                 // Logged out cleanly, all twenty, and the server has let go of every one.
@@ -229,7 +244,13 @@ fn twenty_bots_ramp_fight_and_log_out_and_the_report_adds_up() {
 
 /// A config for a game server with many bots: nothing limits the connections of one address.
 fn bot_config() -> game_server::config::Config {
-    game_server::config::Config { max_per_ip: 1000, connects_per_minute: 100_000, max_connections: 1000, ..config(true) }
+    game_server::config::Config {
+        max_per_ip: 1000,
+        connects_per_minute: 100_000,
+        max_connections: 1000,
+        stats_every: Duration::from_secs(4),
+        ..config(true)
+    }
 }
 
 /// A free address in 127/8 that no other test uses, so that the game server's row in the login server's table is its own.

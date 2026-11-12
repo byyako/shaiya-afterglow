@@ -100,6 +100,12 @@ async fn two_bots_of_the_two_factions_fight_one_dies_and_walks_back() {
     assert_eq!((light.metrics.kills, light.metrics.deaths), (1, 0));
     assert_eq!((fury.metrics.kills, fury.metrics.deaths), (0, 1));
     assert!(!light.metrics.attack_round_trip.is_empty());
+    // The first 0x0502 found the Light bot not fighting, so the server answered at once with 0x0212: measured, and on loopback small
+    // (well below the attack interval that the round trip to the first blow includes).
+    assert!(!light.metrics.attack_ack.is_empty(), "the attack acknowledgement was measured");
+    let (ack, rtt) = (light.metrics.attack_ack.max().unwrap(), light.metrics.attack_round_trip.max().unwrap());
+    println!("attack ack {ack:?}, round trip to the first blow {rtt:?}");
+    assert!(ack < Duration::from_millis(250) && ack < rtt, "ack {ack:?}, round trip {rtt:?}");
     assert!(fury_battle.milestones.unarmed && fury.metrics.results[&7] >= 1, "the Fury character has no weapon: result 7");
     // The dead one waited its 300 ms before 0x0553, sent it once, and is alive again.
     assert_eq!(fury_battle.milestones.rebirth_waits.len(), 1);

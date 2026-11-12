@@ -38,6 +38,8 @@ pub enum Event {
         attacker: u32,
         target: u32,
     },
+    /// `0x0212`: the server began an attack for the bot (its answer to a `0x0502` or a skill when the bot was not fighting).
+    AttackStart,
     /// `0x0511`: a skill's outcome.
     Skill {
         result: u8,
@@ -282,6 +284,7 @@ impl World {
                     }
                 }
             }
+            combat::OP_ATTACK_START => events.push(Event::AttackStart),
             skill::OP_USE_USER => {
                 if p.len() < 12 {
                     bad(&mut events);
@@ -406,6 +409,12 @@ mod tests {
             w.handle(&combat::attack_refused(server_combat::RESULT_OUT_OF_RANGE, 1)),
             [Event::Attack { result: 5, attacker: 1, target: 0 }]
         );
+    }
+
+    #[test]
+    fn the_attack_start_is_an_event() {
+        let mut w = World::new(1, 0, 0, 1, 18);
+        assert_eq!(w.handle(&combat::attack_start()), [Event::AttackStart]);
     }
 
     #[test]

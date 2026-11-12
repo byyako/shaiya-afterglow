@@ -8,7 +8,7 @@
 //! { "schema", "run": {args, bots, window_s, duration_s, build, server},
 //!   "ramp": {bots_per_sec, first_login_s, last_login_s, logins_ok, logins_failed, login_ms, windows},
 //!   "windows": [ {index, start_s, seconds, partial, ramp, bots, disconnects, login_ms, packets, per_bot, opcodes,
-//!                 attack_rtt_ms, skill_rtt_ms, step_echo_ms, results, steps, refusals, protocol_errors, kills, deaths, rebirths} ],
+//!                 attack_rtt_ms, attack_ack_ms, skill_rtt_ms, step_echo_ms, results, steps, refusals, protocol_errors, kills, deaths, rebirths} ],
 //!   "summary": {steady, windows, seconds, ...the same figures over the steady windows},
 //!   "logout": {bots, clean, took_ms}, "notes": [..] }
 //! ```
@@ -33,6 +33,7 @@ pub struct WindowAcc {
     pub rx: BTreeMap<u16, Count>,
     pub tx: BTreeMap<u16, Count>,
     pub attack: Histogram,
+    pub ack: Histogram,
     pub skill: Histogram,
     pub echo: Histogram,
     pub login: Histogram,
@@ -88,6 +89,7 @@ impl WindowAcc {
         add_counts(&mut self.rx, &m.received);
         add_counts(&mut self.tx, &m.sent);
         self.attack.add_samples(&m.attack_round_trip);
+        self.ack.add_samples(&m.attack_ack);
         self.skill.add_samples(&m.skill_round_trip);
         self.echo.add_samples(&m.step_echo);
         for (code, n) in &m.results {
@@ -106,6 +108,7 @@ impl WindowAcc {
         add_counts(&mut self.rx, &other.rx);
         add_counts(&mut self.tx, &other.tx);
         self.attack.merge(&other.attack);
+        self.ack.merge(&other.ack);
         self.skill.merge(&other.skill);
         self.echo.merge(&other.echo);
         self.login.merge(&other.login);
@@ -285,6 +288,7 @@ fn figures_json(acc: &WindowAcc, bots: f64, seconds: f64) -> Value {
         },
         "opcodes": opcodes_json(&acc.rx, &acc.tx),
         "attack_rtt_ms": stats(&acc.attack),
+        "attack_ack_ms": stats(&acc.ack),
         "skill_rtt_ms": stats(&acc.skill),
         "step_echo_ms": stats(&acc.echo),
         "results": results_json(&acc.results),
@@ -509,6 +513,7 @@ impl fmt::Display for Report {
                 s.acc.timed_out,
                 s.acc.errors
             )?;
+            writeln!(f, "{}", line_of("attack acknowledgement", &s.acc.ack))?;
             writeln!(f, "{}", line_of("attack round trip", &s.acc.attack))?;
             writeln!(f, "{}", line_of("skill round trip", &s.acc.skill))?;
             writeln!(f, "{}", line_of("step echo", &s.acc.echo))?;
@@ -550,6 +555,9 @@ mod tests {
         }
         for &ms in echo_ms {
             m.step_echo.record(Duration::from_millis(ms));
+        }
+        for ms in [1, 2] {
+            m.attack_ack.record(Duration::from_millis(ms));
         }
         m.received.insert(0x0501, Count { packets: 100, bytes: 1_900 });
         m.received.insert(0x0502, Count { packets: 20, bytes: 400 });
@@ -631,6 +639,7 @@ mod tests {
         assert_eq!(w[1]["per_bot"]["rx_packets_per_sec"], 12.0);
         assert_eq!(w[1]["attack_rtt_ms"]["n"], 9);
         assert_eq!(w[1]["attack_rtt_ms"]["max"], 30.0);
+        assert_eq!((w[1]["attack_ack_ms"]["n"].clone(), w[1]["attack_ack_ms"]["max"].clone()), (json!(6), json!(2.0)));
         assert_eq!(w[1]["step_echo_ms"]["n"], 6);
         // The summary is the two steady windows: 120 s of bot time, not the ramp's or the partial window's.
         let s = &v["summary"];
@@ -643,6 +652,7 @@ mod tests {
         assert_eq!(s["packets"]["rx"]["packets"], 720);
         assert_eq!((s["steps"].clone(), s["kills"].clone(), s["deaths"].clone()), (json!(120), json!(2), json!(2)));
         assert_eq!(s["attack_rtt_ms"]["n"], 18);
+        assert_eq!((s["attack_ack_ms"]["n"].clone(), s["attack_ack_ms"]["max"].clone()), (json!(12), json!(2.0)));
         assert_eq!(s["results"], json!({"0": 30, "3": 6, "5": 12}));
         assert_eq!(s["disconnects"], json!({"closed": 0, "timeout": 0, "error": 0}));
         // Logout.
@@ -737,6 +747,7 @@ bot swarm: 3 bots, pvp-battle, 35.0 s run
 ramp: 1 a second, 3 logged in, 1 failed, last login at 4.0 s; login p50 202.1 p95 300.0 max 300.0 ms
 steady state: 2 windows of 10 s from 10.0 s (20 s in all)
 bots in world: 3 min, 3.0 avg, 3 max; dead 0.5 avg; connecting 0.0 avg; disconnected 0 (closed 0, timeout 0, error 0)
+attack acknowledgement: p50 1.0 p95 2.0 p99 2.0 max 2.0 ms (n 12)
 attack round trip: p50 20.3 p95 30.0 p99 30.0 max 30.0 ms (n 18)
 skill round trip: p50 - p95 - p99 - max - ms (n 0)
 step echo: p50 5.1 p95 15.0 p99 15.0 max 15.0 ms (n 12)

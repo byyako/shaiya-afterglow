@@ -143,6 +143,9 @@ pub struct Metrics {
     pub sent: BTreeMap<u16, Count>,
     /// From a `0x0502` sent to the first result for that target: the delay between the click and the first blow.
     pub attack_round_trip: Samples,
+    /// From a `0x0502` sent while the bot was not fighting to the server's immediate `0x0212` (attack start): what the server takes to
+    /// answer, with no attack interval in it.
+    pub attack_ack: Samples,
     /// From a `0x0511` sent to its outcome.
     pub skill_round_trip: Samples,
     /// How long after a step of another bot (one in ten is stamped, `crate::echo`) this bot saw it: the delay with which the others see
@@ -162,6 +165,9 @@ pub struct Metrics {
     /// Why the connection ended, when it did.
     pub disconnect: Option<LinkError>,
     pending_attack: Option<(u32, Instant)>,
+    /// A `0x0502` waiting for its `0x0212`. A bot that is already fighting gets none, so the next result for its attacks, or a skill
+    /// sent, ends the wait without a sample.
+    pending_ack: Option<Instant>,
     pending_skill: Option<Instant>,
     warned: HashSet<u16>,
 }
@@ -188,11 +194,21 @@ impl Metrics {
     /// A `0x0502` went out; the first result for `target` answers it.
     pub fn attack_sent(&mut self, target: u32, now: Instant) {
         self.pending_attack = Some((target, now));
+        self.pending_ack = Some(now);
+    }
+
+    /// A `0x0212`: the server started an attack. The answer to the `0x0502` waiting for it, if one waits.
+    pub fn attack_started(&mut self, now: Instant) {
+        if let Some(since) = self.pending_ack.take() {
+            self.attack_ack.record(now - since);
+        }
     }
 
     /// A `0x0502` result for the bot's own attack (attacker the bot).
     pub fn attack_result(&mut self, result: u8, target: u32, now: Instant) {
         *self.results.entry(result).or_default() += 1;
+        // The acknowledgement comes before any result; one that has not come by now is not coming.
+        self.pending_ack = None;
         if let Some((aimed, since)) = self.pending_attack
             && (aimed == target || target == 0)
         {
@@ -205,6 +221,7 @@ impl Metrics {
     }
 
     pub fn skill_sent(&mut self, now: Instant) {
+        self.pending_ack = None;
         self.pending_skill = Some(now);
     }
 
@@ -217,10 +234,11 @@ impl Metrics {
     /// Hands over what was counted since the last call, for the swarm's window, and starts counting again. What is still pending (an
     /// attack waiting for its first blow), the opcodes already warned of and the reason the connection ended stay.
     pub fn take_window(&mut self) -> Metrics {
-        let (pending_attack, pending_skill) = (self.pending_attack, self.pending_skill);
+        let (pending_attack, pending_skill, pending_ack) = (self.pending_attack, self.pending_skill, self.pending_ack);
         let (warned, disconnect) = (std::mem::take(&mut self.warned), self.disconnect.clone());
         let taken = std::mem::take(self);
-        (self.pending_attack, self.pending_skill, self.warned, self.disconnect) = (pending_attack, pending_skill, warned, disconnect);
+        (self.pending_attack, self.pending_skill, self.pending_ack) = (pending_attack, pending_skill, pending_ack);
+        (self.warned, self.disconnect) = (warned, disconnect);
         taken
     }
 
@@ -236,6 +254,9 @@ impl Metrics {
             attack_p95: self.attack_round_trip.percentile(95.0),
             attack_p99: self.attack_round_trip.percentile(99.0),
             attack_max: self.attack_round_trip.max(),
+            ack_p50: self.attack_ack.percentile(50.0),
+            ack_p95: self.attack_ack.percentile(95.0),
+            ack_max: self.attack_ack.max(),
             skill_p50: self.skill_round_trip.percentile(50.0),
             refusals: self.refusals,
             protocol_errors: self.protocol_errors,
@@ -255,6 +276,9 @@ pub struct Summary {
     pub attack_p95: Option<Duration>,
     pub attack_p99: Option<Duration>,
     pub attack_max: Option<Duration>,
+    pub ack_p50: Option<Duration>,
+    pub ack_p95: Option<Duration>,
+    pub ack_max: Option<Duration>,
     pub skill_p50: Option<Duration>,
     pub refusals: u64,
     pub protocol_errors: u64,
@@ -274,11 +298,14 @@ impl fmt::Display for Summary {
         )?;
         writeln!(
             f,
-            "attack round trip p50 {} p95 {} p99 {} max {}; skill p50 {}",
+            "attack round trip p50 {} p95 {} p99 {} max {}; attack ack p50 {} p95 {} max {}; skill p50 {}",
             ms(self.attack_p50),
             ms(self.attack_p95),
             ms(self.attack_p99),
             ms(self.attack_max),
+            ms(self.ack_p50),
+            ms(self.ack_p95),
+            ms(self.ack_max),
             ms(self.skill_p50)
         )?;
         write!(
@@ -322,6 +349,34 @@ mod tests {
         m.attack_sent(8, t);
         m.attack_result(server_combat::RESULT_OUT_OF_RANGE, 0, t + Duration::from_millis(3));
         assert_eq!(m.attack_round_trip.len(), 1);
+    }
+
+    #[test]
+    fn the_acknowledgement_runs_from_the_attack_to_the_servers_attack_start() {
+        let mut m = Metrics::default();
+        let t = Instant::now();
+        m.attack_started(t); // nothing waits: not a sample
+        assert!(m.attack_ack.is_empty());
+        m.attack_sent(7, t);
+        m.attack_started(t + Duration::from_millis(3));
+        m.attack_started(t + Duration::from_millis(9)); // a second one has no attack of ours to answer
+        assert_eq!((m.attack_ack.len(), m.attack_ack.max()), (1, Some(Duration::from_millis(3))));
+        // A bot that was already fighting is not acknowledged: the first result ends the wait, and a later start is not its answer.
+        m.attack_sent(8, t);
+        m.attack_result(0, 8, t + Duration::from_millis(400));
+        m.attack_started(t + Duration::from_millis(500));
+        assert_eq!(m.attack_ack.len(), 1);
+        // A skill sent in between ends the wait too (its own start is not an attack's acknowledgement).
+        m.attack_sent(8, t);
+        m.skill_sent(t + Duration::from_millis(1));
+        m.attack_started(t + Duration::from_millis(2));
+        assert_eq!(m.attack_ack.len(), 1);
+        // The wait survives a window that ends in the middle of it.
+        m.attack_sent(9, t);
+        let window = m.take_window();
+        assert_eq!(window.attack_ack.len(), 1);
+        m.attack_started(t + Duration::from_millis(4));
+        assert_eq!(m.attack_ack.max(), Some(Duration::from_millis(4)));
     }
 
     #[test]
