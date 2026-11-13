@@ -11,3 +11,5 @@ checklist is a thing to do and what should happen; the results are marked on the
   `tools/smoke-list-sync.sh`, so edit it here.
 - [`client-research-queue.md`](client-research-queue.md): questions the server's notes left open that only the client or a live session
   can answer, and where each answer is.
+- [`load-pvp.md`](load-pvp.md): the PvP swarm runs (the test bots, `docs/plans/test-bots.md`): the settings for a run, the steps, and
+  each run's results.
