@@ -19,7 +19,16 @@ pub struct Seen {
     pub position: [f32; 3],
     pub alive: bool,
     pub in_view: bool,
+    /// Shape 13 (`0x051D`): a hiding player or an invisible staff member, whom a client does not draw and cannot aim at.
+    pub hidden: bool,
     asked: bool,
+}
+
+impl Seen {
+    /// In view, alive, not hidden, and of a known faction other than `country`.
+    fn is_enemy_of(&self, country: u8) -> bool {
+        self.in_view && self.alive && !self.hidden && self.country.is_some_and(|c| c != country)
+    }
 }
 
 /// What a packet meant for the bot's decisions.
@@ -145,7 +154,7 @@ impl World {
         std::mem::take(&mut self.asks)
     }
 
-    /// The nearest living enemy in view (known faction other than the bot's own) by the last known positions, ties by id.
+    /// The nearest living, not hidden enemy in view (known faction other than the bot's own) by the last known positions, ties by id.
     pub fn nearest_enemy(&self) -> Option<(u32, f32)> {
         self.nearest_enemy_except(None)
     }
@@ -154,18 +163,26 @@ impl World {
     pub fn nearest_enemy_except(&self, skip: Option<u32>) -> Option<(u32, f32)> {
         self.players
             .iter()
-            .filter(|(id, s)| Some(**id) != skip && s.in_view && s.alive && s.country.is_some_and(|c| c != self.country))
+            .filter(|(id, s)| Some(**id) != skip && s.is_enemy_of(self.country))
             .map(|(&id, s)| (id, distance(self.position, s.position)))
             .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
     }
 
-    /// Whether `id` is an enemy in view now: alive, of a known faction other than the bot's own.
+    /// Whether `id` is an enemy in view now: alive, not hidden, of a known faction other than the bot's own.
     pub fn is_enemy_in_view(&self, id: u32) -> bool {
-        self.players.get(&id).is_some_and(|s| s.in_view && s.alive && s.country.is_some_and(|c| c != self.country))
+        self.players.get(&id).is_some_and(|s| s.is_enemy_of(self.country))
     }
 
     fn seen(&mut self, id: u32) -> &mut Seen {
-        self.players.entry(id).or_insert(Seen { country: None, job: 0, position: [0.0; 3], alive: true, in_view: false, asked: false })
+        self.players.entry(id).or_insert(Seen {
+            country: None,
+            job: 0,
+            position: [0.0; 3],
+            alive: true,
+            in_view: false,
+            hidden: false,
+            asked: false,
+        })
     }
 
     /// Applies one decrypted packet (length field included) and returns what it meant. An opcode the bot does not use returns nothing.
@@ -219,6 +236,8 @@ impl World {
                     seen.position = position;
                     seen.in_view = true;
                     seen.alive = true;
+                    // A shape other than the plain one follows the entry (`Zones::enter`'s form packet).
+                    seen.hidden = false;
                     if !seen.asked {
                         seen.asked = true;
                         self.asks.push(id);
@@ -245,6 +264,27 @@ impl World {
                     seen.country = Some(p[6]);
                     seen.job = p[11];
                     events.push(Event::Shape(id));
+                }
+            }
+            // A player's shape: 13 hides it (the hiding skill, or a staff member's invisibility); any other shows it again.
+            skill::OP_SHAPE => {
+                if p.len() < 5 {
+                    bad(&mut events);
+                } else {
+                    let id = u32_at(p, 0);
+                    if id != self.id {
+                        self.seen(id).hidden = p[4] == skill::SHAPE_HIDDEN;
+                    }
+                }
+            }
+            skill::OP_SHAPE_MOB => {
+                if p.len() < 7 {
+                    bad(&mut events);
+                } else {
+                    let id = u32_at(p, 0);
+                    if id != self.id {
+                        self.seen(id).hidden = false;
+                    }
                 }
             }
             // Another player's step, and the position sync (motion 0xC4) that comes before a `0x0301` or `0x0303` answer.
@@ -300,7 +340,10 @@ impl World {
                     if id == self.id {
                         self.alive = false;
                     } else {
-                        self.seen(id).alive = false;
+                        // The clients clear a shape at death themselves (`reform`).
+                        let seen = self.seen(id);
+                        seen.alive = false;
+                        seen.hidden = false;
                     }
                     events.push(Event::Died { id, killer_kind, killer });
                 }
@@ -374,6 +417,32 @@ mod tests {
         w.handle(&enter(3, [1.0, 0.0, 0.0]));
         w.handle(&shape(3, 0));
         assert_eq!(w.nearest_enemy(), Some((2, 10.0)));
+    }
+
+    #[test]
+    fn a_hidden_player_is_no_target_until_shown_again() {
+        let mut w = World::new(1, 0, 0, 1, 18);
+        w.handle(&enter(2, [10.0, 0.0, 0.0]));
+        w.handle(&shape(2, 1));
+        w.handle(&enter(3, [20.0, 0.0, 0.0]));
+        w.handle(&shape(3, 1));
+        // An invisible staff member (or a hiding player) is shape 13 to everyone else.
+        assert!(w.handle(&skill::shape(2, skill::SHAPE_HIDDEN)).is_empty());
+        assert_eq!(w.nearest_enemy(), Some((3, 20.0)));
+        assert!(!w.is_enemy_in_view(2));
+        w.handle(&skill::shape(2, 0));
+        assert_eq!(w.nearest_enemy(), Some((2, 10.0)));
+        // Leaving the view and entering again starts plain; the server sends shape 13 after the entry if it still applies.
+        w.handle(&skill::shape(2, skill::SHAPE_HIDDEN));
+        w.handle(&world::user_leave(2));
+        w.handle(&enter(2, [10.0, 0.0, 0.0]));
+        assert!(w.is_enemy_in_view(2));
+        w.handle(&skill::shape(2, skill::SHAPE_HIDDEN));
+        assert!(!w.is_enemy_in_view(2));
+        // A shape on the bot itself changes nothing it aims at.
+        w.handle(&skill::shape(1, skill::SHAPE_HIDDEN));
+        assert_eq!(w.nearest_enemy(), Some((3, 20.0)));
+        assert!(w.handle(&skill::shape(2, 0)[..4]).contains(&Event::Bad(skill::OP_SHAPE)));
     }
 
     #[test]
