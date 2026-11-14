@@ -522,13 +522,14 @@ pub async fn mob_updater<S: Backend>(ctx: Arc<Context<S>>) {
 }
 
 /// The figures of the `stats` line over the time since the last one (this task's or the console's).
-pub fn stats_figures<S>(ctx: &Context<S>) -> crate::monitor::Figures {
+pub fn stats_figures<S: crate::backend::Heartbeat>(ctx: &Context<S>) -> crate::monitor::Figures {
     let gauges = crate::monitor::Gauges {
         players: u32::from(ctx.players.load(Ordering::Relaxed)),
         connections: ctx.config.max_connections.saturating_sub(ctx.connections.available_permits()),
         game_log_dropped: ctx.game_log.dropped(),
         rss_mb: crate::monitor::rss_mb(),
         workers: tokio::runtime::Handle::try_current().map_or(0, |h| h.metrics().num_workers()),
+        db_pool: ctx.store.pool_gauges(),
     };
     ctx.sampler.guard().sample(Instant::now(), crate::monitor::counters(), crate::monitor::locks(), gauges)
 }

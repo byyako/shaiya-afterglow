@@ -187,6 +187,9 @@ impl LockTable {
     }
 }
 
+/// The shortest wait for a pooled connection that `Counters::db_wait` counts.
+const DB_WAIT_MIN: Duration = Duration::from_millis(1);
+
 /// The counters of the line, all since the start except the gauges.
 pub struct Counters {
     in_packets: AtomicU64,
@@ -195,6 +198,11 @@ pub struct Counters {
     out_bytes: AtomicU64,
     /// Writes to client sockets that went through (a batch of packets is one).
     out_writes: AtomicU64,
+    /// Acquisitions of a database connection that waited 1 ms or more, the time they waited in all (ns) and the longest wait since
+    /// the last reading.
+    db_waits: AtomicU64,
+    db_wait_ns: AtomicU64,
+    db_wait_max_ns: AtomicU64,
     /// Bytes queued in every outbox now, and the most any one outbox held since the last reading.
     outbox_queued: AtomicI64,
     outbox_peak: AtomicU64,
@@ -220,6 +228,9 @@ impl Counters {
             out_packets: AtomicU64::new(0),
             out_bytes: AtomicU64::new(0),
             out_writes: AtomicU64::new(0),
+            db_waits: AtomicU64::new(0),
+            db_wait_ns: AtomicU64::new(0),
+            db_wait_max_ns: AtomicU64::new(0),
             outbox_queued: AtomicI64::new(0),
             outbox_peak: AtomicU64::new(0),
             outbox_closed: AtomicU64::new(0),
@@ -246,6 +257,18 @@ impl Counters {
     /// One write to a client's socket went through, of one packet or a batch of them (`out_pps` counts the packets).
     pub fn write_done(&self) {
         self.out_writes.fetch_add(1, Relaxed);
+    }
+
+    /// A database connection was taken from the pool after waiting `wait`. A wait under a millisecond is not counted: it is the
+    /// pool answering at once, and the line is about the pool running dry.
+    pub fn db_wait(&self, wait: Duration) {
+        if wait < DB_WAIT_MIN {
+            return;
+        }
+        let ns = u64::try_from(wait.as_nanos()).unwrap_or(u64::MAX);
+        self.db_waits.fetch_add(1, Relaxed);
+        self.db_wait_ns.fetch_add(ns, Relaxed);
+        self.db_wait_max_ns.fetch_max(ns, Relaxed);
     }
 
     /// A packet of `len` bytes joined an outbox that now holds `queued` bytes.
@@ -339,6 +362,8 @@ pub struct Gauges {
     pub game_log_dropped: u64,
     pub rss_mb: u64,
     pub workers: usize,
+    /// The database pool's size and its idle connections; `None` for a backend without a pool.
+    pub db_pool: Option<(u32, u32)>,
 }
 
 /// One lock type's waits over an interval, as the line shows them.
@@ -376,6 +401,13 @@ pub struct Figures {
     pub workers: usize,
     /// Writes a second to client sockets: `out_pps` over this is the packets per write.
     pub out_wps: f64,
+    /// The database pool's size and the connections of it in use at the line; `None` where there is no pool.
+    pub db_size: Option<u32>,
+    pub db_busy: Option<u32>,
+    /// Acquisitions of a connection that waited 1 ms or more in the interval, their total wait and the longest.
+    pub db_waits: u64,
+    pub db_wait_ms: f64,
+    pub db_wait_max_ms: f64,
 }
 
 /// A lock type's short name as the operator knows it, where there is one.
@@ -419,8 +451,18 @@ impl std::fmt::Display for Figures {
         }
         write!(
             f,
-            "\" saves_queued={} game_log_dropped={} rss_mb={} workers={} out_wps={:.0}",
-            self.saves_queued, self.game_log_dropped, self.rss_mb, self.workers, self.out_wps
+            "\" saves_queued={} game_log_dropped={} rss_mb={} workers={} out_wps={:.0} db_size={} db_busy={} db_waits={} \
+             db_wait_ms={:.1} db_wait_max_ms={:.1}",
+            self.saves_queued,
+            self.game_log_dropped,
+            self.rss_mb,
+            self.workers,
+            self.out_wps,
+            self.db_size.map_or_else(|| "-".to_owned(), |n| n.to_string()),
+            self.db_busy.map_or_else(|| "-".to_owned(), |n| n.to_string()),
+            self.db_waits,
+            self.db_wait_ms,
+            self.db_wait_max_ms,
         )
     }
 }
@@ -433,6 +475,8 @@ pub struct Sampler {
     out_packets: u64,
     out_bytes: u64,
     out_writes: u64,
+    db_waits: u64,
+    db_wait_ns: u64,
     outbox_closed: u64,
     passes: u64,
     pass_ns: u64,
@@ -450,6 +494,8 @@ impl Sampler {
             out_packets: 0,
             out_bytes: 0,
             out_writes: 0,
+            db_waits: 0,
+            db_wait_ns: 0,
             outbox_closed: 0,
             passes: 0,
             pass_ns: 0,
@@ -466,6 +512,8 @@ impl Sampler {
         let (in_packets, in_bytes) = (counters.in_packets.load(Relaxed), counters.in_bytes.load(Relaxed));
         let (out_packets, out_bytes) = (counters.out_packets.load(Relaxed), counters.out_bytes.load(Relaxed));
         let out_writes = counters.out_writes.load(Relaxed);
+        let (db_waits, db_wait_ns) = (counters.db_waits.load(Relaxed), counters.db_wait_ns.load(Relaxed));
+        let db_wait_max_ns = counters.db_wait_max_ns.swap(0, Relaxed);
         let outbox_closed = counters.outbox_closed.load(Relaxed);
         let (passes, pass_ns) = (counters.mob_passes.load(Relaxed), counters.mob_pass_ns.load(Relaxed));
         let pass_max_ns = counters.mob_pass_max_ns.swap(0, Relaxed);
@@ -506,9 +554,14 @@ impl Sampler {
             rss_mb: gauges.rss_mb,
             workers: gauges.workers,
             out_wps: per(out_writes - self.out_writes),
+            db_size: gauges.db_pool.map(|(size, _)| size),
+            db_busy: gauges.db_pool.map(|(size, idle)| size.saturating_sub(idle)),
+            db_waits: db_waits - self.db_waits,
+            db_wait_ms: (db_wait_ns - self.db_wait_ns) as f64 / 1e6,
+            db_wait_max_ms: db_wait_max_ns as f64 / 1e6,
         };
         (self.at, self.in_packets, self.in_bytes, self.out_packets, self.out_bytes) = (now, in_packets, in_bytes, out_packets, out_bytes);
-        self.out_writes = out_writes;
+        (self.out_writes, self.db_waits, self.db_wait_ns) = (out_writes, db_waits, db_wait_ns);
         (self.outbox_closed, self.passes, self.pass_ns, self.locks) = (outbox_closed, passes, pass_ns, now_locks);
         figures
     }
@@ -651,6 +704,30 @@ mod tests {
     }
 
     #[test]
+    fn database_waits_are_summed_and_the_longest_starts_again() {
+        let c = Counters::new();
+        let table = LockTable::new();
+        let t0 = Instant::now();
+        let mut sampler = Sampler::new(t0, &c, &table);
+        // Under a millisecond is the pool answering at once: not a wait.
+        c.db_wait(Duration::from_micros(999));
+        c.db_wait(Duration::from_millis(1));
+        c.db_wait(Duration::from_millis(40));
+        c.db_wait(Duration::from_millis(9));
+        let gauges = Gauges { db_pool: Some((24, 5)), ..Gauges::default() };
+        let first = sampler.sample(t0 + Duration::from_secs(1), &c, &table, gauges);
+        assert_eq!((first.db_waits, first.db_wait_ms, first.db_wait_max_ms), (3, 50.0, 40.0));
+        assert_eq!((first.db_size, first.db_busy), (Some(24), Some(19)));
+        // The next interval counts only what came after, and its longest starts from nothing.
+        c.db_wait(Duration::from_millis(2));
+        let second = sampler.sample(t0 + Duration::from_secs(2), &c, &table, Gauges::default());
+        assert_eq!((second.db_waits, second.db_wait_ms, second.db_wait_max_ms), (1, 2.0, 2.0));
+        assert_eq!((second.db_size, second.db_busy), (None, None), "no pool, no gauges");
+        let idle = sampler.sample(t0 + Duration::from_secs(3), &c, &table, Gauges::default());
+        assert_eq!((idle.db_waits, idle.db_wait_ms, idle.db_wait_max_ms), (0, 0.0, 0.0));
+    }
+
+    #[test]
     fn type_names_lose_their_module_paths() {
         assert_eq!(
             short_name("std::collections::hash::map::HashMap<u16, std::collections::hash::map::HashMap<u32, game_server::zone::Placed>>"),
@@ -688,16 +765,23 @@ mod tests {
             rss_mb: 412,
             workers: 4,
             out_wps: 30070.4,
+            db_size: Some(24),
+            db_busy: Some(23),
+            db_waits: 1225,
+            db_wait_ms: 3307.55,
+            db_wait_max_ms: 6104.2,
         };
         assert_eq!(
             figures.to_string(),
             "secs=10.0 players=301 connections=303 in_pps=1234 in_bps=56789 out_pps=90211 out_bps=4200000 outbox_max=65536 \
              outbox_sum=1000000 outbox_closed=2 mob_pass_max_ms=12.35 mob_pass_avg_ms=1.50 mob_period_ms=500 lock_wait_ms=321.0 \
              lock_waits=4410 lock_worst=\"maps 300.0ms/4000 max 8.3ms; Parties 21.0ms/410 max 0.5ms\" saves_queued=0 \
-             game_log_dropped=7 rss_mb=412 workers=4 out_wps=30070"
+             game_log_dropped=7 rss_mb=412 workers=4 out_wps=30070 db_size=24 db_busy=23 db_waits=1225 db_wait_ms=3307.6 db_wait_max_ms=6104.2"
         );
         let quiet = Figures { lock_worst: Vec::new(), ..figures };
         assert!(quiet.to_string().contains("lock_worst=\"-\" "));
+        let no_pool = Figures { db_size: None, db_busy: None, ..quiet };
+        assert!(no_pool.to_string().contains(" db_size=- db_busy=- db_waits=1225 "), "{no_pool}");
     }
 
     #[test]

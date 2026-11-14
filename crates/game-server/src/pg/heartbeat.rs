@@ -3,6 +3,13 @@
 use super::*;
 
 impl Heartbeat for PgBackend {
+    fn pool_gauges(&self) -> Option<(u32, u32)> {
+        // `num_idle` is a count taken at the moment and can be a little over `size` while a connection is being closed: the line
+        // takes the smaller.
+        let size = self.pool.size();
+        Some((size, u32::try_from(self.pool.num_idle()).unwrap_or(u32::MAX).min(size)))
+    }
+
     async fn load_mob_id(&self, server_id: u8) -> Result<u32> {
         let id: Option<i64> = sqlx::query_scalar("SELECT mob_id FROM game_servers WHERE id = $1")
             .bind(i16::from(server_id))

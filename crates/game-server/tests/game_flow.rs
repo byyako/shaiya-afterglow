@@ -6631,6 +6631,11 @@ async fn the_console_answers_stats_with_the_figures_of_the_stats_line() {
         "rss_mb=",
         "workers=",
         "out_wps=",
+        "db_size=",
+        "db_busy=",
+        "db_waits=",
+        "db_wait_ms=",
+        "db_wait_max_ms=",
     ] {
         assert!(line.contains(field), "{field} missing from {line}");
     }

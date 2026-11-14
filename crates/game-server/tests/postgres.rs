@@ -1846,6 +1846,74 @@ async fn the_item_mall_takes_points_and_gives_items_together() {
 }
 
 #[tokio::test]
+async fn a_character_loads_on_a_pool_of_one_connection() {
+    use game_server::backend::{Premium, SavePoint, SavedQuest, StoredPointItem};
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    let (alice, bob) = (db.account("alice").await, db.account("bob").await);
+    for user in [alice, bob] {
+        backend.choose_faction(user, 1, 0).await.unwrap();
+    }
+    let CreateOutcome::Created(id) = backend.create(&hero(alice, 0, "Loader")).await.unwrap() else { panic!("not created") };
+    let CreateOutcome::Created(friend) = backend.create(&hero(bob, 0, "Friend")).await.unwrap() else { panic!("not created") };
+    // Items in the bags and one moved to the warehouse, skills, quick slots, a quest, a save point, a friend, the mall's rows.
+    assert!(backend.trade(id, 0, &[SlotChange::Move { from: (1, 0), to: (100, 3) }]).await.unwrap().is_some());
+    backend.learn(id, 3, Skill { id: 10, level: 1, number: 0, delay: 0 }).await.unwrap();
+    backend.save_quick_slots(id, &[QuickSlot { bar: 0, slot: 1, bag: 1, number: 3 }]).await.unwrap();
+    assert!(backend.start_quest(id, 7, Some(600), &[]).await.unwrap().is_some());
+    backend.save_point(id, SavePoint { slot: 1, map: 1, position: [1.0, 2.0, 3.0] }).await.unwrap();
+    backend.write_friends(&FriendWrite::Friends(vec![(id, friend)])).await.unwrap();
+    sqlx::query("UPDATE accounts SET points = 40, premium = 1, premium_until = now() + interval '1 day' WHERE id = $1")
+        .bind(alice as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO point_items (user_id, server_id, slot, item_id, count) VALUES ($1, 1, 0, 100048, 2)")
+        .bind(alice as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO billing_items (user_id, slot, item_id, count) VALUES ($1, 4, 25001, 3)")
+        .bind(alice as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let usual = backend.load(alice, 1, id).await.unwrap().unwrap();
+    assert_eq!((usual.bank.len(), usual.skills.len(), usual.quick_slots.len(), usual.quests.len()), (1, 1, 1, 1), "the rows are there");
+    assert_eq!((usual.save_points.len(), usual.friends.len(), usual.account_name.as_str()), (1, 1, "alice"));
+    assert_eq!((usual.mall.points, usual.mall.premium.kind), (40, 1));
+    assert_eq!(usual.mall.stored, [StoredPointItem { slot: 0, item_id: 100048, count: 2 }]);
+    assert_eq!(usual.mall.billing, [StoredPointItem { slot: 4, item_id: 25001, count: 3 }]);
+    assert_ne!(usual.mall.premium, Premium::default());
+    assert_eq!(usual.quests, [SavedQuest { quest_id: 7, finished: false, success: false, counts: [0, 0, 0], seconds_left: Some(600) }]);
+
+    // The same load on a pool that has one connection: it needs no second connection, whatever the number of its statements.
+    let path = db.schema.clone();
+    let one = PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .after_connect(move |conn, _| {
+            let path = path.clone();
+            Box::pin(async move {
+                sqlx::query(AssertSqlSafe(format!("SET search_path TO {path}"))).execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect_with((*db.pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let single = PgBackend::new(one.clone(), Duration::from_secs(7200));
+    assert_eq!(single.load(alice, 1, id).await.unwrap().unwrap(), usual, "the same character");
+    // The connection went back to the pool: the next load, and a character that is not there, find it free.
+    assert_eq!(single.load(alice, 1, id).await.unwrap().unwrap(), usual);
+    assert!(single.load(alice, 1, friend).await.unwrap().is_none(), "another account's character");
+    // (A connection given back reaches the idle list a moment later, so only the size is exact here.)
+    assert_eq!(single.pool_gauges().map(|(size, _)| size), Some(1));
+    one.close().await;
+    db.drop().await;
+}
+
+#[tokio::test]
 async fn the_game_log_writes_action_and_chat_rows() {
     use game_server::game_log::{self, Entry, Header};
     let Some(db) = TestDb::create().await else { return };

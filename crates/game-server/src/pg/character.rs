@@ -257,6 +257,9 @@ impl CharacterStore for PgBackend {
     }
 
     async fn load(&self, user_id: u32, server_id: u8, character_id: u32) -> Result<Option<PlayCharacter>> {
+        // One connection for the whole load: fifteen separate acquisitions each waited in the pool's queue, and with the pool busy
+        // an entry took longer than a bot waits (`docs/plans/load-fixes.md` section 3.4). Given back when this returns, on any path.
+        let mut conn = self.acquire().await?;
         let row: Option<PlayRow> = sqlx::query_as(
             "SELECT id, name, family, grow, hair, face, size, job, sex, level, stat_point, skill_point, str, dex, rec, int, wis, luc,
                     hp, mp, sp, map, dir,
@@ -269,7 +272,7 @@ impl CharacterStore for PgBackend {
         .bind(i32::try_from(user_id)?)
         .bind(i16::from(server_id))
         .bind(i32::try_from(character_id)?)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *conn)
         .await?;
         let Some(row) = row else { return Ok(None) };
         let items: Vec<ItemRow> = sqlx::query_as(
@@ -277,7 +280,7 @@ impl CharacterStore for PgBackend {
               WHERE character_id = $1 ORDER BY bag, slot",
         )
         .bind(row.id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *conn)
         .await?;
         let bank: Vec<ItemRow> = sqlx::query_as(
             "SELECT 100::int2 AS bag, slot, type, type_id, quality, gems, count, craft_name FROM bank_items
@@ -285,45 +288,45 @@ impl CharacterStore for PgBackend {
         )
         .bind(i32::try_from(user_id)?)
         .bind(i16::from(server_id))
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *conn)
         .await?;
         let skills: Vec<(i16, i16, i16, i32)> =
             sqlx::query_as("SELECT number, skill_id, level, delay FROM character_skills WHERE character_id = $1 ORDER BY number")
                 .bind(row.id)
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *conn)
                 .await?;
         let quick_slots: Vec<(i16, i16, i16, i32)> =
             sqlx::query_as("SELECT bar, slot, bag, number FROM character_quick_slots WHERE character_id = $1 ORDER BY position")
                 .bind(row.id)
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *conn)
                 .await?;
         let applied: Vec<(i16, i16, i32, f64)> = sqlx::query_as(
             "SELECT skill_id, level, seconds, greatest(extract(epoch FROM now() - saved_at), 0)::float8 FROM character_applied_skills
               WHERE character_id = $1 ORDER BY position",
         )
         .bind(row.id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *conn)
         .await?;
         let quests: Vec<QuestRowSaved> = sqlx::query_as(
             "SELECT quest_id, finished, success, counts, seconds_left FROM character_quests WHERE character_id = $1 ORDER BY quest_id",
         )
         .bind(row.id)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *conn)
         .await?;
         let save_points: Vec<(i16, i16, f32, f32, f32)> =
             sqlx::query_as("SELECT slot, map, x, y, z FROM character_save_points WHERE character_id = $1 ORDER BY slot")
                 .bind(row.id)
-                .fetch_all(&self.pool)
+                .fetch_all(&mut *conn)
                 .await?;
         let interest: Vec<i32> = sqlx::query_scalar("SELECT market_id FROM market_interest WHERE character_id = $1 ORDER BY position")
             .bind(row.id)
-            .fetch_all(&self.pool)
+            .fetch_all(&mut *conn)
             .await?;
         let mut character = row.into_play()?;
         character.account_id = user_id;
         character.account_name =
-            sqlx::query_scalar("SELECT username FROM accounts WHERE id = $1").bind(i32::try_from(user_id)?).fetch_one(&self.pool).await?;
-        character.mall = load_mall(&self.pool, user_id, server_id, character.id).await?;
+            sqlx::query_scalar("SELECT username FROM accounts WHERE id = $1").bind(i32::try_from(user_id)?).fetch_one(&mut *conn).await?;
+        character.mall = load_mall(&mut conn, user_id, server_id, character.id).await?;
         character.interest = interest.into_iter().map(u32::try_from).collect::<Result<_, _>>()?;
         character.save_points = save_points
             .into_iter()
@@ -385,7 +388,7 @@ impl CharacterStore for PgBackend {
              ) lists ORDER BY created_at, id",
         )
         .bind(i32::try_from(character.id)?)
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *conn)
         .await?;
         for (friend, id, name, job, memo) in lists {
             let entry = StoredFriend { id: u32::try_from(id)?, name, job: u8::try_from(job)?, memo };
@@ -776,28 +779,29 @@ impl PlayRow {
 
 /// The item mall's part of a character's load (`docs/original/item-mall.md` section 10): the account's points and premium, this
 /// character's last 10 log rows (newest first), the account's item-mall storage on this server and its billing storage.
-async fn load_mall(pool: &PgPool, user_id: u32, server_id: u8, character_id: u32) -> Result<Mall> {
+/// Runs on the connection `load` holds, so it takes none of its own.
+async fn load_mall(conn: &mut sqlx::PgConnection, user_id: u32, server_id: u8, character_id: u32) -> Result<Mall> {
     let user = i32::try_from(user_id)?;
     let (points, premium, until): (i32, i16, Option<i64>) =
         sqlx::query_as("SELECT points, premium, extract(epoch FROM premium_until)::bigint FROM accounts WHERE id = $1")
             .bind(user)
-            .fetch_one(pool)
+            .fetch_one(&mut *conn)
             .await?;
     let log: Vec<(String, i64, i32)> = sqlx::query_as(
         "SELECT product_code, extract(epoch FROM at)::bigint, points FROM point_log WHERE character_id = $1 ORDER BY at DESC, id DESC LIMIT 10",
     )
     .bind(i32::try_from(character_id)?)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
     let stored: Vec<(i16, i32, i16)> =
         sqlx::query_as("SELECT slot, item_id, count FROM point_items WHERE user_id = $1 AND server_id = $2 ORDER BY slot")
             .bind(user)
             .bind(i16::from(server_id))
-            .fetch_all(pool)
+            .fetch_all(&mut *conn)
             .await?;
     let billing: Vec<(i16, i32, i16)> = sqlx::query_as("SELECT slot, item_id, count FROM billing_items WHERE user_id = $1 ORDER BY slot")
         .bind(user)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
     let rows = |rows: Vec<(i16, i32, i16)>| -> Result<Vec<StoredPointItem>> {
         rows.into_iter()

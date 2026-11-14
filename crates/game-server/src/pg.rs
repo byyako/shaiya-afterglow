@@ -1,12 +1,13 @@
 //! PostgreSQL implementation of the game server's backend. Tables: `db/migrations`.
 
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use shaiya_crypto::SessionKeys;
 use shaiya_proto::world::GUILD_BANK;
-use sqlx::PgPool;
+use sqlx::pool::PoolConnection;
+use sqlx::{PgPool, Postgres};
 
 use crate::backend::{
     AdminStore, Body, Bought, Changed, CharacterStore, CharacterSummary, Claim, Claimed, CreateOutcome, Faction, FriendStore, FriendWrite,
@@ -87,6 +88,16 @@ pub struct PgBackend {
 impl PgBackend {
     pub fn new(pool: PgPool, delete_delay: Duration) -> Self {
         Self { pool, delete_delay }
+    }
+
+    /// A connection from the pool for a task that runs several statements one after the other. The wait for it is recorded into the
+    /// `stats` line's `db_waits`, `db_wait_ms` and `db_wait_max_ms` (waits of 1 ms or more only), so a pool that has run dry shows
+    /// there. Statements that run straight on the pool (`&self.pool`) are not timed.
+    async fn acquire(&self) -> Result<PoolConnection<Postgres>> {
+        let start = Instant::now();
+        let conn = self.pool.acquire().await;
+        crate::monitor::counters().db_wait(start.elapsed());
+        Ok(conn?)
     }
 }
 
