@@ -311,6 +311,8 @@ struct Connection {
     write_timeout: Duration,
     /// The packets the client sends against `Config::packets_per_sec` (R4).
     flood: PacketFlood,
+    /// The buffer `send_queued` gathers a batch in: kept between writes so a write does not allocate.
+    batch: Vec<u8>,
     peer: SocketAddr,
 }
 
@@ -347,16 +349,59 @@ impl Connection {
         if self.closed {
             return Ok(());
         }
+        self.seal(&mut packet);
+        self.write(&packet).await
+    }
+
+    /// Encrypts one packet in place (everything after its length field) and counts it.
+    fn seal(&mut self, packet: &mut [u8]) {
         if let Some(table) = &self.xor {
             table.apply(&mut packet[2..]);
         } else if let Some(cipher) = &mut self.send {
             cipher.apply(&mut packet[2..]);
         }
         crate::monitor::counters().frame_out(packet.len());
-        self.write(&packet).await
     }
 
-    /// Writes with a deadline (`Config::write_timeout`; R1). Expiry is an error, handled as a lost connection. A kick or the
+    /// Sends `first` and whatever else the outbox already holds, in one write. When several packets are queued (a crowd's fan-out
+    /// puts many into one outbox between two wake-ups of its task) this costs one system call and fewer segments instead of one
+    /// of each per packet. Each packet is sealed on its own bytes, in the order taken from the queue, which is the order on the
+    /// wire (the XOR table works per packet and AES-CTR advances with each one); the batch is only a copy of sealed packets. It
+    /// stops taking once it holds `BATCH_BYTES` or more, so it is at most that plus one packet; the rest stays queued for the next
+    /// turn of the loop. `first` alone is written as it is, with no copy. A closed connection takes nothing from the outbox.
+    async fn send_queued(&mut self, mut first: Vec<u8>, outbox: &mut crate::outbox::OutboxInbox) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+        self.seal(&mut first);
+        if first.len() >= BATCH_BYTES {
+            return self.write(&first).await;
+        }
+        let Ok(mut next) = outbox.try_recv() else {
+            return self.write(&first).await;
+        };
+        // The buffer is kept between writes: cleared, not freed. It is taken out of `self` for the write and put back after.
+        let mut batch = std::mem::take(&mut self.batch);
+        batch.clear();
+        batch.extend_from_slice(&first);
+        loop {
+            self.seal(&mut next);
+            batch.extend_from_slice(&next);
+            if batch.len() >= BATCH_BYTES {
+                break;
+            }
+            match outbox.try_recv() {
+                Ok(more) => next = more,
+                Err(_) => break,
+            }
+        }
+        let written = self.write(&batch).await;
+        self.batch = batch;
+        written
+    }
+
+    /// Writes with a deadline (`Config::write_timeout`; R1), one deadline for all of `bytes`: for a batch (`send_queued`) it covers up
+    /// to `BATCH_BYTES` plus one packet. Expiry is an error, handled as a lost connection. A kick or the
     /// shutdown while the write waits abandons it and closes the socket: a connection that is ending has nothing more to say, and
     /// what follows reads as closed.
     async fn write(&mut self, bytes: &[u8]) -> Result<()> {
@@ -376,7 +421,11 @@ impl Connection {
             _ = kicked(&mut self.kick) => Outcome::Abandoned { kicked: true },
         };
         match outcome {
-            Outcome::Written(written) => Ok(written?),
+            Outcome::Written(written) => {
+                written?;
+                crate::monitor::counters().write_done();
+                Ok(())
+            }
             Outcome::TimedOut => bail!("the client did not take a packet in {:?}", self.write_timeout),
             Outcome::Abandoned { kicked } => {
                 tracing::debug!(kicked, "a write was abandoned: the connection is ending");
@@ -731,6 +780,7 @@ async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Context<S
         last_read: Instant::now(),
         write_timeout: ctx.config.write_timeout,
         flood: PacketFlood::new(ctx.config.packets_per_sec, Instant::now()),
+        batch: Vec::new(),
         peer,
     };
 
@@ -1064,6 +1114,9 @@ const PRIEST_PRICE: u32 = 10;
 const QUIT_GRACE: Duration = Duration::from_secs(10);
 /// How long closing the sending side of a socket may take before it is left to the drop.
 const CLOSE_WAIT: Duration = Duration::from_secs(1);
+
+/// The most bytes one write gathers from a connection's outbox (`Connection::send_queued`).
+const BATCH_BYTES: usize = 16 * 1024;
 
 /// One gate for each log line a player can trigger.
 struct LogGates {
@@ -1550,7 +1603,7 @@ async fn world_loop<S: Backend>(
                     crate::monitor::counters().outbox_limit_close();
                     bail!("the packets queued for the client passed {} bytes", ctx.config.outbox_limit);
                 }
-                conn.send(packet).await?;
+                conn.send_queued(packet, &mut inboxes.packets).await?;
                 continue;
             }
             Some(event) = inboxes.events.recv() => {

@@ -6550,6 +6550,7 @@ async fn the_console_answers_stats_with_the_figures_of_the_stats_line() {
         "game_log_dropped=",
         "rss_mb=",
         "workers=",
+        "out_wps=",
     ] {
         assert!(line.contains(field), "{field} missing from {line}");
     }

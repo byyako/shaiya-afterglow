@@ -193,6 +193,8 @@ pub struct Counters {
     in_bytes: AtomicU64,
     out_packets: AtomicU64,
     out_bytes: AtomicU64,
+    /// Writes to client sockets that went through (a batch of packets is one).
+    out_writes: AtomicU64,
     /// Bytes queued in every outbox now, and the most any one outbox held since the last reading.
     outbox_queued: AtomicI64,
     outbox_peak: AtomicU64,
@@ -217,6 +219,7 @@ impl Counters {
             in_bytes: AtomicU64::new(0),
             out_packets: AtomicU64::new(0),
             out_bytes: AtomicU64::new(0),
+            out_writes: AtomicU64::new(0),
             outbox_queued: AtomicI64::new(0),
             outbox_peak: AtomicU64::new(0),
             outbox_closed: AtomicU64::new(0),
@@ -238,6 +241,11 @@ impl Counters {
     pub fn frame_out(&self, len: usize) {
         self.out_packets.fetch_add(1, Relaxed);
         self.out_bytes.fetch_add(len as u64, Relaxed);
+    }
+
+    /// One write to a client's socket went through, of one packet or a batch of them (`out_pps` counts the packets).
+    pub fn write_done(&self) {
+        self.out_writes.fetch_add(1, Relaxed);
     }
 
     /// A packet of `len` bytes joined an outbox that now holds `queued` bytes.
@@ -366,6 +374,8 @@ pub struct Figures {
     pub game_log_dropped: u64,
     pub rss_mb: u64,
     pub workers: usize,
+    /// Writes a second to client sockets: `out_pps` over this is the packets per write.
+    pub out_wps: f64,
 }
 
 /// A lock type's short name as the operator knows it, where there is one.
@@ -409,8 +419,8 @@ impl std::fmt::Display for Figures {
         }
         write!(
             f,
-            "\" saves_queued={} game_log_dropped={} rss_mb={} workers={}",
-            self.saves_queued, self.game_log_dropped, self.rss_mb, self.workers
+            "\" saves_queued={} game_log_dropped={} rss_mb={} workers={} out_wps={:.0}",
+            self.saves_queued, self.game_log_dropped, self.rss_mb, self.workers, self.out_wps
         )
     }
 }
@@ -422,6 +432,7 @@ pub struct Sampler {
     in_bytes: u64,
     out_packets: u64,
     out_bytes: u64,
+    out_writes: u64,
     outbox_closed: u64,
     passes: u64,
     pass_ns: u64,
@@ -438,6 +449,7 @@ impl Sampler {
             in_bytes: 0,
             out_packets: 0,
             out_bytes: 0,
+            out_writes: 0,
             outbox_closed: 0,
             passes: 0,
             pass_ns: 0,
@@ -453,6 +465,7 @@ impl Sampler {
         let per = |delta: u64| if secs > 0.0 { delta as f64 / secs } else { 0.0 };
         let (in_packets, in_bytes) = (counters.in_packets.load(Relaxed), counters.in_bytes.load(Relaxed));
         let (out_packets, out_bytes) = (counters.out_packets.load(Relaxed), counters.out_bytes.load(Relaxed));
+        let out_writes = counters.out_writes.load(Relaxed);
         let outbox_closed = counters.outbox_closed.load(Relaxed);
         let (passes, pass_ns) = (counters.mob_passes.load(Relaxed), counters.mob_pass_ns.load(Relaxed));
         let pass_max_ns = counters.mob_pass_max_ns.swap(0, Relaxed);
@@ -492,8 +505,10 @@ impl Sampler {
             game_log_dropped: gauges.game_log_dropped,
             rss_mb: gauges.rss_mb,
             workers: gauges.workers,
+            out_wps: per(out_writes - self.out_writes),
         };
         (self.at, self.in_packets, self.in_bytes, self.out_packets, self.out_bytes) = (now, in_packets, in_bytes, out_packets, out_bytes);
+        self.out_writes = out_writes;
         (self.outbox_closed, self.passes, self.pass_ns, self.locks) = (outbox_closed, passes, pass_ns, now_locks);
         figures
     }
@@ -613,6 +628,29 @@ mod tests {
     }
 
     #[test]
+    fn writes_are_counted_apart_from_packets() {
+        let c = Counters::new();
+        let table = LockTable::new();
+        let t0 = Instant::now();
+        let mut sampler = Sampler::new(t0, &c, &table);
+        // Ten packets went out in two writes: a batch of nine and a packet alone.
+        for _ in 0..10 {
+            c.frame_out(100);
+        }
+        c.write_done();
+        c.write_done();
+        let first = sampler.sample(t0 + Duration::from_secs(2), &c, &table, Gauges::default());
+        assert_eq!((first.out_pps, first.out_wps), (5.0, 1.0));
+        // The next interval counts only what came after.
+        c.frame_out(100);
+        c.write_done();
+        let second = sampler.sample(t0 + Duration::from_secs(3), &c, &table, Gauges::default());
+        assert_eq!((second.out_pps, second.out_wps), (1.0, 1.0));
+        let idle = sampler.sample(t0 + Duration::from_secs(4), &c, &table, Gauges::default());
+        assert_eq!((idle.out_pps, idle.out_wps), (0.0, 0.0));
+    }
+
+    #[test]
     fn type_names_lose_their_module_paths() {
         assert_eq!(
             short_name("std::collections::hash::map::HashMap<u16, std::collections::hash::map::HashMap<u32, game_server::zone::Placed>>"),
@@ -649,13 +687,14 @@ mod tests {
             game_log_dropped: 7,
             rss_mb: 412,
             workers: 4,
+            out_wps: 30070.4,
         };
         assert_eq!(
             figures.to_string(),
             "secs=10.0 players=301 connections=303 in_pps=1234 in_bps=56789 out_pps=90211 out_bps=4200000 outbox_max=65536 \
              outbox_sum=1000000 outbox_closed=2 mob_pass_max_ms=12.35 mob_pass_avg_ms=1.50 mob_period_ms=500 lock_wait_ms=321.0 \
              lock_waits=4410 lock_worst=\"maps 300.0ms/4000 max 8.3ms; Parties 21.0ms/410 max 0.5ms\" saves_queued=0 \
-             game_log_dropped=7 rss_mb=412 workers=4"
+             game_log_dropped=7 rss_mb=412 workers=4 out_wps=30070"
         );
         let quiet = Figures { lock_worst: Vec::new(), ..figures };
         assert!(quiet.to_string().contains("lock_worst=\"-\" "));

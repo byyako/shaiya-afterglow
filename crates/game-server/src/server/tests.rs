@@ -134,3 +134,159 @@ fn script_commands_are_parsed_from_chat_lines() {
     assert!(!may_use(3, 0), "a player cannot use a staff command");
     assert!(may_use(3, 1) && may_use(3, 3) && !may_use(3, 4) && !may_use(1, 2));
 }
+
+/// A connection over a loopback socket and the far side's stream. The shutdown sender is returned so the connection does not
+/// see a stop.
+async fn loopback_connection() -> (Connection, tokio::net::TcpStream, watch::Sender<bool>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("address");
+    let (server, far) = tokio::join!(listener.accept(), tokio::net::TcpStream::connect(addr));
+    let (stream, peer) = server.expect("accept");
+    let (stop, shutdown) = watch::channel(false);
+    let conn = Connection {
+        stream,
+        decoder: FrameDecoder::new(),
+        recv: None,
+        send: None,
+        xor: None,
+        shutdown,
+        closed: false,
+        kick: None,
+        kicked: false,
+        kick_notice: Duration::ZERO,
+        hold_until: None,
+        last_read: Instant::now(),
+        write_timeout: Duration::from_secs(5),
+        flood: PacketFlood::new(1000, Instant::now()),
+        batch: Vec::new(),
+        peer,
+    };
+    (conn, far.expect("connect"), stop)
+}
+
+/// Reads `count` frames from the far side.
+async fn read_frames(far: &mut tokio::net::TcpStream, count: usize) -> Vec<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    let mut decoder = FrameDecoder::new();
+    let mut frames = Vec::new();
+    let mut buffer = [0u8; 4096];
+    while frames.len() < count {
+        while let Some(frame) = decoder.next_frame().expect("a valid frame") {
+            frames.push(frame);
+        }
+        if frames.len() == count {
+            break;
+        }
+        let n = timeout(Duration::from_secs(2), far.read(&mut buffer)).await.expect("bytes within 2 s").expect("read");
+        assert!(n > 0, "the connection ended after {} frames", frames.len());
+        decoder.push(&buffer[..n]);
+    }
+    frames
+}
+
+/// Packets of different lengths (the payload's first byte says which one).
+fn queued_packets() -> Vec<Vec<u8>> {
+    [3usize, 40, 0, 700, 12].iter().enumerate().map(|(i, len)| shaiya_proto::encode(0x0100 + i as u16, &vec![i as u8 + 1; *len])).collect()
+}
+
+#[tokio::test]
+async fn queued_packets_go_out_in_one_write_in_queue_order() {
+    let (mut conn, mut far, _stop) = loopback_connection().await;
+    let table = Arc::new(XorTable::new(&XOR_SEED));
+    conn.xor = Some(table.clone());
+    let (outbox, mut inbox) = crate::outbox::channel(1 << 20);
+    let originals = queued_packets();
+    for packet in &originals {
+        outbox.send(packet.clone()).expect("queued");
+    }
+    let first = inbox.recv().await.expect("the first packet");
+    conn.send_queued(first, &mut inbox).await.expect("sent");
+    assert_eq!(outbox.queued(), 0, "one call took all five");
+    let frames = read_frames(&mut far, originals.len()).await;
+    for (mut frame, original) in frames.into_iter().zip(&originals) {
+        assert_ne!(frame, *original, "sealed on the wire");
+        table.apply(&mut frame[2..]);
+        assert_eq!(&frame, original);
+    }
+}
+
+#[tokio::test]
+async fn a_batch_under_aes_keeps_the_stream_in_order() {
+    let (mut conn, mut far, _stop) = loopback_connection().await;
+    let (key, iv) = ([7u8; 16], [9u8; 16]);
+    conn.send = Some(CtrStream::new(&key, &iv));
+    let (outbox, mut inbox) = crate::outbox::channel(1 << 20);
+    let originals = queued_packets();
+    // A packet sent directly first: the stream position must carry over into the batch.
+    let lone = shaiya_proto::encode(0x0200, &[5; 9]);
+    conn.send(lone.clone()).await.expect("sent");
+    for packet in &originals {
+        outbox.send(packet.clone()).expect("queued");
+    }
+    let first = inbox.recv().await.expect("the first packet");
+    conn.send_queued(first, &mut inbox).await.expect("sent");
+    let frames = read_frames(&mut far, originals.len() + 1).await;
+    let mut stream = CtrStream::new(&key, &iv);
+    for (mut frame, original) in frames.into_iter().zip(std::iter::once(&lone).chain(&originals)) {
+        stream.apply(&mut frame[2..]);
+        assert_eq!(&frame, original);
+    }
+}
+
+#[tokio::test]
+async fn a_batch_stops_at_batch_bytes_and_leaves_the_rest_queued() {
+    use tokio::io::AsyncReadExt;
+    let (mut conn, mut far, _stop) = loopback_connection().await;
+    let (outbox, mut inbox) = crate::outbox::channel(1 << 20);
+    // Not real frames (a frame is at most 2048 bytes): the far side reads raw bytes.
+    let big: Vec<Vec<u8>> = (1..=3u8).map(|i| vec![i; 10 * 1024]).collect();
+    for packet in &big {
+        outbox.send(packet.clone()).expect("queued");
+    }
+    let first = inbox.recv().await.expect("the first packet");
+    conn.send_queued(first, &mut inbox).await.expect("sent");
+    // 10 KB is under the cap, so the second was taken; 20 KB is over it, so the third was not.
+    assert_eq!(outbox.queued(), 10 * 1024);
+    let mut got = vec![0u8; 20 * 1024];
+    timeout(Duration::from_secs(2), far.read_exact(&mut got)).await.expect("20 KB within 2 s").expect("read");
+    assert_eq!(&got[..10 * 1024], &big[0][..]);
+    assert_eq!(&got[10 * 1024..], &big[1][..]);
+    let mut more = [0u8; 1];
+    assert!(timeout(Duration::from_millis(100), far.read(&mut more)).await.is_err(), "nothing of the third packet");
+    assert_eq!(inbox.try_recv().expect("the third is still queued"), big[2]);
+    assert_eq!(outbox.queued(), 0);
+}
+
+#[tokio::test]
+async fn a_lone_packet_is_written_as_it_is() {
+    let (mut conn, mut far, _stop) = loopback_connection().await;
+    let table = Arc::new(XorTable::new(&XOR_SEED));
+    conn.xor = Some(table.clone());
+    let (outbox, mut inbox) = crate::outbox::channel(1 << 20);
+    let original = shaiya_proto::encode(0x0301, &[4; 30]);
+    outbox.send(original.clone()).expect("queued");
+    let first = inbox.recv().await.expect("the first packet");
+    conn.send_queued(first, &mut inbox).await.expect("sent");
+    assert_eq!(conn.batch.capacity(), 0, "no batch buffer for one packet");
+    let mut frame = read_frames(&mut far, 1).await.remove(0);
+    table.apply(&mut frame[2..]);
+    assert_eq!(frame, original);
+}
+
+#[tokio::test]
+async fn a_closed_connection_takes_nothing_more_from_the_outbox() {
+    use tokio::io::AsyncReadExt;
+    let (mut conn, mut far, _stop) = loopback_connection().await;
+    conn.closed = true;
+    let (outbox, mut inbox) = crate::outbox::channel(1 << 20);
+    let originals = queued_packets();
+    for packet in &originals {
+        outbox.send(packet.clone()).expect("queued");
+    }
+    let first = inbox.recv().await.expect("the first packet");
+    let after_first: usize = originals[1..].iter().map(Vec::len).sum();
+    conn.send_queued(first, &mut inbox).await.expect("nothing to do is not an error");
+    assert_eq!(outbox.queued(), after_first, "what was behind the first is still queued");
+    let mut byte = [0u8; 1];
+    assert!(timeout(Duration::from_millis(100), far.read(&mut byte)).await.is_err(), "nothing was written");
+}
