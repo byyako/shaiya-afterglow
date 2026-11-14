@@ -25,6 +25,11 @@ with its tests, the runs are written up in `docs/testing/load-pvp.md`, and `main
    staged by name. Messages: `Load fixes <N>: <what and why>`, a plain sentence, as `git log` shows.
 6. **Review**: each piece is built by a Sonnet agent at high effort and reviewed by an Opus agent against the piece's checklist
    (section 6) before the next starts.
+7. **Overnight, unattended** (answers of 2026-11-13): a piece rejected twice goes to an Opus fixer, then on; the push happens when every
+   piece is accepted and the tests pass, even if a run target was missed (the miss is written up as an open finding); the maintainer is
+   told by a push notification and a status file when the run stops or ends; the runs of piece 11a may be done at any hour.
+8. **Answered** (section 10): the runs may restart the servers at any time; design B2 stands (piece 9), the second mutex is its fallback;
+   piece 7 and the entry check E2-1000 stay; 192.168.1.240 is the LAN address; F3 is fixed both ways and `db_pool` stays 24.
 
 ## 2. Choices made in this spec (the maintainer may change them)
 
@@ -232,7 +237,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 
 | piece | what | state | commit | reviewed |
 |---|---|---|---|---|
-| 0 | the specs committed | not started | | |
+| 0 | the specs committed | done | 1774edb | by the maintainer's request, 2026-11-13 |
 | 1 | batching | not started | | |
 | 2 | F3, sessions | not started | | |
 | 3 | F5, the kill counts | not started | | |
@@ -253,6 +258,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 - **Verify**: `python3 tools/check_links.py`.
 - **Commit**: `Load fixes spec: batching, the session heartbeat, the kill counts, the pool at entry and the maps lock in steps, then the 700 run again`.
 - **Done when**: committed; `git status` shows only the pre-existing `server.rs` change.
+- **Done**: `1774edb` (2026-11-13), by the maintainer's session, not the orchestrator. The orchestrator starts at piece 1.
 
 ### Piece 1. Batching: finish `send_queued`
 
@@ -546,7 +552,8 @@ not set, so a shell that set one keeps it). Nothing here runs a test or a second
 - **Verify**: `python3 tools/check_links.py`; `git status` clean apart from these files; `git log origin/main..main --oneline` lists the
   pieces' commits.
 - **Commit**: `Load fixes 11: the 300 and 700 runs and the entry check after the fixes, the findings' status, and the plan marked built`.
-- **Push**: `git push` (on `main`). If it fails, stop and report the error; do not change remotes, keys or settings.
+- **Push**: `git push` (on `main`), when every piece is accepted and the workspace tests of the pieces passed, also when a run target was
+  missed (the miss is in the write-up as an open finding). If it fails, stop and report the error; do not change remotes, keys or settings.
 - **Done when**: pushed, or the push failure reported.
 
 ## 6. What a reviewer checks, piece by piece
@@ -647,7 +654,7 @@ target is recorded as an open finding; links check; the push went through or its
 - Moving the bots to another machine; runs above 1000; the 30-minute R5.
 - The status board (`~/.local/bin/shaiya-status.sh`), outside the repository.
 
-## 10. What the maintainer should answer (open)
+## 10. What the maintainer should answer (answered 2026-11-13, see section 1 items 7 and 8)
 
 1. May the runs restart the servers at any time, or is there a window (the maintainer's own play)?
 2. Is the relaxed cross-operation order of design B2 acceptable, or should piece 9 deliver under the second mutex from the start?

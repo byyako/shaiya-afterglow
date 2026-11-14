@@ -40,12 +40,29 @@ pushed and you report to the maintainer.
 - free -m (at least 2 GB available) and df -h /media/drive0 (at least 10 GB free). Below either: stop (see "When to stop").
 - git status --short: only what the previous step left (nothing, or piece 1's server.rs before piece 1).
 
-## Piece 0 (yours)
+## Piece 0
 
-Commit the specs: stage docs/plans/load-fixes.md, docs/plans/load-fixes-prompt.md and docs/plans/README.md after making the README
-change piece 0 names (one line for load-fixes.md after test-bots.md; test-bots.md's line says parts 1 to 4 built). Run python3
-tools/check_links.py first. The message is piece 0's. Do not stage server.rs. Then set piece 0's row in the progress table to done with
-its commit and commit that as below.
+Done by the maintainer's session (commit 1774edb: the specs and the README line). Start at piece 1. If `git log` does not show 1774edb,
+stop and report: you are in the wrong tree.
+
+## Running unattended
+
+The maintainer is asleep: nobody answers questions, so never ask one; decide by this prompt and the spec, take the smaller choice, and
+list it in the report. Every agent runs without permission prompts.
+
+- Waiting: after you start an agent (Agent tool) end your turn and wait for its completion notice; do not poll its output file, do
+  not start another agent meanwhile. A builder or reviewer that has not reported after 3 hours of waiting counts as failed: stop.
+- Long commands: a foreground shell command is cut at 10 minutes, and cargo test --workspace takes about 25 and a swarm run 10 or
+  more. Tell every builder (and the reviewer) to run any command that may take over 8 minutes with run_in_background and wait for its
+  completion notice, never to repeat it or call it failed before it ends, and to write the command's output to a file under
+  /tmp/claude-1000/ (the scratchpad) and read the file's tail. A test run killed by a timeout is not a result.
+- The status file: after every piece and every stop, write logs/load-fixes-status.md (logs/ is git-ignored, so it does not dirty the
+  tree): the time, the piece done or in progress, the verdicts so far, the next step, and any stop reason. The maintainer reads it first.
+- The notice: load the tool with ToolSearch ("select:PushNotification") once at the start. Call it when you stop (one line: "Load fixes
+  STOPPED at piece <N>: <reason>") and when you finish (one line: "Load fixes DONE: <n> pieces, pushed <yes/no>, 700 run <held/missed>").
+  If the tool is not there, the status file is the only notice.
+- Context: you will run long. Keep each agent's report in your head as a summary of a few lines (commit, verdict, the figures that
+  matter); the progress table and git log are your memory after your context is compacted, so update the table before anything else.
 
 ## The loop, for N = 1, 2, ... 10, 11a, 11b
 
@@ -65,13 +82,20 @@ its commit and commit that as below.
    piece's checklist). Wait for its verdict.
 5. Rejected: send the reviewer's findings, as they are, to the same builder (SendMessage to its id; if it is gone, a new builder with
    the builder prompt plus "Your piece was built in <base>..HEAD and rejected for:" and the findings). The builder fixes with new
-   commits on top (no amend, no rebase), then you check again (step 3) and review again (step 4) with the range <base>..HEAD. At most
-   two rejections: a third verdict that is not "accept" means stop.
+   commits on top (no amend, no rebase), then you check again (step 3) and review again (step 4) with the range <base>..HEAD. After two
+   rejections, one Opus fixer (Agent tool, model "opus") takes the piece: the builder prompt, plus "Your piece was built in <base>..HEAD
+   by another agent and rejected twice for:" and both rounds' findings, and it fixes with new commits; then the checks and one more
+   Opus review (a different agent). If that review is not "accept" the piece is BLOCKED: write it in the status file and the progress
+   table (state "blocked", the findings), send the notice, and do not run any piece that needs it (a piece needs the earlier pieces of its
+   own chain: 4 to 6, and 7 to 10; when the spec does not say, treat a later piece as needing it). Pieces that do not need it still run.
+   Never run 11a or 11b while a piece is blocked (its commits are local and not accepted, so nothing is pushed): stop there and report.
 6. Accepted: set the piece's row in the progress table (state "done", the commit hash or range, "accepted <date>, <rounds> round(s)")
    and commit only docs/plans/load-fixes.md with "Load fixes progress: piece <N> accepted". Then the next piece.
 
 Piece 11a makes no commit; its row is recorded after its review like the others. Between 11a and 11b, if section 7 says a target was
-missed, check that 11a did at most the one extra round section 7 allows, and carry the miss into 11b's prompt (11b records it).
+missed, check that 11a did at most the one extra round section 7 allows, and carry the miss into 11b's prompt (11b records it). A
+missed target does not stop 11b and does not stop the push: the code is accepted piece by piece, and the miss is an open finding for the
+maintainer. The push waits only for every piece accepted, the workspace tests passing, and the box put back.
 
 ## The builder prompt (fill in <N>, <TITLE>, <BASE>)
 
@@ -132,7 +156,7 @@ missed, check that 11a did at most the one extra round section 7 allows, and car
 
 ## When to stop and report instead of going on
 
-- A piece rejected twice (a third verdict that is not "accept").
+- A piece blocked (rejected twice, then not accepted after the Opus fixer) and no piece left that does not need it.
 - A failing workspace test that the piece did not cause (the builder or the reviewer reports one that the piece's diff does not touch
   and that fails again when run alone).
 - Anything that would touch data or the database schema and is not in the piece.
@@ -141,7 +165,7 @@ missed, check that 11a did at most the one extra round section 7 allows, and car
 - The game server or the login server not coming back after a restart.
 - A builder or reviewer report that does not match git (after one round of asking the builder to fix it).
 - A question of section 10 of the spec that a piece cannot go on without.
-Before stopping in or after piece 11a, make sure the dev box is put back (piece 11a step 9): if it is not, one builder does only that.
+On any stop: write the status file, send the notice, then the final report. Before stopping in or after piece 11a, make sure the dev box is put back (piece 11a step 9): if it is not, one builder does only that.
 
 ## The final report (to the maintainer)
 
