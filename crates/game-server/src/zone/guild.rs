@@ -42,7 +42,7 @@ impl Zones {
     /// Tests only (`docs/server/audit.md` R5): panics with the players' lock held, which poisons it.
     #[doc(hidden)]
     pub fn panic_holding_locks(&self) {
-        let _maps = self.maps.guard();
+        let _maps = self.maps();
         panic!("a test panic inside the zone lock");
     }
 
@@ -168,7 +168,7 @@ impl Zones {
 
     /// `0x0D21` (section 4): the requester's party, each member with whether it is on the requester's map.
     pub fn guild_create(&self, map: u16, me: u32, name: &[u8], remark: &[u8], party_size: usize, now: Instant) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let parties = self.parties.guard();
         let here = |m: u32| maps.get(&map).is_some_and(|players| players.contains_key(&m));
         let party: Vec<(u32, bool)> = parties.party_of(me).map(|p| p.members.iter().map(|&m| (m, here(m))).collect()).unwrap_or_default();
@@ -189,21 +189,21 @@ impl Zones {
     }
 
     pub fn guild_create_done(&self, me: u32, id: u32, money: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().create_done(me, id, money, now);
         apply(self, &mut maps, after);
     }
 
     /// `0x0D05` (section 5): the target looked up on the inviter's map.
     pub fn guild_invite(&self, map: u16, me: u32, target: u32, now: Instant) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let here = maps.get(&map).is_some_and(|players| players.contains_key(&target));
         self.guilds().invite(me, target, here, now);
     }
 
     /// `0x0D06`: the inviter looked up on the answerer's map.
     pub fn guild_invite_answer(&self, map: u16, me: u32, yes: bool, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = {
             let here = |inviter: u32| maps.get(&map).is_some_and(|players| players.contains_key(&inviter));
             self.guilds().invite_answer(me, yes, here, now)
@@ -216,19 +216,19 @@ impl Zones {
     }
 
     pub fn guild_join_answer(&self, me: u32, accept: bool, target: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().join_answer(me, accept, target, now);
         apply(self, &mut maps, after);
     }
 
     pub fn guild_leave(&self, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().leave(me);
         apply(self, &mut maps, after);
     }
 
     pub fn guild_kick(&self, me: u32, target: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().kick(me, target);
         apply(self, &mut maps, after);
     }
@@ -243,7 +243,7 @@ impl Zones {
 
     /// `0x0D03` (section 11): the members of the master's party on its map; the guilds pick its officers.
     pub fn guild_disband(&self, map: u16, me: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = {
             let parties = self.parties.guard();
             let here: Vec<u32> = parties
@@ -256,14 +256,14 @@ impl Zones {
     }
 
     pub fn guild_disband_answer(&self, me: u32, yes: bool) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().disband_answer(me, yes);
         apply(self, &mut maps, after);
     }
 
     /// A character deleted at the character screen.
     pub fn guild_deleted(&self, id: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let after = self.guilds().deleted(id);
         apply(self, &mut maps, after);
     }

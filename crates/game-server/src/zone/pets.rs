@@ -191,7 +191,7 @@ impl Zones {
     /// dead or invisible has the pet kept hidden until it is alive and visible; so does a `deny pet` rule the caller has found to match
     /// (`ruled`: the arrival on a map; the caller has told the owner).
     pub fn summon_pet(&self, map: u16, owner: u32, look: PetLook, egg: [u8; CRAFT_NAME_MAX], now: Instant, ruled: bool) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return false };
         let Some(me) = players.get(&owner) else { return false };
         let mut all = self.pets.guard();
@@ -234,7 +234,7 @@ impl Zones {
 
     /// Sends the pet back (the egg used again, its egg gone, a safety net): `0x0602` to its view. `false` when none was out.
     pub fn dismiss_pet(&self, map: u16, owner: u32) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.pets.guard();
         let Some(pets) = all.get_mut(&map) else { return false };
         let Some(id) = pets.owners.get(&owner).copied() else { return false };
@@ -304,7 +304,7 @@ impl Zones {
     /// `0x0402` to the view, the owner's own returned.
     pub fn pet_pick_up(&self, map: u16, owner: u32, item_id: u32, quest_ok: impl Fn(u8, u8) -> bool) -> Result<(GroundItem, Vec<u8>), u8> {
         let item = self.pet_peek(map, owner, item_id, quest_ok)?;
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut ground = self.ground.guard();
         let ground = ground.get_mut(&map).ok_or(gp::PICK_GONE)?;
         ground.remove(item_id).ok_or(gp::PICK_GONE)?;
@@ -395,7 +395,7 @@ impl Zones {
             return;
         }
         let rules = self.rules();
-        let maps = self.maps.guard();
+        let maps = self.maps();
         // Who cannot be served a drop now: in a trade (the trades lock comes after `maps`, so it is read before `pets`), a personal shop or
         // looking at one.
         let busy: std::collections::HashSet<u32> = {

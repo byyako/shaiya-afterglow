@@ -105,7 +105,7 @@ impl Zones {
     /// The battle has closed (section 6, deviation 1): everyone in a zone of the map is called to the bind position of its country.
     /// A player with a logout pending stays (its connection decides). Returns how many were called.
     pub fn ranking_close(&self, world: &World, rand: &mut impl FnMut() -> u32) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut moved = 0;
         for (&zone, players) in maps.iter().filter(|&(&zone, _)| self.is_ranking_zone(zone)) {
             for p in players.values() {

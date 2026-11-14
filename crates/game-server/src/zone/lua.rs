@@ -1057,7 +1057,7 @@ impl Zones {
     /// The Lua monsters' second (`CMob::UpdateIdle` for a Lua monster, section 10): per zone, the new monsters' scripts and the
     /// waiting events first, then each living Lua monster's top state, the events it raised after it. Not in the 500 ms attack pass.
     pub fn lua(&self, now: Instant, world: &World, defs: &MobDefs, loot: (&DropTables, &ItemDefs), rand: &mut impl FnMut() -> u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut nobody = HashMap::new();
         let clock = crate::mob_ai::tick(now);

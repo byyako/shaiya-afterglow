@@ -54,7 +54,7 @@ impl Zones {
     /// is returned for the whisper, and it beats the permission.
     pub fn trade_request(&self, map: u16, me: u32, target: u32, now: Instant) -> Option<crate::rules::Refusal> {
         let rules = self.rules();
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let players = maps.get(&map)?;
         let requester = players.get(&me)?;
         let mut trades = self.trades();
@@ -82,7 +82,7 @@ impl Zones {
     /// script's `trade` point is asked between this and the request (`docs/plans/ext-5-lua.md` section 6.1).
     pub fn trade_check(&self, map: u16, me: u32, target: u32) -> bool {
         let rules = self.rules();
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return false };
         let (Some(requester), Some(asked)) = (players.get(&me), players.get(&target)) else { return false };
         let trades = self.trades();
@@ -96,7 +96,7 @@ impl Zones {
 
     /// `0x0A02` (section 2.2): yes opens both windows; no tells the requester with its own id, as the original.
     pub fn trade_answer(&self, me: u32, yes: bool) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut trades = self.trades();
         // A duel stakes window opened meanwhile on either side: the request is cancelled as busy (audit R3).
         let busy = yes && trades.partner(me).is_some_and(|requester| staking(&maps, me) || staking(&maps, requester));
@@ -113,7 +113,7 @@ impl Zones {
 
     /// `0x0A06` for an item the caller found in its bags as asked (section 2.3): the request echoed, the partner shown the item.
     pub fn trade_offer(&self, me: u32, offer: tp::Offer, item: &w::ItemUnit) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let offered = Offered { bag: offer.bag, slot: offer.slot, count: offer.count, item_type: item.item_type, type_id: item.type_id };
         let Some(Changed { partner, unready }) = self.trades().offer(me, offer.trade_slot, offered) else { return false };
         if unready {
@@ -126,7 +126,7 @@ impl Zones {
 
     /// `0x0A07` (section 2.4).
     pub fn trade_take_back(&self, me: u32, trade_slot: u8) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(Changed { partner, unready }) = self.trades().take_back(me, trade_slot) else { return };
         if unready {
             tell_unready(&maps, me, partner);
@@ -137,7 +137,7 @@ impl Zones {
 
     /// `0x0A08` with an amount the caller has (section 2.5).
     pub fn trade_money(&self, me: u32, money: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(Changed { partner, unready }) = self.trades().set_money(me, money) else { return };
         if unready {
             tell_unready(&maps, me, partner);
@@ -148,7 +148,7 @@ impl Zones {
 
     /// `0x0A05` (section 2.6). Returns the partner when both are ready now: the caller runs the exchange.
     pub fn trade_ready(&self, me: u32, request: u8) -> Option<u32> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut trades = self.trades();
         match request {
             tp::READY => {
@@ -176,7 +176,7 @@ impl Zones {
     /// `CUser::CancleActionExc` (section 4): death, item actions, shops, leaving the map or the world. Whether a trade ended.
     /// An open duel stakes window closes too (`docs/original/duel.md` section 6.8).
     pub fn trade_end(&self, me: u32) -> bool {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let ended = self.trades().end(me);
         if let Some(ended) = ended {
             tell_ended(&maps, me, ended);
@@ -187,7 +187,7 @@ impl Zones {
 
     /// After a step (`CUser::PacketPC` 0x46a5d1): more than 10 from the partner ends the trade at any stage, `0x0A04 2` and `3`.
     pub fn trade_moved(&self, map: u16, me: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut trades = self.trades();
         let Some(partner) = trades.partner(me) else { return };
         let Some(players) = maps.get(&map) else { return };
@@ -214,7 +214,7 @@ impl Zones {
     /// Parks the side of the player who pressed ready last and wakes its partner's connection (`ZoneEvent::Trade`). Given back
     /// when the trade ended meanwhile or the partner is gone.
     pub fn trade_park(&self, me: u32, parked: Parked) -> Result<(), Parked> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut trades = self.trades();
         let partner = trades.park(me, parked)?;
         let woken =
@@ -237,7 +237,7 @@ impl Zones {
 
     /// Takes back a side nobody took in time: both told it was cancelled. False when the partner's connection has it.
     pub fn trade_unpark(&self, me: u32) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(partner) = self.trades().unpark(me) else { return false };
         tell_cancelled(&maps, me, partner);
         true
@@ -245,6 +245,6 @@ impl Zones {
 
     /// `0x0A04` to a player, from the connection running an exchange for its partner.
     pub fn trade_tell(&self, id: u32, packet: &[u8]) {
-        tell(&self.maps.guard(), id, packet);
+        tell(&self.maps(), id, packet);
     }
 }

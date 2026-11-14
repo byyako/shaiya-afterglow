@@ -9,8 +9,9 @@
 //! meant for the acting player, so the caller sends them in order with its other replies.
 
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use shaiya_proto::combat as cp;
@@ -1709,7 +1710,49 @@ fn view_cells(view: (i32, i32)) -> impl Iterator<Item = (i32, i32)> {
     (-VIEW_CELLS..=VIEW_CELLS).flat_map(move |dx| (-VIEW_CELLS..=VIEW_CELLS).map(move |dz| (view.0 + dx, view.1 + dz)))
 }
 
+/// The players of every map, locked (`Zones::maps`). It is the `maps` mutex's own guard plus a timer: every hold, from the lock
+/// being taken to its being released, goes into `monitor::counters().maps_held` (`maps_held_ms` and `maps_held_max_ms` of the stats
+/// line), so a run shows how much of the time the zone's busiest lock is held and not only how long it is waited for.
+///
+/// The fields are declared lock first, timer second, and Rust drops fields in declaration order: the lock is released, then the
+/// timer reads the clock. That order is the point; swapped, the hold would end before the lock does and the figure would miss the
+/// unlock. (`sync::Relock::guard` still times the waits, under the lock's type name, `maps`.)
+struct MapsGuard<'a> {
+    lock: MutexGuard<'a, HashMap<u16, HashMap<u32, Placed>>>,
+    _held: HoldTimer,
+}
+
+/// Records how long it lived into the `maps` hold counters when it is dropped.
+struct HoldTimer(Instant);
+
+impl Drop for HoldTimer {
+    fn drop(&mut self) {
+        crate::monitor::counters().maps_held(self.0.elapsed());
+    }
+}
+
+impl Deref for MapsGuard<'_> {
+    type Target = HashMap<u16, HashMap<u32, Placed>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.lock
+    }
+}
+
+impl DerefMut for MapsGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.lock
+    }
+}
+
 impl Zones {
+    /// The players of every map, locked, and timed until the guard drops (`MapsGuard`). The one way to take `maps`, so the lock's
+    /// order against `mobs` and the rest stays as the fields say.
+    fn maps(&self) -> MapsGuard<'_> {
+        let lock = Relock::guard(&self.maps);
+        MapsGuard { lock, _held: HoldTimer(Instant::now()) }
+    }
+
     /// Zones with the world's NPCs placed in their cells and the monster spawn areas ready (nothing spawned yet).
     pub fn new(world: &World, mob_defs: &MobDefs) -> Self {
         let (npcs, last_npc_id) = npc::build(world);
@@ -1850,7 +1893,7 @@ impl Zones {
                 }
             }
         }
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for (map, mob) in &left {
             obelisk::leave_view(maps.get(map), mob);
         }
@@ -1870,7 +1913,7 @@ impl Zones {
     /// views around (`0x0602`/`0x0601`, still at the old spot), then everyone in the view of its cell gets `0x0603`. Returns how
     /// many moved.
     pub fn idle(&self, now: Instant, world: &World, defs: &MobDefs, rand: &mut impl FnMut() -> u32) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let mut moved = 0;
         for (&map, mobs) in all.iter_mut() {
@@ -1944,7 +1987,7 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> AttackOutcome {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let (Some(players), Some(mobs)) = (maps.get_mut(&map), all.get_mut(&map)) else { return AttackOutcome::Gone };
         let Some(at) = players.get(&attack.attacker).map(|me| me.occupant.position) else { return AttackOutcome::Gone };
@@ -2281,7 +2324,7 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> Option<SkillOutcome> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut no_mobs = MobMap::default();
         let players = maps.get_mut(&map)?;
@@ -2398,7 +2441,7 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> Option<SkillOutcome> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut no_mobs = MobMap::default();
         let players = maps.get_mut(&map)?;
@@ -2483,7 +2526,7 @@ impl Zones {
         kind: u8,
         dropped: Dropped,
     ) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut ground = self.ground.guard();
         self.place(ground.entry(map).or_default(), maps.get(&map), loot, position, owner, party, now, kind, 0, dropped);
     }
@@ -2491,7 +2534,7 @@ impl Zones {
     /// Puts what a player dropped on the ground where it stands (`CUser::ItemDrop`, `docs/original/item-drop.md` section 3): kind 1,
     /// the player's alone for its first 30 s, no party. The view gets `0x0401`; the player's own is returned.
     pub fn drop_by_player(&self, map: u16, player: u32, loot: Loot, position: [f32; 3], now: Instant) -> Option<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut ground = self.ground.guard();
         self.place(
             ground.entry(map).or_default(),
@@ -2532,7 +2575,7 @@ impl Zones {
         now: Instant,
         quest_ok: impl Fn(u8, u8) -> bool,
     ) -> Result<(GroundItem, Vec<u8>), u8> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut ground = self.ground.guard();
         let players = maps.get(&map);
         let me = players.and_then(|p| p.get(&player)).ok_or(gp::PICK_GONE)?;
@@ -2562,7 +2605,7 @@ impl Zones {
     /// An item that could not be taken goes back on the ground for another 60 s (`CZone::EnterItem`, kind 1); returns the player's
     /// `0x0401`.
     pub fn put_back(&self, map: u16, player: u32, item: GroundItem, loot: Loot, now: Instant) -> Option<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut ground = self.ground.guard();
         let item = GroundItem { loot, expires: now + ITEM_LIFETIME, ..item };
         ground.entry(map).or_default().insert(item);
@@ -2577,7 +2620,7 @@ impl Zones {
 
     /// Removes the items whose time is up (`CZone::UpdateItem`): `0x0402` to their view.
     pub fn expire_items(&self, now: Instant) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.ground.guard();
         let mut removed = 0;
         for (map, ground) in all.iter_mut() {
@@ -2598,7 +2641,7 @@ impl Zones {
     /// fewer, and an entry that was full may spawn again after the respawn time (`docs/original/combat.md` section 6); an
     /// obelisk's and its guards' as `docs/original/obelisks.md` section 3 says.
     pub fn remove_bodies(&self, now: Instant, defs: &MobDefs, rand: &mut impl FnMut() -> u32) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let mut removed = 0;
         for (&map, mobs) in all.iter_mut() {
@@ -2644,14 +2687,14 @@ impl Zones {
     /// Whether a player may sit at a gambling table (`docs/original/mini-game.md` decision 3): alive, in no trade, with no personal
     /// shop open, in no duel and no guild war. The caller asks for the NPC separately.
     pub fn may_gamble(&self, map: u16, id: u32) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(p) = maps.get(&map).and_then(|players| players.get(&id)) else { return false };
         !p.dead && p.shop.is_none() && p.duel.is_none() && p.war.is_none() && !self.trades.guard().busy(id)
     }
 
     /// Where a player in the zone stands, and what decides whether a skill may aim at it.
     pub fn whereabouts(&self, map: u16, id: u32) -> Option<Whereabouts> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let p = maps.get(&map)?.get(&id)?;
         let o = &p.occupant;
         Some(Whereabouts {
@@ -2669,7 +2712,7 @@ impl Zones {
 
     /// A player's max HP and HP (`0x0302`).
     pub fn hp(&self, map: u16, target: u32) -> Option<(u16, u16)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let p = maps.get(&map)?.get(&target)?;
         Some((p.occupant.vitals.max[0], p.occupant.vitals.health[0]))
     }
@@ -2678,14 +2721,14 @@ impl Zones {
     /// client from dealing with NPCs anywhere on the map.
     pub fn npc_in_view(&self, map: u16, player: u32, npc_id: u32) -> Option<NpcEnter> {
         let npc = self.npc(map, npc_id)?;
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let me = maps.get(&map)?.get(&player)?;
         in_view(me.cell, cell_of(npc.position)).then_some(npc)
     }
 
     /// Whether an NPC of `kind` (`npc_type`) is in the player's view.
     pub fn npc_kind_in_view(&self, map: u16, player: u32, kind: u8) -> bool {
-        let Some(cell) = self.maps.guard().get(&map).and_then(|players| players.get(&player)).map(|me| me.cell) else {
+        let Some(cell) = self.maps().get(&map).and_then(|players| players.get(&player)).map(|me| me.cell) else {
             return false;
         };
         self.npcs_in_view(map, cell, None).iter().any(|npc| npc.kind == kind)
@@ -2701,7 +2744,7 @@ impl Zones {
     /// NPCs in view, the weather, and its own shape (`CUser::SendShape`; a hidden player's client is made to walk).
     /// (The original goes cell by cell, players then NPCs in each; here all players come first. Not yet seen to matter.)
     pub fn enter(&self, map: u16, mut occupant: Occupant) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         // Arrived: no longer on the way into an instance zone.
         self.instances.guard().unbook(occupant.id);
         self.ranking_arrival(map, occupant.id);
@@ -2774,7 +2817,7 @@ impl Zones {
     /// Removes a player; everyone in view gets `0x0202` (`CZone::LeaveUser`). Returns its HP, MP and SP, its applied skills, and the
     /// duel stakes it had out of its bags (`docs/original/duel.md` section 6.7, deviation 3: back into them).
     pub fn leave(&self, map: u16, id: u32) -> Option<Left> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let players = maps.get_mut(&map)?;
         let now = Instant::now();
         // A duel ends, and the player's guild war (`CUser::PvPChkLeaveByZoneLeave`).
@@ -2802,7 +2845,7 @@ impl Zones {
     /// margin and swaps what each side sees (players both ways, then the NPCs that left and came into the mover's view),
     /// then sends `0x0501` to the players within range, the mover included.
     pub fn move_to(&self, map: u16, id: u32, step: &Move) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(mut me) = players.remove(&id) else { return Vec::new() };
         me.occupant.position = step.position;
@@ -2843,7 +2886,7 @@ impl Zones {
     }
 
     fn relocate(&self, map: u16, id: u32, position: [f32; 3], split: bool) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         // A teleport splits a pair on one mount (`CZone::MoveUser`).
         if split {
@@ -2918,7 +2961,7 @@ impl Zones {
 
     /// A packet for everyone in the player's view (`CZone::SendView`); returns it for the player itself.
     pub fn send_view(&self, map: u16, id: u32, packet: Vec<u8>) -> Vec<u8> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some(players) = maps.get(&map)
             && let Some(me) = players.get(&id)
         {
@@ -2936,7 +2979,7 @@ impl Zones {
 
     /// A packet for the players within `range` of the player (`CZone::PSendView`); returns it for the player itself.
     pub fn send_near(&self, map: u16, id: u32, packet: Vec<u8>, range: f32) -> Vec<u8> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some(players) = maps.get(&map)
             && let Some(me) = players.get(&id)
         {
@@ -2949,7 +2992,7 @@ impl Zones {
 
     /// A player anywhere on this server by name, ignoring case: (map, id, country, name as stored).
     pub fn find_by_name(&self, name: &[u8]) -> Option<(u16, u32, u8, Vec<u8>)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         maps.iter().find_map(|(&map, players)| {
             players.values().find(|p| p.occupant.shape.name.eq_ignore_ascii_case(name)).map(|p| {
                 let o = &p.occupant;
@@ -2980,7 +3023,7 @@ impl Zones {
 
     /// The name of a player in the world by its id, as text (the game log's records name the dead player of a death drop).
     pub fn name_of(&self, id: u32) -> Option<String> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         maps.values()
             .find_map(|players| players.get(&id))
             .map(|p| String::from_utf8_lossy(&p.occupant.shape.name).trim_end_matches('\0').to_owned())
@@ -2991,14 +3034,14 @@ impl Zones {
     /// 1 when none. The abilities are on the definitions (`SkillDef::ext`), from an extension's rows or the `kill_boost_skills`
     /// shorthand.
     pub fn kill_boost(&self, map: u16, id: u32) -> u32 {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(player) = maps.get(&map).and_then(|players| players.get(&id)) else { return 1 };
         player.occupant.buffs.list.iter().filter_map(|applied| applied.def.ext.kill_boost()).max().unwrap_or(1)
     }
 
     /// A packet for one player.
     pub fn send_to(&self, map: u16, id: u32, packet: &[u8]) {
-        if let Some(p) = self.maps.guard().get(&map).and_then(|players| players.get(&id)) {
+        if let Some(p) = self.maps().get(&map).and_then(|players| players.get(&id)) {
             p.send(packet);
         }
     }
@@ -3006,14 +3049,14 @@ impl Zones {
     /// A packet for every player of a faction, on one map or on all (`CZone::SendAllCountry`, `CWorld::PSendAllCountry`).
     /// Tells every player of a faction's connection, in every map.
     pub fn notify_country(&self, country: u8, event: &ZoneEvent) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for p in maps.values().flat_map(|players| players.values()).filter(|p| p.occupant.shape.country == country) {
             let _ = p.occupant.events.send(event.clone());
         }
     }
 
     pub fn send_country(&self, country: u8, map: Option<u16>, packet: &[u8]) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for (_, players) in maps.iter().filter(|(m, _)| map.is_none_or(|map| **m == map)) {
             for p in players.values().filter(|p| p.occupant.shape.country == country) {
                 p.send(packet);
@@ -3024,7 +3067,7 @@ impl Zones {
     /// A visible equipment slot (0 to 7) changed (`CUser::SendEquipment`): the looks other players get with `0x0303` follow, and
     /// everyone in view gets `0x0507`; returns it for the player itself.
     pub fn change_equipment(&self, map: u16, id: u32, slot: u8, item: Option<&w::ItemUnit>) -> Vec<u8> {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id))
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id))
             && let Some(looks) = p.occupant.shape.equipment.get_mut(usize::from(slot))
         {
             *looks = item.map_or([0; 3], |i| [i.item_type, i.type_id, w::enchant_level(&i.craft_name)]);
@@ -3038,7 +3081,7 @@ impl Zones {
     /// New looks from a scroll (`docs/original/item-windows.md` section 2): kept for `0x0303`, `0x0226` to the view; returns it for
     /// the player itself.
     pub fn change_body(&self, map: u16, id: u32, body: crate::backend::Body) -> Vec<u8> {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             let s = &mut p.occupant.shape;
             (s.hair, s.face, s.size, s.sex) = (body.hair, body.face, body.size, body.sex);
         }
@@ -3048,7 +3091,7 @@ impl Zones {
     /// New speeds after an equipment change: other players' `0x0301` follows, and the players within 60 get `0x051C`
     /// (`CUser::ItemEquipmentAdd`); returns it for the player itself.
     pub fn change_speeds(&self, map: u16, id: u32, attack_speed: u8, move_speed: u8) -> Vec<u8> {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.attack_speed = attack_speed;
             p.occupant.move_speed = move_speed;
         }
@@ -3058,7 +3101,7 @@ impl Zones {
     /// A new maximum (`kind` 0 HP, 1 SP, 2 MP) to the players within 60 (`CUser::SendMaxHP` and the others); returns it for the
     /// player itself. The current value is kept within it.
     pub fn change_max(&self, map: u16, id: u32, kind: u8, max: u16) -> Vec<u8> {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             // Vitals are HP, MP, SP; the kinds HP, SP, MP.
             let i = match kind {
                 w::MAX_HP => 0,
@@ -3073,7 +3116,7 @@ impl Zones {
 
     /// The player's numbers against monsters and its REC after a change of level, equipment or applied skills.
     pub fn set_guard(&self, map: u16, id: u32, guard: Guard) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             let v = &mut p.occupant.vitals;
             (v.guard, v.guard_element, v.rec) = (guard.fighter, guard.element, guard.rec);
             (v.absorption, v.state_blocks) = (guard.absorption, guard.state_blocks);
@@ -3085,7 +3128,7 @@ impl Zones {
     /// Attacking (`CUser::RemApplySkillToMOB` at the attack tick, `docs/original/skills-special.md` section 6): a hiding or a
     /// transformation (but Evolution) ends, `0x050E`, and the shape goes. Returns whether one ended.
     pub fn end_shape_by_attack(&self, map: u16, id: u32) -> bool {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return false };
         let Some(p) = players.get_mut(&id) else { return false };
         if p.form.shape == 0 {
@@ -3099,21 +3142,21 @@ impl Zones {
 
     /// The sitting recovery percentages after a passive skill changed them.
     pub fn set_sit_percent(&self, map: u16, id: u32, percent: [i32; 3]) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.vitals.sit_percent = percent;
         }
     }
 
     /// HP, MP and SP of a player in the zone.
     pub fn health(&self, map: u16, id: u32) -> Option<[u16; 3]> {
-        Some(self.maps.guard().get(&map)?.get(&id)?.occupant.vitals.health)
+        Some(self.maps().get(&map)?.get(&id)?.occupant.vitals.health)
     }
 
     /// New maxima after a level-up, and HP, MP and SP filled to them (`CUser::LevelUp`): `0x0505` with what was gained to the
     /// players within 60 when something changed. Returns that packet for the player itself.
     pub fn fill(&self, map: u16, id: u32, max: [u16; 3]) -> Option<Vec<u8>> {
         let gained = {
-            let mut maps = self.maps.guard();
+            let mut maps = self.maps();
             let p = maps.get_mut(&map)?.get_mut(&id)?;
             let v = &mut p.occupant.vitals;
             let gained = [0, 1, 2].map(|i| clamp_i16(i32::from(max[i]) - i32::from(v.health[i])));
@@ -3128,7 +3171,7 @@ impl Zones {
     /// Starting or stopping attacks: the recovery state follows at once (fighting, or normal; `CUser::SendAttackStart`,
     /// `CUser::StatusAttackStop`).
     pub fn set_attacking(&self, map: u16, id: u32, attacking: bool) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.attacking = attacking;
             p.rec_status = if attacking { REC_FIGHTING } else { REC_NORMAL };
         }
@@ -3136,14 +3179,14 @@ impl Zones {
 
     /// Records sitting or standing, which other players' `0x0303` reports.
     pub fn set_motion(&self, map: u16, id: u32, motion: u8) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.shape.motion = motion;
         }
     }
 
     /// `0x0301` (`CUser::PacketGetInfo`): the target's position, then its HP and speeds. Nothing if it is not in the zone.
     pub fn info(&self, map: u16, target: u32) -> Vec<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(p) = maps.get(&map).and_then(|players| players.get(&target)) else { return Vec::new() };
         let o = &p.occupant;
         vec![position_sync(o), w::user_info(o.id, o.vitals.max[0], o.vitals.health[0], o.attack_speed, o.move_speed)]
@@ -3155,7 +3198,7 @@ impl Zones {
     /// `0x0307` (`CUser::PacketGetInfo`): a player of the asker's zone and country who is not staff is asked for its equipment; true
     /// when it was. No distance or state check, as the original.
     pub fn inspect(&self, map: u16, asker: u32, target: u32) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return false };
         let (Some(a), Some(t)) = (players.get(&asker), players.get(&target)) else { return false };
         !t.occupant.staff
@@ -3164,7 +3207,7 @@ impl Zones {
     }
 
     pub fn shape(&self, map: u16, asker: u32, target: u32) -> Vec<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return vec![w::user_leave(target)] };
         let Some(p) = players.get(&target) else { return vec![w::user_leave(target)] };
         let mut out = vec![position_sync(&p.occupant), p.looks_packet()];
@@ -3188,7 +3231,7 @@ impl Zones {
     /// the map of the other country, alive, of a level not above `level`, not hidden, disguised or an illusion; under the
     /// disguised player's own id.
     pub fn copy_looks(&self, map: u16, me: u32, target: u32, country: u8, level: u16) -> Option<UserShape> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let p = maps.get(&map)?.get(&target)?;
         let o = &p.occupant;
         // Never the duel partner (`docs/original/duel.md` section 5) or a guild war's enemy (`docs/original/guild-war.md` section 5).
@@ -3209,7 +3252,7 @@ impl Zones {
     /// The attack pass (`CZone::UpdateMobAttack`, every 500 ms; `docs/original/mob-fight.md` sections 3 to 6): fighting
     /// monsters chase and strike, those going home walk; a stunned or sleeping monster does nothing (`CMob::UpdateAttack`).
     pub fn mob_fight(&self, now: Instant, world: &World, defs: &MobDefs, loot: (&DropTables, &ItemDefs), rand: &mut impl FnMut() -> u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut nobody = HashMap::new();
         for (&map, mobs) in all.iter_mut() {
@@ -3242,7 +3285,7 @@ impl Zones {
     /// their recovery state, idle monsters that recover), then the applied skills whose time is up end on players and monsters
     /// (`docs/original/skills-buffs.md` sections 6 and 12).
     pub fn recover(&self, now: Instant, defs: &MobDefs, loot: (&DropTables, &ItemDefs), rand: &mut impl FnMut() -> u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         for (&map, players) in maps.iter_mut() {
             let mut changes = Vec::new();
@@ -3381,7 +3424,7 @@ impl Zones {
         loot: (&DropTables, &ItemDefs),
         rand: &mut impl FnMut() -> u32,
     ) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         for (&map, players) in maps.iter_mut() {
             let mut no_mobs = MobMap::default();
@@ -3593,7 +3636,7 @@ impl Zones {
     /// numbers, `0x0513` naming the owner within 60 of the field; the owner need not be in the zone), and a trap is used up by its
     /// first victim, player or monster. Fields whose time is up go.
     pub fn fields(&self, now: Instant, world: &World, defs: &MobDefs, loot: (&DropTables, &ItemDefs), rand: &mut impl FnMut() -> u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut fields = self.fields.guard();
         let mut nobody = HashMap::new();
@@ -3741,7 +3784,7 @@ impl Zones {
     /// A player's own buff cancelled (`0x0511` with number 255, `docs/original/skills-buffs.md` section 7): `0x050E`, and a heal
     /// over time paid for the time it ran. Returns the player's packets; nothing for an unknown key or what is not a buff.
     pub fn cancel_buff(&self, map: u16, id: u32, key: u32, now: Instant) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(p) = players.get_mut(&id) else { return Vec::new() };
         if p.dead {
@@ -3763,12 +3806,12 @@ impl Zones {
 
     /// What a player's applied skills add up to, while it is in the zone.
     pub fn buff_effects(&self, map: u16, id: u32) -> Option<buffs::BuffEffects> {
-        Some(self.maps.guard().get(&map)?.get(&id)?.occupant.buffs.effects())
+        Some(self.maps().get(&map)?.get(&id)?.occupant.buffs.effects())
     }
 
     /// The player's low-HP passive after learning one (`m_pHPAbility`).
     pub fn set_low_hp(&self, map: u16, id: u32, def: Option<SkillDef>) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.buffs.low_hp = def;
         }
     }
@@ -3783,7 +3826,7 @@ impl Zones {
     /// packets.
     #[allow(clippy::too_many_arguments)]
     pub fn revive_here(&self, map: u16, id: u32, position: [f32; 3], exp: u32, kind: u8, half: bool) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(mut me) = players.remove(&id) else { return Vec::new() };
         let gained = revive(&mut me, half);
@@ -3805,7 +3848,7 @@ impl Zones {
     /// Back to life before going to another map: HP, MP and SP full (at half with `half`), `0x0551` (with the new position) for the
     /// player alone, then `0x0505` within 60. The caller then moves the player. Returns the player's packets.
     pub fn revive_away(&self, map: u16, id: u32, position: [f32; 3], exp: u32, half: bool) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(me) = players.get_mut(&id) else { return Vec::new() };
         let gained = revive(me, half);
@@ -3819,7 +3862,7 @@ impl Zones {
     }
 
     pub fn count(&self, map: u16) -> usize {
-        self.maps.guard().get(&map).map_or(0, HashMap::len)
+        self.maps().get(&map).map_or(0, HashMap::len)
     }
 }
 

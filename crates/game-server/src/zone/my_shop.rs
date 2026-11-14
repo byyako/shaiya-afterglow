@@ -79,7 +79,7 @@ impl Zones {
     /// `stMyShop::Ended` from outside the shop packets (section 6): anything that ends a trade, a trade packet, standing up, a move
     /// carried out. Nothing without a shop.
     pub fn shop_end(&self, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         if let Some(players) = maps.values_mut().find(|players| players.get(&me).is_some_and(|p| p.shop.is_some())) {
             self.close_shop(players, me, true, true);
         }
@@ -95,13 +95,13 @@ impl Zones {
 
     /// Whether the player has a shop, set up or open.
     pub fn has_shop(&self, map: u16, me: u32) -> bool {
-        self.maps.guard().get(&map).and_then(|players| players.get(&me)).is_some_and(|p| p.shop.is_some())
+        self.maps().get(&map).and_then(|players| players.get(&me)).is_some_and(|p| p.shop.is_some())
     }
 
     /// `0x2301` (section 3.1); the caller checked that the player sits on a market map. A shop already there starts afresh, its
     /// visitors stopped and its sign down (deviation 6).
     pub fn shop_begin(&self, map: u16, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get(&me) else { return };
         if let Some(shop) = &p.shop {
@@ -119,7 +119,7 @@ impl Zones {
 
     /// `0x2302` (section 3.2): the sign down when the shop was open (deviation 6).
     pub fn shop_finish(&self, map: u16, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let was_open = players.get(&me).and_then(|p| p.shop.as_ref()).is_some_and(|s| s.stage == Stage::Open);
         self.close_shop(players, me, true, was_open);
@@ -127,7 +127,7 @@ impl Zones {
 
     /// `0x2303` (section 3.5): open, the sign to the view.
     pub fn shop_open(&self, map: u16, me: u32, len: u8, title: Vec<u8>) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get_mut(&me) else { return };
         let Some(shop) = p.shop.as_mut().filter(|s| s.stage == Stage::Setup) else { return };
@@ -142,7 +142,7 @@ impl Zones {
 
     /// `0x2304` (section 3.6): back to setting up, the items still placed.
     pub fn shop_close(&self, map: u16, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get_mut(&me) else { return };
         let Some(shop) = p.shop.as_mut().filter(|s| s.stage == Stage::Open) else { return };
@@ -155,7 +155,7 @@ impl Zones {
 
     /// `0x2305` for an item the caller found placeable (section 3.3, deviation 2): the request echoed.
     pub fn shop_place(&self, map: u16, me: u32, add: mp::Add, item: ItemUnit) -> bool {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(p) = maps.get_mut(&map).and_then(|players| players.get_mut(&me)) else { return false };
         let Some(shop) = p.shop.as_mut() else { return false };
         if !shop.place(add.shop_slot, Listed { bag: add.bag, slot: add.slot, price: add.price, item }) {
@@ -167,7 +167,7 @@ impl Zones {
 
     /// `0x2306` (section 3.4): the request echoed.
     pub fn shop_take_off(&self, map: u16, me: u32, shop_slot: u8) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(p) = maps.get_mut(&map).and_then(|players| players.get_mut(&me)) else { return };
         if p.shop.as_mut().is_some_and(|s| s.take_off(shop_slot)) {
             p.send(&mp::removed(shop_slot));
@@ -176,7 +176,7 @@ impl Zones {
 
     /// `0x2307` (section 3.4): no answer.
     pub fn shop_set_price(&self, map: u16, me: u32, shop_slot: u8, price: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         if let Some(shop) = maps.get_mut(&map).and_then(|players| players.get_mut(&me)).and_then(|p| p.shop.as_mut()) {
             shop.set_price(shop_slot, price);
         }
@@ -185,7 +185,7 @@ impl Zones {
     /// `0x2309` (section 4.1): the seller on the visitor's map, the same country unless on map 42, the shop open with room; then
     /// `0x2309 1` and the items. A refused visit is answered nothing (deviation 5), oneself included.
     pub fn shop_visit(&self, map: u16, me: u32, seller: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(visitor) = players.get(&me) else { return };
         if visitor.visiting.is_some() || seller == me {
@@ -211,7 +211,7 @@ impl Zones {
 
     /// `0x230A` (section 4.2): out of the seller's list, answered even when the shop is gone (deviation 4).
     pub fn shop_leave(&self, map: u16, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(seller) = players.get_mut(&me).and_then(|p| p.visiting.take()) else { return };
         if let Some(shop) = players.get_mut(&seller).and_then(|p| p.shop.as_mut()) {
@@ -222,7 +222,7 @@ impl Zones {
 
     /// The seller the player visits, and what its shop shows in a shop slot (section 5's first check, on the buyer's side).
     pub fn shop_listing(&self, map: u16, me: u32, shop_slot: u8) -> Option<(u32, Option<Listed>)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let players = maps.get(&map)?;
         let seller = players.get(&me)?.visiting?;
         let shop = players.get(&seller).and_then(|s| s.shop.as_ref());
@@ -231,7 +231,7 @@ impl Zones {
 
     /// The seller's own shop slot now, for its checks of a purchase.
     pub fn shop_slot(&self, map: u16, me: u32, shop_slot: u8) -> Option<Listed> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let shop = maps.get(&map)?.get(&me)?.shop.as_ref()?;
         shop.slots.get(usize::from(shop_slot))?.clone()
     }
@@ -239,7 +239,7 @@ impl Zones {
     /// Queues a purchase with an open shop on the map and wakes the seller's connection (`ZoneEvent::Sale`). Given back when the
     /// shop is gone or its connection cannot be woken.
     pub fn shop_queue(&self, map: u16, seller: u32, purchase: Purchase) -> Result<(), Purchase> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(s) =
             maps.get(&map).and_then(|players| players.get(&seller)).filter(|s| s.shop.as_ref().is_some_and(|s| s.stage == Stage::Open))
         else {
@@ -285,7 +285,7 @@ impl Zones {
     /// A sale was written (section 5 steps 5 and 7): `bought` (`0x230D 1`) to the buyer wherever it is, the shop slot keeps `left`,
     /// and every visitor gets `0x230E`.
     pub fn shop_sold(&self, map: u16, me: u32, shop_slot: u8, left: u8, buyer: u32, bought: &[u8]) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         if let Some(b) = maps.values().find_map(|players| players.get(&buyer)) {
             b.send(bought);
         }

@@ -12,7 +12,7 @@ impl Zones {
         if !self.smooth_chase() {
             return;
         }
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let nobody = HashMap::new();
         for (&map, mobs) in all.iter_mut() {

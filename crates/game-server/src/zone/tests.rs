@@ -5159,3 +5159,20 @@ fn the_pickup_from_the_pets_spot_is_strict() {
     assert!(zones.pet_pick_up(1, 1, mine, rule).is_ok());
     assert_eq!(zones.pet_pick_up(1, 1, mine, rule).err(), Some(gp::PICK_GONE), "taken once");
 }
+
+#[test]
+fn holding_maps_is_timed() {
+    // Lower bounds only: the counters are the process's, and the other tests add to them.
+    let zones = Zones::default();
+    let before = crate::monitor::counters().maps_held_total();
+    let guard = zones.maps();
+    std::thread::sleep(Duration::from_millis(20));
+    assert!(guard.is_empty(), "the guard reads the players' map like the lock");
+    // The hold is counted when the guard drops.
+    drop(guard);
+    let after = crate::monitor::counters().maps_held_total();
+    assert!(after - before >= Duration::from_millis(20), "the hold of 20 ms is in the total: {before:?} to {after:?}");
+    // A guard taken and dropped at once adds its own (small) hold, and the lock is free again.
+    drop(zones.maps());
+    assert!(zones.maps.try_lock().is_ok());
+}

@@ -546,7 +546,7 @@ impl Zones {
         if library.machines.is_empty() {
             return;
         }
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut nobody = HashMap::new();
         let mut elsewhere = Vec::new();

@@ -118,7 +118,7 @@ impl Zones {
     /// `0x2501` (section 3): the requester ranked 1 to 4, in no duel, its guild at peace; the target on its map, ranked 1 to 4 in
     /// another guild at peace, in no duel. Without a guild nothing at all.
     pub fn war_request(&self, map: u16, me: u32, target: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(requester) = players.get(&me) else { return };
         let guild = requester.occupant.guild_id;
@@ -151,7 +151,7 @@ impl Zones {
     /// starts the countdown with every member of each guild on the map closer than 40 to the officers' midpoint, unless the two stand
     /// 80 or more apart (deviation 1).
     pub fn war_answer(&self, map: u16, me: u32, accept: bool, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(guild) = players.get(&me).map(|p| p.occupant.guild_id) else { return };
         // Every use of `wars` holds `maps`: nothing changes between the two takes.
@@ -207,7 +207,7 @@ impl Zones {
 
     /// Every second (`CUser::PvPChkLeaveByTime`, section 5): a request without an answer ends, a countdown over starts the fight.
     pub fn war_timers(&self, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut wars = self.wars();
         for guild in wars.due(now) {
             let Some(war) = wars.get(guild) else { continue };
@@ -232,7 +232,7 @@ impl Zones {
     /// After a step (`CUser::PvPChkLeaveByMove`, section 6.3): more than 40 from the centre takes a player out of the countdown or
     /// the fight; the officers are checked from the fight on.
     pub fn war_moved(&self, map: u16, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get(&me) else { return };
         let out = p.war.is_some_and(|w| w.ready && gw::out_of_area(w.centre, p.occupant.position));
@@ -264,7 +264,7 @@ impl Zones {
 
     /// Leaving the world: `0x2506 0` "disconnected" (deviation 5), before the player leaves its map.
     pub fn war_left_world(&self, map: u16, id: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         if let Some(players) = maps.get_mut(&map) {
             self.war_left(players, id, wp::LEFT_WORLD);
         }

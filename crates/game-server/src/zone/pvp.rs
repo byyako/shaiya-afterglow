@@ -229,7 +229,7 @@ impl Zones {
     /// (`docs/plans/ext-2-rules.md` section 5.3): the refusal is for the whisper at the request.
     pub fn attack_verdict(&self, map: u16, me: u32, target: u32, war_map: bool) -> Verdict {
         let rules = self.rules();
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return Verdict::No };
         let (Some(a), Some(t)) = (players.get(&me), players.get(&target)) else { return Verdict::No };
         if me == target { Verdict::No } else { attackable(a, t, war_map, &rules, map) }
@@ -257,7 +257,7 @@ impl Zones {
     ) -> AttackOutcome {
         // One snapshot of the rules for the blow (`docs/plans/ext-2-rules.md` section 8); a blow a rule now forbids is dropped silently.
         let rules = self.rules();
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let Some(players) = maps.get_mut(&map) else { return AttackOutcome::Gone };
         let mobs = all.entry(map).or_default();
@@ -325,7 +325,7 @@ impl Zones {
 
     /// A player's kills changed (`CUser::KillPCTo`): `0x0522` to its view and in its looks from now on; its own copy is returned.
     pub fn set_kills(&self, map: u16, id: u32, kills: u32) -> Vec<u8> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let packet = cp::kill_info(id, kills);
         let Some(players) = maps.get_mut(&map) else { return packet };
         let Some(p) = players.get_mut(&id) else { return packet };
@@ -349,7 +349,7 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> Option<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let players = maps.get(&map)?;
         let position = drop_spot(players.get(&victim)?.occupant.position, rand);
         let mut party = 0;
@@ -388,7 +388,7 @@ impl Zones {
         now: Instant,
         rand: &mut impl FnMut() -> u32,
     ) -> Option<Vec<u8>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let players = maps.get(&map)?;
         let position = drop_spot(players.get(&victim)?.occupant.position, rand);
         if let Some(share) = self.kill_share(players, killer) {

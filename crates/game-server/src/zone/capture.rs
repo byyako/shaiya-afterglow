@@ -28,7 +28,7 @@ impl Zones {
     /// The monster a capture item is used on (section 3.1 steps 2 and 3): of the monsters on the map that are alive, fighting `user` and
     /// within `range` of it, the one with the lowest HP in percent, the nearest on a tie.
     pub fn weakest_fighting(&self, map: u16, user: u32, range: f32) -> Option<Mob> {
-        let at = self.maps.guard().get(&map)?.get(&user)?.occupant.position;
+        let at = self.maps().get(&map)?.get(&user)?.occupant.position;
         let all = self.mobs.guard();
         all.get(&map)?
             .mobs
@@ -64,7 +64,7 @@ impl Zones {
     /// idle, its body due now. The next `remove_bodies` pass takes it away and counts its spawn entry down, so it respawns as usual.
     /// Nothing a death gives: no experience, kill, drop, gold, kill count, quest progress or event. Returns the monster's id.
     pub fn capture_take(&self, map: u16, user: u32, mob_id: u32, below: u8, now: Instant) -> Option<u16> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let mobs = all.get_mut(&map)?;
         let mob = mobs.mobs.get(&mob_id).copied()?;

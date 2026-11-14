@@ -191,7 +191,7 @@ pub(super) fn generate_around(
 impl Zones {
     /// Leaves an order for a player on `map` and wakes its connection. `false` when it is not there (nothing is left).
     pub fn admin_order(&self, map: u16, target: u32, order: AdminOrder) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(p) = maps.get(&map).and_then(|players| players.get(&target)) else { return false };
         let mut orders = self.admin_orders.guard();
         orders.entry(target).or_default().push(order);
@@ -209,7 +209,7 @@ impl Zones {
 
     /// A packet for one player on any map.
     pub fn send_to_char(&self, id: u32, packet: &[u8]) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some(p) = maps.values().find_map(|players| players.get(&id)) {
             p.send(packet);
         }
@@ -217,12 +217,12 @@ impl Zones {
 
     /// Where a player on `map` stands.
     pub fn position_of(&self, map: u16, id: u32) -> Option<[f32; 3]> {
-        self.maps.guard().get(&map)?.get(&id).map(|p| p.occupant.position)
+        self.maps().get(&map)?.get(&id).map(|p| p.occupant.position)
     }
 
     /// The players of one zone as `/xcall` needs them: `(id, staff, country, position)`.
     pub fn players_of(&self, map: u16) -> Vec<(u32, bool, u8, [f32; 3])> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         maps.get(&map)
             .map(|players| {
                 players.values().map(|p| (p.occupant.id, p.occupant.staff, p.occupant.shape.country, p.occupant.position)).collect()
@@ -234,7 +234,7 @@ impl Zones {
     /// attacks, `FA16`/`FA17` the players' attacks alone). A change of visibility sends the shape (13 while invisible) to the view; the
     /// returned packets are for the staff member itself.
     pub fn set_gm_flags(&self, map: u16, id: u32, visible: Option<bool>, attackable: Option<bool>, pvp: Option<bool>) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(p) = players.get_mut(&id) else { return Vec::new() };
         let was = p.occupant.visible;
@@ -258,14 +258,14 @@ impl Zones {
     /// A staff level change (`F601`) reaches the occupant: the staff packets (`send_staff`) go to it, and the view sees it as staff, only
     /// while it is one (`docs/server/audit.md` R26).
     pub fn set_staff(&self, map: u16, id: u32, staff: bool) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.staff = staff;
         }
     }
 
     /// A packet for every player who entered the world as staff, on any map (`CUserQuestionMgr::SendAdminAll`).
     pub fn send_staff(&self, packet: &[u8]) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for p in maps.values().flat_map(|players| players.values()).filter(|p| p.occupant.staff) {
             p.send(packet);
         }
@@ -273,7 +273,7 @@ impl Zones {
 
     /// A packet for every player of one zone (`CZone::SendAll`).
     pub fn send_zone(&self, map: u16, packet: &[u8]) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for p in maps.get(&map).into_iter().flat_map(|players| players.values()) {
             p.send(packet);
         }
@@ -282,7 +282,7 @@ impl Zones {
     /// `F801` / `F80E`: applied skills taken off a player (`0x050E` each, returned for the player). `all == false` takes the debuffs;
     /// `all == true` every skill but the ones kept through death (deviation 10 of part 2).
     pub fn clear_applied(&self, map: u16, id: u32, all: bool) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(me) = players.get_mut(&id) else { return Vec::new() };
         let gone = if all { me.occupant.buffs.take_all_but_kept() } else { me.occupant.buffs.cure(&[], true) };
@@ -296,7 +296,7 @@ impl Zones {
 
     /// A packet for every player on the server, both countries (`CWorld::SendAll`).
     pub fn send_world(&self, packet: &[u8]) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         for p in maps.values().flat_map(|players| players.values()) {
             p.send(packet);
         }
@@ -408,7 +408,7 @@ impl Zones {
         rand: &mut impl FnMut() -> u32,
     ) -> usize {
         let Some(def) = usable_def(defs, mob_id) else { return 0 };
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let Some(players) = maps.get(&zone) else { return 0 };
         let mobs = all.entry(zone).or_default();
@@ -419,7 +419,7 @@ impl Zones {
     /// quietly at the next body pass (deviation 13); an obelisk falls to its own country, a boss's chain moves on
     /// (`docs/original/obelisks.md` sections 11.5 and 11.3). Returns how many.
     pub fn mob_remove_near(&self, zone: u16, mob_id: u16, at: [f32; 3], count: u8, now: Instant) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let Some(mobs) = all.get_mut(&zone) else { return 0 };
         let cell = cell_of(at);
@@ -446,7 +446,7 @@ impl Zones {
     /// `CZone::MobRemoveByID` (`/mera t`): that monster of the zone dies quietly; an obelisk falls to its base country, a boss's chain
     /// moves on. `false` when it is dead or not there.
     pub fn mob_remove_id(&self, zone: u16, object_id: u32, now: Instant) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let Some(mobs) = all.get_mut(&zone) else { return false };
         if mobs.mobs.get(&object_id).is_none_or(|m| m.dead_until.is_some()) {
@@ -472,7 +472,7 @@ impl Zones {
         if !world.has_npc(kind, type_id) {
             return false;
         }
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.npcs.guard();
         if !maps.contains_key(&zone) {
             return false;
@@ -494,7 +494,7 @@ impl Zones {
     /// `CZone::NpcRemove` (`/nera`): up to `count` NPCs of that kind in the 3 x 3 cells around the spot and within 10 of it leave the
     /// zone (`0x0E02` to the view). Returns how many.
     pub fn npc_remove_near(&self, zone: u16, kind: u8, type_id: u16, at: [f32; 3], count: u8) -> usize {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.npcs.guard();
         let Some(map) = all.get_mut(&zone) else { return 0 };
         let cell = cell_of(at);

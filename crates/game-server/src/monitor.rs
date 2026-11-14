@@ -203,6 +203,9 @@ pub struct Counters {
     db_waits: AtomicU64,
     db_wait_ns: AtomicU64,
     db_wait_max_ns: AtomicU64,
+    /// How long the zone's `maps` lock was held, all holds added up (ns), and the longest hold since the last reading.
+    maps_held_ns: AtomicU64,
+    maps_held_max_ns: AtomicU64,
     /// Bytes queued in every outbox now, and the most any one outbox held since the last reading.
     outbox_queued: AtomicI64,
     outbox_peak: AtomicU64,
@@ -231,6 +234,8 @@ impl Counters {
             db_waits: AtomicU64::new(0),
             db_wait_ns: AtomicU64::new(0),
             db_wait_max_ns: AtomicU64::new(0),
+            maps_held_ns: AtomicU64::new(0),
+            maps_held_max_ns: AtomicU64::new(0),
             outbox_queued: AtomicI64::new(0),
             outbox_peak: AtomicU64::new(0),
             outbox_closed: AtomicU64::new(0),
@@ -269,6 +274,19 @@ impl Counters {
         self.db_waits.fetch_add(1, Relaxed);
         self.db_wait_ns.fetch_add(ns, Relaxed);
         self.db_wait_max_ns.fetch_max(ns, Relaxed);
+    }
+
+    /// The zone's `maps` lock was held for `held`, from taking it to releasing it (`zone::MapsGuard`). The lock is not re-entrant,
+    /// so the holds never overlap and their total over an interval cannot exceed the interval.
+    pub fn maps_held(&self, held: Duration) {
+        let ns = u64::try_from(held.as_nanos()).unwrap_or(u64::MAX);
+        self.maps_held_ns.fetch_add(ns, Relaxed);
+        self.maps_held_max_ns.fetch_max(ns, Relaxed);
+    }
+
+    /// The total time the `maps` lock has been held since the start.
+    pub fn maps_held_total(&self) -> Duration {
+        Duration::from_nanos(self.maps_held_ns.load(Relaxed))
     }
 
     /// A packet of `len` bytes joined an outbox that now holds `queued` bytes.
@@ -408,6 +426,9 @@ pub struct Figures {
     pub db_waits: u64,
     pub db_wait_ms: f64,
     pub db_wait_max_ms: f64,
+    /// The time the zone's `maps` lock was held in the interval, all holds added up, and the longest single hold.
+    pub maps_held_ms: f64,
+    pub maps_held_max_ms: f64,
 }
 
 /// A lock type's short name as the operator knows it, where there is one.
@@ -452,7 +473,7 @@ impl std::fmt::Display for Figures {
         write!(
             f,
             "\" saves_queued={} game_log_dropped={} rss_mb={} workers={} out_wps={:.0} db_size={} db_busy={} db_waits={} \
-             db_wait_ms={:.1} db_wait_max_ms={:.1}",
+             db_wait_ms={:.1} db_wait_max_ms={:.1} maps_held_ms={:.1} maps_held_max_ms={:.1}",
             self.saves_queued,
             self.game_log_dropped,
             self.rss_mb,
@@ -463,6 +484,8 @@ impl std::fmt::Display for Figures {
             self.db_waits,
             self.db_wait_ms,
             self.db_wait_max_ms,
+            self.maps_held_ms,
+            self.maps_held_max_ms,
         )
     }
 }
@@ -477,6 +500,7 @@ pub struct Sampler {
     out_writes: u64,
     db_waits: u64,
     db_wait_ns: u64,
+    maps_held_ns: u64,
     outbox_closed: u64,
     passes: u64,
     pass_ns: u64,
@@ -496,6 +520,7 @@ impl Sampler {
             out_writes: 0,
             db_waits: 0,
             db_wait_ns: 0,
+            maps_held_ns: 0,
             outbox_closed: 0,
             passes: 0,
             pass_ns: 0,
@@ -514,6 +539,8 @@ impl Sampler {
         let out_writes = counters.out_writes.load(Relaxed);
         let (db_waits, db_wait_ns) = (counters.db_waits.load(Relaxed), counters.db_wait_ns.load(Relaxed));
         let db_wait_max_ns = counters.db_wait_max_ns.swap(0, Relaxed);
+        let maps_held_ns = counters.maps_held_ns.load(Relaxed);
+        let maps_held_max_ns = counters.maps_held_max_ns.swap(0, Relaxed);
         let outbox_closed = counters.outbox_closed.load(Relaxed);
         let (passes, pass_ns) = (counters.mob_passes.load(Relaxed), counters.mob_pass_ns.load(Relaxed));
         let pass_max_ns = counters.mob_pass_max_ns.swap(0, Relaxed);
@@ -559,9 +586,12 @@ impl Sampler {
             db_waits: db_waits - self.db_waits,
             db_wait_ms: (db_wait_ns - self.db_wait_ns) as f64 / 1e6,
             db_wait_max_ms: db_wait_max_ns as f64 / 1e6,
+            maps_held_ms: (maps_held_ns - self.maps_held_ns) as f64 / 1e6,
+            maps_held_max_ms: maps_held_max_ns as f64 / 1e6,
         };
         (self.at, self.in_packets, self.in_bytes, self.out_packets, self.out_bytes) = (now, in_packets, in_bytes, out_packets, out_bytes);
         (self.out_writes, self.db_waits, self.db_wait_ns) = (out_writes, db_waits, db_wait_ns);
+        self.maps_held_ns = maps_held_ns;
         (self.outbox_closed, self.passes, self.pass_ns, self.locks) = (outbox_closed, passes, pass_ns, now_locks);
         figures
     }
@@ -728,6 +758,26 @@ mod tests {
     }
 
     #[test]
+    fn maps_holds_are_summed_and_the_longest_starts_again() {
+        let c = Counters::new();
+        let table = LockTable::new();
+        let t0 = Instant::now();
+        let mut sampler = Sampler::new(t0, &c, &table);
+        c.maps_held(Duration::from_millis(3));
+        c.maps_held(Duration::from_millis(12));
+        c.maps_held(Duration::from_millis(5));
+        assert_eq!(c.maps_held_total(), Duration::from_millis(20));
+        let first = sampler.sample(t0 + Duration::from_secs(1), &c, &table, Gauges::default());
+        assert_eq!((first.maps_held_ms, first.maps_held_max_ms), (20.0, 12.0));
+        // The next interval counts only what came after, and its longest starts from nothing.
+        c.maps_held(Duration::from_millis(2));
+        let second = sampler.sample(t0 + Duration::from_secs(2), &c, &table, Gauges::default());
+        assert_eq!((second.maps_held_ms, second.maps_held_max_ms), (2.0, 2.0));
+        let idle = sampler.sample(t0 + Duration::from_secs(3), &c, &table, Gauges::default());
+        assert_eq!((idle.maps_held_ms, idle.maps_held_max_ms), (0.0, 0.0));
+    }
+
+    #[test]
     fn type_names_lose_their_module_paths() {
         assert_eq!(
             short_name("std::collections::hash::map::HashMap<u16, std::collections::hash::map::HashMap<u32, game_server::zone::Placed>>"),
@@ -770,13 +820,16 @@ mod tests {
             db_waits: 1225,
             db_wait_ms: 3307.55,
             db_wait_max_ms: 6104.2,
+            maps_held_ms: 4120.34,
+            maps_held_max_ms: 18.76,
         };
         assert_eq!(
             figures.to_string(),
             "secs=10.0 players=301 connections=303 in_pps=1234 in_bps=56789 out_pps=90211 out_bps=4200000 outbox_max=65536 \
              outbox_sum=1000000 outbox_closed=2 mob_pass_max_ms=12.35 mob_pass_avg_ms=1.50 mob_period_ms=500 lock_wait_ms=321.0 \
              lock_waits=4410 lock_worst=\"maps 300.0ms/4000 max 8.3ms; Parties 21.0ms/410 max 0.5ms\" saves_queued=0 \
-             game_log_dropped=7 rss_mb=412 workers=4 out_wps=30070 db_size=24 db_busy=23 db_waits=1225 db_wait_ms=3307.6 db_wait_max_ms=6104.2"
+             game_log_dropped=7 rss_mb=412 workers=4 out_wps=30070 db_size=24 db_busy=23 db_waits=1225 db_wait_ms=3307.6 db_wait_max_ms=6104.2 \
+             maps_held_ms=4120.3 maps_held_max_ms=18.8"
         );
         let quiet = Figures { lock_worst: Vec::new(), ..figures };
         assert!(quiet.to_string().contains("lock_worst=\"-\" "));

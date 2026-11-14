@@ -688,7 +688,7 @@ impl super::Zones {
     /// `0x0E04` (`CUser::PacketNpc`, section 2): an NPC on the player's map becomes its current NPC; the old one's user count goes
     /// down, the new one's up.
     pub fn use_npc(&self, map: u16, player: u32, npc_id: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(p) = maps.get_mut(&map).and_then(|players| players.get_mut(&player)) else { return };
         let mut npcs = self.npcs.guard();
         let Some(m) = npcs.get_mut(&map) else { return };
@@ -733,7 +733,7 @@ impl super::Zones {
         rand: &mut impl FnMut() -> u32,
         idle: bool,
     ) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut all = self.mobs.guard();
         let mut npcs = self.npcs.guard();
         let mut nobody = HashMap::new();

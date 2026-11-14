@@ -184,7 +184,7 @@ impl Zones {
     /// checks in the original's order; the invited player gets the invitation, the inviter a failure code (with a real id:
     /// deviation), `0x0B19` for `0x0B14`, `0x0B03` otherwise.
     pub fn party_invite(&self, map: u16, me: u32, invitee: Invitee, union: bool, now: Instant) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(inviter) = maps.get(&map).and_then(|players| players.get(&me)) else { return };
         let by_id = matches!(invitee, Invitee::Id(_));
         let fail = |code: u8, id: u32| {
@@ -255,7 +255,7 @@ impl Zones {
     /// `0x0B03` (section 3), or `0x0B15` (`union`, `docs/original/union.md` section 4: failures as `0x0B19`, the sub-leader's
     /// invitation too): no, or the inviter's party (created when it has none: a normal party) takes the answerer in.
     pub fn party_answer(&self, map: u16, me: u32, yes: bool, union: bool, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut parties = self.parties.guard();
         if parties.party_of(me).is_some() {
             return;
@@ -288,7 +288,7 @@ impl Zones {
 
     /// `0x0B05` (section 4).
     pub fn party_leave(&self, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut parties = self.parties.guard();
         let party = parties.party_of(me).map(|p| p.id);
         if let (Some(party), Some(out)) = (party, parties.leave(me)) {
@@ -318,7 +318,7 @@ impl Zones {
         if union_only && !self.parties.guard().party_of(me).is_some_and(|p| p.is_union()) {
             return;
         }
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut parties = self.parties.guard();
         let party = parties.party_of(me).map(|p| p.id);
         if let (Some(party), Some(out)) = (party, parties.kick(me, target)) {
@@ -333,7 +333,7 @@ impl Zones {
         if self.parties.guard().party_of(me).is_some_and(|p| p.is_union()) {
             return self.union_leader(me, target);
         }
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut parties = self.parties.guard();
         let Some((members, old, new)) = parties.set_leader(me, target) else {
             return send_anywhere(&maps, me, &pp::leader(0));
@@ -348,7 +348,7 @@ impl Zones {
 
     /// `0x1105` (section 6) to every member, the sender included; false without a party.
     pub fn party_chat(&self, me: u32, packet: &[u8]) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let parties = self.parties.guard();
         let Some(p) = parties.party_of(me) else { return false };
         for &m in &p.members {
@@ -359,7 +359,7 @@ impl Zones {
 
     /// A member levelled up (`CUser::LevelUp`): `0x0C09` to every member, itself included; the highest level again.
     pub fn party_level(&self, me: u32, level: u16) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut parties = self.parties.guard();
         let Some(p) = parties.party_of(me) else { return };
         let (party, packet) = (p.id, pp::level(p.is_union(), me, level));
@@ -376,7 +376,7 @@ impl Zones {
     /// Where the dead player comes back to life with its party (`CUser::KillSoulParty`, section 11): at its leader, when that is
     /// another player, alive, on the same map.
     pub fn party_leader_spot(&self, map: u16, me: u32) -> Option<[f32; 3]> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let leader = self.parties.guard().party_of(me)?.leader_id();
         let p = maps.get(&map)?.get(&leader).filter(|p| leader != me && !p.dead)?;
         Some(p.occupant.position)
@@ -384,7 +384,7 @@ impl Zones {
 
     /// `0x0B08` (section 9): the members on the player's map within 100 of it hear of what it got.
     pub fn party_loot_notice(&self, map: u16, me: u32, item_type: u8, type_id: u8) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return };
         let Some(at) = players.get(&me).map(|p| p.occupant.position) else { return };
         let parties = self.parties.guard();
@@ -399,7 +399,7 @@ impl Zones {
 
     /// `0x0B0E` (`docs/original/union.md` section 2): the leader makes its party a union (not again, deviation 8); `0x0B0E` to every member.
     pub fn union_set(&self, me: u32, union: u8, auto_join: bool, rule: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut parties = self.parties.guard();
         let Some((members, settings)) = parties.make_union(me, union, auto_join, rule) else {
             return tracing::debug!(id = me, union, rule, "union set-up refused");
@@ -410,7 +410,7 @@ impl Zones {
 
     /// `0x0B0F`: the union's loot rule; `0x0B0F` to every member.
     pub fn union_rule(&self, me: u32, rule: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some(members) = self.parties.guard().set_union_rule(me, rule) {
             send_all(&maps, &members, &pp::union_rule(rule));
         }
@@ -418,7 +418,7 @@ impl Zones {
 
     /// `0x0B10`: auto-join; `0x0B10` to every member.
     pub fn union_auto_join(&self, me: u32, on: bool) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some(members) = self.parties.guard().set_auto_join(me, on) {
             send_all(&maps, &members, &pp::union_auto_join(on));
         }
@@ -427,7 +427,7 @@ impl Zones {
     /// `0x0B11` `/join <name>` (`docs/original/union.md` section 4): into the named player's union, from anywhere, when it takes
     /// anyone (auto-join) and is not full; else `0x0B19` 12, 13 or 14. Ignored when the player is in a party.
     pub fn union_join(&self, me: u32, name: &[u8], now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let mut parties = self.parties.guard();
         if parties.party_of(me).is_some() {
             return;
@@ -451,7 +451,7 @@ impl Zones {
 
     /// `0x0B12` (`docs/original/union.md` section 6): a group move by the leader or the sub-leader; `0x0B12` to every member.
     pub fn union_move(&self, me: u32, from: u32, to: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some((members, settings)) = self.parties.guard().move_in_union(me, from, to) else {
             return tracing::debug!(id = me, from, to, "union move refused");
         };
@@ -462,7 +462,7 @@ impl Zones {
     /// `0x0B17` (`docs/original/union.md` section 6): the union's leader hands over; `0x0B17` to every member, `0x0B13` when the
     /// sub-leader changed with it, the two leaders' party types to their views. Nothing outside a union.
     pub fn union_leader(&self, me: u32, target: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(change) = self.parties.guard().set_union_leader(me, target) else { return };
         send_all(&maps, &change.members, &pp::union_by_id(pp::OP_UNION_LEADER, change.new));
         if let Some(sub) = change.sub {
@@ -475,7 +475,7 @@ impl Zones {
 
     /// `0x0B13` (`docs/original/union.md` section 6): the leader names the sub-leader; `0x0B13` with the sub-leader to every member.
     pub fn union_sub_leader(&self, me: u32, target: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if let Some((members, sub)) = self.parties.guard().set_sub_leader(me, target) {
             send_all(&maps, &members, &pp::union_by_id(pp::OP_UNION_SUB_LEADER, sub));
         }
@@ -484,7 +484,7 @@ impl Zones {
     /// `0x0B16` (`docs/original/union.md` section 6): the leader dismantles the union, which ends the party too: `0x0B16` to every
     /// member, then each one's party type 0 to its view.
     pub fn union_break(&self, me: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let party = self.parties.guard().party_of(me).map(|p| p.id);
         let Some(members) = self.parties.guard().dismantle(me) else { return };
         // `0x0F02` (`CParty::BreakParty`) for every member.
@@ -501,7 +501,7 @@ impl Zones {
     /// `0x1112` (`docs/original/union.md` section 9): the union's leader or sub-leader to every member (as `0xF10A`, deviation 7);
     /// false otherwise.
     pub fn union_chat(&self, me: u32, packet: &[u8]) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let parties = self.parties.guard();
         let Some(p) = parties.party_of(me).filter(|p| p.is_union() && p.leads(me)) else { return false };
         send_all(&maps, &p.members, packet);
@@ -524,7 +524,7 @@ impl Zones {
     /// The party pass (every 500 ms; deviation, section 13): what changed of each member since the others were last told: death
     /// (`0x0C06`, the client clears its buffs), maxima (`0x0C08`), HP, SP and MP (`0x0C03`), applied skills (`0x0C05`, `0x0C04`).
     pub fn party_status(&self) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut parties = self.parties.guard();
         for party in parties.all_mut() {
             let union = party.is_union();

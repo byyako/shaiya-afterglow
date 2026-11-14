@@ -153,7 +153,7 @@ impl Zones {
     /// `0x2401` (section 3.1): the target on the requester's map, both free (no duel, no guild war) and on foot, the same country
     /// unless on map 39 or 40, not oneself (deviation 1), neither with a debuff.
     pub fn duel_request(&self, map: u16, me: u32, target: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(requester) = players.get(&me) else { return };
         if requester.duel.is_some() || requester.war.is_some() || requester.ride.status != Riding::OnFoot {
@@ -193,7 +193,7 @@ impl Zones {
     /// `0x2402` (section 3.2): a refusal clears both and tells the requester; an acceptance opens both stakes windows, the area's
     /// centre where the two stand (deviation 2).
     pub fn duel_answer(&self, map: u16, me: u32, accept: bool) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         if players.get(&me).and_then(|p| p.duel.as_ref()).is_none_or(|d| d.stage != Stage::Asked) {
             return;
@@ -228,7 +228,7 @@ impl Zones {
 
     /// `0x240A` for an item the caller found in its bags as asked (section 4): the request echoed, the partner shown the item.
     pub fn duel_stake(&self, map: u16, me: u32, offer: Offer, item: &w::ItemUnit) -> bool {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return false };
         let Some((other, mine, theirs)) = Self::window_sides(players, me) else { return false };
         let offered = Offered { bag: offer.bag, slot: offer.slot, count: offer.count, item_type: item.item_type, type_id: item.type_id };
@@ -243,7 +243,7 @@ impl Zones {
 
     /// `0x240B`.
     pub fn duel_unstake(&self, map: u16, me: u32, stake_slot: u8) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some((other, mine, theirs)) = Self::window_sides(players, me) else { return };
         let Some(unready) = du::take_back(mine, theirs, stake_slot) else { return };
@@ -257,14 +257,14 @@ impl Zones {
     /// A side's stakes could not be taken as staked (an item gone or smaller, the gold short; audit R3): the duel ends for both, the
     /// stakes window closed on both screens, and whatever the partner's connection took already goes on the ground at its feet.
     pub fn duel_stakes_failed(&self, map: u16, me: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         self.end_duel(map, players, me, How::Interrupted, now);
     }
 
     /// `0x240C` with an amount the caller has.
     pub fn duel_money(&self, map: u16, me: u32, money: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some((other, mine, theirs)) = Self::window_sides(players, me) else { return };
         if du::set_money(mine, theirs, money) {
@@ -277,7 +277,7 @@ impl Zones {
     /// `0x2409` (section 4). True when both are ready now: the caller takes its stakes out, the partner's connection is woken to take
     /// its own (`ZoneEvent::DuelStakes`).
     pub fn duel_ready(&self, map: u16, me: u32, request: u8) -> bool {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return false };
         let Some((other, mine, theirs)) = Self::window_sides(players, me) else { return false };
         match request {
@@ -309,7 +309,7 @@ impl Zones {
 
     /// The other side of a player's duel, with its name (the game log's duel records).
     pub fn duel_partner(&self, map: u16, me: u32) -> Option<(u32, String)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let players = maps.get(&map)?;
         let other = partner(players, me)?;
         Some((other, String::from_utf8_lossy(&players[&other].occupant.shape.name).trim_end_matches('\0').to_owned()))
@@ -317,7 +317,7 @@ impl Zones {
 
     /// What a player taking its stakes out staked: the items and the money.
     pub fn duel_offers(&self, map: u16, me: u32) -> Option<(Vec<Option<Offered>>, u32)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let side = maps.get(&map)?.get(&me)?.duel.as_ref()?;
         (side.stage == Stage::Taking && side.held.is_none()).then(|| (side.offers.to_vec(), side.money))
     }
@@ -326,7 +326,7 @@ impl Zones {
     /// midpoint: `0x2403` to both, 5 s. When the duel ended meanwhile they go back to it on the ground at its feet, as the original's
     /// ends do; when the player is no longer in the zone they are returned for its bags.
     pub fn duel_staked(&self, map: u16, me: u32, held: Held, now: Instant) -> Option<Held> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map).filter(|players| players.contains_key(&me)) else { return Some(held) };
         let taking = partner(players, me).filter(|_| players[&me].duel.as_ref().is_some_and(|d| d.stage == Stage::Taking));
         let Some(other) = taking else {
@@ -350,14 +350,14 @@ impl Zones {
 
     /// `0x2406` (section 6.3): only while fighting; both get their stakes back, no winner.
     pub fn duel_give_up(&self, map: u16, me: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         self.end_duel(map, players, me, How::GaveUp, now);
     }
 
     /// After a step (section 6.4): more than 40 from the centre ends the window, the countdown or the fight.
     pub fn duel_moved(&self, map: u16, me: u32, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get(&me) else { return };
         let out = p
@@ -371,7 +371,7 @@ impl Zones {
 
     /// Every second (`CUser::PvPChkLeaveByTime`, section 5): a request without an answer ends, a countdown over starts the fight.
     pub fn duel_timers(&self, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         for players in maps.values_mut() {
             let due: Vec<u32> = players.values().filter(|p| p.duel.as_ref().is_some_and(|d| d.due(now))).map(|p| p.occupant.id).collect();
             for id in due {

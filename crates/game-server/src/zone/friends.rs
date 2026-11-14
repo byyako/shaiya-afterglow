@@ -29,7 +29,7 @@ impl Zones {
 
     /// Leaving the world (`CUser::ReleaseFriend`), before `Zones::leave`: a waiting request is refused to an asker on `map`.
     pub fn friend_leave_world(&self, map: u16, id: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         self.friends().disconnect(id, |asker| maps.get(&map).is_some_and(|players| players.contains_key(&asker)));
     }
 
@@ -44,13 +44,13 @@ impl Zones {
 
     /// `0x2202` (section 3): the one asked must be on the asker's map.
     pub fn friend_request(&self, map: u16, me: u32, name: &[u8], now: Instant) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         self.friends().request(me, name, |id| maps.get(&map).is_some_and(|players| players.contains_key(&id)), now);
     }
 
     /// `0x2203` (section 4): the asker must be on the answerer's map.
     pub fn friend_answer(&self, map: u16, me: u32, yes: bool, now: Instant) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         self.friends().answer(me, yes, |id| maps.get(&map).is_some_and(|players| players.contains_key(&id)), now);
     }
 
@@ -76,7 +76,7 @@ impl Zones {
 
     /// `0x220C` (section 8): among the players on the map, registered unless in a party.
     pub fn party_search(&self, map: u16, me: u32) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let parties = self.parties.guard();
         let on_map: Vec<u32> = maps.get(&map).map(|players| players.keys().copied().collect()).unwrap_or_default();
         self.friends().party_search(me, parties.party_of(me).is_some(), &on_map);

@@ -22,7 +22,7 @@ impl Zones {
         defs: &MobDefs,
     ) -> Result<u16, u8> {
         let party = self.parties.guard().party_of(me).map(|p| (p.id, p.members.len()));
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut instances = self.instances.guard();
         let existing = party.and_then(|(id, _)| instances.find(map, instance::Owner::Party(id)));
         let full = existing.is_some_and(|zone| {
@@ -110,7 +110,7 @@ impl Zones {
     /// The one-second pass of section 6: instance zones empty for their map's `ExpireTime` go, with their monsters, NPCs, items on
     /// the ground and fields. Returns how many went.
     pub fn expire_instances(&self, now: Instant, world: &World) -> usize {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let gone = {
             let occupied = |zone: u16| maps.get(&zone).is_some_and(|players| !players.is_empty());
             let mut instances = self.instances.guard();
@@ -143,7 +143,7 @@ impl Zones {
 
     /// Each zone of a map, the static one and its instances, with its players and living monsters (`map`).
     pub fn map_report(&self, map: u16) -> Vec<(u16, usize, usize)> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mobs = self.mobs.guard();
         let mut zones: Vec<u16> = maps.keys().chain(mobs.keys()).copied().filter(|&z| crate::world::map_of(z) == map).collect();
         zones.sort_unstable();

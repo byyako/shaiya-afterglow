@@ -3,7 +3,6 @@
 //! players from a caller that holds it. The summon's timing and the mount item are the connection's.
 
 use super::*;
-use crate::sync::Relock;
 use shaiya_proto::vehicle as vp;
 
 /// A mount being ridden: its shape (`m_nVehicleType + m_nVehicleTypeAdd`, section 3) and whether it takes a passenger (type 15).
@@ -170,13 +169,13 @@ pub(super) fn split(players: &mut Players, id: u32, leaving: bool, now: Instant)
 impl Zones {
     /// The player's vehicle status.
     pub fn riding(&self, map: u16, id: u32) -> Riding {
-        self.maps.guard().get(&map).and_then(|p| p.get(&id)).map_or(Riding::OnFoot, |p| p.ride.status)
+        self.maps().get(&map).and_then(|p| p.get(&id)).map_or(Riding::OnFoot, |p| p.ride.status)
     }
 
     /// The summoning starts (section 1): an invitation the player received is dropped (its asker gets `0x021E` 2), and `0x0217` goes
     /// to the view; returns it for the player.
     pub fn start_summon(&self, map: u16, id: u32) -> Vec<u8> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(p) = players.get_mut(&id) else { return Vec::new() };
         p.ride.status = Riding::Summoning;
@@ -196,7 +195,7 @@ impl Zones {
 
     /// A summon stops without a word (a step, a failed completion).
     pub fn stop_summon(&self, map: u16, id: u32) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|p| p.get_mut(&id))
+        if let Some(p) = self.maps().get_mut(&map).and_then(|p| p.get_mut(&id))
             && p.ride.status == Riding::Summoning
         {
             p.ride.status = Riding::OnFoot;
@@ -206,7 +205,7 @@ impl Zones {
     /// The summon completes: riding, the mount's shape to the view; returns it for the player. `None` when the player is no longer
     /// summoning.
     pub fn mount(&self, map: u16, id: u32, mount: Mount) -> Option<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let players = maps.get_mut(&map)?;
         let p = players.get_mut(&id).filter(|p| p.ride.status == Riding::Summoning)?;
         p.ride.status = Riding::Riding(mount);
@@ -221,7 +220,7 @@ impl Zones {
     /// Getting off, or a summon stopped, by `0x0216` or a change of the mount slot (sections 1 and 2): a passenger put down, on foot,
     /// the shape to the view; returns it for the player. `None` when neither summoning nor riding.
     pub fn dismount(&self, map: u16, id: u32) -> Option<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let players = maps.get_mut(&map)?;
         let status = players.get(&id)?.ride.status;
         if !matches!(status, Riding::Summoning | Riding::Riding(_)) {
@@ -242,7 +241,7 @@ impl Zones {
     /// asked already. Returns `0x021E` 2 for the asker when that fails; otherwise the target gets `0x021D`.
     pub fn ask_to_ride(&self, map: u16, asker: u32, target: u32, now: Instant) -> Option<Vec<u8>> {
         let failed = Some(vp::answer(vp::ASK_FAILED));
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return failed };
         let Some(a) = players.get(&asker) else { return failed };
         let two_seat = matches!(a.ride.status, Riding::Riding(Mount { two_seat: true, .. }));
@@ -263,7 +262,7 @@ impl Zones {
     /// `0x021E` (section 4): the answer of an on-foot player with an invitation goes to its asker as it came; yes (0) puts it behind
     /// the asker (`0x021C` to its view). Both invitations end.
     pub fn answer_ride(&self, map: u16, target: u32, answer: u8, now: Instant) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(t) = players.get_mut(&target) else { return };
         if t.ride.status != Riding::OnFoot || t.ride.invite == 0 {
@@ -285,7 +284,7 @@ impl Zones {
 
     /// `0x021C` from a passenger (section 4): it gets off; its driver rides on.
     pub fn get_off_behind(&self, map: u16, passenger: u32) {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
         let Some(p) = players.get(&passenger).filter(|p| p.ride.status == Riding::Behind) else { return };
         let driver = p.ride.partner;

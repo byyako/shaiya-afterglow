@@ -277,7 +277,7 @@ impl Zones {
     /// `CMap::ObeliskReset` on every map of create type 0 (a faction reached its top grade): a standing obelisk's monster goes
     /// with its guards; every obelisk is down for ten minutes at its base country; `0x2102` to the map, and the owners are saved.
     pub fn reset_obelisks(&self, now: Instant, world: &World) {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         for (&map, mobs) in all.iter_mut().filter(|(map, mobs)| !mobs.obelisks.is_empty() && world.create_type(**map) == 0) {
             let players = maps.get(&map);
@@ -316,7 +316,7 @@ impl Zones {
 
     /// A packet for every player in the world (`CWorld::SendAll`).
     pub fn send_all(&self, packet: &[u8]) {
-        for p in self.maps.guard().values().flat_map(|players| players.values()) {
+        for p in self.maps().values().flat_map(|players| players.values()) {
             p.send(packet);
         }
     }

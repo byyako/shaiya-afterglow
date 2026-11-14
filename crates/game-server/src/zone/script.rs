@@ -79,7 +79,7 @@ impl Zones {
     /// Leaves an order for a player and wakes its connection (the way a GM's order goes, `admin_order`). False when the player is not
     /// in a zone here (nothing is left).
     pub fn script_order(&self, target: u32, queued: crate::script::event::Queued) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(p) = maps.values().find_map(|players| players.get(&target)) else { return false };
         let mut orders = self.script_orders.guard();
         orders.entry(target).or_default().push(queued);
@@ -120,7 +120,7 @@ impl Zones {
     /// A player online here, by character id.
     pub fn script_view(&self, id: u32) -> Option<PlayerView> {
         let found = {
-            let maps = self.maps.guard();
+            let maps = self.maps();
             maps.iter().find_map(|(&map, players)| players.get(&id).map(|p| view(map, p)))
         };
         found.and_then(|v| self.with_staff(vec![v]).pop())
@@ -129,7 +129,7 @@ impl Zones {
     /// A player online here, by name, ignoring case.
     pub fn script_find(&self, name: &str) -> Option<PlayerView> {
         let found = {
-            let maps = self.maps.guard();
+            let maps = self.maps();
             maps.iter().find_map(|(&map, players)| {
                 players.values().find(|p| p.occupant.shape.name.eq_ignore_ascii_case(name.as_bytes())).map(|p| view(map, p))
             })
@@ -140,7 +140,7 @@ impl Zones {
     /// The players online here, at most `max`, by character id.
     pub fn script_online(&self, max: usize) -> Vec<PlayerView> {
         let mut views: Vec<PlayerView> = {
-            let maps = self.maps.guard();
+            let maps = self.maps();
             maps.iter().flat_map(|(&map, players)| players.values().map(move |p| view(map, p))).collect()
         };
         views.sort_by_key(|v| v.id);
@@ -149,12 +149,12 @@ impl Zones {
     }
 
     pub fn script_online_count(&self) -> usize {
-        self.maps.guard().values().map(HashMap::len).sum()
+        self.maps().values().map(HashMap::len).sum()
     }
 
     /// The members of the player's party or union (itself included, `[id]` without one), whoever is in the world.
     pub fn script_party(&self, id: u32) -> Vec<u32> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         if !maps.values().any(|players| players.contains_key(&id)) {
             return Vec::new();
         }
@@ -269,7 +269,7 @@ impl Zones {
         if count == 0 {
             return Vec::new();
         }
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let Some(players) = maps.get(&zone) else { return Vec::new() };
         let mobs = all.entry(zone).or_default();
@@ -317,7 +317,7 @@ impl Zones {
     }
 
     fn remove_spawns(&self, list: &[(u32, u16)], now: Instant) -> usize {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let mut all = self.mobs.guard();
         let mut removed = 0;
         for &(uid, zone) in list {

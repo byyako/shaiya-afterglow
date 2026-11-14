@@ -33,7 +33,7 @@ impl Zones {
     }
 
     fn recover_with(&self, map: u16, id: u32, amounts: impl FnOnce([u16; 3]) -> [u16; 3]) -> Option<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let players = maps.get_mut(&map)?;
         let me = players.get_mut(&id)?;
         let amounts = amounts(me.occupant.vitals.max);
@@ -52,7 +52,7 @@ impl Zones {
     /// A cure item (`CUser::ItemUseRemState`, section 5): the applied skills it removes go (`0x050E` each, returned for the player),
     /// the shape and numbers follow, and its protections are set.
     pub fn cure(&self, map: u16, id: u32, cure: &Cure) -> Vec<Vec<u8>> {
-        let mut maps = self.maps.guard();
+        let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
         let Some(me) = players.get_mut(&id) else { return Vec::new() };
         let buffs = &mut me.occupant.buffs;
@@ -69,7 +69,7 @@ impl Zones {
 
     /// A stat or skill reset clears the cure items' protections (`CUser::SkillClearAll`).
     pub fn clear_protections(&self, map: u16, id: u32) {
-        if let Some(p) = self.maps.guard().get_mut(&map).and_then(|players| players.get_mut(&id)) {
+        if let Some(p) = self.maps().get_mut(&map).and_then(|players| players.get_mut(&id)) {
             p.occupant.buffs.block_dying = false;
             p.occupant.buffs.block_death = false;
         }
@@ -77,14 +77,14 @@ impl Zones {
 
     /// Whether a buff item's skill is refused for the player (`CUser::UseItemSkill`, section 7).
     pub fn item_skill_refused(&self, map: u16, id: u32, def: &SkillDef) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         maps.get(&map).and_then(|players| players.get(&id)).is_none_or(|p| p.occupant.buffs.item_skill_refused(def))
     }
 
     /// The Target Resurrection Rune (section 10): another player in the zone, dead, of the user's country, comes back to life where
     /// the user stands (as the Resurrection skill, `ZoneEvent::Resurrected`). False when it cannot.
     pub fn resurrect_by_item(&self, map: u16, user: u32, target: u32) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(players) = maps.get(&map) else { return false };
         let (Some(me), Some(them)) = (players.get(&user), players.get(&target)) else { return false };
         if user == target || !them.dead || them.occupant.shape.country != me.occupant.shape.country {
@@ -95,7 +95,7 @@ impl Zones {
 
     /// The members of the player's party, wherever they are in the world; `None` without a party.
     pub fn party_members_placed(&self, id: u32) -> Option<Vec<Member>> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let members = self.parties.guard().party_of(id)?.members.clone();
         let placed = members
             .into_iter()
@@ -117,7 +117,7 @@ impl Zones {
 
     /// A player anywhere in the world (`CWorld::FindUserZoneMove`).
     pub fn locate(&self, id: u32) -> Option<Member> {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         maps.iter().find_map(|(&map, players)| {
             players.get(&id).map(|p| Member {
                 id,
@@ -133,7 +133,7 @@ impl Zones {
     /// A summon asks `member` (`m_dwPartyCallReqID`, `m_dwTimeOverPartyCall`): `0x0223` and 35 s to answer. False when a summon
     /// is already waiting for it or it has left.
     pub fn ask_party_call(&self, member: &Member, summoner: u32, now: Instant) -> bool {
-        let maps = self.maps.guard();
+        let maps = self.maps();
         let Some(p) = maps.get(&member.map).and_then(|players| players.get(&member.id)) else { return false };
         let mut calls = self.party_calls.guard();
         if calls.contains_key(&member.id) {
