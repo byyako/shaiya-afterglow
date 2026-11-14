@@ -1,6 +1,6 @@
 # Test bots and the PvP swarm (spec and build plan)
 
-**Specified 2026-11-12 (first draft and this full version the same day); parts 1 to 4 built** (`crates/bot`: link, login, enter, world,
+**Specified 2026-11-12 (first draft and this full version the same day); parts 1 to 4 built; the runs at 300, 700 and 1000 bots done (`docs/testing/load-pvp.md`)** (`crates/bot`: link, login, enter, world,
 metrics, `bot probe`, the `pvp-battle` loop for one bot; 17 tests). What part 1 settled, where the code corrected the spec:
 
 - **Leaving needs sitting**: the server ignores `0x0107` from a standing player (`server.rs`, `OP_LOGOUT_TO_SELECT`), so a bot sends
@@ -449,6 +449,10 @@ what limits each; the bottlenecks found are fixed or listed.
   named player and follows them, for the two-client items of `docs/testing/live-test-solo.md`.
 - **Bot-only scenarios**: checklist items that need no eyes (an answer packet and a database row), run as a test command.
 - **The soak test**: hundreds of bots spread over the maps, hours long, for the 1.0 capacity figure.
+- **Known gap in the bots' logout** (F6 of `docs/testing/load-pvp.md`, found 2026-11-14): `leave` in `crates/bot/src/bot.rs` asks to log
+  out again only on an `OP_ATTACK_USER` or a single-target skill hit, but the server also stands a sitting player up on area-skill
+  hits (`OP_USE_PARTY`, `0x0513`, which `crates/bot/src/world.rs` does not parse), so under a battle some bots (42 of 1000) never ask again
+  and are closed at the 30 s wait. A later bot change should treat any stand-up as "struck".
 
 ## 15. The Sonnet build prompt (one part at a time)
 

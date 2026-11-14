@@ -64,6 +64,10 @@ const KEPT_ENTRIES: usize = 4096;
 /// a send is an atomic add, a channel push and the wake of the receiving task, and with the lock held every other thread's step waits
 /// for them (`docs/plans/load-fixes.md` section 4, design B2).
 ///
+/// The order is kept per thread, not across threads: two operations on two threads that finish within microseconds of each other can
+/// reach a third player's outbox in the other order than they held the lock. A client drops a packet about an id it does not know yet,
+/// so such a swap (an appearance after a death, a hit on a just-spawned monster) shows until that unit's next update.
+///
 /// A send's outcome is applied at delivery, not at the call: a closed outbox drops the packet, a full one drops it and marks itself
 /// overflowed, as a direct send does, and `send` inside a scope always says `Ok`. Nothing reads that result or `queued()` under the
 /// lock. The scope is `!Send`: it belongs to the thread whose list it counts in, so it cannot be held across an `.await` that moves

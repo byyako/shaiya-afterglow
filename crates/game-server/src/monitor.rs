@@ -277,7 +277,8 @@ impl Counters {
     }
 
     /// The zone's `maps` lock was held for `held`, from taking it to releasing it (`zone::MapsGuard`). The lock is not re-entrant,
-    /// so the holds never overlap and their total over an interval cannot exceed the interval.
+    /// so the holds never overlap; a hold is counted when it ends, so the total over an interval can exceed the interval by up to one
+    /// hold that began before the interval did.
     pub fn maps_held(&self, held: Duration) {
         let ns = u64::try_from(held.as_nanos()).unwrap_or(u64::MAX);
         self.maps_held_ns.fetch_add(ns, Relaxed);

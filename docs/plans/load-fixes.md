@@ -1,6 +1,6 @@
 # Load fixes: what the PvP swarm found (spec and build plan)
 
-**Specified 2026-11-13; not built.** The fixes for the open findings of `docs/testing/load-pvp.md` (F2 to F5) and the uncommitted
+**Specified 2026-11-13; built 2026-11-14** (pieces 1 to 11b: the fixes are committed with their tests, the runs of 2026-11-14 held every target, and the write-up is in `docs/testing/load-pvp.md`). The fixes for the open findings of `docs/testing/load-pvp.md` (F2 to F5) and the uncommitted
 batching change in `server.rs`, then the 700 run again. Each piece below is built by one agent and reviewed before the next starts
 (section 6 and `load-fixes-prompt.md`).
 
@@ -211,7 +211,9 @@ including the operations nobody would think to convert by hand (`enter`'s 2,100 
 exactly (all its sends are queued in order and delivered in order, so `attack_player`'s death packets still come before the blow), and
 is small to review: the guard, the scope, and a rename the compiler checks. What it gives up: two operations that finish within
 microseconds of each other on two threads may reach a third player's outbox in the other order than they held the lock. The client
-already sees such orders (section 3.5, last points). If the run or the client shows artifacts from it, the fallback is to deliver under a
+already sees such orders (section 3.5, last points), but it drops a packet about an id it does not know yet, so a swap (an appearance
+after a death, a hit on a just-spawned monster) lasts until that unit's next update, and a dropped `0x0610` HP delta leaves a bar off
+for the fight; the runs were bots only, so this is unchecked on a real client. If the run or the client shows artifacts from it, the fallback is to deliver under a
 second mutex taken before `maps` is released (deliveries then keep the lock's order, at the price of being one at a time).
 
 Its invariants:
@@ -249,9 +251,9 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 9 | F2c, sends deferred while `maps` is held | done | 412f9c3 | accepted 2026-11-14, 1 round |
 | 10 | F2d, a step's follow-up checks | done | 06fb355 | accepted 2026-11-14, 1 round |
 | 11a | the runs and the cleanup | done | (no commit; logs/load-pvp/R2-summary.txt) | accepted 2026-11-14, 1 round; all targets held, no extra round |
-| 11b | the write-up and the push | not started | | |
+| 11b | the write-up and the push | done | this commit | the push is the report's last line |
 
-**Carry-overs for piece 11b** (non-blocking notes from the reviews; 11b's builder takes them with its write-up, small doc edits only):
+**Carry-overs for piece 11b** (non-blocking notes from the reviews; 11b took them with its write-up, small doc edits only; all taken except `defer()`'s `try_with`, which is a code change, left):
 
 - Piece 6: a held session now tolerates about 85 s of failed heartbeats before its row expires (it was about 115 s), and is purged after about
   145 s; the 1000 run's `pool timed out` window was about 90 s. Say so in the write-up. `docs/server/settings.md` (the `db_pool` row): reword
@@ -645,7 +647,7 @@ target is recorded as an open finding; links check; the push went through or its
 
 | risk | effect | answer |
 |---|---|---|
-| deferred sends reorder two near-simultaneous operations at a third player | a client sees, say, a death before the dead player's entry for a moment | the client already sees such orders (section 3.5); the fallback of section 4 keeps the lock's order |
+| deferred sends reorder two near-simultaneous operations at a third player | a client sees, say, a death before the dead player's entry; the client drops a packet about an id it does not know yet, so it lasts until that unit's next update, and a dropped `0x0610` HP delta leaves a bar off for the fight | the client already sees such orders (section 3.5); the fallback of section 4 keeps the lock's order |
 | a long operation under `maps` queues thousands of packets on one thread | memory per worker; one delivery burst | bounded by the operation (`enter` at 1000: about 3000 entries); the capacity is cut back |
 | an `.await` while `maps()` is held, in a future that is not spawned | the deferral scope would span other tasks' work on that thread | the guard is `!Send`; reviewers grep; spawned tasks cannot compile it |
 | batching delays a packet behind 16 KB of others | a few microseconds more per write | the write is one system call either way; the run measures the step echo |

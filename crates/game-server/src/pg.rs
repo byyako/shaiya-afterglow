@@ -33,10 +33,11 @@ use crate::world::{BindArea, Gate, GateKeeper, MapNpcRow, Portal, World};
 /// How long a session stays valid without a heartbeat once its player is in the game. The heartbeat renews it while a connection of
 /// this server holds the account, so it runs out when this server stops or when its end was lost.
 pub const SESSION_GAME_SECS: f64 = 120.0;
-/// The heartbeat rewrites a held session's row only when it has less than this many seconds left, so a row is written about every
-/// `SESSION_GAME_SECS - SESSION_RENEW_BELOW` seconds (30) instead of at every beat: at 1000 players, 1000 row updates every 5 seconds
-/// were most of the heartbeat's cost. The beat just before a row is renewed finds it with at least `SESSION_RENEW_BELOW` minus one
-/// interval left, so a row never has under 85 seconds left with the default interval of 5 and still 30 with an interval of 60.
+/// The heartbeat rewrites a held session's row only when it has less than this many seconds left, so a row is written every 30 to 35
+/// seconds (the first beat that finds under `SESSION_RENEW_BELOW`: 35 with the default interval of 5) instead of at every beat: at
+/// 1000 players, 1000 row updates every 5 seconds were most of the heartbeat's cost. A row never has under 85 seconds left with the
+/// default interval of 5 (`SESSION_RENEW_BELOW` minus one interval); with an interval over 30 seconds every beat finds it under the
+/// threshold and renews it, so it keeps `SESSION_GAME_SECS` minus one interval (60 seconds at an interval of 60, not 30).
 pub const SESSION_RENEW_BELOW: f64 = 90.0;
 /// The login server's notification of every login (`docs/original/client-extras.md` section 3.2).
 pub const ACCOUNT_LOGIN_CHANNEL: &str = "account_login";
