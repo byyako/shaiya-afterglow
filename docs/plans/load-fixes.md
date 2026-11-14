@@ -242,7 +242,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 2 | F3, sessions | done | 04bfdb5 | accepted 2026-11-14, 1 round |
 | 3 | F5, the kill counts | done | 23ccf8b | accepted 2026-11-14, 1 round |
 | 4 | F4a, the pool measured, `load` on one connection | done | 85d19af | accepted 2026-11-14, 1 round |
-| 5 | F4b, fewer round trips in `load` | not started | | |
+| 5 | F4b, fewer round trips in `load` | done | 3876678 | accepted 2026-11-14, 1 round |
 | 6 | F4c, the heartbeat's session writes | not started | | |
 | 7 | F2a, the ban end kept in the world loop | not started | | |
 | 8 | F2b, the `maps` guard and its hold time | not started | | |
