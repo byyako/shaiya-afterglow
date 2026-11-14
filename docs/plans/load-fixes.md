@@ -243,13 +243,24 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 3 | F5, the kill counts | done | 23ccf8b | accepted 2026-11-14, 1 round |
 | 4 | F4a, the pool measured, `load` on one connection | done | 85d19af | accepted 2026-11-14, 1 round |
 | 5 | F4b, fewer round trips in `load` | done | 3876678 | accepted 2026-11-14, 1 round |
-| 6 | F4c, the heartbeat's session writes | not started | | |
+| 6 | F4c, the heartbeat's session writes | done | 2f81384 | accepted 2026-11-14, 1 round |
 | 7 | F2a, the ban end kept in the world loop | not started | | |
 | 8 | F2b, the `maps` guard and its hold time | not started | | |
 | 9 | F2c, sends deferred while `maps` is held | not started | | |
 | 10 | F2d, a step's follow-up checks | not started | | |
 | 11a | the runs and the cleanup | not started | | |
 | 11b | the write-up and the push | not started | | |
+
+**Carry-overs for piece 11b** (non-blocking notes from the reviews; 11b's builder takes them with its write-up, small doc edits only):
+
+- Piece 6: a held session now tolerates about 85 s of failed heartbeats before its row expires (it was about 115 s), and is purged after about
+  145 s; the 1000 run's `pool timed out` window was about 90 s. Say so in the write-up. `docs/server/settings.md` (the `db_pool` row): reword
+  the entering sentence to "about 20 statements on 6 to 8 connections taken one after another (the handshake 3, the list 1, `load` 1 for its
+  twelve statements, the world 1 to 3)", and drop "so the default stays" (the reason is that raising it does not help). `pg.rs`
+  `SESSION_RENEW_BELOW` comment: a row is rewritten every 30 to 35 s, and at a 60 s interval it keeps 60 s, not 30 (the floor is `SESSION_GAME_SECS`
+  minus one interval when that is smaller).
+- Piece 4: `db_waits` counts only `load`'s acquisition; the write-up must say so when it quotes the figure.
+- Piece 3: `docs/testing/load-pvp.md` F5 text: "the ones counted are from 2026-11-04 to 11-11" could name the 36 INSERTs and 2,101 UPDATEs.
 
 ### Piece 0. The specs committed (the orchestrator)
 
