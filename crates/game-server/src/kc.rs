@@ -434,6 +434,30 @@ mod tests {
     }
 
     #[test]
+    fn with_counting_off_kills_move_nothing_but_the_tick_still_sends_and_saves() {
+        let t0 = Instant::now();
+        // Not at the top grade, so only `disabled` can be what holds the counts (the control: with counting on, a kill moves them).
+        let mut on = KillCounts::new(grades(), [10, 20], t0);
+        on.add(0, 1, t0);
+        assert_eq!(on.counts(), [11, 20]);
+
+        let mut k = KillCounts::new(grades(), [10, 20], t0);
+        k.disabled = true;
+        assert_eq!(k.add(0, 5, t0), Changes::default());
+        assert_eq!(k.add(1, 500, t0), Changes::default(), "not even a kill that would reach the top");
+        assert_eq!(k.sub(0, 5, t0), Changes::default());
+        assert_eq!(k.add_grade(0, BLESSING_GRADES, t0), None);
+        assert!(!k.can_add_grade(0) && !k.can_add_grade(1));
+        assert_eq!(k.counts(), [10, 20]);
+        // The tick does not look at `disabled`: at `PERIOD` it sends both factions' `0x020F` and asks for a save of the same counts
+        // (`CWorld::UpdateKillCount` does the same with counting off).
+        assert_eq!(k.tick(t0), Changes { sent: [true; 2], save: true, ..Default::default() }, "at once after loading");
+        assert_eq!(k.tick(t0 + Duration::from_secs(599)), Changes::default());
+        assert_eq!(k.tick(t0 + PERIOD), Changes { applied: [false; 2], sent: [true, true], save: true, top: false, top_by: None });
+        assert_eq!(k.counts(), [10, 20]);
+    }
+
+    #[test]
     fn percentages_truncate_in_single_precision() {
         assert_eq!(percent(1000, 6), 59);
         assert_eq!(percent(1234, 5), 61);

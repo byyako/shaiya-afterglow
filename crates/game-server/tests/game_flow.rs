@@ -4489,6 +4489,45 @@ async fn the_monster_ticks_saves_go_to_a_queue_and_are_flushed_in_order() {
 }
 
 #[tokio::test]
+async fn kill_count_false_survives_loading_the_saved_counts() {
+    use game_server::kc::{Grades, Row};
+    use game_server::server::load_kill_counts;
+    // Real grades, so that a count held at 3 and 4 is held by `kill_count = false` and not by a faction sitting in its top grade
+    // (with no grades at all, grade 0 is the top and counting is frozen whatever the setting).
+    let row = |faction, kills| Row { faction, kills, bonuses: [(0, 0); 6] };
+    let grades = || Grades::new(&[row(0, 150), row(1, 150), row(0, 300), row(1, 300)]);
+    let counts = |off: bool| {
+        let mut data = data();
+        data.kill_grades = grades();
+        let backend = Arc::new(MemoryBackend::default());
+        *backend.kill_counts.guard() = [3, 4];
+        let config = Config { kill_count: !off, ..config(true) };
+        Context::new(config, backend, data)
+    };
+
+    let ctx = counts(true);
+    assert!(ctx.kill_counts.guard().disabled, "the setting is applied at construction");
+    load_kill_counts(&ctx).await.unwrap();
+    let now = std::time::Instant::now();
+    {
+        let mut k = ctx.kill_counts.guard();
+        assert_eq!(k.counts(), [3, 4], "the saved counts are loaded");
+        assert!(k.disabled, "and counting is still off");
+        assert_eq!(k.add(0, 1, now), game_server::kc::Changes::default());
+        assert_eq!(k.sub(1, 1, now), game_server::kc::Changes::default());
+        assert_eq!(k.counts(), [3, 4], "a kill moves nothing");
+    }
+
+    // The control: the same load with counting on, and the same kill moves the count.
+    let ctx = counts(false);
+    load_kill_counts(&ctx).await.unwrap();
+    let mut k = ctx.kill_counts.guard();
+    assert!(!k.disabled);
+    k.add(0, 1, now);
+    assert_eq!(k.counts(), [4, 4]);
+}
+
+#[tokio::test]
 async fn a_connection_that_panics_inside_a_zone_lock_leaves_the_zone_and_the_server_goes_on() {
     let backend = Arc::new(MemoryBackend::default());
     let (addr, ctx) = start(backend.clone(), true).await;

@@ -81,10 +81,10 @@ crowd: 300 to 700 is 2.3 times the players and about 4 times the packets. The bo
 another machine would free that core but not move the knee much. The `maps` mutex is the lock that waits (the spec's expectation),
 up to a quarter of the time across the 4 workers at 700 to 1000.
 
-**1000 at 10 a second**: entering is the first thing to break. The game server's database pool ran dry (1,223 waits of 2 s or more
-for a connection, 17 "pool timed out") and the heartbeat's `UPDATE game_servers SET players …` showed up 670 times as a slow
-statement; 288 bots gave up waiting for the burst after selecting their character, and do not reconnect. The 700 run at 5 a second
-had no pool waits at all.
+**1000 at 10 a second**: entering is the first thing to break. The game server's database pool ran dry: the log has 1,225 slow
+acquisitions (past 2 s; median 2.7 s, longest 6.1 s), 1,221 of them in the one minute 05:26, and 28 `pool timed out` (25 dropped
+connections, two failed session ends and one lost game-log batch); no slow statement was logged. 288 bots gave up waiting for the
+burst after selecting their character, and do not reconnect. The 700 run at 5 a second had no pool waits at all.
 
 ## The real client
 
@@ -112,6 +112,9 @@ left behind. That is the next question for R2 (100 bots with the client) and R3 
   the server has online, or the failed end is retried.
 - **F4, the database pool at entry**: 10 logins a second with 700+ in the world empties it. Look at what entering costs (the loads,
   the heartbeat's player-count update) and the pool size (`db_pool`) before a faster ramp.
-- **F5, a question**: the slow statements in the 1000 run include 12 `INSERT INTO faction_kill_counts …`, the save made when the counts
-  change, although `kill_count = false`. After the runs the counts read Light 0, Fury 1366. Whether bot kills moved them is not yet
-  checked.
+- **F5, answered: not a bug.** With `kill_count = false` a kill cannot move the counts (`kc.rs`, `frozen`). The counts read Light 0,
+  Fury 1366 at every start since 2026-11-03, before the bots. The `INSERT INTO faction_kill_counts` is the ten-minute tick, which saves
+  the unchanged counts whether counting is on or off, as the original's `CWorld::UpdateKillCount`. None of the slow statements was
+  logged during the runs: the ones counted are from 2026-11-04 to 11-11, before the databases moved to the SSD (one more `INSERT`, on
+  2026-11-14, is after the runs). Pinned by `kc.rs` `with_counting_off_kills_move_nothing_but_the_tick_still_sends_and_saves` and
+  `tests/game_flow.rs` `kill_count_false_survives_loading_the_saved_counts`.
