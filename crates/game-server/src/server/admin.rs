@@ -1102,6 +1102,8 @@ pub(super) async fn carry_out<S: Backend>(
                     state.move_banned = false;
                 }
             }
+            // The loop sleeps on the kept end, so every change of the bans refreshes it (before anything that can fail).
+            state.ban_end = next_ban_end(ctx, id);
             resend_speeds(conn, ctx, state, id).await?;
             conn.send(ap::bare(op)).await?;
             ctx.zones.send_to_char(gm, &ap::answer(0));
@@ -1458,7 +1460,8 @@ async fn set<S: Backend>(
     Ok(())
 }
 
-/// The moment the next ban of the character ends.
+/// The moment the next ban of the character ends. Reads the zone's `bans` lock: the world loop keeps the answer in
+/// `WorldState::ban_end` and calls this only at entering and after it changed the bans itself.
 pub(super) fn next_ban_end<S>(ctx: &Context<S>, id: u32) -> Option<Instant> {
     let bans = ctx.zones.bans_of(id);
     [bans.chat, bans.moves]
@@ -1484,6 +1487,7 @@ pub(super) async fn bans_ended<S: Backend>(conn: &mut Connection, ctx: &Context<
         resend_speeds(conn, ctx, state, id).await?;
         conn.send(ap::bare(ap::OP_STOP_OFF)).await?;
     }
+    state.ban_end = next_ban_end(ctx, id);
     Ok(())
 }
 

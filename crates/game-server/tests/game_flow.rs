@@ -3014,6 +3014,54 @@ async fn gm_chat_reaches_the_view_and_chat_bans_silence_a_player() {
     assert_eq!(read_op(&mut gm, chat::OP_NORMAL).await, chat::by_id(chat::OP_NORMAL, bob_id, b"yo\0"));
 }
 
+/// A ban with a timed end, put through the zone's order queue as a GM's `/stop` and `/silence` put it (the commands' own minutes
+/// are whole ones), ends by itself while the player only waits: the world loop keeps the next end and refreshes it after each change.
+#[tokio::test]
+async fn a_timed_move_ban_ends_by_itself_in_the_world() {
+    use game_server::admin::Until;
+    use game_server::zone::AdminOrder;
+    let backend = Arc::new(MemoryBackend::default());
+    let (addr, ctx) = start(backend.clone(), true).await;
+    let (mut gm, gm_id, mut bob, bob_id, _) = gm_and_player(&backend, addr, 1).await;
+    let (map, ..) = ctx.zones.find_by_name(b"Bob").expect("Bob is in the world");
+    let order = |op, until| AdminOrder::Ban { gm: gm_id, op, until };
+    let soon = |millis| Some(Until::At(std::time::Instant::now() + Duration::from_millis(millis)));
+    let before = std::time::Instant::now();
+
+    // A move ban 300 ms long: Bob is told it began, then, without sending anything, that it ended.
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_STOP, soon(300))));
+    assert_eq!(read_op(&mut bob, ap::OP_STOP).await, ap::bare(ap::OP_STOP));
+    assert_eq!(read_op(&mut gm, ap::OP_ANSWER).await, ap::answer(0));
+    assert_eq!(
+        timeout(Duration::from_secs(2), read_op(&mut bob, ap::OP_STOP_OFF)).await.expect("the ban ended by itself"),
+        ap::bare(ap::OP_STOP_OFF)
+    );
+    assert!(before.elapsed() >= Duration::from_millis(300), "not before its end: {:?}", before.elapsed());
+    assert_eq!(ctx.zones.bans_of(bob_id), game_server::zone::Bans::default(), "the zone's table is clean too");
+
+    // Two bans at once: the kept end is the nearer one, then the other; a ban lifted by hand leaves nothing to wake for.
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_STOP, soon(60_000))));
+    assert_eq!(read_op(&mut bob, ap::OP_STOP).await, ap::bare(ap::OP_STOP));
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_SILENCE, soon(300))));
+    assert_eq!(read_op(&mut bob, ap::OP_SILENCE).await, ap::bare(ap::OP_SILENCE));
+    assert_eq!(
+        timeout(Duration::from_secs(2), read_op(&mut bob, ap::OP_SILENCE_OFF)).await.expect("the chat ban ended by itself"),
+        ap::bare(ap::OP_SILENCE_OFF)
+    );
+    assert!(ctx.zones.bans_of(bob_id).moves.is_some(), "the long move ban is still on");
+    // Lifted by hand, a nearer one set after it and lifted again: nothing ends by itself afterwards.
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_STOP_OFF, None)));
+    assert_eq!(read_op(&mut bob, ap::OP_STOP_OFF).await, ap::bare(ap::OP_STOP_OFF));
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_SILENCE, soon(300))));
+    assert_eq!(read_op(&mut bob, ap::OP_SILENCE).await, ap::bare(ap::OP_SILENCE));
+    assert!(ctx.zones.admin_order(map, bob_id, order(ap::OP_SILENCE_OFF, None)));
+    assert_eq!(read_op(&mut bob, ap::OP_SILENCE_OFF).await, ap::bare(ap::OP_SILENCE_OFF));
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    bob.write(shaiya_proto::encode(w::OP_MOTION, &[0])).await;
+    let seen = read_until(&mut bob, w::OP_MOTION).await;
+    assert!(seen.iter().all(|p| frame::opcode(p) != ap::OP_SILENCE_OFF), "the lifted ban did not end a second time");
+}
+
 /// What the next whisper says (`0x1102`, the receiving form): its sender and its text.
 async fn next_whisper(client: &mut Client) -> (String, String) {
     let packet = read_op(client, chat::OP_WHISPER).await;

@@ -1165,6 +1165,10 @@ struct WorldState {
     gm: crate::admin::Flags,
     /// A move ban is on (`FA0F`): the move speed is 255.
     move_banned: bool,
+    /// When the player's next timed chat or move ban runs out: read from the zone's ban table once at entering and again after every
+    /// change this task makes to the player's bans (`AdminOrder::Ban`, `admin::bans_ended`; no other task changes them), so the loop's
+    /// turn never takes the `bans` lock to find it.
+    ban_end: Option<Instant>,
     /// A `/xcall` move waiting for its time: when, the zone and the spot.
     called: Option<(Instant, u16, [f32; 3])>,
     /// The notices the staff member repeats (`F907` to `F90B`); they end with the connection.
@@ -1338,6 +1342,7 @@ async fn in_world<S: Backend>(
         staff_level: player.privilege.load(Ordering::Relaxed),
         gm: crate::admin::Flags::on_entering(staff),
         move_banned: ctx.zones.bans_of(character.id).moves.is_some(),
+        ban_end: admin::next_ban_end(ctx, character.id),
         called: None,
         notices: crate::admin::Notices::default(),
         entered: false,
@@ -1827,7 +1832,7 @@ async fn world_loop<S: Backend>(
                 admin::notices_due(conn, ctx, state, id).await?;
                 continue;
             }
-            () = sleep_until_some(admin::next_ban_end(ctx, id)) => {
+            () = sleep_until_some(state.ban_end) => {
                 admin::bans_ended(conn, ctx, state, id).await?;
                 continue;
             }
