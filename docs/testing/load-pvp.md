@@ -39,7 +39,7 @@ It shows no `LOGIN_` variable and `RUST_LOG` as the script's default (`info,game
 minute after.
 
 The settings after the 2026-11-12 runs were **not** put back: at the start of the load-fixes work (2026-11-13) the block and the
-variables were still live in the running servers, and they were put back on 2026-11-14. After the 2026-11-14 runs `config/game.toml`
+variables were still live in the running servers, and they were put back on 2026-11-14 (at 09:19 UTC, after the runs). After the 2026-11-14 runs `config/game.toml`
 equals `logs/game.toml-before-load-test` (no LOAD TEST block), and both servers were restarted with clean environments at 09:19 UTC.
 
 ## A run
@@ -234,14 +234,15 @@ left behind. That is the next question for R2 (100 bots with the client) and R3 
   logged during the runs: the ones counted (36 `INSERT INTO faction_kill_counts` and 2,101 `UPDATE game_servers SET players`) are from 2026-11-04 to 11-11,
   before the databases moved to the SSD (one more `INSERT`, on 2026-11-14, is after the runs). Pinned by `kc.rs` `with_counting_off_kills_move_nothing_but_the_tick_still_sends_and_saves` and
   `tests/game_flow.rs` `kill_count_false_survives_loading_the_saved_counts`.
-- **F6, new, open: the bots' logout leaves bots behind at 1000.** E2-1000 logged 958 of 1000 clean; R2-700 one of 700. From 09:17:35
-  the server logged `logout pending` (10 s) and `logout cancelled: attacked` for 747 bots; 42 had their logout cancelled by a hit and
-  never asked again (each closed at 30 s: `connection ended in the world; the character stays linger=10s`), and the server freed all
-  of them by 09:18:21. The gap is in the bots: `crates/bot/src/bot.rs` `leave` (about lines 142 to 176) asks again only on
-  `OP_ATTACK_USER` or a single-target skill (`OP_USE_USER`, `0x0511`) aimed at it, but the server also stands a sitting player up on
-  area-skill hits (`zone.rs` `hit_player` with `single = false` sends `OP_USE_PARTY`, `0x0513`; monster hits do the same) and
-  `crates/bot/src/world.rs` does not parse `0x0513`. A later change to the bots should treat a `0x0513` hit, or any stand-up, as
-  "struck". The one unclean bot in R2-700 shows the same pattern. Not fixed in this work; the server's side is as designed.
+- **F6, new, open: the bots' logout leaves bots behind at 1000.** E2-1000 logged 958 of 1000 clean; R2-700 one of 700. From 09:17:36 the server logged `logout pending` (10 s) for all 1000 bots and `logout cancelled: attacked` 825 times for 57 of
+  them (a few over and over: 199, 130, 125, 80 and 80 times); 15 of the 57 asked again and got out, and the other 42 had their logout
+  cancelled by a hit and never asked again (each closed at 30 s: `connection ended in the world; the character stays linger=10s`),
+  and the server freed all of them by 09:18:21. The log does not name the kind of hit; the code shows what the bots do not watch for:
+  `crates/bot/src/bot.rs` `leave` (about lines 142 to 176) asks again only on `OP_ATTACK_USER` or a single-target skill
+  (`OP_USE_USER`, `0x0511`) aimed at it, but the server also stands a sitting player up on area-skill hits (`zone.rs` `hit_player`
+  with `single = false` sends `OP_USE_PARTY`, `0x0513`; monster hits do the same) and `crates/bot/src/world.rs` does not parse
+  `0x0513`. That fits the 42 being struck by area-skill or monster hits. A later change to the bots should treat a `0x0513` hit, or
+  any stand-up, as "struck". The one unclean bot in R2-700 shows the same pattern. Not fixed in this work; the server's side is as designed.
 
 ## Open questions
 
