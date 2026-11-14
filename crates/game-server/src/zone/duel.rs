@@ -355,18 +355,22 @@ impl Zones {
         self.end_duel(map, players, me, How::GaveUp, now);
     }
 
-    /// After a step (section 6.4): more than 40 from the centre ends the window, the countdown or the fight.
-    pub fn duel_moved(&self, map: u16, me: u32, now: Instant) {
+    /// After a step: the two checks of areas a player can step out of, under one `maps` lock. First the duel (section 6.4): more than
+    /// 40 from the centre ends the window, the countdown or the fight. Then the guild war (`CUser::PvPChkLeaveByMove`): the same
+    /// distance takes the player out of the countdown or the fight. The packets of one end go out before the other's, as when they
+    /// were two calls (the sends under the lock are delivered in order once it is released).
+    pub fn left_areas(&self, map: u16, me: u32, now: Instant) {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
-        let Some(p) = players.get(&me) else { return };
-        let out = p
-            .duel
-            .as_ref()
-            .is_some_and(|d| d.stage != Stage::Asking && d.stage != Stage::Asked && du::out_of_area(d.centre, p.occupant.position));
+        let out = players.get(&me).is_some_and(|p| {
+            p.duel
+                .as_ref()
+                .is_some_and(|d| d.stage != Stage::Asking && d.stage != Stage::Asked && du::out_of_area(d.centre, p.occupant.position))
+        });
         if out {
             self.end_duel(map, players, me, How::OutOfArea, now);
         }
+        self.war_left_area(players, me);
     }
 
     /// Every second (`CUser::PvPChkLeaveByTime`, section 5): a request without an answer ends, a countdown over starts the fight.

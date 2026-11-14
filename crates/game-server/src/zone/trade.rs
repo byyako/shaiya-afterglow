@@ -186,7 +186,14 @@ impl Zones {
     }
 
     /// After a step (`CUser::PacketPC` 0x46a5d1): more than 10 from the partner ends the trade at any stage, `0x0A04 2` and `3`.
+    /// Most players have no trade, so `trades` alone is asked first (and released) and the step goes on without taking `maps`. With a
+    /// partner, `maps` and then `trades` are taken in the lock order and the partner is read again: the trade may have ended or changed
+    /// partner meanwhile, and what is found under both locks decides, as when both were held from the start.
     pub fn trade_moved(&self, map: u16, me: u32) {
+        let traded = self.trades().partner(me).is_some();
+        if !traded {
+            return;
+        }
         let maps = self.maps();
         let mut trades = self.trades();
         let Some(partner) = trades.partner(me) else { return };

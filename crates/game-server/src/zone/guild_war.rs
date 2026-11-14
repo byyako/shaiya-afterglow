@@ -229,11 +229,9 @@ impl Zones {
         }
     }
 
-    /// After a step (`CUser::PvPChkLeaveByMove`, section 6.3): more than 40 from the centre takes a player out of the countdown or
-    /// the fight; the officers are checked from the fight on.
-    pub fn war_moved(&self, map: u16, me: u32) {
-        let mut maps = self.maps();
-        let Some(players) = maps.get_mut(&map) else { return };
+    /// The war half of `left_areas` (`CUser::PvPChkLeaveByMove`, section 6.3): more than 40 from the centre takes a player out of the
+    /// countdown or the fight; the officers are checked from the fight on. The caller holds `maps`; this takes `wars` after it.
+    pub(super) fn war_left_area(&self, players: &mut Players, me: u32) {
         let Some(p) = players.get(&me) else { return };
         let out = p.war.is_some_and(|w| w.ready && gw::out_of_area(w.centre, p.occupant.position));
         if !out {

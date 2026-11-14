@@ -2300,8 +2300,7 @@ async fn world_loop<S: Backend>(
                     }
                     conn.send(w::move_refused(id)).await?;
                     ctx.zones.trade_moved(map, id);
-                    ctx.zones.duel_moved(map, id, Instant::now());
-                    ctx.zones.war_moved(map, id);
+                    ctx.zones.left_areas(map, id, Instant::now());
                     continue;
                 }
                 state.position = step.position;
@@ -2313,8 +2312,7 @@ async fn world_loop<S: Backend>(
                     conn.send(packet).await?;
                 }
                 ctx.zones.trade_moved(map, id);
-                ctx.zones.duel_moved(map, id, Instant::now());
-                ctx.zones.war_moved(map, id);
+                ctx.zones.left_areas(map, id, Instant::now());
                 // A step cancels a move by item, after it went out (`CUser::CancleMove`, `docs/original/item-use.md` section 9).
                 if let Some(packet) = cancel_item_move(ctx, state, id) {
                     conn.send(packet).await?;

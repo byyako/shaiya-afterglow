@@ -2212,6 +2212,53 @@ fn trades_need_the_same_faction_except_where_allowed() {
 }
 
 #[test]
+fn a_trade_ends_when_a_step_takes_the_partners_apart() {
+    use shaiya_proto::trade as tp;
+    let zones = Zones::default();
+    let (a, mut a_in, _) = member(1, 100.0, 100.0, 0, b"Alice", 10);
+    let (b, mut b_in, _) = member(2, 105.0, 100.0, 0, b"Bob", 10);
+    let (c, mut c_in, _) = member(3, 100.0, 90.0, 0, b"Cat", 10);
+    for o in [a, b, c] {
+        zones.enter(1, o);
+    }
+    for inbox in [&mut a_in, &mut b_in, &mut c_in] {
+        drain(inbox);
+    }
+    // Someone with no trade: the step's check does not take `maps` at all (a lock held here would block it).
+    std::thread::scope(|scope| {
+        let held = zones.maps.guard();
+        let (done, returned) = std::sync::mpsc::channel();
+        let zones = &zones;
+        scope.spawn(move || {
+            zones.trade_moved(1, 3);
+            let _ = done.send(());
+        });
+        let went_on = returned.recv_timeout(Duration::from_secs(2)).is_ok();
+        drop(held);
+        assert!(went_on, "trade_moved took maps for a player with no trade");
+    });
+    assert!(received(&mut c_in).is_empty());
+
+    zones.trade_request(1, 1, 2, Instant::now());
+    zones.trade_answer(2, true);
+    drain(&mut a_in);
+    drain(&mut b_in);
+    // 10 apart is still near (x and z only); a step to 11 apart ends it, Alice told `2` and Bob `3`.
+    edit(&zones, 2, |p| p.occupant.position = [110.0, 0.0, 100.0]);
+    zones.trade_moved(1, 1);
+    assert!(received(&mut a_in).is_empty() && received(&mut b_in).is_empty(), "10 is still near");
+    edit(&zones, 2, |p| p.occupant.position = [111.0, 0.0, 100.0]);
+    zones.trade_moved(1, 1);
+    assert_eq!(received(&mut a_in), [tp::end(tp::END_CANCELLED)]);
+    assert_eq!(received(&mut b_in), [tp::end(tp::END_CANCELLED_BY_PARTNER)]);
+    // The trade is over: another step says nothing, and neither side is exchanging.
+    zones.trade_moved(1, 1);
+    zones.trade_moved(1, 2);
+    assert!(received(&mut a_in).is_empty() && received(&mut b_in).is_empty());
+    assert!(!zones.trade_end(1) && !zones.trade_end(2));
+}
+
+#[test]
 fn two_ride_one_mount_and_a_hit_puts_both_down() {
     use shaiya_proto::vehicle as vp;
     let zones = Zones::default();
@@ -2990,10 +3037,10 @@ fn duels_end_without_a_winner() {
     let (zones, mut inboxes, _) = duel_ground();
     duel_fight(&zones, &mut inboxes);
     edit(&zones, 3, |p| p.occupant.position = [100.0, 0.0, 143.0]);
-    zones.duel_moved(1, 3, Instant::now());
+    zones.left_areas(1, 3, Instant::now());
     assert!(received(&mut inboxes[2]).is_empty(), "40 is still in");
     edit(&zones, 3, |p| p.occupant.position = [100.0, 0.0, 144.0]);
-    zones.duel_moved(1, 3, Instant::now());
+    zones.left_areas(1, 3, Instant::now());
     assert_eq!(received(&mut inboxes[1]).last(), Some(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)));
     assert_eq!(received(&mut inboxes[2]).last(), Some(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)));
 
@@ -3053,10 +3100,10 @@ fn the_stakes_window_closes_on_trade_ends_and_steps_away() {
     let (zones, mut inboxes, _) = duel_ground();
     duel_window(&zones, &mut inboxes);
     edit(&zones, 2, |p| p.occupant.position = [130.0, 0.0, 103.0]);
-    zones.duel_moved(1, 2, Instant::now());
+    zones.left_areas(1, 2, Instant::now());
     assert!(received(&mut inboxes[1]).is_empty());
     edit(&zones, 2, |p| p.occupant.position = [141.0, 0.0, 103.0]);
-    zones.duel_moved(1, 2, Instant::now());
+    zones.left_areas(1, 2, Instant::now());
     assert_eq!(received(&mut inboxes[1]), [dp::window_closed(dp::WINDOW_CLOSED_BY_ME)]);
     assert_eq!(received(&mut inboxes[2]), [dp::window_closed(dp::WINDOW_CLOSED_BY_PARTNER)]);
 
@@ -3476,7 +3523,7 @@ fn a_guild_war_ends_when_a_side_runs_out() {
     }
     // Ben steps out of the area: everyone in the war hears it, Ben too.
     edit(&zones, 4, |p| p.occupant.position = [100.0, 0.0, 156.0]);
-    zones.war_moved(1, 4);
+    zones.left_areas(1, 4, Instant::now());
     for inbox in &mut inboxes[..4] {
         assert_eq!(received(inbox), [wp::left(wp::OUT_OF_AREA, 4)]);
     }
