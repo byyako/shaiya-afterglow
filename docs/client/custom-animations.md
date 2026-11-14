@@ -19,6 +19,12 @@ reproduced by a test), *inferred*, **live** (seen in a game session).
 - **The first attempt failed because race and sex do not pick the rig:** replacing only the `humm` file left the Fighter's stock victory;
   the Fighter uses `huwm`.
 
+### Using this page
+
+- **If you make an emote:** read "Format contract", then "Authoring and validation"; the client repository's animation tools check a candidate against the rig it replaces and report any difference.
+- **If you patch or mod the client:** "Staging in the archive and rollback" says how to put the file in and take it out again; the [archive](glossary.md#archive) is in [data-archive.md](data-archive.md).
+- **To check a claim yourself:** the `.ANI` layout and the playing code are in [formats.md](formats.md); use [tools-and-method.md](tools-and-method.md) for the tools.
+
 ## Format contract (confirmed)
 
 An `.ANI` is headerless and little-endian:

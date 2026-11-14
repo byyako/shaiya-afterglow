@@ -144,6 +144,7 @@ nav:
   - Client (game.exe):
       - Start here:
           - About these pages: client.md
+          - Words used on these pages: client/glossary.md
           - Client facts for server developers: client/CLIENT-FACTS.md
           - Systems the client supports: client/client-systems.md
       - Network:
@@ -152,12 +153,13 @@ nav:
           - Packet catalogue (generated): client/client-packets.generated.md
           - World packets: client/client-world-packets.md
           - Social packets: client/client-social-packets.md
-          - Packet opportunities: client/packet-opportunities.md
+          - Every opcode against the original server: client/packet-opportunities.md
       - Engine:
           - Engine internals: client/re-engine.md
           - Graphics and performance: client/graphics.md
       - Gameplay systems:
           - The client's game state: client/re-gameplay-state.md
+          - Region features: client/region-features.md
           - Actions and result messages: client/client-actions.md
           - GM opcodes and commands: client/gm-and-commands.md
           - Auction house: client/auction-house.md
@@ -170,6 +172,7 @@ nav:
           - Scripted monsters: client/scripted-monsters.md
       - Data formats and archive:
           - File formats: client/formats.md
+          - "The effect tool eft.exe": client/eft-tool.md
           - "The archive: data.sah and data.saf": client/data-archive.md
           - Finding unused archive files: client/cleanup.md
           - Custom animations: client/custom-animations.md
@@ -183,6 +186,19 @@ nav:
           - The companion DLL: client/fixes-dll.md
           - Operator chat copies (F502): client/operator-listen.md
           - The updater and patch files: client/updater.md
+      - Episodes (other clients):
+          - Episodes at a glance: client/episodes/index.md
+          - "Episode 1": client/episodes/ep1.md
+          - "Episode 2": client/episodes/ep2.md
+          - "Episode 3": client/episodes/ep3.md
+          - "Episode 4": client/episodes/ep4.md
+          - "Episode 4.5 (this client)": client/episodes/ep4-5.md
+          - "Episode 5": client/episodes/ep5.md
+          - "Episode 6": client/episodes/ep6.md
+          - "Episode 7": client/episodes/ep7.md
+          - "Episode 8": client/episodes/ep8.md
+          - After Episode 8: client/episodes/later.md
+          - US patch history: client/episodes/us-patches.md
       - Tools and method:
           - Tools and method: client/tools-and-method.md
       - Research notes:
@@ -193,7 +209,7 @@ nav:
           - "The Priest packets 0x0F01 / 0x0F02": client/research-priest-packets.md
           - Character window, attack timing, creation screen: client/research-balance.md
           - Quality-of-life features: client/qol-feasibility.md
-  - Server (Shaiya Afterglow):
+  - Shaiya Afterglow:
       - Start here:
           - About the server: server.md
           - Run your own server: server/run.md
@@ -210,3 +226,8 @@ nav:
       - Behaviour and safety:
           - Deviations from the original: server/deviations.md
           - Robustness audit: server/audit.md
+      - The US client and this server:
+          - Overview: client/afterglow/index.md
+          - What a server must do for this client: client/afterglow/server-checklist.md
+          - Opportunities the client already supports: client/afterglow/opportunities.md
+          - "Client findings: acted on and open": client/afterglow/client-findings-status.md

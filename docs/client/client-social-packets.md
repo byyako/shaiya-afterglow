@@ -4,7 +4,7 @@ This page describes what the client `game.exe` (US build 2010-04-26, patch 108) 
 (`0x0Bxx`), party member status (`0x0Cxx`) and guild (`0x0Dxx`) packet, read from its handlers and send sites, and in which order the
 original EP4.5 server `ps_game.exe` sends them.
 
-The method is the one on [World packets](client-world-packets.md): the dispatcher (`0x582e10`) calls a reader (`FUN_005xxxxx`, field
+The method is the one on [World packets](client-world-packets.md): the [dispatcher](glossary.md#dispatcher) (`0x582e10`) calls a reader (`FUN_005xxxxx`, field
 order = wire order), which calls a slot of the network object's vtable (`0x6A5C20`) holding the logic (the "logic" column). Sizes include
 the 2-byte opcode and exclude the length prefix. Field names are the EP4.5 server's own (from `ps_game.pdb`, the debug symbols shipped
 with `ps_game.exe`); ✓ = the PDB struct has exactly the size the client reads or sends.
@@ -28,6 +28,15 @@ Messages are `sysmsg-uni.txt` IDs with their text. `<p>` = a player name the cli
 - **A union** ("raid") joins several parties; the client keeps its own list of the members and their groups.
 - **A guild** has its own create, join, leave, kick and rank packets, a guild list, guild points and a guild house.
 
+### Using this page
+
+- **If you write a server:** read "Conventions shared by these families", then the family you send, and its "What the original server
+  sends, in order" section: the order matters in places (a union joiner needs its own `0x0B0C`). [What a server must do for
+  this client](afterglow/server-checklist.md#social-packets) and [Union parties](union-parties.md) go further.
+- **If you patch or mod the client:** the "logic" column gives the function behind each packet; the yes/no dialog code is in `FUN_0048c120`.
+- **To check a claim yourself:** open the reader and logic addresses in a decompiler; [Tools and method](tools-and-method.md) has the
+  setup.
+
 ## Conventions shared by these families
 
 - **Yes/no dialogs.** A request that needs the player's answer sets the pending-dialog mode `DAT_00850a5c` (4 party invite,
@@ -36,13 +45,12 @@ Messages are `sysmsg-uni.txt` IDs with their text. `<p>` = a player name the cli
   0 = no.**
 - **Names in dialogs and messages come from the player table**: the client looks the id up among the players in view
   (`FUN_00447880`). Unknown id: party/trade invitations show a generic text ("invited to a party" 10007, "receive a request
-  for transaction." 10008) and some results show nothing (noted per row). So the server should only send ids of players the
-  client has seen (`0x0201`), or accept the generic text.
+  for transaction." 10008) and some results show nothing (noted per row). So an id the client has not seen (`0x0201`)
+  gives the generic text or nothing.
 - **Busy players auto-decline.** On a party/union invitation or a trade request the client answers "no" by itself when the
   player is busy (player object `+0x2f0` set) or has the refuse option on (`DAT_00701a04` party, `DAT_00701a0c` trade;
   *inferred* to be the "refuse party/trade" options).
-- **Party type above heads**: `0x0520` (7) `u32 dwUserID, u8 byType` stores `byType` at player `+0x2c0` (*inferred*: the
-  party/union mark drawn on that player). **server**: sent to the players in view of each member whose party state changes
+- **Party type above heads**: `0x0520` (7) `u32 dwUserID, u8 byType` stores `byType` at player `+0x2c0`. The scene draw `0x447d30` reads it twice (`0x44bcdd`, and `0x44bdeb` for the targeted player): 0 draws nothing, 1 draws `party_member.tga`, any other value draws `party_jang.tga` (**confirmed (disasm)**; the two pictures are loaded by `0x4444d0` at `0x444b12` and `0x444b2b`). That the second picture marks the party leader is *inferred* from its name. **server**: sent to the players in view of each member whose party state changes
   (join, leave, kick, leader change); the value comes from `CUser::GetPartyType` (values **unknown**).
 
 ## Trade (`0x0Axx`)
@@ -77,7 +85,9 @@ source `bag, slot, count` in `DAT_00854e70`, the partner's 8 slots `DAT_00854d60
 
 The same window is reused for duel stakes (`0x2409`–`0x240C`, same layouts) when its duel flag (`+0xab4`) is set.
 
-### What the server must send (order from the original server, **server**)
+### What the original server sends, in order
+
+Status word **server** (read in the original `ps_game.exe`) applies to this whole subsection.
 
 1. `0x0A01` from A → target B gets `0x0A01 (A's id)`. B busy or other faction → A gets `0x0A03 (B, 2)`.
 2. B answers `0x0A02`: 1 → A gets `0x0A03 (B, 1)`. 0 → **both** get `0x0A03 (other's id, 0)`: windows open.
@@ -153,7 +163,7 @@ Member status (party; the union versions are below) — find the member by id, e
 | `0x0C07` | 20 ✓ | `u32 dwUserID, u16 wMap, f32 fX, fY, fZ` (`TP_PARTY_SET_POS`) | `0x55f190` | member position (party window/minimap) |
 | `0x0C09` | 8 ✓ | `u32 dwUserID, u16 wLevel` (`TP_PARTY_SET_LEVEL`) | `0x55f250` | member level |
 
-The members' HP bars only move with these packets: the server must push them (the client never asks).
+The members' HP bars only move with these packets: the server pushes them and the client never asks.
 
 ### Client → server
 
@@ -168,7 +178,9 @@ The members' HP bars only move with these packets: the server must push them (th
 | `0x0B0F` | 6 ✓ | `u32 nDivType` (1, 2, 4) | union settings (loot rule) |
 | `0x0B10` | 3 ✓ | `u8 bAutoJoinFlag` | union settings |
 
-### What the server must send (order from the original server, **server**)
+### What the original server sends, in order
+
+Status word **server** (read in the original `ps_game.exe`) applies to this whole subsection.
 
 - **Invite**: `0x0B02 (inviter id)` to the target (refused with `0x0B03` 4 if the target is the inviter itself, 1 if the inviter
   is busy; 3/5 if the target is in a party; leader-only check for an existing party; 30 s timeout).
@@ -184,7 +196,7 @@ The members' HP bars only move with these packets: the server must push them (th
   `0x0B05` with its own id) and the party is gone. `0x0520` for the changed players.
 - **Kick** (`0x0B06`, leader only): `0x0B06 (id)` to every member including the kicked one.
 - **Leader** (`0x0B07`): `0x0B07 (new id)` to all; failure → `0x0B07 (0)` to the requester.
-- Then keep members current with `0x0C01`–`0x0C09` (HP/SP/MP changes, buffs, death, position, level).
+- Afterwards the original keeps members current with `0x0C01`–`0x0C09` (HP/SP/MP changes, buffs, death, position, level).
 
 ## Union ("raid") party
 
@@ -241,7 +253,7 @@ sub-leader changed. Leader/sub-leader changes and moves are sent to all members.
 
 ## Guild (`0x0Dxx`)
 
-Client state: my guild name `DAT_021e54e4`, my rank `DAT_021e54e2` (0xFF = none; 1 = master *inferred*), my guild id at
+Client state: my guild name `DAT_021e54e4`, my rank `DAT_021e54e2` (0xFF = none; the guild window's click function `0x4e35e0` enables the member buttons for ranks 1 and 2 only, `0x4e36bf`, and only rank 1 may open the window's text-edit overlay, `0x4e3a93` and `0x4e5430`: **confirmed (disasm)**; the member list prints the rank as a plain number, `0x4e15b0`, so the client has no rank titles; that 1 is called "master" stays *inferred*), my guild id at
 player `+0x2c8`, guild name above each player at player `+0x2c4`, the guild list (`DAT_021e816c`, 120-byte entries), my guild's
 member list (`FUN_004cb170`/`FUN_004c7260`), the join-request list (`FUN_004cb430`), guild house NPC levels `DAT_021e8198`,
 guild bank `DAT_021e5be0` (40-byte slots).
@@ -279,7 +291,7 @@ guild bank `DAT_021e5be0` (40-byte slots).
 | `0x0D30` | 122 ✓ | `GUILD_UNIT` (`TP_GUILD_GUILDLISTADD`) | `0x557100` | adds one guild |
 | `0x0D0F` / `0x0D10` | 3 + 50n / 52 | old 50-byte units | `0x556ef0` / `0x556f70` | old guild list / add (no rank, remark or points) |
 | `0x0D11` | 6 ✓ | `u32 dwGuildID` (`TP_GUILD_GUILDLISTREMOVE`) | `0x556df0` | removes a guild from the list |
-| `0x0D12` / `0x0D13` / `0x0D19` | 3 + 29n | `u8 byCount`, n × `GUILDUSER_UNIT` (`TP_GUILD_USERLISTONLINE`, 3 + 40 × 29) | `0x555310` / `0x555450` / `0x5553b0` | adds members with status 1 / 2 / 3 (*inferred* online / offline / in war zone); my entry sets my rank |
+| `0x0D12` / `0x0D13` / `0x0D19` | 3 + 29n | `u8 byCount`, n × `GUILDUSER_UNIT` (`TP_GUILD_USERLISTONLINE`, 3 + 40 × 29) | `0x555310` / `0x555450` / `0x5553b0` | adds members with status 1 / 2 / 3 (stored at member `+0x1e`); the guild window `0x4e15b0` prints status 1 and 3 as "On" (1 in yellow, 3 in green) and every other value as "Off" in red (**confirmed**, strings `0x6ad10c` and `0x6ad108`), so 1 and 3 are online and 2 is offline; why 3 is a different colour (a war zone?) stays *inferred*; my entry sets my rank |
 | `0x0D14` | 32 ✓ | `u8 byState, GUILDUSER_UNIT` (`TP_GUILD_USERLISTADD`) | `0x5554f0` | adds one member (status `byState`); shows my guild name over that player |
 | `0x0D15` | 6 | `u32 dwUserID` | `0x5555e0` | removes a member, clears the name over that player |
 | `0x0D16` | 3 + 28n | `u8 byCount`, n × `GUILDJOINUSER_UNIT` (`TP_GUILD_JOINLIST`) | `0x555630` | join requests (for the master/officers) |
@@ -318,14 +330,16 @@ Not handled: **`0x0D33`** (`TP_GUILD_HOUSE_KEEP_ETIN`, which the original server
 | `0x0D08` | 7 ✓ | `u8 byOK, u32 dwUserID` (`TPC_GUILD_JOINRESULTUSER`) | join-request list: accept (1) / refuse (0) |
 | `0x0D09` | 2 ✓ | — (`TPC_GUILD_LEAVE`) | guild window "leave" |
 | `0x0D0A` | 6 ✓ | `u32 dwUserID` (`TPC_GUILD_EXPEL`) | member list "kick" |
-| `0x0D0C` | 7 | `u8, u32 dwUserID` | member list rank buttons: sender `0x588bc0` (7 bytes: `u8 state, u32 id of the selected member`), called twice from the guild window's click handler `0x4e35e0`: the button object at window `+0x2d8c` sends 0 (`0x4e3c6d`), the one at `+0x3260` sends 1 (`0x4e3cb5`) (confirmed). *inferred* demote/promote; which is which **unknown** (the button labels were not traced) |
+| `0x0D0C` | 7 | `u8, u32 dwUserID` | member list rank buttons: sender `0x588bc0` (7 bytes: `u8 state, u32 id of the selected member`), called twice from the guild window's click handler `0x4e35e0`: the button object at window `+0x2d8c` sends 0 (`0x4e3c6d`), the one at `+0x3260` sends 1 (`0x4e3cb5`) (confirmed). The two buttons are built by `0x4e4450` from `guild_button1.tga` (cell rows by the texture coordinates at `0x4e4850` and `0x4e4905`): `+0x2d8c` takes the first row, **Upgrade**, and `+0x3260` the second row, **Degrade**. So 0 = promote and 1 = demote (**confirmed (disasm)** plus the picture; the labels are in the picture, not in code). Both buttons are enabled only for rank 1 or 2 with a member selected |
 | `0x0D20` | 67 ✓ | `char szRemark[65]` (`TPC_GUILD_UPDATEREMARK`) | remark edit |
 | `0x0D23` | 2 ✓ | — (`TPC_GUILD_GUILD_GETETIN`) | guild house windows (Etin count) |
 | `0x0D25` | 5 ✓ | `u16 wGNpcType, u8 byNpcLV` (`TPC_GUILD_NPC_UPGRADE`) | NPC upgrade |
 | `0x0D34` | 6 ✓ | `u32 dwNpcID` (`TPC_GUILD_HOUSE_BUY`) | guild house purchase at the NPC |
 | `0x0D35` | 6 ✓ | `u32 dwNpcID` (`TPC_GUILD_ETIN_RETURN`) | return Etin at the NPC |
 
-### What the server must send (original server, **server**)
+### What the original server sends, in order
+
+Status word **server** (read in the original `ps_game.exe`) applies to this whole subsection.
 
 - **Create** (`0x0D21` request): the requester must be level ≥ 11 and in a party of exactly 7 with no guild. Each other party
   member gets `0x0D22` (agreement dialog) and answers `0x0D22`. When all agree: every party member gets `0x0D21` (98 bytes,
@@ -350,7 +364,7 @@ Not handled: **`0x0D33`** (`TP_GUILD_HOUSE_KEEP_ETIN`, which the original server
 
 ## Gaps
 
-- `0x0520` party type values; `0x0D27` fields; the member unit's job byte and the guild units' second name (*inferred*).
+- `0x0520` party type values above 1 (the client draws the same picture for all of them); `0x0D27` fields; the member unit's job byte and the guild units' second name (*inferred*).
 - The union's `0x0B0B` start/end flag is ignored by the client; whether the original server relies on clearing (it does not
   send `0x0B16` before a new list) was not traced.
-- Guild ranks: 1 = master is *inferred* (the server allows kicks and invites for rank < 3).
+- Guild ranks: the client treats rank 1 as the highest (only it may edit the overlay text) and ranks 1 and 2 as officers (member buttons); that 1 is called "master" is **ref** ([Guilds](../original/guild.md#2-ranks): 1 is the master, and officers are the ranks below 3, who invite and kick).

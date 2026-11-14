@@ -7,12 +7,18 @@ Status words: **confirmed** (read in `game.exe` or checked by the tool), *inferr
 
 ## In short
 
-- **Two files:** `data.sah` lists names, offsets and lengths in a directory tree; `data.saf` is the files laid end to end.
+- **Two files make up the [archive](glossary.md#archive):** `data.sah` lists names, offsets and lengths in a directory tree; `data.saf` is the files laid end to end.
 - **The 108 archive holds 20,412 files (about 1.97 GiB referenced)** and about 10.6 % of `data.saf` is space released by old patches.
 - **The client finds a file by a hash of its lower-cased name** in each directory; it never reads the free list. If two entries share a
   name, the later one wins.
-- **Only the SData tables are encrypted** (SEED, ECB, one fixed key); everything else is stored plain.
+- **Only the [SData](glossary.md#sdata) tables are encrypted** (SEED, ECB, one fixed key); everything else is stored plain.
 - **A repack can drop the dead space** (−270 MB here) without changing what the client sees; the method and result are below.
+
+### Using this page
+
+- **If you patch or mod the client:** list, extract and check the archive with the client repository's `tools/sah.py`; you see the file count, the free space and any name that appears twice. Repacking is described under "Repack".
+- **If you write a server:** nothing here crosses the network; the SData wrapper matters for [generating the client data files](sdata-generation.md).
+- **To check a claim yourself:** the lookup is under "How the client looks files up"; see [tools-and-method.md](tools-and-method.md) for the tools.
 
 ## Index layout (little-endian)
 

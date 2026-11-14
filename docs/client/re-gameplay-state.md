@@ -3,8 +3,8 @@
 What `game.exe` keeps in memory about the game world: the local character, the other players, monsters, NPCs and items on the
 ground, the inventory, how it uses the `.SData` tables, skills, buffs and the party. Everything here was read statically in the Shaiya
 US client (`game.exe`, 2010-04-26, patch 108, SHA-256 `5f045bcb4a2e29562ac79effc4108fbaa6404ab29258df02c4dfc6ed7e3401a6`). Nothing was
-run. Addresses are virtual addresses in that file. "confirmed" means the function named was read and the field is written or read
-there as described; "confirmed (disasm)" means it was read in the disassembly; *inferred* marks a meaning the code does not state by
+run. Addresses are [virtual addresses](glossary.md#va) in that file. "confirmed" means the function named was read and the field is written or read
+there as described; "confirmed (disasm)" means it was read in the disassembly; [*inferred*](glossary.md#inferred) marks a meaning the code does not state by
 itself; **open** marks what was not settled. Field names in `code` style that look like `byJob` are the original server's packet
 field names, matched by position.
 
@@ -16,11 +16,17 @@ field names, matched by position.
 - The local player is also an ordinary player entity in that manager. Its HP, MP and SP, name, looks and equipment are kept on the
   entity; the HUD reads them from there.
 - The inventory is a fixed array: 6 bags (bag 0 = equipment) of 24 slots, 34 bytes per item, the same item unit the server sends.
-- `Item.SData`, `Skill.SData` and `Monster.SData` are loaded into arrays indexed directly by type/id, so a lookup is two array reads.
+- `Item.SData`, `Skill.SData` and `Monster.SData` ([SData](glossary.md#sdata)) are loaded into arrays indexed directly by type/id, so a lookup is two array reads.
   The in-memory item record is laid out differently from the file (a few padding bytes move the fields).
 - Damage is not applied when the result packet arrives: it is stored on the attacker and applied when the attack animation lands.
 - Buffs, the skill list and the party are standard containers in globals; each buff remembers its start time and duration in
   milliseconds, taken from `Skill.SData`.
+
+### Using this page
+
+- **If you write a server:** the bag array, the entity records and the stat globals say which values a packet must fill and how wide they are; the checklist is [What a server must do for this client](afterglow/server-checklist.md#client-facts).
+- **If you patch or mod the client:** sections 2, 3 and 5 give the addresses of the globals, the bag array and the entity managers, the places a patch or a hook (see [the companion DLL](fixes-dll.md)) usually starts from.
+- **To check a claim yourself:** open `game.exe` in a decompiler as [Tools and method](tools-and-method.md) describes and go to the handler named in the row (for example the `0x0105` handler in section 2).
 
 Related pages: [client-world-packets.md](client-world-packets.md) (what each world packet does on screen),
 [client-social-packets.md](client-social-packets.md) (party, guild, trade), [client-actions.md](client-actions.md) (what the client
@@ -141,7 +147,7 @@ takes the attack range from the slot-5 item record (`+0x185`/`+0x192` → item `
 (confirmed, `0x551650`, `0x54de20`). The other slot names follow the server's order (helmet, upper armour, lower armour, gloves,
 shoes, weapon, shield, cape, …; *inferred*).
 
-The warehouse (`0x0711`) and the other storages were not traced here (**open**); their packet layouts are in
+The warehouse (`0x0711`) is stored by `0x54d130`, once per item, into an array at `0x852c6e` with 34 bytes per slot (`+1` type, `+2` type id, `+3` count, `+4` quality u16, `+6`..`+11` gems, `+12` craft name of 21 bytes; `+0` is a byte the handler computes from the item record `+0x2b` and the gems) and the money into `0x84d674` (**confirmed**, `0x54d130`; the `0x0204` handler `0x557500` and `0x54d240` write the same array). The other storages were not traced here (**open**); their packet layouts are in
 [client-world-packets.md](client-world-packets.md).
 
 **How to find it.** The `0x0106` reader `0x5793d0` calls vtable `+0x2c` (`0x54cf90`); the `REP STOSD` that clears `0x4c8` dwords from
@@ -391,8 +397,8 @@ member list and ranks were not traced in this pass (**open**; the packets are in
 | Item | What is known | What is missing |
 |---|---|---|
 | Item and skill fields the client ignores | the fields listed in section 4 are read | a full scan of record uses |
-| Local selected target | target kinds 1–4 in `0x43c000`; chase target `+0x2e4`/`+0x2e8` on the entity | where the clicked target is stored |
-| Warehouse and other storages | packet layouts known | their arrays in memory |
+| Local selected target | partly: the kind is the global `0x84fa18` (0 none, 1–3 set by the click code in `0x43c000`, 2 also by the UI functions `0x502750`, `0x4fa7d0`, `0x5034e0`, `0x503f90`), the id is the local entity's `+0x160` (kind copy at `+0x164`); chase target `+0x2e4`/`+0x2e8` on the entity | what kinds 1 and 3 stand for on screen |
+| Warehouse and other storages | warehouse settled: array `0x852c6e`, 34 bytes per slot, written by `0x54d130` (see above); packet layouts known for the others | the other storages' arrays; the slot count of the warehouse array |
 | Guild member list | name and id on the entity | the list, ranks, guild points |
 | Stat bonuses `0x84d6a4`–`0x84d6b8` | read by the status window; no instruction writes these six absolute addresses (reference search); the loop at `0x46b7e0` zeroes `0x84d6bc`–`0x84d6d4`, not these | the writer, which must reach them through the object at `0x84d668` (offsets `+0x3c`–`+0x50`) |
 | Equipment slot names beyond 5 (weapon) and 7 | server order | a client-side proof for each slot |

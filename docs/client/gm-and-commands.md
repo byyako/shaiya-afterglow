@@ -6,7 +6,7 @@ Then the player chat commands and prefixes, and how new commands could be added 
 
 Sources: Ghidra decompiles of `game.exe` and of `ps_game.exe` (with the function names from its debug symbols, `ps_game.pdb`), and the
 message texts of `sysmsg-uni.txt`. Status words: **confirmed** (decompiled), **confirmed (disasm)** (disassembly only), **ref** (another
-page), **inferred**, **live** (needs a test; nothing here was run). In the tables, **handled** = the original server has a case for the
+page), [*inferred*](glossary.md#inferred), [**live**](glossary.md#live) (needs a test; nothing here was run). In the tables, **handled** = the original server has a case for the
 opcode; **client-only** = the client sends or reads it but the original never sends it or has no case for it. Sizes include the 2-byte
 opcode; `name[21]` is a zero-padded character name; `len` bytes of text include the terminating zero unless noted.
 
@@ -20,6 +20,13 @@ opcode; `name[21]` is a zero-padded character name; `len` bytes of text include 
   the client offers (`/ban`, `/aban`, `/pvpon` and others) have no case in the original, so using them disconnects the GM.
 - **Players' unknown `/` commands are silently dropped** by the client; only text without a leading `/` reaches the server intact. A
   server that wants its own commands can use another prefix such as `.cmd`, or patch two jumps in the client.
+
+### Using this page
+
+- **If you write a server:** the tables of F1xx to FAxx give what each GM command sends and which privilege it needs. The original closes the GM's connection on a command it does not handle (third bullet above); decide what yours does. The checklist item for the two auction commands is in [What a server must do for this client](afterglow/server-checklist.md#auction-house).
+- **If you play with a GM account:** type the command in the chat box with a leading `/` (for example `/kick Name`). The client checks the privilege first and prints "Unusable command" if it is too low. "Client-only GM commands" lists what is typed but never sent.
+- **If you patch or mod the client:** "Adding commands" has the two ways (a prefix the client already passes through, or a client change); the fixes for five broken English commands are in [the companion DLL](fixes-dll.md#english-texts-and-gm-command-fixes).
+- **To check a claim yourself:** start at the parser `0x475e00` and the privilege check `0x46d5a0`, using [Tools and method](tools-and-method.md).
 
 ## Summary
 
@@ -50,7 +57,7 @@ opcode; `name[21]` is a zero-padded character name; `len` bytes of text include 
   "Invalid command. Please check" and sends nothing. Text not starting with `/` goes to the server intact (see [Player chat commands](#player-chat-commands-and-prefixes)). confirmed (disasm)
 - **Also**: `F501`'s failure value is the failing opcode for every command (all 46 call sites of
   `CUser::SendAdminCmdError` load it); the deferred moves are `op u32 charId, u16 map, f32 x, y, z` (20 bytes); `/cwatch` copies are
-  `F502`, **which this client does not handle**; `/autocure` only works against the developers' server `172.17.10.205`; `F202`/`F203`
+  `F502`, **which the stock client does not handle** (the [companion DLL](fixes-dll.md) adds a handler, [operator-listen.md](operator-listen.md)); `/autocure` only works against the developers' server `172.17.10.205`; `F202`/`F203`
   answers only go to the original's game log; `/xcall` summons a faction's players. [What the client sends at each privilege](#what-the-us-client-sends-at-each-privilege-110) lists what each privilege 1–10 can
   send. confirmed
 

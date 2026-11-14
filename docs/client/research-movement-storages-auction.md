@@ -10,13 +10,19 @@ read with objdump and direct reads of the constants as a cross-check. Status wor
 
 - **Forward speed is a small table:** walk 1.5–3.5 and run 3.0–7.0 world units per second by move index 0–4, and 7.0/8.0 on a mount.
   Strafing and backing up use other coefficients, so a combined diagonal can exceed the forward-only table.
-- **`0x0501` has no universal send interval or distance.** The client sends on timers of 250, 500 or 1000 ms by situation and directly on
+- **`0x0501` (an [opcode](glossary.md#opcode)) has no universal send interval or distance.** The client sends on timers of 250, 500 or 1000 ms by situation and directly on
   corrections and warps.
 - **Opening either storage sends nothing.** The server must push the list when the window opens; taking an item is a drag that sends
   `0x2607` or `0xB102` with only the storage slot.
 - **`0xB103` carries a packed date,** not seconds; the client prints it once and does not run a countdown for region 6.
 - **Every field of an auction row (48 bytes) is meaningful,** even those the list does not print: quality, gems and craft data feed the
   tooltip.
+
+### Using this page
+
+- **If you write a server:** the speed table, the storage-open behaviour and the `0xB103` date format tell you what the client expects; "Opening the two storages" matters most.
+- **If you patch or mod the client:** "Client-side fixes touched by this work" lists what was changed and what state it is in ([fixes-dll.md](fixes-dll.md)).
+- **To check a claim yourself:** the functions and constants are named in each section ([tools-and-method.md](tools-and-method.md)).
 
 ## Movement speeds and `0x0501`
 

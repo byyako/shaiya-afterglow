@@ -6,7 +6,7 @@ counts are for the 108 archive. Status words: **confirmed** (read in `game.exe`,
 
 ## In short
 
-- **The client opens archive files only by a full name,** either a literal in `game.exe` or one read from another data file (model
+- **The client opens [archive](glossary.md#archive) files only by a full name,** either a literal in `game.exe` or one read from another data file (model
   lists, maps, effect lists, SData). So a model, effect or map file named in none of them cannot be opened.
 - **About 500 files (about 109 MB) were never opened:** development leftovers, test models, tool binaries, Explorer thumbnail caches
   and a 2006 copy of a dungeon. Removing them left the game unchanged (tested in play).
@@ -14,6 +14,11 @@ counts are for the 108 archive. Status words: **confirmed** (read in `game.exe`,
   terminating NUL ran into the next name when scanned naively.
 - **Several files that look broken are used:** the client tolerates malformed models, so a file failing a strict parser is not
   evidence that it is unused.
+
+### Using this page
+
+- **If you patch or mod the client:** before removing any file, run the client repository's `tools/unreferenced.py`; it lists files no name points to. Treat the "looked broken but used" list as a do-not-remove list.
+- **To check a claim yourself:** pick a file from "What was found", search for its name in `game.exe` strings and the decrypted SData ([tools-and-method.md](tools-and-method.md)); the archive layout is in [data-archive.md](data-archive.md).
 
 ## Method
 

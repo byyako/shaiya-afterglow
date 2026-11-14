@@ -46,6 +46,7 @@ A reading path, from running it to how it is made:
 | How it works | [Architecture](server/architecture.md): programs, the login path, the game server's tasks and locks, the schemas |
 | Running it | [Settings](server/settings.md), [Deploying on a VPS](server/deploy.md) and [Pointing the client at the server](original/client-login.md) |
 | Behaviour and safety | [Deviations from the original](server/deviations.md) and the [Robustness audit](server/audit.md) |
+| The US client and this server | [Overview](client/afterglow/index.md): what a server must do for this client, the opportunities it already supports, and what this server has acted on |
 
 The rest is on GitHub: the [README](https://github.com/byyako/shaiya-afterglow#readme) (the full setup), [`tools/README.md`](https://github.com/byyako/shaiya-afterglow/blob/main/tools/README.md) (every script), [CONTRIBUTING](https://github.com/byyako/shaiya-afterglow/blob/main/CONTRIBUTING.md), [SECURITY](https://github.com/byyako/shaiya-afterglow/blob/main/SECURITY.md) (reporting a vulnerability privately), and the plans in [`docs/plans/`](https://github.com/byyako/shaiya-afterglow/tree/main/docs/plans).
 

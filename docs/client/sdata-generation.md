@@ -7,7 +7,7 @@ client shows its own copies; generating the client files from the database would
 
 ## In short
 
-- **The client keeps its own copies of the game's data**: items, skills, monsters, NPCs and quests, the item mall and more. The server
+- **The client keeps its own copies of the game's data** (the [SData](glossary.md#sdata) files): items, skills, monsters, NPCs and quests, the item mall and more. The server
   never sends them, so the client shows whatever its files say.
 - **The files can be read and rebuilt exactly.** The encryption is known, and every file is fully explained by its records: rebuilding
   one from its parsed records gives the same bytes.
@@ -15,6 +15,12 @@ client shows its own copies; generating the client files from the database would
   English names) would have to come from the client's own file.
 - **A generated file would reach players in a client patch.** Each difference it fixes (prices, stack sizes, tooltips, level and trade
   marks) changes what players see, so each is a choice to make before shipping.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#generating-the-client-data-files).
+- **If you patch or mod the client:** "Getting generated files to the client" says how a rebuilt file reaches players; rebuild only after a byte-for-byte round trip of the stock file passes.
+- **To check a claim yourself:** the encryption and record layout are under "What is proven"; the archive wrapper is in [data-archive.md](data-archive.md).
 
 ## What is proven for `Item.SData`
 
@@ -40,7 +46,7 @@ client shows its own copies; generating the client files from the database would
 | description | no | tooltip text with markup (`\n`, `{c5}` colours) |
 | model, icon, `type2`, `type3` | no | bytes +2, +3, +14, +15: looks and the client's own grouping |
 | range | wider | one byte in the client, two in the database (only the low byte goes in the file) |
-| 16-bit fields | signed | `smallint` holds them as signed (44061 reads −21475); write them back as `u16` |
+| 16-bit fields | signed | `smallint` holds them as signed (44061 reads −21475), so the file needs them as `u16` again |
 | empty records | no | type 0 records where no item exists: generated from the gaps |
 
 With the client's own values for those fields kept alongside the database, the original file can be **restored** byte for byte (client
@@ -89,6 +95,15 @@ Maps (client world files against the server's svmaps) are not SData and not cove
 A generated file would ship in a client patch: the client's archive is `data.sah`/`data.saf`, and patches arrive as `psNNNN.patch`
 files (patch 108 is `ps0108.patch`). A generated `Item.SData` (SEED-encrypted as above) would go into such a patch at
 `data/item/item.sdata`.
+
+## In other episodes
+
+- **EP8 data formats:** public tool repositories exist for the EP8 data files (BinarySData, `DB*Data` files); this site did not check them
+  (*unverified*, [EP8](episodes/ep8.md)). Nothing on this page is claimed for those files.
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#generating-the-client-data-files).
 
 ## Open questions
 

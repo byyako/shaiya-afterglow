@@ -10,7 +10,7 @@ VA minus `0x400000`. Status words: **confirmed** (decompiled data flow or parsed
 
 - **The client has a complete gambling path for NPC type 5.** Clicking the NPC's primary action opens a table selector; choosing one of
   seven tables sends `0x3101` with a one-byte table index (not the NPC id) and, once accepted, runs a slot scene and a card scene.
-- **Nine answers (`0x3101`–`0x3109`) drive the windows.** The payouts, faces and wallet come from the server's fields, not from a client
+- **Nine answers ([opcodes](glossary.md#opcode) `0x3101`–`0x3109`) drive the windows.** The payouts, faces and wallet come from the server's fields, not from a client
   calculation; a trailing "short" byte in `0x3103` is a **no-re-bet flag**, and some answers (`0x3105`, `0x3109`) carry nothing the
   client reads.
 - **The gambling window shows its own wallet,** copied from the normal gold when it opens; only `0x3102` result 1 and `0x3106` assign it
@@ -19,6 +19,12 @@ VA minus `0x400000`. Status words: **confirmed** (decompiled data flow or parsed
   are absent from the gambling scene.
 - **A dedicated kill-boost item is possible by adding data only:** a new consumable in `Item.SData`, a new neutral buff in `Skill.SData`
   (the multiplier is a server-side check on the buff id), and no new opcode. The one catch is a one-byte item field for the skill id.
+
+### Using this page
+
+- **If you write a server:** the nine answers and what each one does are in "The nine answers"; "What adding dedicated content takes" is a proposal, not built.
+- **If you patch or mod the client:** the kill-boost route needs data files only ([sdata-generation.md](sdata-generation.md)); the one catch is named in "Item use, buff duration, icon and text".
+- **To check a claim yourself:** start from the addresses under "Reaching the window" ([tools-and-method.md](tools-and-method.md)).
 
 ## The gambling house
 

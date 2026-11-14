@@ -238,7 +238,7 @@ for p in published:
                 line = repo_path.sub(github, line)
         out.append(line)
     # the title comes first, then the note saying which client the page is about
-    if p.startswith("client/") and out and out[0].startswith("# "):
+    if p.startswith("client/") and not p.startswith(("client/afterglow/", "client/episodes/")) and out and out[0].startswith("# "):
         out[1:1] = ["", *CLIENT_NOTE.rstrip("\n").split("\n"), ""]
     (STAGE / p).parent.mkdir(parents=True, exist_ok=True)
     (STAGE / p).write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")

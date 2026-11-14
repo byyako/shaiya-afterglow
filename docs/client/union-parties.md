@@ -14,6 +14,11 @@ the points most likely to bite a server. The full packet tables are on [Social p
 - **Union chat** goes out as `0x1112`, but the client ignores `0x1112` from the server; lines sent to it as `F10A` show in the chat
   window and in the middle of the screen.
 
+### Using this page
+
+- **If you write a server:** the packet order near the end is what a joining client needs (including its own `0x0B0C`); the checklist is [What a server must do for this client](afterglow/server-checklist.md#union-parties).
+- **To check a claim yourself:** the full packet tables and addresses are on [Social packets](client-social-packets.md#union-raid-party).
+
 ## Summary
 
 - A union is made **from an existing party** (`0x0B0E`): the party members keep their party order as slots 0…; 5 groups of 6
@@ -27,11 +32,11 @@ the points most likely to bite a server. The full packet tables are on [Social p
 - **Only an own `0x0B0C` (or `0x0B0E`) makes the client a union member**: it sets the in-union flag `0x21e4928`, the role `0x21e485c`
   = 2, the window flags and prints 207. `0x0B0B` sets none of these (only the list, leader, sub-leader, rule, auto-join and my
   group); without the flag party chat `0x1105` is looked up in the empty party list (nothing shows), the settings window would
-  send `0x0B0E` and `/party` sends `0x0B09`. Send the joiner its own `0x0B0C` too (either order: a slot already listed is kept,
-  `0x48bd70` is a map insert). confirmed (`0x561340`, `0x5610c0`)
+  send `0x0B0E` and `/party` sends `0x0B09`. Its own `0x0B0C` can arrive before or after the `0x0B0B` list: a slot already
+  listed is kept (`0x48bd70` is a map insert). confirmed (`0x561340`, `0x5610c0`)
 - Union member units are the party unit **preceded by `u16 slot`** (57 + 7 × buffs bytes); lists (`0x0B0B`) are packed units.
-- `0x0B0B` **adds** members by slot; the client never clears the list on it (`wStartEndFlag` and `bRaidPartyType` are unused). Send
-  `0x0B16` (or rely on the leave packets) before rebuilding.
+- `0x0B0B` **adds** members by slot; the client never clears the list on it (`wStartEndFlag` and `bRaidPartyType` are unused). A list that
+  is meant to replace the old one therefore needs the old members removed first, by `0x0B16` or the leave packets.
 - Invitations: `0x0B14` / `0x0B18` (by id / by name) → the invitee answers `0x0B15` with **0 = yes, 1 = no and its own id**; the
   inviter is the server's to remember. `/party <name>` sends `0x0B18` instead of `0x0B09` while in a union (leader or sub-leader,
   union not full).
@@ -46,17 +51,25 @@ the points most likely to bite a server. The full packet tables are on [Social p
 - Party chat `0x1105` shows for union members: in a union the sender is looked up in the union list and printed as 353
   "[Party]<p> : <b>" (type 10); an unknown sender prints nothing. confirmed (`0x554bd0`)
 
-## Packet order (original, ref; with the joiner's own `0x0B0C` added)
+## Packet order (original, ref; the client also needs the joiner's own `0x0B0C`)
 
 - Create: `0x0B0E` (16) to the members.
-- Join: the joiner gets `0x0B0C` (its own unit) and `0x0B0B` with the others (several packets if needed); the others get `0x0B0C`.
-  (The original's `ps_game.exe` sends the joiner only the `0x0B0B` list, see [Entering a union](../original/union.md#3-entering-a-union);
-  the client then misses the flags above.)
+- Join: the original's `ps_game.exe` sends the joiner only the `0x0B0B` list (several packets if needed), and the others `0x0B0C`
+  (see [Entering a union](../original/union.md#3-entering-a-union)). This client also needs its own unit in a `0x0B0C`, or it misses the
+  flags above.
 - Settings: `0x0B0F` / `0x0B10` to all members; the client stores the value and prints 6516 / 6517 / 6518 (loot 1 / 2 / 4, other
   values silently) or 6520 / 6521 (auto-join on / off). confirmed (`0x55ea30`, `0x55ea80`)
 - Leave / kick: `0x0B0D` / `0x0B1A` to all, then `0x0B17` / `0x0B13` if the leader / sub-leader changed.
 - Leader, sub-leader, group moves (`0x0B17`, `0x0B13`, `0x0B12`): to all members.
 - Dismantle: `0x0B16` to all, then the union is removed.
+
+## In other episodes
+
+- The server pack labelled EP3 has no party instances; union (raid) parties arrive with EP4.5. **ref** ([what EP4.5 added](../original/ep3.md); episode summary on [Episode 4.5](episodes/ep4-5.md))
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#union-parties).
 
 ## Open
 

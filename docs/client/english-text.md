@@ -7,13 +7,19 @@ game text and is not published. Status words: **confirmed** (read in the binary 
 
 ## In short
 
-- **790 of the 1,386 messages were changed;** the rest were already fine or must not change.
+- **790 of the 1,386 messages in the [sysmsg](glossary.md#sysmsg) table were changed;** the rest were already fine or must not change.
 - **Each message is a line `id<TAB><TAB>"text"`** in a UTF-16LE file with a byte-order mark and CRLF line ends.
 - **The client fills in placeholders** (`<p>`, `<t>`, `<v>`, `<b>`, `<i>`, …), colours (`{c3}…{/c}`) and passes the text through `printf`,
   so a rewrite must keep exactly the same tags and the same number of `%` signs; a tool refuses any line that does not.
 - **Left alone on purpose:** slash-command words the client matches, labels it joins to a value, chat formats, texts never shown,
   monster shouts, and map and NPC names.
 - **The change is a data file:** it ships through the updater (`updater.md`), not through `game.exe` or the DLL.
+
+### Using this page
+
+- **If you patch or mod the client:** edit the text file only with the checking tool of the client repository, which refuses a line whose tags or `%` signs changed; ship the file through [the updater](updater.md).
+- **If you write a server:** a server picks messages by id, so the ids and their placeholders are the contract; the words can change freely.
+- **To check a claim yourself:** the loader is at `0x41df80`; see [tools-and-method.md](tools-and-method.md).
 
 ## The file and the placeholders
 

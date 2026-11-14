@@ -8,14 +8,20 @@ download on the client pages is the patch kit (`client-patch-kit.md`).
 ## In short
 
 - **Everything is static.** The client was read in Ghidra and with disassemblers; it was not run to learn how it works. The few facts that
-  needed a running game are marked **live** and listed as open.
-- **A claim is "confirmed" only when a function and address say so.** Everything else is *inferred* or **ref** (from an older Hex-Rays
+  needed a running game are marked [**live**](glossary.md#live) and listed as open.
+- **A claim is "[confirmed](glossary.md#confirmed)" only when a function and address say so.** Everything else is [*inferred*](glossary.md#inferred) or **ref** (from an older Hex-Rays
   listing of a later client, matched here by constants and message ids).
 - **Formats are checked against every file.** A parser that consumes each file of a type to its last byte is the test, not a sample.
 - **You can check any claim:** the pages give addresses; the strings, imports and constants that led there are in the "How to find it"
   parts of the research pages.
 - **Public sources are credited:** the community format notes by Castor, the Parsec library, and the 2012 patcher for the first byte
   patches.
+
+### Using this page
+
+- **If you want to repeat a finding:** follow "Method" step by step, then "How to check a claim yourself"; every client page gives the addresses to start from.
+- **If you patch or mod the client:** "Python tools by purpose" says which tool of the client repository does what; the only download is [the patch kit](client-patch-kit.md).
+- **If you write a server:** the status words (**confirmed**, *inferred*, **live**) tell you how far to trust a fact; see [glossary.md](glossary.md).
 
 ## Method
 

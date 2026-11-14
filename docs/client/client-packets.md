@@ -4,17 +4,27 @@ This page describes how the client `game.exe` (US build 2010-04-26, patch 108) r
 dispatcher, the read routines and their error report, the send routines, a packet log built into the client, and a few findings that
 matter to a server. The full per-opcode table is on [Client packet catalogue](client-packets.generated.md); the connection, the cipher and the framing are on [How the client talks to the servers](re-network.md).
 
-Status words: **confirmed** = read in the code; *inferred*; **unknown**.
+Status words: **confirmed** = read in the code; **ref** = stated on a linked server page; *inferred*; **open** = not traced.
 
 ## In short
 
-- **Every packet from the server goes through one big switch** on its 2-byte opcode. A packet the client does not know is silently
+- **Every packet from the server goes through one big switch** on its 2-byte [opcode](glossary.md#opcode). A packet the client does not know is silently
   ignored.
 - **The client reads fields one by one, in order**, so the order of its reads is the packet layout it expects. A packet that is too short
   is padded with zeros and reported once as "Packet Underflow", which makes a handy check for a server developer.
 - **The client has a packet log built in.** A small config file next to `game.exe` turns on a hex dump of every packet sent and received.
 - **One chat trick crashes clients.** A colour marker typed into chat with a length that runs past the text crashes every client that
-  shows the line, so a server has to check chat text (the patch kit does it for the original server).
+  shows the line, so any server that relays chat is exposed to it (the patch kit has a filter for the original server).
+
+### Using this page
+
+- **If you write a server:** "Findings that matter to a server" lists the checks the client makes on what it receives, and the chat
+  marker filter you need if the server relays chat. [What a server must do for this client](afterglow/server-checklist.md#packet-handling)
+  collects the rules.
+- **If you patch or mod the client:** to see the traffic, create `gsConfig.cfg` next to `game.exe` with the three lines shown under
+  "Built-in packet logging"; the log file `Log.txt` then holds a hex dump of every packet sent and received (read from the code, not yet tried in play: **live**).
+- **To check a claim yourself:** the receive and send tables give the addresses to open in a decompiler; "How the catalogue is made"
+  and [Tools and method](tools-and-method.md) say how the dumps were produced.
 
 ## Receive path (confirmed)
 
@@ -62,12 +72,12 @@ LogLevel=67
   `UserData/Logs/<YYYYmmddHHMMSS>Log.txt` when mask bit `0x1000` is set. `LogLevel` is the mask, parsed with `atol` (decimal only).
   Without the file the mask is 3.
 
-## Findings for a server
+## Findings that matter to a server
 
 - **86 opcodes match the EP4.5 server's PDB struct sizes exactly** (✓ in the catalogue), so those layouts are confirmed from both ends.
   (The PDB is the debug-symbol file shipped with `ps_game.exe`; it names the server's packet structs and gives their sizes.)
 - **`0x020A` portal use**: the client sends **3 bytes** (`u8 portal`); `TPC_USER_USEPORTAL` is 4 bytes because the same struct is used for
-  the reply (`byPortal, byResult`). A server must accept the 3-byte request. The client sends it whenever the player stands in a portal
+  the reply (`byPortal, byResult`). The client sends it whenever the player stands in a portal
   box of its own `world/<map>.wld` (index = position in that list, the same order as the server's `.svmap`), with no level or country
   check, and again every 15 s while still inside (`0x443541`, flag at network object `+0x358`). Refusals (`0x555b60`, chat type 7):
   0 → 8038, 1 → 8039, 2 → 8040, 3 → 8041, 4 → 8042 "only party members allowed", 5 → the ranking-battle question 8043 (yes sends
@@ -80,17 +90,26 @@ LogLevel=67
   `0x4705d0` and helpers that take the opcode as an argument (one `?` row in the catalogue).
 - **`0x0205` pick up (`u32 groundItemId`) and `0x0502` attack a player (`u32 playerId`)**, both 6 bytes, were missing from the catalogue
   until their send stubs (`0x5859a0`, `0x586110`) became Ghidra functions; they are in it now. **`0x0502` is also a server → client
-  opcode** (`TP_PC_ATTACK`, 17 bytes, also used with `bySuccess = 5` when a move is refused): a server must accept the 6-byte request
-  under the same number. Details: [World packets](client-world-packets.md).
-- **Chat markup crash (`<<NNNcCC`).** The client's text renderer treats `<<` + 3 digits + `c` + 2 digits as a colour/link marker for the
+  opcode** (`TP_PC_ATTACK`, 17 bytes, also used with `bySuccess = 5` when a move is refused), so the same number is a 6-byte request
+  and a 17-byte answer. Details: [World packets](client-world-packets.md).
+- **The underflow error is a layout check.** If the client logs `Packet Underflow. Protocol : 0x…`, the packet it was given is shorter
+  than the catalogue says.
+
+### Chat markup crash (`<<NNNcCC`)
+
+- **Symptom and cause.** The client's text renderer treats `<<` + 3 digits + `c` + 2 digits as a colour/link marker for the
   next NNN bytes (the client builds it only for item names: `sprintf("<<%03dc%02d", strlen(name), colour)` + name, e.g. in the `0x0205`
   handler; recognised by `FUN_0041bec0`). A chat line with a marker whose NNN runs past the text crashes **every client that displays it**,
-  the sender's included. The client lets a player type it,
-  so a server must check chat text (all `11xx`/`F1xx` chat with text): drop or reject a message containing `<<` unless each marker is
-  `<<` + 3 digits + `c` + 2 digits with 1 ≤ NNN ≤ the bytes left after the 8-byte marker. For the original server, the patch kit's
+  the sender's included. The client lets a player type it.
+  All `11xx`/`F1xx` chat with text is affected.
+- **The check.** A message containing `<<` is safe only if each marker is `<<` + 3 digits + `c` + 2 digits with 1 ≤ NNN ≤ the bytes
+  left after the 8-byte marker; otherwise it must be dropped or broken up. For the original server, the patch kit's
   [`chat-markup-filter`](../original/community-fixes.md#chat-markup-filter) breaks such markers up in place. Whether the renderer stops at the
-  first NUL inside the text, or counts to the packet's length, was not checked: count to the first NUL to be safe.
-- Use the underflow error: if the client logs `Packet Underflow. Protocol : 0x…`, the server's packet is shorter than the catalogue says.
+  first NUL inside the text, or counts to the packet's length, was not checked (the cautious reading is to the first NUL).
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#packet-handling).
 
 ## How the catalogue is made
 

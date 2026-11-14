@@ -4,13 +4,13 @@ This page assesses which quality-of-life changes the US `game.exe` (build 2010-0
 companion DLL (`fixes-dll.md`), with the client facts that decide each one and the cost. It was written from static analysis of
 the client; none of the features is built or accepted in play. Work estimates are relative: **small** reuses a narrow established path;
 **medium** adds a UI control or bounded protocol behaviour; **large** crosses native subsystems, persistence, replication or resource
-lifecycles. They are not delivery times. Evidence labels: **observed** (read in the binary or data), **proposal** (engineering inference),
-**unknown** (a trace or runtime check not resolved). Recovered pseudo-code is not original source; its signatures and stack arguments do not
+lifecycles. They are not delivery times. Status words: **confirmed** (read in the binary or data), *inferred* (a proposal is an engineering inference),
+**open** (a trace not resolved), **live** (needs a game session). Recovered pseudo-code is not original source; its signatures and stack arguments do not
 establish a safe detour ABI.
 
 ## In short
 
-- **Most proposals are feasible in the DLL,** sometimes with server work and assets. The strongest are inventory search, a sell button,
+- **Most proposals are feasible in the [companion DLL](fixes-dll.md),** sometimes with server work and assets. The strongest are inventory search, a sell button,
   sequential sort and stack consolidation, better tooltips, clearer cooldown and buff displays, selected-target HP visibility, and reuse of
   the native cloak, helmet and effect controls.
 - **A third skill bar can reuse existing slot pages:** the native save path already handles five pages of ten general slots and four pages of
@@ -22,6 +22,12 @@ establish a safe detour ABI.
   rendering path; adding them is a separate DLL, server and asset project.
 - **Server rules decide the rest:** remote selling, blacksmith and warehouse access, protected items, buyback and presets need explicit server
   entitlements and, for robust versions, new atomic operations or stable item identity.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#quality-of-life-features).
+- **If you patch or mod the client:** "Feasibility matrix" gives each idea a size and the client fact that decides it; "Implementation boundaries" says what the DLL can safely touch ([fixes-dll.md](fixes-dll.md)).
+- **To check a claim yourself:** the matrix names the addresses; start from them ([tools-and-method.md](tools-and-method.md)).
 
 ## Feasibility matrix
 
@@ -89,16 +95,9 @@ selected-entry state; a generic asynchronous loader is not justified by the evid
 repetition and memory peaks (`graphics.md`). Existing mixed `Present` and loading diagnostics do not establish gameplay FPS, a speedup or a
 whole loading-screen duration.
 
-## Suggested order
+## For server developers
 
-1. **Smallest useful additions:** sell UI, inventory search and highlights, factual tooltip improvements, confirmed native visibility
-   controls, and acceptance of the existing region features. Start display work by preserving custom modes and correcting validated aspect
-   consumers.
-2. **Broader client work:** sequential sorting and stacking, readable cooldown and buff timers, a third visible bar on existing slot
-   pages, and consistent HUD, font and hit-test scaling.
-3. **Joint server features:** protected items, explicit rules for remote blacksmith and warehouse use, warehouse gold, authoritative party and
-   event timer information, and well-defined batch operations.
-4. **Larger systems:** buyback, atomic equipment presets and new replicated cosmetic systems. Plan identity, persistence and assets before UI.
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#quality-of-life-features).
 
 ## Open
 

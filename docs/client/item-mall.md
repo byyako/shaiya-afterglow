@@ -3,7 +3,7 @@
 This page covers the item mall ("Point shop") of the client `game.exe` (US build 2010-04-26, patch 108): where the product list and
 prices come from, the point balance, the purchase and gift flows, the two storages, and the billing packets. It was read from
 `game.exe` (handlers on the network object's vtable slots `+0x54c`…`+0x588`) and the packet structs of the EP4.5 server's debug symbols
-(`ps_game.pdb`). Status words: **confirmed**, **confirmed (disasm)**, *inferred*, **live**. Sizes include the opcode.
+(`ps_game.pdb`). Status words: **confirmed**, **confirmed (disasm)**, [*inferred*](glossary.md#inferred), [**live**](glossary.md#live). Sizes include the [opcode](glossary.md#opcode).
 
 ## In short
 
@@ -14,23 +14,33 @@ prices come from, the point balance, the purchase and gift flows, the two storag
   there are enough points and bag space.
 - **Bought items go straight into the bags**; gifts go to a separate mall storage of 240 slots, which the player empties later.
 
+### Using this page
+
+- **If you write a server:** the request and answer tables give the packet fields; the product list is client data, so prices change only through the server's copy of `Cash.SData` matching the client's. The checklist is [What a server must do for this client](afterglow/server-checklist.md#item-mall).
+- **To check a claim yourself:** start at the mall window code `0x4cd7f0`, using [Tools and method](tools-and-method.md).
+
 ## Summary
 
 - **The product list is client data**: the mall window is filled from `Cash.SData` (85 products: index, tab, icon, price, 24 ×
   (item id, count), name, code, description; see [Skill and Monster SData](skill-monster-sdata-vs-defs.md#the-item-mall-cashsdata-against-productlist)). Entry `+0x88` is the tab (1–4; anything above 4
-  goes to tab 4), at most 300 products per tab; a fifth tab (`ins_market_past.tga`) shows the purchase history (*inferred*).
+  goes to tab 4), at most 300 products per tab; a fifth tab (tab index 4, `ins_market_past.tga`) shows the purchase history (**confirmed**: the click handler `0x4ce550` sets the tab to 4 and loads that texture at `0x4cee81`; what its rows show is still *inferred*).
   confirmed (`0x4cd7f0`)
 - **`0xB106` can rename and reprice** products already in `Cash.SData` (match by code, case-sensitive); it cannot add products. The
   client asks for it once after a scene set-up (`0xB106` 2, region feature 10). The original never answers. confirmed (`0x55a000`,
   [Packet opportunities](packet-opportunities.md))
 - **Points** come only from the server: `0x2601` at world entry, `0x2605` any time, and
   the remaining points in each buy/gift answer. The region-6 mall window does **not** ask for points when it opens (only regions 5
-  and 9 send `0x2605` there); `0x2605` is also sent when the game window becomes active again in the world (`0x40977b`, *inferred*:
-  after the "charge" web page). confirmed
+  and 9 send `0x2605` there); `0x2605` is also sent when the game window becomes active again in the world (window message `WM_ACTIVATEAPP` in `0x409640`, call at `0x40977b`, **confirmed**: only when the window becomes active, the player object exists and a 60-second cool-down `0x6f1580` (counted down in the main loop `0x40b1a0`) is 0; the sender is `0x5897c0`; the purpose, the "charge" web page, is *inferred*). confirmed
 - **The client does not check points or bag space before buying**: it asks "Do you want to purchase <b>?" (822) and sends the
   product code. The server decides. confirmed (`0x4ce550`)
 - "Charge" button: region 6 starts Internet Explorer with `http://www.aeriagames.com/user?destination=https://billing.aeriagames.com/index.asp`
   (CreateProcess). Harmless offline; no packet. confirmed
+- **What a purchase answer must carry for the client**: `0x2602 0` brings the remaining points, one log row and one `TP_POINTITEM_UNIT`
+  (`bag, slot, type, typeId, count`) per item. The client only writes those slots; it does not move, merge or check anything itself.
+  A gift (`0x2603`) goes to the recipient's mall storage and the recipient is told with `0x2604`; taking from a storage is `0x2607` or
+  `0xB102`. confirmed (handlers as in the tables below)
+- **The product codes**: the client's `Cash.SData` has 85 products; the original server's `ProductList` table has 84 of them (the one
+  the server lacks is "Phukey Long Cape", see [Skill and Monster SData](skill-monster-sdata-vs-defs.md#the-item-mall-cashsdata-against-productlist)).
 
 ## Requests (client → server)
 
@@ -59,22 +69,17 @@ prices come from, the point balance, the purchase and gift flows, the two storag
 | `0xB102` | 5 | `u8 byNpcSlot, u8 bag, u8 slot` (`TP_BILLING_ITEMGET`) | as `0x2607`, from the billing storage |
 | `0xB103` | 7 | `u8 byServiceType, u32 dwExpireTime` (`TP_BILLING_SERVICETYPE`) | region 6: stores the type; 1 → 814 "You are using individual package. (expire date : <b>)", 2 → 815 (PC room 1.5× exp), 3 → 816, 4 → sysmsg 863, **which this client lacks** ("GetMsg Error 863"); 0 → nothing. `<b>` is the expiry as `YYYY-MM-DD` from the packed date (see [Auction house](auction-house.md#summary)) |
 | `0xB104` | 6 | `u32` | "3 hour-free service" — region feature 28, off: no effect |
-| `0xB105` | 6 | `u32 dwLogOffTime` (seconds) | prints sysmsg 840 with `mm : ss`; **840 is a lapis-extraction text in this sysmsg**, so the line is wrong on this client. Client-only, never sent by the original: do not send |
+| `0xB105` | 6 | `u32 dwLogOffTime` (seconds) | prints sysmsg 840 with `mm : ss`; **840 is a lapis-extraction text in this sysmsg**, so the line is wrong on this client. Client-only, never sent by the original |
 | `0xB106` | 3 + 76n | `u8 n`, n × (`char code[21], char name[51], u32 price`) (`TP_BILLING_PRODUCTLIST`, ≤ 128) | for each code already in the mall list: name (≤ 50 characters) and price replaced. Client-only |
 
 Purchase history rows (`TP_POINTLOG_UNIT`) are kept as `code, buyTime, usePoint`; `buyTime` is a packed date (*inferred*, as the
 auction dates).
 
-## For a server: a minimal mall
+## For server developers
 
-1. At world entry: `0x2601` with the account's points and, if the storage is used, `0x2606`.
-2. On `0x2602`: look the code up in the product table (the client's `Cash.SData` codes; the original database's `ProductList` has 84 of the 85),
-   check points and free bag slots, put the items in, then `0x2602 0` with the remaining points, a log row and one
-   `TP_POINTITEM_UNIT` per item (the client only writes those slots; it does not move or merge anything itself).
-3. Optional: answer `0xB106` with the database's names/prices for codes the client has, so price changes need no client patch.
-4. Gifts (`0x2603`) put the items in the recipient's mall storage and send them `0x2604`; storage takes are `0x2607`.
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#item-mall).
 
 ## Open
 
-- **Live**: what the fifth tab shows exactly; whether `0x2605` is sent on window activation; the gift flag `0x21e5b9d`'s icon.
+- **Live**: what the fifth tab shows exactly; whether the activation resend of `0x2605` reaches the server in play (the static condition is in the points section above); the gift flag `0x21e5b9d`'s icon.
 - The billing-storage and mall-storage windows: how they are opened (NPC or button) was not traced.

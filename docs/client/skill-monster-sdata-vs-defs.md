@@ -12,10 +12,16 @@ does with a value is *inferred* (not read in `game.exe`) unless marked.
 - **Skills**: 80 of the 978 skill records differ. Most players see only a tooltip or cast bar that does not match, but two differences
   change what they can do: archers cannot learn Trap, and Pollution Zone asks one skill point more in the client.
 - **Monsters**: one spawned boss, Kimuraku, has ten times less HP in the client's file, so its health bar stays full for most of the
-  fight. A server can fix that by sending the real HP with `0x0608`.
+  fight. A `0x0608` [packet](glossary.md#packet) can overwrite the max HP the client uses.
 - **Monster skills** differ in 34 records, but monster skills show no numbers, so players see at most a different state icon.
 - **Item mall**: the client lists one product, "Phukey Long Cape", that the server's product table does not sell.
 - **Kill ranks** are byte-identical on both sides, and guild-house prices agree.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#skill-and-monster-sdata).
+- **If you patch or mod the client:** "What players see" says which differences matter in play; the others change only a tooltip.
+- **To check a claim yourself:** [sdata-generation.md](sdata-generation.md) has the layouts and the decryption; [tools-and-method.md](tools-and-method.md) lists the tools.
 
 ## Reading the files
 
@@ -117,9 +123,9 @@ row on the server.
   compare.
 - **`PriestTalk.SData`**: plain, 25 entries of **Korean** text (code page 949) even in the US client; no server side. Keep as shipped.
 
-## For a server
+## What players see
 
-Nothing to change. The visible differences, all the original's own:
+The visible differences, all the original's own:
 
 - archers cannot learn Trap (the client does not offer it);
 - Pollution Zone asks one skill point more in the client;
@@ -127,10 +133,22 @@ Nothing to change. The visible differences, all the original's own:
 - the Lv3 stat remedies show no bonus (mall items);
 - tooltips: Potential Nimble, Slow, Rapid Shot Lv3; cast bars of Healing, Healing Prayer and Recovery longer than the cast.
 
-Worth a look in a live test: whether the client sends Pollution Zone with exactly 3 points, Gruesome Attack with a sword, and whether it
-refuses to attack from the server's reach on the Aidion and Astaroth monsters (*live*).
-
 **What the client does, read in `game.exe`** (see [Client facts](CLIENT-FACTS.md#sdata-differences-what-the-client-does-with-its-own-values)):
 the skill window's learn arrow uses the client's job flags, levels and points (Pollution Zone needs 4 points in this client; an Archer
-cannot raise Trap past the level it has); no weapon check was found before a skill is sent; Kimuraku's bar can be fixed from the server
-with `0x0608` (`u32 id, u32 maxHP, u32 HP`), which overwrites the client's max HP.
+cannot raise Trap past the level it has); no weapon check was found before a skill is sent; a `0x0608` (`u32 id, u32 maxHP, u32 HP`)
+overwrites a monster's max HP in the client, which is how Kimuraku's bar can be corrected.
+
+## In other episodes
+
+- **Skill levels per skill:** this client's `Skill.SData` holds 3 levels per skill; EP5.4 uses 9 and the EP6 client's lookup accepts 1 to 15
+  (**ref** [EP4.5](episodes/ep4-5.md), [EP5](episodes/ep5.md), [EP6](episodes/ep6.md)). The EP5.4 count comes from a reconstruction of an
+  EP5.4 client, not from a client file on hand.
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#skill-and-monster-sdata).
+
+## Open
+
+**Live:** whether the client sends Pollution Zone with exactly 3 points, Gruesome Attack with a sword, and whether it refuses to attack
+from the server's reach on the Aidion and Astaroth monsters.

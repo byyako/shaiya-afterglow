@@ -14,13 +14,19 @@ parser consumes it to the exact last byte). The loader functions named below are
   them reads the whole game.
 - **Animation is plain math:** quaternion keys per bone, D3DX row-vector matrices and a two-bone blend. The section on playing `.ANI`
   on `.3DC` is enough to export working models.
-- **Only SData tables are encrypted;** models and maps are plain.
+- **Only [SData](glossary.md#sdata) tables are encrypted;** models and maps are plain.
+
+### Using this page
+
+- **If you build a tool or mod:** use the layout blocks per format, and the playing section for `.ANI` on `.3DC`; the client repository's `tools/formats.py check` reads every file of a type to its last byte.
+- **If you write a server:** none of these files cross the network; they matter only when a server's data must agree with what the client loads (see [client-systems.md](client-systems.md)).
+- **To check a claim yourself:** open a loader named under a format heading in a disassembler ([tools-and-method.md](tools-and-method.md)) and compare it with the layout; [data-archive.md](data-archive.md) shows where each file sits in the archive.
 
 Conventions: all values little-endian; `i32`/`u16`/`f32` etc.; `str` = `i32 len` + `len` bytes (usually NUL-terminated, cp949);
 `face` = `u16 i1, i2, i3` (a triangle of vertex indices; every Shaiya mesh is triangles). Status words: **confirmed** (the parser
 consumes every file; loader address given), *inferred*.
 
-Sources (elitepvpers, Shaiya PServer sections): the "Shaiya File Formats" sticky (thread 4462055, Castor's posts 2020-01..04),
+Sources (elitepvpers, Shaiya PServer sections): the "Shaiya File Formats" sticky (thread 4462055, Castor's posts),
 "Question about SMOD file format" (4638178, 2019), "Trying to read Bone info in 3DC files" (4664506, 2019), "DataSah" (3621923),
 "Data tool crash on specific offsets" (3441524). The struct text built into Castor's shStudio agrees (see `tools-and-method.md`).
 
@@ -243,6 +249,20 @@ Blend list (`D3DBLEND_*` names and values in a table at `0x6B61F0`, 32-byte reco
 12 BOTHINVSRCALPHA. A few indices in the files are out of range (5 mesh, 8 frame, 3 sequence indices); for frames the client
 checks and draws untextured.
 
+Header details (the developers' asset tool `eft.exe` reads the same header, see `eft-tool.md`):
+- The signature is the only check and there is no version field: `FUN_00546710` reads 3 bytes into a zeroed 4-byte buffer and compares
+  4 bytes with `"EFT\0"` (`0x6b6120`, `REPE CMPSB` at `0x546783`). A file that cannot be opened returns 1 (counted as loaded, nothing
+  in it); a wrong signature closes the file and returns 0. **confirmed.** The 2005 tool reads the same header, so the header did not
+  change between 2005 and this build.
+- Every 3DE and DDS name stores its trailing NUL inside `len` (all 446 files: 1,835 mesh and 4,780 texture names, the longest 30 bytes;
+  checked by a script over the archive). The client reads each name into a 268-byte stack buffer with no length check, so an editor
+  must keep names short and NUL-terminated. **confirmed.**
+- Five mesh names in three files are in neither archive, and emitters of those files use them: `erial01.3DE`, `erial02.3DE`
+  (`Erial_att03.EFT`), `mate01.3DE` (`MateM_att02.EFT`), `mate02.3DE`, `mate03.3DE` (`MateW_att02.EFT`). The mesh cache
+  `FUN_00538af0` returns null for a file it cannot load (**confirmed**). An emitter instance whose mesh pointer (`+0x1dad0`) is null is
+  stepped and drawn as billboards (`FUN_0054b930`, `FUN_00549990`; **confirmed**). That these missing meshes end up as that null pointer
+  is *inferred*: the copy from the `.EFT` mesh list into the instance was not traced.
+
 ### .ALT — character action list ("AL3")
 Loader `FUN_0053ef50`; one per race/sex/class group (`<race>/<xxxx>_action.ALT`, literals in `FUN_0053f230`). The slot number is
 the action id.
@@ -267,7 +287,8 @@ must be ignored. `List(R)` = `i32 nNames; name[nNames]; i32 n; R[n]`, where each
 char[4] type                 "FLD\0" field or "DUN\0" dungeon
 FLD:                         terrain (FUN_00446c50 sets up the grid; FUN_0058cfa0 reads it)
   i32 mapSize                1024 or 2048 (map 70 is forced to 1600 in memory)
-  i16 height[n*n]            n = mapSize/2 + 1 corners per side (FUN_0059d3d0)
+  i16 height[n*n]            n = mapSize/2 + 1 corners per side (FUN_0059d3d0); index cz*n + cx, corners 2 units apart,
+                             height = value * 0.02 - 200 (world units)
   u8  texIndex[n*n]          terrain texture per corner, index into the list below
   i32 nTex; {name texture (Terrain/Detail), f32 tiling, name footstep .wav}[nTex]    (FUN_0059cd70, 516 bytes each)
                              the footstep name picks the walk sound set: ch_walks* (stone), ch_walkg* (grass), else ch_walke*
@@ -276,7 +297,7 @@ DUN:
   name dg                    dungeon geometry (.dg in data/world/dungeon); its octree replaces the terrain
 both:
   List(Placement) building   data/entity/building (.smod)          Placement = i32 nameIndex, f32 pos[3], f32 dir[3], f32 up[3]
-  List(Placement) shape      data/entity/shape                     (40 bytes; dir/up give rotation and scale, -1 index = skip)
+  List(Placement) shape      data/entity/shape                     (40 bytes; dir/up give the rotation only, there is no scale: all 49,500 building, shape and tree placements in the 83 .wld files have unit, perpendicular dir and up; -1 index = skip)
   List(Placement) tree       data/entity/tree
   List(Placement) grass      data/entity/grass
   List(Placement) vani       data/entity/vani (.vani)
@@ -296,25 +317,33 @@ both:
      i32 n; {box, f32 rotY}[n]                                      oriented boxes (rare; Parsec calls them monster-restricted zones)
      i32 n; Portal[n]            Portal (556 bytes) = box, f32 rotY, name, char[248] destination name (shown in the UI),
                                  i32 country (1/2 seen), i16 minLevel, i16 maxLevel (0, 999), i32 destMap, f32 destPos[3]
-                                 (must match the server .svmap portals; the L_portal effect is drawn at the box centre)
-     i32 total; groups until `total` records are read: {i32 k; {box, f32 rotY, i32, i32}[k]}   (Parsec: spawns; not traced)
-     i32 n; Area[n]              named areas (548 bytes) = box, f32 rotY, name, name tga, i32 mode, i32; their order is the
-                                 index into world/<mapId>.txt (mode 1 = text caption, 2 = .tga caption)
+                                 (must match the server .svmap portals, same order and fields: the svmap position is the box
+                                 centre (x, z) and the box's min y; the L_portal effect is drawn at the box centre)
+     i32 total; groups until `total` records are read: {i32 k; {box, f32 rotY, i32 country, i32 attr}[k]}
+                                 = the server's bind (respawn) areas, same order: one group per svmap bind, k boxes,
+                                 country 0/1/2 and attr per box (Parsec called them spawns)
+     i32 n; Area[n]              named areas (548 bytes) = box, f32 rotY, name, name tga, i32 mode, i32; area i is named by the
+                                 line of world/<mapId>.txt whose first column is i (map 2 names 0-66, 87, 88; gaps are
+                                 picture captions) (mode 1 = text caption, 2 = .tga caption). They are the server's svmap
+                                 regions: same boxes, same order, svmap kind = mode
      i32 n; then records while i < n, each {i32 npcType, i32 npcTypeId, f32 pos[3], f32 angle, i32 k, f32 pos[3][k]}
                                  and the client subtracts k from n after each one. NPC positions used for the minimap and quest
                                  marks (FUN_005254e0 looks the NPC up by type/typeId as in NpcQuest.SData, types 1–13);
-                                 the NPCs themselves are spawned by the server (0x0E01)
+                                 the NPCs themselves are spawned by the server (0x0E01). The list equals the server's svmap
+                                 NPC list record for record (type, type id, first point, angle, path points): 286/286 on map 1,
+                                 136/136 on map 35
 FLD: name sky[3]             sky dome .bmp and two cloud .tga (data/sky); dungeons have none (maps 39/40 use fixed names)
 both: f32 rgb[3] ×3          three colours (0..255): the first is kept as a D3D colour value, the second as ARGB, the third
                              feeds the fog/light settings when feature 0x26 is on (exact roles not traced; Parsec: 2 unused + fog)
       f32 fogNear, fogFar    read but not used (e.g. 300, 600)
 ```
 Rendering: each terrain tile is 4 triangles (`/wire` GM command shows it), diagonals generated by the client. After the file is
-loaded the client reads `DATA\world\<mapId>.txt` (area names). Height scale reported by another member: `(i16)h * 0.2 - 200.0`
-(*inferred*). The client also probes `Data/World/<id>.svmap` (`FUN_00430280`, only when a feature flag is set): optional.
+loaded the client reads `DATA\world\<mapId>.txt` (area names). Terrain heights are `(i16)h * 0.02 - 200.0` (checked against NPC heights: median
+error under 0.02 on maps 1, 2, 18; an earlier report of `* 0.2` was wrong). The client also probes `Data/World/<id>.svmap` (`FUN_00430280`, called from `0x452270`@`0x452336`, only when region feature 16 is on; **confirmed**): optional.
 
 ### .DG — dungeon geometry (world/dungeon/*.dg)
-Read by `FUN_0058fba0` (`SDungeonScene::Load`). **confirmed: 46/46 parse to the last byte.**
+Read by `FUN_0058fba0` (`SDungeonScene::Load`). **confirmed: 44/44 parse to the last byte** (the cleaned-up `data.sah`; the uncleaned original archive has 51, all parse). A dungeon map's
+server size is the larger of its `.dg` bound x and z rounded up to a multiple of 8 (46 of the 50 dungeon maps that have an svmap; maps 3, 27, 48 and 49 use 1024).
 ```
 box bounds
 i32 nTex; name texture[nTex]      data/entity/texture
@@ -329,8 +358,9 @@ Node (octree, FUN_0058f860):
   8 × {i32 hasChild; Node (if hasChild)}
 ```
 
-### .SVMAP — server map (read by server tools, listed here for reference)
-`i32 mapSize; u8 heights[mapSize*mapSize/8]; i32 unk; Ladders; MonsterAreas; NpcLocations; Portals; Spawns; NamedAreas`.
+### .SVMAP — server map (not a client file)
+The server's `PS_Game/Data/Map/<id>.svmap`. Its verified layout (all 77 originals parse to the last byte and write back
+byte-identical) is in `svmap-editor.md` section 3; the old one-line layout that stood here was wrong.
 
 ## SData (client tables)
 

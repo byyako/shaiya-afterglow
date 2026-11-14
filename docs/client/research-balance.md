@@ -10,10 +10,11 @@ data), *inferred*, **live** (needs a game session). Addresses are in `game.exe` 
 ## In short
 
 - **The character window computes attack, magic attack, defence and magic defence itself,** with the original server's per-point factors
-  hard-coded. No packet carries those numbers, and hit, evasion and critical are not shown. A change to the formulas shows wrong numbers
+  hard-coded. No [packet](glossary.md#packet) carries those numbers, and hit, evasion and critical are not shown. A change to the formulas shows wrong numbers
   in the window until the client is patched.
 - **Maxima (HP/MP/SP) and starting stats come from the server;** the client has no status table, and the creation screen shows no stats.
-- **Crafted HP/MP/SP is multiplied by 100 in the client** (one byte, `0x64`), so a server that halves it needs a one-byte client patch.
+  The one exception is crafted HP/MP/SP, which **the client multiplies by 100** (one byte, `0x64`), so a server that halves it needs a
+  one-byte client patch.
 - **The client has no wait of its own tied to the weapon:** its gates are the skill's cooldown, one outstanding skill request, and the
   cast state. The server's interval is the cadence players feel.
 - **Skill costs are not checked before sending,** and a cost of exactly 1 is printed as "spend all".
@@ -21,6 +22,12 @@ data), *inferred*, **live** (needs a game session). Addresses are in `game.exe` 
   codes, so a refused mode has no code of its own.
 - **The original enchant tables are not the ones a copied server uses:** they live in a data file next to the original server, and the
   client's window uses the original formula.
+
+### Using this page
+
+- **If you write a server:** "Short answers" says which balance values the client computes itself and which come from the server; the latter can change without a client patch.
+- **If you patch or mod the client:** "Short answers" says which balance changes need a client or DLL patch ([fixes-dll.md](fixes-dll.md)).
+- **To check a claim yourself:** each section names the function and address it was read from; start there ([tools-and-method.md](tools-and-method.md)).
 
 ## Short answers
 

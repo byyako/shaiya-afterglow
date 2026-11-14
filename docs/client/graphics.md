@@ -1,6 +1,6 @@
 # Graphics and performance
 
-This page covers the optional renderer controls in the companion DLL (see `fixes-dll.md`), the loading timers, what the logs from
+This page covers the optional renderer controls in the companion DLL (see [The companion DLL](fixes-dll.md)), the loading timers, what the logs from
 real play show, and the offline texture and archive audits. It describes the US `game.exe` (build 2010-04-26, patch 108). Status
 words: **confirmed** (read in the binary, with address), *inferred*, **measured** (from logs of real play).
 
@@ -14,6 +14,15 @@ words: **confirmed** (read in the binary, with address), *inferred*, **measured*
   depth-test-off or an unsupported vertex format. A later build also filters the second sampler (terrain detail and lightmaps).
 - **With every option at its default the DLL installs no Direct3D hook at all.** No hook failure appeared in any log.
 - **Not established:** any real FPS or loading gain, visual quality, long sessions, other graphics drivers.
+
+### Using this page
+
+- **If you patch or mod the client:** if you use a DLL like this, you try a renderer option by setting its key in the DLL's INI file and
+  starting the game; "Classic" turns every option off again. Set `metrics` to true to get the graphics and loading logs,
+  and read the numbers against "Measurements" below. The DLL itself is described in [The companion DLL](fixes-dll.md).
+- **If you write a server:** nothing here depends on the server.
+- **To check a claim yourself:** the "How it works" addresses are places in `game.exe` to open in a decompiler; the audits can be redone
+  from the [archive format](data-archive.md) and [Tools and method](tools-and-method.md).
 
 ## Settings
 
@@ -81,6 +90,13 @@ All **measured**, 7 play sessions, 16x filtering, metrics on, preload (feature 2
   whole member, creates the texture and closes the file on every call; a read cache or reusable buffer is only worth building if
   instrumentation shows repeated reads. The lookup keeps global "selected entry" state (`0x2232aac` and two siblings), so background
   loading needs a design first. **confirmed (disasm)**
+
+## In other episodes
+
+- The EP1, EP3, EP4.5, EP5.4-labelled and all four EP6 builds import `d3d9.dll`, the same Direct3D 9 library this client uses; no build
+  read here imports an older or newer one (**confirmed (file)**, [Episode 1](episodes/ep1.md), [Episode 3](episodes/ep3.md),
+  [Episode 4.5](episodes/ep4-5.md), [Episode 5](episodes/ep5.md), [Episode 6](episodes/ep6.md)). Whether the measurements here carry
+  over to them is not known.
 
 ## Open
 

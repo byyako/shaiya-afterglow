@@ -6,20 +6,27 @@ keeping the game from freezing the mouse in the background, adding one new packe
 load path, the safety checks, every change with its address, the original bytes or slot it replaces and the new behaviour, and the
 settings. **The DLL and its source are not published and not offered for download;** the page exists so the changes can be understood,
 checked against your own copy of the client, and reproduced by anyone who writes their own. For plain byte patches see
-`client-patch-kit.md`. Status words: **confirmed** (read in the binary, address given), **confirmed (disasm)**, *inferred*, **live**
+`client-patch-kit.md`. Status words: **confirmed** (read in the binary, address given), **confirmed (disasm)**, [*inferred*](glossary.md#inferred), [**live**](glossary.md#live)
 (needs a game session).
 
 ## In short
 
 - **It loads before the game starts** because `game.exe` carries one extra import for it, so Windows runs its `DllMain` first.
-- **It changes nothing unless the executable is the right one:** every write first checks the build stamp (`0x4bd5001e`) and then the exact
+- **It changes nothing unless the executable is the right one:** every write first checks the build stamp and then the exact
   bytes it replaces, and logs what it did.
-- **Its biggest tool is one hook:** the client decides most regional features through one function, `IsOn(n)`; the DLL answers "yes" for
+- **Its biggest tool is one hook:** the client decides most [region features](glossary.md#region-feature) through one function, `IsOn(n)`; the DLL answers "yes" for
   a chosen list (default: 0, 5, 8, 23, 26, 43, 45, 46, 62) and asks the original for everything else.
 - **It also fixes:** the `0x2104` road lines, 34 Korean texts, five broken GM chat commands (and a quote parser), anti-freeze in the
   background, and adds a handler for a new operator-chat packet (`operator-listen.md`).
 - **Graphics controls are off by default** and install no Direct3D hook until a setting asks for one (`graphics.md`).
 - **Everything is a setting** in an INI file next to the DLL; defaults are decided, not detected.
+
+### Using this page
+
+- **To check what the DLL does:** each section names the address it changes and the original bytes; compare them with your own copy of the client as [Tools and method](tools-and-method.md) describes. The DLL itself is not published.
+- **If you use a DLL like this:** it reads a settings file next to it (table under "Settings"). An empty `features` list installs no hook, a missing file means defaults, and `log` on writes a log of every change applied or refused. Start the game as usual; a refused change shows in the log, not on screen.
+- **If you write a server:** "Region features" lists what each feature needs from a server (for example `0x0608` for exact boss HP).
+- **For plain byte patches** that need no DLL, see [the patch kit](client-patch-kit.md).
 
 ## How it loads
 
@@ -68,7 +75,7 @@ feature in the constructor, works but each list differs and some are filled by `
 | 5 | Easy mode asks for confirmation at character creation | – |
 | 8 | the revive window says when you have no Resurrection Rune | – |
 | 23 | time left on the continuous-resurrection buff | – |
-| 26 | target HP percentage under the target bar (25 shows it only when `0x431a40` allows; redundant with 26) | `0x0608` for exact maxima |
+| 26 | target HP percentage under the target bar (25 shows it only when `0x431a40` allows: the target is monster id 2382 or 2383, the two Descended Goddess bosses; redundant with 26) | `0x0608` for exact maxima |
 | 43 | a brand-new character gets two default quick slots | – |
 | 45 | an options checkbox "lock the skill window" | – |
 | 46 | auto-dismount: a skill or quick slot used while riding sends `0x0216` and queues the action (resume path `0x416ba0` → `0x4c49c0`) | the answer must return the entity to state 0 (**live**) |

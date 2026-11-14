@@ -4,11 +4,11 @@ This page describes what the client `game.exe` (US build 2010-04-26, patch 108) 
 monsters, attacks and skills, emotes, health and mana, items on the ground and in bags, NPC shops, the warehouse and quests. It also
 lists what the client sends for each.
 
-Every server packet goes dispatcher (`0x582e10`) → a small reader (`FUN_005xxxxx`, field order = wire order) → a slot of the network
+Every server packet goes [dispatcher](glossary.md#dispatcher) (`0x582e10`) → a small reader (`FUN_005xxxxx`, field order = wire order) → a slot of the network
 object's vtable (`0x6A5C20`), which holds the logic; the "logic" column names that function. Field names are the EP4.5 server's own
 (from `ps_game.pdb`, the debug symbols shipped with `ps_game.exe`) wherever its struct size matches what the client reads; meanings come
 from the client code. Sizes include the 2-byte opcode and exclude the 2-byte length prefix. Status: **confirmed** unless marked
-*inferred*.
+*inferred*; **ref** = stated on a linked server page; **confirmed (disasm)** = read in the disassembly only.
 
 ## In short
 
@@ -21,6 +21,16 @@ from the client code. Sizes include the 2-byte opcode and exclude the 2-byte len
   requests.
 - **Emotes need no client work**: the chat commands `/victory`, `/clap` and the rest are motion numbers the server passes on to the
   players nearby.
+
+### Using this page
+
+- **If you write a server:** read "Conventions" first (ids, positions, damage order), then the family you are sending: NPCs, mobs,
+  players, items, shops or quests. [What a server must do for this client](afterglow/server-checklist.md#packet-handling) lists the
+  checks that matter most.
+- **If you patch or mod the client:** the "logic" column gives the function that does the work for each packet, the place to start for a
+  patch; [Patch kit for game.exe](client-patch-kit.md) shows how patches are applied.
+- **To check a claim yourself:** open the reader and logic addresses in a decompiler; the packet's row in the
+  [packet catalogue](client-packets.generated.md) shows the field order, and [Tools and method](tools-and-method.md) the setup.
 
 ## Conventions
 
@@ -58,7 +68,7 @@ Mobs are **not** in this family: they are `0x06xx` (below).
 |---|---|---|---|---|
 | `0x0E01` | 23 | `u32 dwID, u8 byType, u16 wTypeID, f32 fPosX, fPosY, fPosZ, u16 wDir` (`TP_NPC_ENTER`) | `0x552730` | creates the NPC (type/typeId index `NpcQuest.SData`), facing `wDir` |
 | `0x0E02` | 6 | `u32 dwID` | `0x54f790` | removes the NPC |
-| `0x0E03` | 19 | `u32 dwID, u8 byMotion, f32 x, y, z` (`TP_NPC_MOVE`) | `0x54f7c0` | walks the NPC to x/y/z (turns to face it); `byMotion != 0` is kept as a flag (*inferred* run) |
+| `0x0E03` | 19 | `u32 dwID, u8 byMotion, f32 x, y, z` (`TP_NPC_MOVE`) | `0x54f7c0` | walks the NPC to x/y/z (turns to face it); `byMotion != 0` is kept as a flag at NPC `+0xac`; the NPC move update `0x433d90` multiplies its step by 4.0 (`0x6a67a4`) when it is set, so it means run (**confirmed**); what the original sends: motion 0 for an idle step, 1 for a chase step (*inferred* from the server's calls, **ref** [Walking NPCs and guards](../original/guards.md#3-walking) and [chasing](../original/guards.md#8-chasing): the server sends motion 0 for an idle step and 1 for a chase step; [Chase smoothing](../original/chase-smoothing.md#7-the-clients-npc-mover) reads the same handler (run flag at `+0xac`)) |
 | `0x0E04` | 6 | `u32` | `0x407660` | **ignored** (empty function) |
 | `0x0E05` | 13 | `u8 bySuccess, u32 dwID (NPC), u32 dwUserID, u16 wDamage` (PDB name `TP_NPC_ATTACKMOB`, but the target is a **player**) | `0x54f890` | guard attacks a **player** (looked up with 0x447880, the player list): attack animation, turns to the player (`+0xb8` = 1), the HP (`+0x130`) lowered by `wDamage` when the blow lands. Unknown NPC but known player: the HP is lowered at once (corrected: an earlier version read it as a monster) |
 | `0x0E06` | 13 | `u8 bySuccess, u32 dwID (NPC), u32 dwMOBID, u16 wDamage` (PDB name `TP_NPC_ATTACKPC`, but the target is a **monster**) | `0x54f9e0` | guard attacks a **monster** (looked up with 0x447900, the monster list; `+0xb8` = 0): its HP (`+0x58`) lowered when the blow lands, at once for an unknown NPC (corrected: an earlier version read it as a player) |
@@ -75,7 +85,7 @@ from `0x0E01`.
 |---|---|---|---|---|
 | `0x0601` | 17 | `u32 dwID, u8 byNew, u16 wMOBID, f32 fPosX, fPosZ` (`TP_MOB_ENTER`) | `0x552380` | creates the mob from `Monster.SData[wMOBID]` (model, **max HP** from the record), random facing; `byNew != 0` plays the spawn animation. **Current HP starts at 0**: send `0x0608` after it (or the target bar shows empty). A `0x0601` for an id already known is ignored entirely (send `0x0602` first to change `wMOBID`) |
 | `0x0602` | 6 | `u32 dwID` | `0x54e7e0` | removes the mob |
-| `0x0603` | 15 | `u32 dwID, u8 byMotion, f32 fPosX, fPosZ` (`TP_MOB_MOVE`) | `0x54e810` | moves toward x/z; `byMotion` stored (*inferred* walk 0 / run 1) |
+| `0x0603` | 15 | `u32 dwID, u8 byMotion, f32 fPosX, fPosZ` (`TP_MOB_MOVE`) | `0x54e810` | moves toward x/z; `byMotion` stored at mob `+0x84`; the mob move update `0x431aa0` picks walk (animation slot 0) for 0 and run (slot 1, the chase speed values) for anything else (**confirmed**) |
 | `0x0604` | 6 | `u32 dwID` | `0x54e8c0` | removes the mob (no existence check) |
 | `0x0605` | 17 | `u8 bySuccess, u32 dwID (mob), u32 dwUserID, u16 wDamage[3]` (`TP_MOB_ATTACKPC`) | `0x54e8d0` | mob attack animation (one of its 3 attacks, `Monster.SData`), damage applied to the player when the blow lands; unknown mob: applied at once |
 | `0x0606` | 11 | `u32 dwID, u8 byKillerType, u32 dwKillerID` (like `TP_DEATH`) | `0x551c50` | mob dies (death animation if its HP < 1); players attacking it stop |
@@ -128,7 +138,7 @@ Client → server `0x0506` (3) `u8 motion`; server → client `0x0506` (7) `u32 
 | motion | sent by the client when | client shows (`0x54e3f0`) |
 |---|---|---|
 | 0 / 1 | stand / sit (sit key, exit dialog) | stand-up / sit-down animation, `ch_mstup001.wav` / `ch_mdown001.wav` |
-| 2, 3, 10, 11 | player actions in `FUN_0043c000` (not identified) | other players only: 2 sets a vertical speed (*inferred* jump), 3/10/11 play animations 13/14/15 |
+| 2, 3, 10, 11 | the movement keys read in `FUN_0043c000`: 2 is key binding KEY9 (default Space, sent at `0x43f11b` and `0x44280f`), 3 is KEY6 (default S, `0x43f315`), 10 is KEY2 (default Q, `0x43e7f3`), 11 is KEY7 (default E, `0x43ec72`) (**confirmed (disasm)**; defaults from the table `0x6f2bc0`) | other players only: 2 sets a vertical speed (*inferred* jump), 3/10/11 play animations 13/14/15 |
 | 116–125 | chat commands `/victory`, `/begging`, `/love`, `/laugh`, `/clap`, `/greeting`, `/start`, `/apoligize` (sic), `/provocation`, `/insult` (sysmsg 5114–5123, `FUN_00475e00`), when `FUN_004c4620()` allows | the emote and a chat line "<p> poses for victory" … "<p> abuses hard." (sysmsg 5228–5237) |
 
 So emotes need no client work: the server only has to accept these motion values and send `0x0506` to the players in view.
@@ -182,7 +192,7 @@ does not have to send the goods.
 | `0x0701` | 2 + 2n | `u8 n`, then n × `u8 type, u8 typeID` | `0x557d40` | **replaces** the open shop's goods list (up to 256 entries) |
 | `0x0702` | 12 | `u8 bySuccess, u8 byBag, u8 bySlot, u8 byType, u8 byTypeID, u8 byCount, u32 dwMoney` (`TP_SHOP_BUY`) | `0x557d80` | 0: item put in bag/slot (durability from `Item.SData`), **money set to `dwMoney`** (the new total), "Attained <i>" (52), `ui_pay001.wav`; 1: "Insufficient gold" (303); 2: "Inventory is full" (238) |
 | `0x0703` | 12 | same fields (`TP_SHOP_SELL`) | `0x557e90` | 0: the slot now holds `byCount` (0 empties it), money = `dwMoney`, "Sold <i>" (54); 1: "No item located on that spot" (239) |
-| `0x0711` | 7 + 33n | `u32 dwMoney, u8 n`, then n × `u8 bySlot, u8 byType, u8 byTypeID, u16 wQuality, u8 byGem[6], u8 byCount, char szCraftName[21]` (`TP_CHAR_BANK`, at most 50 per packet) | `0x54d130` | warehouse contents and warehouse money; send several packets for more than 50 items |
+| `0x0711` | 7 + 33n | `u32 dwMoney, u8 n`, then n × `u8 bySlot, u8 byType, u8 byTypeID, u16 wQuality, u8 byGem[6], u8 byCount, char szCraftName[21]` (`TP_CHAR_BANK`, at most 50 per packet) | `0x54d130` | warehouse contents and warehouse money (kept in an array at `0x852c6e`, 34 bytes per slot, money at `0x84d674`; see [re-gameplay-state.md](re-gameplay-state.md)); send several packets for more than 50 items |
 
 Client → server: **`0x0702` (8) `u32 npcId, u8 listIndex, u8 count`** buy (`listIndex` = position in the goods list);
 **`0x0703` (5) `u8 bag, u8 slot, u8 count`** sell (`TPC_SHOP_BUY`/`TPC_SHOP_SELL`, sent by the shop window `FUN_004f8220`).

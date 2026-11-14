@@ -2,7 +2,7 @@
 
 This page answers, from `game.exe` (US build 2010-04-26, patch 108), the questions a server author asks about the client: what it sends
 for actions a server may not build yet, what it shows for each result code, whether it filters blocked players itself, what sends the
-unidentified opcodes, and how the client's tables compare with a server's data. Sizes include the 2-byte opcode and exclude the length
+unidentified opcodes, and how the client's tables compare with a server's data. Sizes include the 2-byte [opcode](glossary.md#opcode) and exclude the length
 prefix; messages are `sysmsg-uni.txt` ids. Corrections and the shortest answers are collected in [client facts](CLIENT-FACTS.md); this
 page has the evidence.
 
@@ -12,9 +12,14 @@ page has the evidence.
   `0x0801`/`0x0802`/`0x0805`, shops `0x23xx`, duels `0x2401`, auction `0x1Cxx`); section 1 lists each with where it is sent.
 - **Result codes become fixed messages.** Section 2 maps each reply's code to the message id and text the client shows.
 - **The client hides blocked players' chat itself** (whisper, trade, guild and "all members" chat) **but not their invitations**.
-- **Several opcodes the client never sends** in this region (`0x2704`, `0x2705`, the 8-byte `0x0802`); a server can ignore them.
+- **Several [opcodes](glossary.md#opcode) the client never sends** in this region (`0x2704`, `0x2705`, the 8-byte `0x0802`); a server can ignore them.
 - **Item and skill data in the client differ from a server's database in places players can see** (cost, level, points checks);
   section 5 says which differences matter.
+
+### Using this page
+
+- **If you write a server:** section 1 lists what the client sends for each action (size and fields), section 2 what each result code shows; the checklist is [What a server must do for this client](afterglow/server-checklist.md#client-facts).
+- **To check a claim yourself:** the addresses start at the sender or handler named in each row; [Tools and method](tools-and-method.md) says how to open them.
 
 Status words:
 - **confirmed**: read in a Ghidra decompile of this `game.exe` (SHA-256 `5f045bcb…01a6`, 10,778 functions). Sections 0, 1, 3 and 4 and the
@@ -71,11 +76,11 @@ All go through `send3` (`0x585520`). "id" = the auction id the server gave the r
 |---|---|---|---|
 | `0x1C01` | 39 | `u8 classFilter, u8 minLevel×10, u8 maxLevel×10 (0xFF = no maximum), u8 category, u8 grade, char name[32]` | Search (`0x459f60` case 6). classFilter: 0 = both or neither faction checkbox, 1 = only the first, 2 = only the second. grade: the window's choice, 6 → 7 and 7 → 0xFF (any). Name copied with its NUL. |
 | `0x1C02` | 4 | `u8 type, u8 typeId` | "search this item" on a selected result row (row bytes 1–2 are the item's Type/TypeID) |
-| `0x1C03` | 3 | `u8 dir`: **1 = previous page, 2 = next page** (confirmed: the sender `0x459f60` sends 1 for its action 7 and 2 for its action 8; *inferred*: that these are the previous and next buttons, from the reverse-order insertion of a 1-page reply) | page buttons |
+| `0x1C03` | 3 | `u8 dir`: **1 = previous page, 2 = next page** (confirmed: the sender `0x459f60` sends 1 for its action 7 and 2 for its action 8. Action 7 is returned by the auction window's click function `0x455100` for the button at window `+0x1824` and action 8 for the one at `+0x1cf8`; the constructor `0x452e50` builds both from `market_button.tga`, the first at x 383 and the second at x 475, with the left and the right arrow cell of the picture. So 1 = previous page, 2 = next page: **confirmed (disasm)** plus the picture) | page buttons |
 | `0x1C04`, `0x1C05` | 2 | — | my registrations / my bids list (tab "progress"); each **once per session** (flags `0x84cdbc`/`0x84cdbd`), later kept up to date by the results below |
 | `0x1C06`, `0x1C07` | 2 | — | items to collect / gold to collect (tab "completion"); once per session (`0x84cdbe`/`0x84cdbf`) |
 | `0x1C14` | 2 | — | interest list (tab 3), every time the tab opens |
-| `0x1C08` | 14 | `u8 bag, u8 slot, u8 count, u8 period, u32 minBid, u32 buyNow` | register an item. period index 0–3 = **7 h, 24 h, 72 h, 168 h** (table `0x6a98e8`; default 2). Client checks first: an item chosen (7100), minBid > 0 (7112) and ≤ 3,800,000,000 (7139), buyNow > 0 (7115) and ≤ 4,000,000,000 (7113), buyNow not below minBid (7105), gold ≥ the commission (7102), count ≤ the stack. Commission shown = `round(minBid × 0.000002) × hours × 5` (*inferred* rounding). |
+| `0x1C08` | 14 | `u8 bag, u8 slot, u8 count, u8 period, u32 minBid, u32 buyNow` | register an item. period index 0–3 = **7 h, 24 h, 72 h, 168 h** (table `0x6a98e8`; default 2). Client checks first: an item chosen (7100), minBid > 0 (7112) and ≤ 3,800,000,000 (7139), buyNow > 0 (7115) and ≤ 4,000,000,000 (7113), buyNow not below minBid (7105), gold ≥ the commission (7102), count ≤ the stack. Commission shown = `round(minBid × 0.000002) × hours × 5` (the client's own rounding stays *inferred*; the original server charges hours × ceil(minBid ÷ 500,000) × 5, **ref** [The auction house](../original/auction.md#52-the-fee-the-deposit)). |
 | `0x1C0B` | 10 | `u32 id, u32 price` | bid |
 | `0x1C0A` | 6 | `u32 id` | buy now, after "Do you want to process buy now option for <i> with <b>golds?" (7110) |
 | `0x1C09` | 6 | `u32 id` | cancel my auction, after 7118 (commission is lost) |
@@ -206,7 +211,7 @@ Item names in these notices get the `<<NNNcCC` colour marker only when region fe
 |---|---|---|---|
 | `0x0307` | 6 `u32 id` | player menu "Inspect" (5421), only within 3 m, else "Too far away from an opponent" (233) — `0x490c7b` | `0x0307` `TP_USER_ITEMS` (equipment list). confirmed (disasm) |
 | `0x0555` | 2 | blacksmith NPC menu → lapis linking (`0x48c120`, NPC menu case 3 option 2; sets dialog mode 0x66) | `0x0555` `u16` Goddess-blessing rate modifier. confirmed |
-| `0x0556` | 2 | chat commands `/return` (5076) / `/town`, and two buttons (`0x4d52a7`, `0x4db66c`, *inferred* the death/return window); prints "Will be moved to the nearest town in 10 seconds…" (251) | — confirmed (disasm) |
+| `0x0556` | 2 | chat commands `/return` (5076) / `/town`, and two quick-slot uses (`0x4d52a7` in `0x4d4e10` and `0x4db66c` in `0x4db300`, **confirmed**: not windows but the quick-slot use handlers, queued by `0x4c49c0`; they send it when the slot's entry has the id `0xc0` and the player's flag `+0x378` is set, and nothing when `+0xe4` is non-zero); prints "Will be moved to the nearest town in 10 seconds…" (251) | — confirmed (disasm) |
 | `0x0F01` | 2 | **Priest** NPC menu option 2 (`0x48d0f2`; NPC type 14 per ref) | `0x0F01` `u8 ok, u16, u16, u8, u8, u8`: ok 1 stores four ratings (warrior / leader / righteousness / teamwork — window labels, Korean) and opens dialog mode 0x69; else "Insufficient gold" (303). confirmed (disasm) |
 | `0x0F02` | 2 | Priest result window (`SHOW_MESSAGE_PRIEST`) confirm, `0x4d09e2`/`0x4d0b21` | `0x0F02` `u8`: 1 shows the reading; else 303. *Inferred*: a paid character "reading" by the Priest. confirmed (disasm) |
 | `0x1201` | `4 + n`: `u16 n, char text[n]` | chat command `/request GM` (5077) + text; prints "Successfully applied" (252) | — (a GM call / petition). confirmed (disasm) |
@@ -285,5 +290,5 @@ Every caller of every feature (260 calls) and what turning each off-feature on w
 
 Honour (`0x0230` is ignored), trading with the other faction (the player menu opens only on my faction or on maps 42 and 40), item wear
 without a packet, and the `0x021B` reset counters (display numbers only) are answered, with addresses, in
-[client facts](CLIENT-FACTS.md) ("Answers of October 2026"). The auction row layouts are in `auction-house.md`; the GM questions in
+[client facts](CLIENT-FACTS.md#further-answers). The auction row layouts are in `auction-house.md`; the GM questions in
 `gm-and-commands.md`.

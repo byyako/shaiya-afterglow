@@ -16,8 +16,15 @@ changes. This page has the download, how to use it, what each patch does in the 
 - **How it is careful:** it writes a new file and never the input, undoes every patch it knows in memory and checks the original hash
   before and after, checks each original byte before writing it, prints every byte it changes, and can undo any patch.
 - **How far it was checked:** every patch was read in the disassembly of this build. The kit gives byte-identical files to an
-  independent script that applies the same patches. `no-updater` and `multi-client` have been in daily use since 2026-10; for the
+  independent script that applies the same patches. `no-updater` and `multi-client` are in daily use; for the
   others the status under each patch says what was checked. Try a copy first.
+
+### Using this page
+
+- **To patch your own `game.exe`:** download the kit (below), run `python3 patch_game_exe.py status game.exe` to see what a file carries, `python3 patch_game_exe.py apply game.exe game_patched.exe` to write a patched copy with the default set, and `python3 patch_game_exe.py revert game_patched.exe game_clean.exe all` to undo it. The tool prints every changed range and the hash of the copy. Detail is under "Using it".
+- **To add an opt-in patch:** name it after the file names, for example `apply game.exe game_patched.exe anti-freeze`; "Each patch" says what it does first.
+- **If you write a server:** the patch that matters most is `market-anywhere`, which removes the client's market-map check; see [Personal shop](personal-shop.md).
+- **To check a claim yourself:** every patch has its addresses and byte list on this page; open the build in a decompiler as [Tools and method](tools-and-method.md) describes.
 
 ## Download
 
@@ -99,7 +106,7 @@ or data bytes only). "The old patcher" is the 2012 *Shaiya Patcher* (see
 The startup function at `0x40b1a0` requires the command line to begin with `start game`, which only `Updater.exe` passes; without it
 the client starts the updater instead and quits. The patch turns the `jz` at `0x40b97d` into an unconditional `jmp`, so the argument
 is treated as present and the client runs when started directly. See [the updater](updater.md) for what the argument is for.
-Status: confirmed; used in play since 2026-10.
+Status: confirmed; used in play.
 
 ### `skip-updater-wait`: no wait for the updater window (default)
 
@@ -111,7 +118,7 @@ Also in `0x40b1a0`: after the self-update step (`new_updater.exe`) the client po
 
 Two checks in `0x40b1a0` stop a second client. After `CreateMutexA`, `GetLastError() == ERROR_ALREADY_EXISTS` shows an "ERROR!!!" box
 and quits; the `jnz` at `0x40b61f` becomes a `jmp`. Then `FindWindowA("GAME", "Shaiya")` finding a window shows an "ERROR!" box and
-quits; the `jz` at `0x40b643` becomes a `jmp`. Both are needed. Status: confirmed; used in play since 2026-10.
+quits; the `jz` at `0x40b643` becomes a `jmp`. Both are needed. Status: confirmed; used in play.
 
 ### `road-messages`: the "a road to … will be opened" lines (default)
 
@@ -257,6 +264,10 @@ VA 0x6a5b34  file offset 0x2a5b34  16 bytes
 
 `revert game.exe out.exe all` on a patched file gives back the original file, byte for byte (the tool prints the original hash and
 says so). You can also just keep your original `game.exe`, since the tool never changes its input.
+
+## In other episodes
+
+- The file a public collection labels "EP4" is this kit's client (the US patch 106 file) with eight byte ranges edited, among them a flag that turns the updater off and a changed login address; it is not a separate episode. **confirmed (file)** ([Episode 4](episodes/ep4.md))
 
 ## Origin
 

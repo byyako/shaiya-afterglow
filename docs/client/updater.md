@@ -3,7 +3,7 @@
 This page describes the original `Updater.exe` of the US client (2009-01-29): the files it uses, its flow, the format of the `psNNNN.patch`
 files it downloads, and its second, TCP transport. It then describes, in prose, a replacement updater that adds signatures, removals and
 compaction. The original was read statically (MFC, WinINet and WinSock) and never run. Status words: **confirmed** (read in the binary
-or checked on real patches), *inferred*.
+or checked on real patches), [*inferred*](glossary.md#inferred).
 
 ## In short
 
@@ -16,6 +16,13 @@ or checked on real patches), *inferred*.
 - **A replacement updater** keeps the same protocol (so old patches still work) and adds a required Ed25519 signature on every patch and
   on itself, removal lists, crash-safe application and compaction of dead archive space.
 - **A TCP message transport also exists** in the original; which server spoke it is not known.
+
+### Using this page
+
+- **To see what a patch holds:** a `psNNNN.patch` is an ordinary ZIP; open it with any ZIP tool, then list the small archive inside with the client repository's `tools/sah.py list --sah update.sah`.
+- **To start the game without the updater:** use a shortcut to `game.exe start game`, started in the client folder (see "Launching and a running game"); the `no-updater` patch of [the patch kit](client-patch-kit.md#no-updater-run-without-the-updater-default) does the same without the shortcut.
+- **If you write a server or a patch host:** "Files the original updater uses" lists what the host must serve; the replacement updater section says what a signed one adds.
+- **To check a claim yourself:** the flow is *inferred* from strings; the patch format is confirmed on real patches.
 
 ## Files the original updater uses
 

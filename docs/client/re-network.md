@@ -8,26 +8,34 @@ does not state by itself.
 
 ## In short
 
-- The client opens **two TCP connections one after the other**, never both at once: first to the **login server (port 30800)**, then,
-  after you pick a server, to the **game server (port 30810)**. Both go through the same few functions and the same global cipher state.
-- The socket is a plain blocking-connect Winsock socket driven by `WSAAsyncSelect`: a hidden window receives "data arrived" messages,
-  so all receiving happens on the main thread inside the Windows message loop. There is no network thread.
-- A packet on the wire is `u16 length` (counts itself) + `u16 opcode` + payload, little-endian. The length field is never encrypted.
-- Right after connecting to the login server, the server sends its public RSA key (`0xA101`). The client invents a random 128-byte secret,
-  RSA-encrypts it with that key and sends it back. Both sides derive the **AES-128 key and counter** from it with HMAC-SHA256.
-- The cipher is **AES-128 in counter mode**, one continuous keystream per direction (not reset per packet). The game connection reuses
-  the key and re-derives the counter from the login IV with one SHA-256.
-- After the character is chosen, the **server-to-client direction switches to a second layer: an XOR table** (4096 bytes built by chaining
-  SHA-256). The client never XORs what it sends.
-- Receiving: accumulate bytes until a whole packet is there, copy it into a stream object, decrypt it, read the opcode, and call the one big
-  dispatch function (`0x582e10`) that fans out to ~390 handlers. Handlers read fields one at a time; reading past the end zero-fills and logs
-  "Packet Underflow".
-- Sending: every sender builds `opcode + payload` and calls `0x585640`, which adds the length, encrypts and calls `send()`. If Winsock says
-  "would block", the bytes go into a 16 KiB queue that is flushed on the next `FD_WRITE`.
-- If the connection drops, the client shows a message box and **quits**. There is no automatic reconnect. The only "reconnect" is a
-  server-ordered hop to another game server (`0x0111`).
-- A keep-alive `0x0003` goes out every 2 minutes. There are no other timeouts on an open connection; the only timeouts are 30-second waits
-  while connecting.
+- **Two connections, one after the other.** The client connects to the **login server (port 30800)**, and after you pick a server to the
+  **game server (port 30810)**. Both use the same code and the same cipher state. It is an ordinary Winsock socket checked by a hidden
+  window, so everything is received on the main thread; there is no network thread.
+- **A packet is a length, an [opcode](glossary.md#opcode) and a payload**: `u16 length` (counts itself, never encrypted) + `u16 opcode` +
+  payload, little-endian.
+- **The login server's first packet is a public RSA key (`0xA101`).** The client invents a random 128-byte secret, RSA-encrypts it with
+  that key and sends it back. Both sides derive the **AES-128 key and a starting counter** from it with a standard keyed hash. The game
+  connection reuses the key and derives a fresh counter from the login one with one more hash.
+- **Two cipher layers.** AES-128 in counter mode gives one continuous keystream per direction (not reset per packet). After the
+  character is chosen, the **server-to-client direction adds an XOR table** (4096 bytes built by chaining SHA-256); the client never XORs
+  what it sends.
+- **Receiving and sending are simple.** The client collects bytes until a whole packet is there, decrypts it and calls one big dispatch
+  function that fans out to about 390 [handlers](glossary.md#handler); a handler that reads past the end gets zeros and logs
+  "Packet Underflow". Every sender builds `opcode + payload` and calls one send routine, which adds the length, encrypts and sends; if Winsock
+  says "would block", the bytes wait in a 16 KiB queue until Winsock reports that the socket can take data again.
+- **A dropped connection ends the game.** The client shows a message box and **quits**; there is no automatic reconnect. The only
+  "reconnect" is a server-ordered hop to another game server (`0x0111`). A keep-alive `0x0003` goes out every 2 minutes, and the only
+  timeouts are 30-second waits while connecting.
+
+### Using this page
+
+- **If you write a server:** sections 4 to 6 give the handshake, the two cipher layers and the framing a server must match;
+  section 9 lists two checks of the client that are easy to miss. [What a server must do for this client](afterglow/server-checklist.md#packet-handling)
+  collects the rules.
+- **If you patch or mod the client:** sections 1 and 7 give the addresses of the connect, send, receive and dispatch code; the packet
+  log in [How the client receives and sends packets](client-packets.md) shows the traffic as hex.
+- **To check a claim yourself:** section 11 says which strings and constants to search for, and [Tools and method](tools-and-method.md)
+  has the setup.
 
 Related pages: [client-packets.md](client-packets.md) (receive and send tables, packet log), [client-packets.generated.md](client-packets.generated.md)
 (every opcode's layout), [client-world-packets.md](client-world-packets.md) (what the world packets do).
@@ -62,7 +70,7 @@ Global state used by the cipher (all confirmed from the references listed in the
 |---|---|
 | `0x2232a58` | the socket |
 | `0x222ea48` | the hidden message window |
-| `0x222aa38` / `0x222aa40` | receive accumulation: byte count (16-bit) and buffer |
+| `0x222aa38` / `0x222aa40` | receive accumulation: byte count (16-bit) and buffer (no capacity check; see the open points at the end) |
 | `0x2226a38` / `0x2232a60` | send queue: buffer and byte count |
 | `0x2237700` / `0x2237701` / `0x2237702` | flags: **XOR layer on** / **encrypt on** / **decrypt (AES) on** |
 | `0x22376f8` | cipher type chosen by the server in `0xA101` (0 = AES-CTR) |
@@ -124,11 +132,11 @@ server selection (`0x4dca00`) and the game-connection step inside it.
 | 11 | `0x0107` received (back to the character screen) | `0x4015a0`: XOR off, AES decrypt back on |
 
 All of the above is confirmed from the code. The ports are literals passed to `0x578b10` (`0x7850`, `0x785A`). Login-server connects
-are in `0x40a6f0` and `0x47bb10`; game-server connects are in `0x4dca00` and in the main loop's state 6 (section 8).
+are in `0x40a6f0` and `0x47bb10`; game server connects are in `0x4dca00` and in the main loop's state 6 (section 8).
 
 ## 4. The handshake and key exchange (`0xA101`)
 
-The server's first packet carries a public RSA key. The wire layout (verified by the receive side, `0x57d3c0`):
+The server's first packet carries a public RSA key. The wire layout (checked against the receive side, `0x57d3c0`):
 
 ```
 u16 length  u16 0xA101
@@ -429,7 +437,7 @@ no timer anywhere in `0x585280` or the dispatch path). Whether a server drops id
 |---|---|---|
 | Where is the socket code? | the import table: `WSAStartup`, `WSAAsyncSelect`, `connect`, `send`, `recv` | cross-references from the imports lead to `0x5854b0`, `0x578b10`, `0x585280`, `0x585640` in a few hops |
 | Which function is the receive entry? | the constant `0x2B10` | `scalar`-style search for that immediate finds exactly the six uses in the connect, send and window-procedure functions |
-| The maintainer-visible error texts | the strings `LoginServer Connet Error!!!`, `key Data Recv!!!`, `Send Error!!!` | each has one reference: `0x47bb10`, `0x40a6f0`/`0x4dca00`, `0x585640` |
+| The on-screen error texts | the strings `LoginServer Connet Error!!!`, `key Data Recv!!!`, `Send Error!!!` | each has one reference: `0x47bb10`, `0x40a6f0`/`0x4dca00`, `0x585640` |
 | The dispatcher | callers of the `RECV>>` dump (string `RECV>>`, `PacketDump`, `ProjectSNet.cpp`) | the function after it in `0x585280` is the dispatcher |
 | Underflow | the string `Packet Underflow. Protocol` | `0x552c40`, and the vtable slot that points to it is `+0x5FC`, which `read()` calls |
 | The cipher | the SHA-256 initial values `0x6a09e667`, `0xbb67ae85`; the AES S-box table (first bytes `63 7c 77 7b`) at `0x6e1e08`; the C `rand()` constants `0x343fd` and `0x269ec3` | each constant has a handful of users: `0x404410`/`0x4044a0` (hashing), `0x404770` (AES), `0x4046a0`/`0x4015c0` (random and the alternative stream cipher) |
@@ -472,5 +480,5 @@ Two statements elsewhere in these notes did not survive this reading:
 
 - ~~What the two disconnect opcodes `0x0002` and `0x0004` do~~ settled: see the table in section 7 and [re-open-items.md](re-open-items.md).
 - Whether any server has ever selected the alternative stream cipher (`mode != 0`).
-- The exact buffer capacity of the accumulation buffer at `0x222aa40` and what happens when it overflows (no check was found; not tested).
+- The accumulation buffer at `0x222aa40`: known: the receive handler `0x585280` appends each `recv` (up to `0x2000` bytes) at offset `0x222aa38` (a 16-bit count) and never compares the count with a capacity (**confirmed**, decompile of `0x585280`). The next global the code uses after the buffer is `0x222ea40`, 16,384 bytes on, so that is the most the buffer can be (*inferred*; nothing declares its size). The stream copy `0x589c90` caps a frame at `0x2000` bytes, but the decrypt call `0x4010e0` is given the uncapped `length - 2` (**confirmed**), so a frame longer than 8,194 bytes is not handled safely; what the cipher routines `0x4051b0` and `0x401700` do with such a length was not read. Open: what actually happens on overflow is **live**.
 - The click handling and per-frame drawing steps of the worked examples.

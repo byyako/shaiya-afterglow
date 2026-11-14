@@ -10,24 +10,32 @@ means not settled.
 
 ## In short
 
-- `game.exe` is a single-threaded Win32 program. `WinMain` reads its settings, opens the archive, loads the text tables, checks that
-  it is the only copy running and that it was started by the updater, creates one window, connects to the login server, and only
-  then creates the Direct3D 9 device and the sound system.
-- The main loop never sleeps: it empties the Windows message queue, measures the time since the last frame, and calls one frame
-  function. There is no frame cap and no VSync (the device presents "immediately"), which is why the game runs at hundreds of FPS.
-- The frame function is a small state machine: intro, login, faction choice, character select, character creation, world loading,
-  in the world, map change, and two rarer scenes. Each state updates, then draws, then presents.
-- Settings come from `CONFIG.INI` next to the exe (video, sound, user options, key bindings and window positions), an optional
-  `gsConfig.cfg` (logging), and an optional `data/Config.cfg`. `Version.ini` is not read by `game.exe`.
-- Every file the game opens under `data/` is looked up in `data.sah` first and read out of `data.saf`; only if it is missing there does
-  the game try the loose file on disk. The `.SData` tables are decrypted with a 16-byte block cipher; one of them (`Item.SData`)
-  skips its checksum check.
-- Text shown to players comes from `data/sysmsg-uni.txt` (UTF-16, `id "text"` per line), looked up by number, with markers such as
-  `<p>` and `<v>` filled in from fixed buffers.
-- The UI is about 60 window classes sharing one small base class with a 9-slot vtable (input, draw, load/save position). A manager
-  object draws them in a fixed order every frame; window positions are saved per resolution in `CONFIG.INI`.
-- Mouse and keyboard come from DirectInput 8, typing from ordinary window messages (with IME support), and some keys from
-  `GetAsyncKeyState`. Sound effects use DirectSound 8 with 3D positions; music is streamed through the Audiere library.
+- **One thread, one loop.** `game.exe` is a single-threaded Win32 program. `WinMain` reads the settings, opens the archive, loads the
+  text tables, checks that it is the only copy running and that the updater started it, creates one window, connects to the login
+  server, and only then creates the Direct3D 9 device and the sound system.
+- **The loop never sleeps.** It empties the Windows message queue, measures the time since the last frame and calls one frame function.
+  There is no frame cap and no VSync (no waiting for the monitor), which is why the game runs at hundreds of frames per second. The frame function is a small state
+  machine: intro, login, faction choice, character select, character creation, world loading, in the world, map change, and two rarer
+  scenes.
+- **Settings come from three text files.** `CONFIG.INI` next to the exe (video, sound, user options, key bindings, window positions),
+  an optional `gsConfig.cfg` (logging) and an optional `data/Config.cfg`. `Version.ini` is not read by `game.exe`.
+- **Files come out of the archive first.** Every file the game opens under `data/` is looked up in `data.sah` and read out of
+  `data.saf`; only if it is missing there does the game try the loose file on disk. The `.SData` tables are decrypted with a 16-byte
+  block cipher; one of them (`Item.SData`) skips its checksum check. See [the archive](data-archive.md).
+- **Text is looked up by number.** Messages come from `data/sysmsg-uni.txt` (UTF-16, `id "text"` per line), with markers such as `<p>` and
+  `<v>` filled in from fixed buffers. The UI is about 60 window classes sharing one small base class, drawn in a fixed order every frame.
+- **Input and sound use DirectX.** Mouse and keyboard come from DirectInput 8, typing from ordinary window messages (with IME support),
+  and some keys from `GetAsyncKeyState`. Sound effects use DirectSound 8 with 3D positions; music is streamed through the Audiere
+  library.
+
+### Using this page
+
+- **If you write a server:** you need little from this page. The network side is in [How the client talks to the servers](re-network.md);
+  section 7 here explains how the client turns a message number into text, and what it prints for a number that does not exist.
+- **If you patch or mod the client:** section 3 lists the settings files and keys, section 6 how files are found, section 7 how
+  messages are looked up, and section 12 how to turn on the log. [Patch kit for game.exe](client-patch-kit.md) and
+  [The companion DLL](fixes-dll.md) apply changes.
+- **To check a claim yourself:** every section gives the address to open; [Tools and method](tools-and-method.md) has the setup.
 
 Related pages: [re-network.md](re-network.md) (the network layer, which runs inside this loop),
 [data-archive.md](data-archive.md) (the archive format and SData wrapper), [formats.md](formats.md) (model, map and effect files),
@@ -98,10 +106,10 @@ In order, as the function runs (confirmed unless marked):
     (0 below 400 MiB, 1 below 800 MiB, 2 up to 1.5 GiB, 3 above, 4 above 1.5 GiB with at least 700 MiB free). The tier limits how
     many copies of a sound are kept (section 11).
 11. `0x409550`: notes whether Windows is NT-based (`0x701994`). Region 2 also records the install folder in the registry.
-12. The window (section 4), seeded random numbers (`0x5b73f4(timeGetTime())`, *inferred* `srand`), then `GameInit` (`0x40a6f0`).
+12. The window (section 4), seeded random numbers (`0x5b73f4(timeGetTime())`, confirmed (disasm): it stores the seed in the per-thread C-runtime block, which is `srand`), then `GameInit` (`0x40a6f0`).
 13. `ShowWindow`, `UpdateWindow`, `SetFocus`, the timer is started (`0x405850(1)`), the cursor is hidden, the main loop runs (section 5).
 14. Shut-down: `0x409e40` (logs `GameExit`, frees the chat object and the renderer helpers, disconnects, deletes the region-feature
-    and network objects), `UnregisterClassA("GAME")`, frees the archive tree (`0x40d770`), `0x5a9350` (*inferred*: logger shut-down),
+    and network objects), `UnregisterClassA("GAME")`, frees the archive tree (`0x40d770`), `0x5a9350` (confirmed: logs `gsCommonSDM::Shutdown` and shuts the logger down),
     then `WinExec("Ending.exe")`.
 
 `GameInit` (`0x40a6f0`), in order (confirmed):
@@ -164,7 +172,7 @@ A typical `CONFIG.INI` also has an `[INTERFACE]` section and `[LOGIN] ID`; their
 
 `gsConfig.cfg` (loose file) holds the logger settings; its format, keys and the `LogLevel` mask are described in
 [client-packets.md](client-packets.md). `GameInit` also opens `data/Config.cfg` (archive first, then disk; the US client ships no such file) and feeds it to the same parser
-(`0x5a8cd0`, confirmed). What keys it holds was not checked (**open**).
+(`0x5a8cd0`, confirmed). That parser is a plain INI reader (`[section]` lines, `key=value`, lines starting `#`, `@` or `;` skipped) with no key names of its own; `GameInit` first empties the shared settings store at `0x22331cc` (`0x5a8c10`) and then fills it, so a present `Config.cfg` replaces what `gsConfig.cfg` put there (*inferred*: which file `0x5a9310` loads, and into which object, was not shown). The keys the exe asks that store for (confirmed, strings in the readers): `[Config] FontName` (`0x5315c0`, the UI font name for two language branches; defaults `simsun` and `arial`), `[gsCommon] LogDefaultListener` and `LogLevel` (`0x5a5980`), and `[gsCommon] MiniDumperReport_MailServer`, `_ip`, `_dir`, `_id`, `_pw`, `_MailMessage`, `_MailSubject`, `_MailAddress` (`0x5aabb0`, crash-report mailing). `0x5a9490` also uses the store (five sites) and was not decompiled, so whether it reads more keys is **open**. The separate `data/WorldMap.cfg` (read by `0x4bc1a0` with the same parser) holds `[WorldMap] count` and per-entry `Country`, `MapNum`, `Click_left`, `Click_top`, `Click_right`, `Click_bottom`, `ImgPos_x`, `ImgPos_y`.
 
 ### `Version.ini`
 
@@ -235,8 +243,7 @@ loop does not run frames; it asks `TestCooperativeLevel` each pass and, on `D3DE
 present parameters, calls `Reset`, re-creates the render helpers and fonts and clears the flag. A failed reset ends the game
 (confirmed, `0x40bee6`–`0x40bf08`).
 
-`0x52fe20` can also draw an FPS counter and the player position (`Player x:… y:… z:…, Map:%d`) when renderer `+0x410` is set; what
-sets it was not traced (**open**).
+`0x52fe20` can also draw an FPS counter and the player position (`Player x:… y:… z:…, Map:%d`) when renderer `+0x410` is set. The only write to that field in the whole file is the renderer's constructor (`0x52f610`, sets 0), so nothing in this build turns the overlay on (confirmed, reference list of the offset `0x410`).
 
 **How to find it.** The only caller of the `Direct3DCreate9` thunk (`0x693df2`) is `0x5315c0`. Device methods are called through the
 device's vtable; the slot number gives the method (`+0x44` Present, `+0xa4` BeginScene, `+0xa8` EndScene, `+0xac` Clear, `+0xe4`
@@ -295,10 +302,10 @@ keep-alive every 120 s ([re-network.md](re-network.md)), and runs two per-frame 
 | 5 | `0x42e632` | first world load: world object (`0x42a210`, `0x6608` bytes, `0x705054`), `BGM_load0001.wav`, loading screen `0x4b13f0` (*inferred*), map loader `0x452270` (called at `0x42e87a`) | — | 6 |
 | 6 | `0x42eb4c` | in the world | `0x4216f0` / `0x4354f0` | 7, 3 |
 | 7 | `0x42f654` | map change: the same loading path, map loader called at `0x42f836`; entered from `0x46a4e0` and state 9 | — | 6 |
-| 8 | `0x42fbde` | loads `strip.wld`, clears the local player; entered when the UI window at manager `+0x260` returns 4 (`0x48f5e9`) | — | 9 |
-| 9 | `0x430022` | a scene object `0x488330` (`0x2eec` bytes) with `BGM_dung02.wav` | `0x4899c0` / `0x487860` | 7 |
+| 8 | `0x42fbde` | loads `strip.wld`, clears the local player; entered when the UI window at manager `+0x260` returns 4 (`0x48f5e9`); that window is the gambling table selector (confirmed, below) | — | 9 |
+| 9 | `0x430022` | the gambling scene: a scene object `0x488330` (`0x2eec` bytes) with `BGM_dung02.wav` | `0x4899c0` / `0x487860` | 7 |
 
-The names of states 0–7 are *inferred* from their resources and transitions; what states 8 and 9 are for is **open**. This settles
+The names of states 0–7 are *inferred* from their resources and transitions; states 8 and 9 are the gambling house. The window at manager `+0x260` is built by `0x486bf0` (vtable `0x6aae8c`, set-up `0x485bc0`: `gamble.TGA`, `gamble_button.tga`, `cancel_button.tga`); its input slot `0x486140` sends the chosen table (`0x588c00`), waits for the answer flags set by the handlers `0x554fb0`–`0x555130` and returns 4 once the answer says yes, which makes `0x48f5e9` set state 8 (confirmed; the wire side is on [research-gambling-kill-boost.md](research-gambling-kill-boost.md)). This settles
 the two map-loader call sites that [graphics.md](graphics.md) calls `map_a` and `map_b`: `0x42e87a` is the first world entry (state 5),
 `0x42f836` the map change (state 7) (confirmed (disasm), jump table ranges).
 
@@ -363,7 +370,7 @@ can read its length (confirmed). Consequences:
 - The "selected entry" global makes the helpers unsafe to call from two threads at once (*inferred*; the client never does).
 
 Readers built on top: textures (`0x5966d0` for the 3D scene, `0x40c7c0` for UI textures) read the whole member into a buffer and pass it
-to an in-memory texture loader (`0x5cd4ab`, *inferred* `D3DXCreateTextureFromFileInMemoryEx` from its 14 arguments), then free the
+to an in-memory texture loader (`0x5cd4ab`, confirmed (disasm): `D3DXCreateTextureFromFileInMemoryEx` compiled into the exe; a wrapper of 15 stack arguments that passes resource type 3 (a plain 2D texture) to the shared D3DX loader `0x5ccc36`), then free the
 buffer; text files are read line by line from the same handle (`0x437350` ANSI, `0x4373e0` UTF-16).
 
 ### The SData tables
@@ -447,11 +454,11 @@ Every vtable has 9 slots:
 | Slot | Offset | Base implementation | Meaning (status window as the example: vtable `0x6a69ec`) |
 |---|---|---|---|
 | 0 | `+0x00` | `0x421760` | destructor (`0x421d30`) |
-| 1 | `+0x04` | stub `0x5b804d` (*inferred* `_purecall`) | input: mouse handling, returns whether the click was taken (`0x4f3990`) |
+| 1 | `+0x04` | stub `0x5b804d` (confirmed (disasm) `_purecall`: calls the runtime's handler if set, then exits with runtime error 25) | input: mouse handling, returns whether the click was taken (`0x4f3990`) |
 | 2 | `+0x08` | stub `0x5b804d` | draw (`0x4f3f80`) |
 | 3 | `+0x0c` | empty | load position: calls slot 7 with its two key names (`0x4f3f50`: `SHEET_STATUS_POS_X/Y`) |
 | 4 | `+0x10` | empty | save position: calls slot 8 (`0x4f3f70`) |
-| 5, 6 | `+0x14`, `+0x18` | empty (`0x407660`, `0x5a8700`) | optional hooks; slot 5 is called with an argument by the UI manager (meaning **open**) |
+| 5, 6 | `+0x14`, `+0x18` | empty (`0x407660`, `0x5a8700`) | optional hooks; slot 5 is called with 0 or 1 by the UI manager, but only the chat window overrides it (`0x423f40`: stores the byte at `+0x3baf`; confirmed, see the Open table) |
 | 7 | `+0x1c` | `0x513930` | read X and Y from `CONFIG.INI [INTERFACE_<W>X<H>]`, falling back to `[INTERFACE_1024X768]`; clamp to the screen (`0x5138e0`) when asked |
 | 8 | `+0x20` | `0x513cf0` | write X and Y to the same section (`WritePrivateProfileStringA`) |
 
@@ -514,7 +521,7 @@ The world draw `0x4354f0` (state 6, confirmed) sets up the frame and calls the d
 4. `0x539c50` with fog off, then fog on again (*inferred*: the sky).
 5. `0x52e7c0(aspect 0x6f1574, near 0x701938, far 0x701934)` (*inferred*: the projection; the far value is the `RANGE` distance).
 6. `0x447d30`: the scene (terrain, objects, characters, monsters, effects, weather; a large function of about 3,500 lines, not broken
-   down here).
+   down here). Order in which its direct calls first appear (confirmed, decompile; names not read): `0x597120`, `0x596ed0`, `0x52b260`, `0x590d90`, `0x591200`, `0x523190`, `0x523300`, `0x593130`, `0x52f1f0`, `0x59a300`/`0x59a370`/`0x59a410`, `0x5301a0`, `0x439670`, `0x428430`, `0x4322e0`, `0x431650`, `0x4344d0`, `0x433950`, `0x40ea50`, `0x5403b0`, `0x535e40`, `0x52e970`, `0x526bd0`, `0x51b020`–`0x51b150`, `0x52d400`, `0x52ab40`, `0x52a9b0`, `0x594190`, `0x5359a0`, `0x546710`, `0x5484d0`, `0x548070`, `0x549990`, `0x430770`, `0x427cb0`, `0x420600`, `0x4349d0`, `0x432c40`, `0x429940`, `0x413820`, `0x4131e0`, `0x413050`, `0x539b40`, `0x53c690`, `0x53bcb0`, `0x53cad0`, `0x5302f0`, `0x433c90`, `0x43b410`, `0x4440f0`, `0x41b1e0`, `0x41b240`, `0x410500`, `0x431a60`, `0x461210`, `0x4c21a0`, `0x524cf0`, `0x530ac0`, `0x444190`, `0x444280` (what each draws is not read).
 7. `0x5302f0`, alpha blending (`SRCALPHA`, `INVSRCALPHA`) and texture stages for 2D, `0x41eef0`.
 8. The UI (`0x48aa00`, section 8) if `SHOW_INTERFACE` is on.
 
@@ -590,20 +597,26 @@ programs reach the game (confirmed mechanism; the symptom is *inferred*).
 | other | `USER  ` | — |
 
 `0x1000` is not a level: it puts the log in `UserData/Logs/<timestamp>Log.txt` instead of `Log.txt`. The common `LogLevel=67` is
-`ERROR | WARN | NET`. Errors such as `File Not Open [%s]` go through a separate reporter (`0x40c4c0`) that was not traced (**open**).
+`ERROR | WARN | NET`. Errors such as `File Not Open [%s]` go through a separate reporter (`0x40c4c0`). It formats its message (`0x5a7c70`), looks up the logger by name (`0x40a2a0`) and calls `0x5a41b0` with level 1 (ERROR), the function, file and line. That call checks the ERROR bit of the level mask, passes the entry to the registered listeners (`0x5a2cc0`) and, if the log file is open, writes `[time] [ERROR ] …` plus a tab-indented message line and flushes. Nothing is shown on screen (confirmed).
 
 **How to find it.** The level names are adjacent strings; `0x5a3480` returns one per level and `0x5a4070` is its caller that formats
 `[%s] [%s] %s`.
+
+## In other episodes
+
+- The EP1, EP3, EP4.5 and EP5.4-labelled builds all import `d3d9.dll` and the same audio, input and network libraries as this client
+  (**confirmed (file)**, [Episode 1](episodes/ep1.md), [Episode 3](episodes/ep3.md), [Episode 4.5](episodes/ep4-5.md),
+  [Episode 5](episodes/ep5.md)). All four EP6 builds import `d3d9.dll` too ([Episode 6](episodes/ep6.md)).
 
 ## Open
 
 | Item | What is known | What is missing |
 |---|---|---|
-| Scene states 8 and 9 | 8 loads `strip.wld` after a UI window returns 4; 9 runs object `0x488330` with dungeon music, then goes to 7 | which window, and what the scene is for |
+| Scene states 8 and 9 | the gambling house: 8 loads `strip.wld` after the gambling table window returns 4; 9 runs object `0x488330` with dungeon music, then goes to 7 | how the scene looks (**live**) |
 | `[VIDEO] TEXTURE` | sets `0x70196c` to −1/128/64 | settled: readers `0x4444d0`, `0x52abd0` ([re-open-items.md](re-open-items.md)) |
-| `data/Config.cfg` | opened and parsed like `gsConfig.cfg`; not shipped | its keys |
-| FPS overlay | renderer `+0x410` turns it on | what sets the flag |
-| Error reporter `0x40c4c0` | receives function, file and line plus a message | where it writes |
-| UI slot 5 | called with an argument by the manager | meaning |
+| `data/Config.cfg` | opened and parsed like `gsConfig.cfg`; not shipped; keys listed in the section above | which keys a localised build ships (not checkable here: needs a localised build's files) |
+| FPS overlay | renderer `+0x410` turns it on; only the constructor writes it (0) | nothing in this build sets it |
+| Error reporter `0x40c4c0` | receives function, file and line plus a message; writes to the log through `0x5a41b0` at level ERROR | — |
+| UI slot 5 | the chat window's override `0x423f40` stores the argument at `+0x3baf`; the chat input handler `0x475e00` skips its edge-resize and cursor handling while it is set; the manager passes 1 when the character-face window (`0x462cc0`, `ch_face.tga`) opens and 0 when it closes | the other windows ignore it |
 | Resolutions outside the list | use layout 1 and aspect 1.25 | how it looks (**live**) |
-| Per-pass rendering inside `0x447d30` | the order of the outer passes | draw order of terrain, models and effects inside the scene function |
+| Per-pass rendering inside `0x447d30` | the order of the outer passes and of the direct calls (section 9) | what each call draws |

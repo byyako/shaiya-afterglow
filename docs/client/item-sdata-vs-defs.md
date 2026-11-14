@@ -7,13 +7,19 @@ below is the original game's own.
 
 ## In short
 
-- **The client and the server each have their own item list**, and they disagree on 532 named items. 123 of those can be had in
+- **The client and the server each have their own item list** (the client's is an [SData](glossary.md#sdata) file), and they disagree on 532 named items. 123 of those can be had in
   normal play.
 - **Most differences only change what players see**: a potion's tooltip shows flat points while the server heals a percentage, a cape
   costs 40 million in the shop window but the server charges 741,190, leggings promise less MP than they give.
 - **A few change what players can do**, because the client checks some values itself: rings, amulets and mount stones cannot be
   equipped between the server's level and the client's higher level.
 - **Names never matter**: the server never sends item names, so the client's own names are what players read.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#itemsdata-against-the-server).
+- **If you patch or mod the client:** "Real differences in items a player can get" lists what a player notices; "What the client does with its own values" says which values the client enforces itself.
+- **To check a claim yourself:** [sdata-generation.md](sdata-generation.md) has the file layout and how to decrypt it; [tools-and-method.md](tools-and-method.md) lists the tools.
 
 ## How the file was read
 
@@ -85,11 +91,13 @@ checks are on [Client facts](CLIENT-FACTS.md#sdata-differences-what-the-client-d
 - **Firecrackers** 100/115 to 117: buy 0 in the database (1,000 in the client), sell 1,000 against 100.
 - **Special**: the Christmas Party Hats (16/81, 166, 251) special 0 in the database, 63 in the client.
 
-## For a server
+## What the client does with its own values
 
-Nothing to change: the database wins, and the reachable differences are the original's (prices, tooltips).
+Read in `game.exe` (see [Client facts](CLIENT-FACTS.md#sdata-differences-what-the-client-does-with-its-own-values)): the shop sends a buy
+with no money check, so the client never refuses a cape or a mount stone for its own price. Equipping is refused below the client's
+level, so the rings, amulets, Echidna, Zion Cross and mount stones 42/1 to 4 cannot be equipped between the two levels. Item use and
+stack moves are not compared with the client's file at all. The differences on this page are the original game's own (prices, tooltips).
 
-What the client does with its own values, read in `game.exe` (see
-[Client facts](CLIENT-FACTS.md#sdata-differences-what-the-client-does-with-its-own-values)): the shop sends a buy with no money check (no
-refusal for capes or mount stones); equipping is refused below the client's level (the rings, amulets, Echidna, Zion Cross and mount
-stones 42/1 to 4 cannot be equipped between the two levels); item use and stack moves are left to the server.
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#itemsdata-against-the-server).

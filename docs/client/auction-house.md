@@ -5,7 +5,7 @@ layouts, the date format, the checks the client makes itself, and what each noti
 `game.exe` (sub-dispatcher `0x55d490`, list adders `0x45acd0` / `0x45af50` / `0x45b090` / `0x45b1c0` / `0x45b2f0`, date code
 `0x454920` / `0x454a30`) and the packet structs of the EP4.5 server's debug symbols (`ps_game.pdb`); the original server's date packing
 comes from `CMarketMgr::GetResultEndDate` `0x438ec0` in `ps_game.exe`. Status words: **confirmed**, **confirmed (disasm)**,
-*inferred*, **live**. Sizes include the opcode.
+[*inferred*](glossary.md#inferred), [**live**](glossary.md#live). Sizes include the [opcode](glossary.md#opcode).
 
 ## In short
 
@@ -15,7 +15,12 @@ comes from `CMarketMgr::GetResultEndDate` `0x438ec0` in `ps_game.exe`. Status wo
 - **Nothing is handed over directly.** Won items, unsold items and gold from sales all wait in two "to collect" lists until the player
   collects them.
 - **The client loads each list once per session** and then keeps it up to date from the server's answers and notices, so every answer
-  has to carry the full row.
+  carries the full row the client will show.
+
+### Using this page
+
+- **If you write a server:** the request table says what the client checks before it sends and the answer table gives each row layout; the checklist is [What a server must do for this client](afterglow/server-checklist.md#auction-house).
+- **To check a claim yourself:** start at the sub-dispatcher `0x55d490`; the requests are traced in [Client actions](client-actions.md#auction-house-requests-confirmed), and [Tools and method](tools-and-method.md) says how to open the binary.
 
 ## Summary
 
@@ -35,7 +40,12 @@ comes from `CMarketMgr::GetResultEndDate` `0x438ec0` in `ps_game.exe`. Status wo
 - **Dates** are packed local time: `(year − 2000) << 26 | month << 22 | day << 17 | hour << 12 | minute << 6 | second` (the original
   builds it from `localtime(now + 1,209,600 s)` for item-collection deadlines). The client shows the time left as "N min" / "%dH" /
   "%dD" against its clock corrected by the server time (`0x0114`, `0x21e8730`), nothing once it has passed; colour red under 2 h,
-  orange from 2 to 12 h, yellow from 13 h (ARGB `0xFFFF0000` / `0xFFFF8000` / `0xFFFFFF00`). confirmed
+  orange from 2 to 12 h, yellow from 13 h (ARGB `0xFFFF0000` / `0xFFFF8000` / `0xFFFFFF00`). The client corrects an end date only by the
+  `0x0114` offset, so the date it shows is the server's local time as sent. confirmed
+- **A list is loaded once; the client has no refresh request after that.** A row it receives is added to its lists exactly as sent (all item
+  fields, and for gold rows the money id). confirmed
+- **Staff commands** on this house are `FA19` `/auctionrecall` and `FA1A` `/auctionsearch`
+  ([GM opcodes and commands](gm-and-commands.md#faxx-gm-self-observation-bans-guilds-auction-packetadmincmde-level-5)).
 - Packet row limits (PDB): search page 17, registrations 36, bids 40, items to collect 46, gold to collect 36, interest list 10.
 
 ## Requests (client → server), with the client's own checks
@@ -44,11 +54,11 @@ comes from `CMarketMgr::GetResultEndDate` `0x438ec0` in `ps_game.exe`. Status wo
 |---|---|---|---|
 | `0x1C01` | 39 | `u8 classFilter (0 both/neither faction box, 1 first, 2 second), u8 minLv/10, u8 maxLv/10 (0xFF none), u8 category, u8 grade (0xFF any), char name[32]` (`TPC_MARKET_SEARCH`) | search button (`0x459f60` case 6) |
 | `0x1C02` | 4 | `u8 type, u8 typeId` (`TPC_MARKET_SAMEITEM`) | "search this item" on a selected result |
-| `0x1C03` | 3 | `u8` 1 prev / 2 next (*inferred*; `TPC_MARKET_SEARCH_ACTION`) | page buttons |
+| `0x1C03` | 3 | `u8` 1 prev / 2 next (**confirmed (disasm)** plus the button picture, sender `0x459f60`, see [client-actions.md](client-actions.md); `TPC_MARKET_SEARCH_ACTION`) | page buttons |
 | `0x1C04` / `0x1C05` | 2 | — | my registrations / my bids tab, **once per session** (flags `0x84cdbc` / `0x84cdbd`); later kept by results and notices |
 | `0x1C06` / `0x1C07` | 2 | — | items / gold to collect tab, once per session (`0x84cdbe` / `0x84cdbf`) |
 | `0x1C14` | 2 | — | interest list tab, every time |
-| `0x1C08` | 14 | `u8 bag, u8 slot, u8 count, u8 period (0–3 = 7/24/72/168 h), u32 minBid, u32 buyNow` (`TPC_MARKET_ITEM_REGISTER`, `byMarketType` = period) | register: item chosen (7100), minBid > 0 (7112) and ≤ 3,800,000,000 (7139), buyNow > 0 (7115) and ≤ 4,000,000,000 (7113), buyNow not below minBid (7105), gold ≥ commission ≈ round(minBid × 2e-6) × hours × 5 (7102), count ≤ the stack |
+| `0x1C08` | 14 | `u8 bag, u8 slot, u8 count, u8 period (0–3 = 7/24/72/168 h), u32 minBid, u32 buyNow` (`TPC_MARKET_ITEM_REGISTER`, `byMarketType` = period) | register: item chosen (7100), minBid > 0 (7112) and ≤ 3,800,000,000 (7139), buyNow > 0 (7115) and ≤ 4,000,000,000 (7113), buyNow not below minBid (7105), gold ≥ commission ≈ round(minBid × 2e-6) × hours × 5 (7102; the original server charges hours × ceil(minBid ÷ 500,000) × 5, **ref** [The auction house](../original/auction.md#52-the-fee-the-deposit)), count ≤ the stack |
 | `0x1C09` | 6 | `u32 marketId` | cancel my auction, after 7118 (commission lost) |
 | `0x1C0A` | 6 | `u32 marketId` | buy now, after 7110 |
 | `0x1C0B` | 10 | `u32 marketId, u32 price` | bid |
@@ -86,12 +96,13 @@ comes from `CMarketMgr::GetResultEndDate` `0x438ec0` in `ps_game.exe`. Status wo
 The list updates above only touch lists the client has loaded (the once-per-session flags); a notice for an unloaded list only
 prints its message. confirmed (`0x55d490`)
 
-## For a server
+## In other episodes
 
-- Send `dwEndDate` in the packed format above (local time of the server; the client corrects only by the `0x0114` offset).
-- Gold rows: the client returns `dwMoneyID` in `0x1C0D`; keep money ids distinct from market ids.
-- Collect results must carry the full row/item so the client can add it; there is no "refresh" request after the first one.
-- GM side: `FA19` `/auctionrecall` and `FA1A` `/auctionsearch` ([GM opcodes and commands](gm-and-commands.md#faxx-gm-self-observation-bans-guilds-auction-packetadmincmde-level-5)).
+- The server pack labelled EP3 has no auction house; the EP4.5 pack added it. **ref** ([what EP4.5 added](../original/ep3.md); episode summary on [Episode 4.5](episodes/ep4-5.md))
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#auction-house).
 
 ## Open
 

@@ -4,17 +4,26 @@ This page maps every game system the client `game.exe` (US build 2010-04-26, pat
 row per packet family. It was built from the [packet catalogue](client-packets.generated.md), the messages, sounds and files each handler
 uses (a Ghidra script over every handler and the network-object methods it calls, resolved through vtable `0x6A5C20`), the system-message
 table `sysmsg-uni.txt` (ID → text, looked up by `FUN_0041c180`), the original server's handler names (from `ps_game.pdb`), and EP6 packet
-names. **inferred** marks families whose purpose comes from indirect evidence only.
+names. *inferred* marks families whose purpose comes from indirect evidence only.
 
 ## In short
 
-- **Packets come in families.** The first byte of an opcode names the system: `05xx` is player actions and combat, `0Bxx` parties,
+- **Packets come in families.** The first byte of an [opcode](glossary.md#opcode) (the 2-byte number that names a packet) names the system: `05xx` is player actions and combat, `0Bxx` parties,
   `0Dxx` guilds, `23xx` personal shops, and so on.
 - **The client covers the whole EP4.5 game**: combat, items, quests, trade, parties and unions, guilds, friends, personal shops, duels,
   guild battles, the item mall, the auction house, a mini-game, and the GM tools.
-- **A few families are unclear**: a paid service in `0Fxx`, one request in `12xx` and an item list view in `27xx`.
+- **One family is still unclear**: the item list view in `27xx`. The Priest reading (`0Fxx`), the GM request (`12xx`) and the gambling house (`31xx`) now have their own notes.
 - **The client asks for files it does not have**: some icons, effects and UI pieces are missing from its archive, which explains blank
   icons and missing effects in game.
+
+### Using this page
+
+- **If you write a server:** find the family of the opcode you are implementing, then follow the link to the page that lists its fields.
+  [What a server must do for this client](afterglow/server-checklist.md#packet-handling) says what to check first.
+- **If you patch or mod the client:** the second table lists files the client asks for and does not have; the family rows show which
+  system a patch touches.
+- **To check a claim yourself:** start from the [packet catalogue](client-packets.generated.md) row for the opcode and the method on
+  [Tools and method](tools-and-method.md).
 
 ## The families
 
@@ -38,9 +47,9 @@ family (from its PDB).
 | `0Cxx` | party member status (HP/SP/MP, maxima, buffs, death, position, level); `0C01`–`0C09` party, `0C0A`–`0C14` union (see [Social packets](client-social-packets.md)) | 19 | 0 | (pushed) | handlers; PDB `TP_PARTY_SET_*` |
 | `0Dxx` | guild: create, disband, join, quit, kick, ranks, guild list, guild points | 44 | 17 | `PacketGuild` | sysmsg 372–398, 8006–8054 |
 | `0Exx` | NPCs in view: appear `0E01`, leave `0E02`, move `0E03`, NPCs attacking players/mobs `0E05`/`0E06`; client sends `0E04` when an NPC is clicked | 6 | 1 | (pushed) | handlers |
-| `0Fxx` | **inferred:** a paid service (costs gold: "Insufficient gold" on failure) | 2 | 2 | ? | sysmsg 303 |
+| `0Fxx` | the Priest's paid "reading" (10 gold); the client has no NPC type that sends it, see [The Priest packets](research-priest-packets.md) | 2 | 2 | `CUser::PacketPriest` | sysmsg 303, 5296 |
 | `11xx` | chat: normal, whisper, all/trade, guild, party, shout, zone, union | 13 | 2 | `PacketChatE` | catalogue |
-| `12xx` | **unknown:** one client request with a variable length | 0 | 1 | ? | — |
+| `12xx` | the `/request GM` chat command: `0x1201` carries the text, the client prints "Successfully applied" (252) (**confirmed (disasm)**, [client actions](client-actions.md)) | 0 | 1 | ? | sysmsg 5077, 252 |
 | `1Cxx` | auction house (via fallback sub-dispatcher) | 23 | 0 | `PacketMarket` | `auction_objectsearch_button` |
 | `1Dxx` | mail ("paper") | 8 | 0 | ? | `ui_paper001.wav`, sysmsg 7166 |
 | `21xx` | world events: kills/destructions, obelisks, "a road to Jungle of Fury will be opened" | 4 | 0 | (pushed) | sysmsg 463, 5372 |
@@ -49,8 +58,8 @@ family (from its PDB).
 | `24xx` | duels | 13 | 7 | `PacketPVP` | sysmsg 5325–5336, `Duel.EFT` |
 | `25xx` | guild vs guild battles | 6 | 2 | `PacketPVPGuild` | sysmsg 5340–5343, `Guild.EFT` |
 | `26xx` | item mall: points, buy, send/receive gifts | 8 | 4 | `PacketPoint` | sysmsg 824–832 |
-| `27xx` | **inferred:** item list view (records with craft names; warehouse-like) | 4 | 2 | ? | field layout |
-| `31xx` | **inferred:** mini-game / gambling house (9-byte result = 3×3 reel, u32 winnings) | 9 | 9 | `PacketMiniGame` | handler state machine `0x84CEDC` |
+| `27xx` | *inferred:* item list view (records with craft names; warehouse-like) | 4 | 2 | ? | field layout |
+| `31xx` | gambling house (NPC type 5): table choice, slot and card scenes; the 9-byte result is a 3×3 reel plus the winnings; details on [Gambling house](research-gambling-kill-boost.md) | 9 | 9 | `PacketMiniGame` | handler state machine `0x84CEDC` |
 | `A1xx`–`A3xx` | login key exchange, login, server list/select, game handshake | 9 | 4 | ps_login | working |
 | `B1xx` | billing / time-limited services ("3 hour-free service", EXP penalty) | 6 | 2 | `PacketBilling` | sysmsg 813, 834, 840 |
 | `F1xx`, `F2xx` | GM chat (mirrors `11xx`) and GM notices | 11 | 5 | `PacketAdminChat` | |

@@ -9,18 +9,23 @@ Status words: **confirmed** (read in the code or data), *inferred*, **live** (ne
 
 ## In short
 
-- **Check what you send:** hair, face and size are bounded by lists; **race above 3 or sex above 1 are not checked** and index tables out of
-  bounds; shop-sign and chat text must stay inside fixed buffers.
+- **The client checks little of what it receives:** hair, face and size are bounded by lists; **race above 3 or sex above 1 are not
+  checked** and index tables out of bounds; shop-sign and chat text are copied into fixed buffers.
 - **Text in names, signs, balloons and chat goes through a `<<NNNcCC` colour-marker parser** in two places, so any text a server relays
-  must be kept free of markers (the one crash the site writes out, with its filter, is in `client-packets.md`).
+  reaches that parser (the one crash the site writes out, with its filter, is in [Packet handling](client-packets.md#chat-markup-crash-nnnccc)).
 - **A ground item sent to only some players is fine:** the client keeps only items it was told about, and an unsolicited pick-up answer
   looks exactly like a real one.
 - **Small monsters can serve as pets, scenery or campfires** with data only: scale classes are fixed, "size 0" makes a monster unclickable,
-  and max HP must be at least 1.
+  and a monster's max HP of 0 is not handled (its bar needs at least 1).
 - **The client scrambles the other faction's chat itself** and gates its player menu by faction; almost every other cross-faction rule is
-  the server's.
-- **No combat level rule exists in the client;** levels only colour names and gate item use, equipping and a few NPCs.
-- **New effects, skill visuals and UI windows need the companion DLL;** new items, skills, monsters and buff icons are data.
+  the server's. **No combat level rule exists in the client;** levels only colour names and gate item use, equipping and a few NPCs.
+- **New effects, skill visuals and UI windows need the [companion DLL](fixes-dll.md);** new items, skills, monsters and buff icons are data.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#extension-features).
+- **If you patch or mod the client:** "Items, ids and ceilings" and "A DLL overlay: design facts" give the limits that apply to new data and new windows.
+- **To check a claim yourself:** each section names the code it was read from ([tools-and-method.md](tools-and-method.md)); the open points are in [re-open-items.md](re-open-items.md).
 
 ## Input ranges
 
@@ -35,12 +40,12 @@ What a viewer does with other values: `0x0303` (logic `0x54d370`), the `0x0226` 
 store everything unchecked, then `0x415ec0`/`0x415310` build the model. Hair or face out of range is **ignored safely** (`0x415310` checks
 `0 <= idx < count` and a null entry). Size above 4 gives scale 1.0 (switch `0x413d29`: 0.96, 0.98, 1.00, 1.02, 1.04). **Race above 3 or sex
 above 1 are not checked**: they index the part and skeleton tables (`0x21f4cac`, `0x21f4eac`, `0x21f5aa8`, stride `race*2+sex`) out of
-bounds; *inferred* wrong model or crash. A server therefore sends race 0–3, sex 0–1, hair 0–13 (creation 0–4), face 0–7 (creation 0–4),
-size 0–4. Whether a `0x0303` with race 4 crashes is a **live** question; a test would crash viewers, so keep the strict server check.
+bounds; *inferred* wrong model or crash. The values the client itself can produce or index safely are race 0–3, sex 0–1, hair 0–13 (creation 0–4), face 0–7 (creation 0–4),
+size 0–4. Whether a `0x0303` with race 4 crashes is a **live** question; a test would crash viewers.
 
 **Shop sign** (confirmed). `0x0523` (reader `0x5807c0`) reads `u8 len` and then `len` bytes into a 124-byte stack buffer: an oversized
 length overwrites the return address and **crashes every viewer**. The logic `0x559080` copies the text to player `+0x2f4` (128 bytes), so
-the text needs a NUL within 124 bytes; send a length of 121 or less (the original caps the title at 120 plus NUL). The sign is drawn by
+the text needs a NUL within 124 bytes, which a length of 121 or less keeps (the original caps the title at 120 plus NUL). The sign is drawn by
 `0x41b1e0` → `0x5373b0`, which parses colour markers (below). Typing uses the shared text input `0x21ea51c` with a maximum of 60 characters
 (`0x51f440(0x3c, …)` at `0x4de939`) and no character filter; `0x2303` sends `u8 strlen+1, text`.
 
@@ -54,15 +59,15 @@ Only two functions parse `<<NNNcCC` and copy NNN bytes (every `atol` caller that
    **guild names** (`+0x2c4`, 25 bytes), **chat balloons** (`0x410460`, 5 s, for `0x1101`/`0x1107`/`0xF101`), shop signs, monster names, the
    target name and ground-item labels (`0x433c90`).
 
-An over-long marker therefore crashes viewers from a chat line, a name, a guild name or a sign; **names and relayed text must be kept
-marker-free by the server.** `0x41bec0` only carries an 8-byte marker to the next wrapped line (no copy). Not parsed (plain draw, *inferred*
+An over-long marker therefore crashes viewers from a chat line, a name, a guild name or a sign; **the client does not keep names and relayed text marker-free
+itself, so the server's text is all it relies on.** `0x41bec0` only carries an 8-byte marker to the next wrapped line (no copy). Not parsed (plain draw, *inferred*
 because their callers never reach the two functions above): the friend and block memo column, the guild window's remark and names, mall
 and auction texts. Notices `0xF106` (sysmsg 356, chat type 8) and `0xF906`–`0xF90B` (`ui_news001.wav` + 356, type `0x18`) are chat-log lines,
 so they are parsed (`0x5533a0`, `0x553de0`); no separate banner exists for them.
 
 Everything is a C string: readers copy `len` bytes, handlers use `%s`/`strcpy`, the parser uses `strlen`, so text after the first NUL is never
-seen. Reader buffer sizes a server must stay within (confirmed): `0x1101`/`0x1105`/`0xF101`/`0xF105` 132 bytes, `0x2206`/`0x220B` memo 51,
-`0xF106` 2004 (then `strcpy` into a 1544-byte global at `0x702478`: keep it under about 1500), `0xF906`–`0xF90B` 1032, `0x0D20` fixed 65,
+seen. Reader buffer sizes (confirmed): `0x1101`/`0x1105`/`0xF101`/`0xF105` 132 bytes, `0x2206`/`0x220B` memo 51,
+`0xF106` 2004 (then `strcpy` into a 1544-byte global at `0x702478`, so a text of about 1500 bytes or more overflows it), `0xF906`–`0xF90B` 1032, `0x0D20` fixed 65,
 `0x0523` 124.
 
 ## Ground items
@@ -226,7 +231,7 @@ hard-coded names), so a new `.EFT` name needs the DLL, while replacing an existi
 by index from the item record (`+0x1a`, `0x51d370`, *inferred*), so new icon files follow the existing naming. The run-time names are listed
 in `cleanup.md`.
 
-## What a server can drive in the UI
+## What the client shows when a server sends it
 
 - **A list the server fills:** `0x0701 u8 n, n × (u8 type, u8 typeId)` **replaces the open shop's goods list** (up to 256 rows, `0x557d40`);
   the buy request `0x0702` carries the row index. It is the only stock window whose rows the server picks at run time; the shop itself opens
@@ -264,7 +269,7 @@ in `cleanup.md`.
   name and text (a new skill row, proven in patch 109) plus a line. **New text:** the markers `<p>`, `<t>`, `<b>`, `<v>`, `<i>`, `<s>` are filled
   from fixed buffers, not `%s`/`%d`; a new id is shown only where code asks for it, except **`0x110A u32 mobId, u16 msgId`**, which prints any
   id (a monster must be in view). Large id ranges in the file are unused (for example 489–799, 1313–1999, 5516–6000); 863 is asked for by
-  `0xB103` type 4, so keep it free or give it a text.
+  `0xB103` type 4, so the file needs a text there.
 - **Screen-centre text** (pink, mid-screen − 150 px, at most 5 lines, 10 s each; chat type `0x1E`): `0x1108` all-members chat ("[chatting
   all members]<p> : <b>", 481, `0x5544e1`) takes **free text with any sender name and no monster**, but is dropped for players who blocked
   that name; `0x1109` with kind ≠ 0 and `0x110A` need a monster in view. Sound to everyone: `0xF906`–`0xF90B` (one fixed sound) and `0x110B` (any
@@ -296,13 +301,17 @@ exists, so the cheapest *inferred* way for a client to announce itself is one ne
 that logs unknown opcodes can read (the original closes the connection). A public project (Spelunkern's Shaiya-Core) shows the same
 approach: it subclasses the window procedure, hooks Present and Reset, and draws Dear ImGui with the Win32 and DX9 back ends.
 
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#extension-features).
+
 ## Open
 
 | Point | Cheapest way to settle |
 |---|---|
 | live look of a scaled monster (Day 6) | patch one record's Day byte to 6 and spawn it |
 | monster with max HP 0 | spawn a record with HP 0 without `0x0608`; look at the target bar |
-| race above 3 | not worth a live test (crashes viewers); keep the server check |
+| race above 3 | not worth a live test (crashes viewers); the server's check is the only guard |
 | quit-dialog timer (366) | callers of message-box kind 8 (`0x516770`) and the system-menu exit path |
 | condition of 231 (quest items in trade) | read `0x4ffc50` around `0x4fff93` |
 | campfire look | spawn the "Flame Relicpole" row, then a Size 0, small-scale copy |

@@ -5,7 +5,7 @@ before the fight). It was read from `game.exe` (handlers on the network object's
 machine `0x420660` and `0x421210`) and from the original EP4.5 server `ps_game.exe` (`CUser::PacketPVP` `0x47d0f0`,
 `CUser::PvPChkLeaveByTime` `0x47c210`); struct names come from the server's debug symbols (`ps_game.pdb`). Who may attack whom is on
 [Player kills](../original/pvp.md#1-enemies) (`IsTeam`: a duel makes the two players enemies when `m_nPvPStatus == 4`). Status words:
-**confirmed**, **confirmed (disasm)**, *inferred*, **live**. Sizes include the opcode. Messages are sysmsg IDs.
+**confirmed**, **confirmed (disasm)**, [*inferred*](glossary.md#inferred), [**live**](glossary.md#live). Sizes include the [opcode](glossary.md#opcode). Messages are sysmsg IDs.
 
 ## In short
 
@@ -14,6 +14,11 @@ machine `0x420660` and `0x421210`) and from the original EP4.5 server `ps_game.e
 - **When both are ready**, the fight area is set at the midpoint between them, a countdown runs, and the fight starts.
 - **The fight ends** with a win, a loss or a draw, or is cancelled when a player disconnects, leaves the area (35 units around the
   centre), gives up with `/defeat`, or is attacked by someone else. The winner takes the stakes.
+
+### Using this page
+
+- **If you write a server:** the flow in the summary is the packet order the client expects; the checklist is [What a server must do for this client](afterglow/server-checklist.md#duels).
+- **To check a claim yourself:** start at the state machines `0x420660` and `0x421210`, using [Tools and method](tools-and-method.md).
 
 ## Summary
 
@@ -24,19 +29,20 @@ machine `0x420660` and `0x421210`) and from the original EP4.5 server `ps_game.e
 - Client countdown: 6 s of "the battle starts after <v> seconds." (5308) after `0x2403`; `0x2404` prints "start battle!!" (5311)
   and plays `ui_challenge01.wav`. The client only allows `/defeat` (`0x2406`) after `0x2404` (duel state `0x7045b4 == 2`).
 - **Area**: radius **35.0** around the `0x2403` centre (`0x6a67b8`); leaving it prints 5309 once ("…cancelled if you get out of
-  allowed battle area."). The client cancels nothing itself: the server must send `0x2406 1`.
+  allowed battle area."). The client itself cancels nothing when a player leaves the area: the cancel comes only from a `0x2406 1` from the server. The
+  35 is the client's warning radius; the original server's own radius is 40 around the centre (**ref** [Duels](../original/duel.md#6-how-a-duel-ends)).
 - **Catalogue correction**: `0x2406`'s reason codes are **0 disconnect, 1 out of area, 2 gave up, 3 attacked**, not 1–4
   (the [packet opportunities](packet-opportunities.md) table first read the handler's `+1`).
 - Win/loss counters: the client adds 1 to `0x21e4f70` on a win and to `0x21e4f74` on a loss itself (*inferred*: the victory and
-  defeat counts of the character window; [Player kills](../original/pvp.md#7-the-kill-and-death-counters) calls them the third and fourth counters). Send the
-  counters only if they must be corrected.
+  defeat counts of the character window; [Player kills](../original/pvp.md#7-the-kill-and-death-counters) calls them the third and fourth counters). The
+  client's own +1 stays on screen until the server sends different counters.
 
 ## Request and answer
 
 | op | dir | size | fields | client | original |
 |---|---|---|---|---|---|
-| `0x2401` | C→S | 6 | `u32 targetId` (`TPC_PVP_REQ`) | sender `0x589370` (player menu, *inferred*) | needs: neither player in a duel or guild war or `+0x1460` (*inferred*: exchange), same faction unless map 39/40; else `0x2402 (2, target)`. A debuff on either → `0x2402 (4, target)`. OK: both get `0x2401` 10, states 1/2, 10 s |
-| `0x2401` | S→C | 10 | `u32 requesterId, u32 targetId` | only with no dialog open (`0x850a5c == 0`), and ignored if either player has `+0x250` set (*inferred*: dead or mounted). I am the requester → dialog 7 (waiting). I am the target → if busy (`0x701a00` or player `+0x2f0`) answers `0x2402 0` itself; else dialog 6 "<p> requested battle to <t>." (5325), `ui_party001.wav` | — |
+| `0x2401` | C→S | 6 | `u32 targetId` (`TPC_PVP_REQ`) | sender `0x589370` (player menu entry "Request duel", sysmsg 5008: menu code `0x1390` in `0x48c120`@`0x490aaf`, only for a player found by `0x447880`; **confirmed**) | needs: neither player in a duel or guild war or `+0x1460` (*inferred*: exchange), same faction unless map 39/40; else `0x2402 (2, target)`. A debuff on either → `0x2402 (4, target)`. OK: both get `0x2401` 10, states 1/2, 10 s |
+| `0x2401` | S→C | 10 | `u32 requesterId, u32 targetId` | only with no dialog open (`0x850a5c == 0`), and ignored if either player has `+0x250` set (**confirmed**: the entity's life state, 0 alive, 1 dying, 2 dead; set by `0x551b50` (`0x0504`), `0x410080` and `0x418c00`, cleared by `0x54f330`; mounting never writes it). I am the requester → dialog 7 (waiting). I am the target → if busy (`0x701a00` or player `+0x2f0`) answers `0x2402 0` itself; else dialog 6 "<p> requested battle to <t>." (5325), `ui_party001.wav` | — |
 | `0x2402` | C→S | 3 | `u8 answer` (**0 refuse, else accept**) (`TPC_PVP_ANS`) | dialog 6 | refuse: requester gets `0x2402 (0, target)`; accept: requester gets `0x2402 (1, target)`, both `0x2407` |
 | `0x2402` | S→C | 7 | `u8 result, u32 id` | only while dialog 0/6/7: 0 → 5326 "<p> rejected the battle."; 2 → 5327 "can't request the battle to <p>."; 3 → if `id` is me: closes silently, else 5328 "…the opponent didn't respond."; 4 → 5334 "impossible to battle as Debuff skill is on <p>." (`<p>` = my own name when the debuffed one is not found); **1 and others: dialog closed silently** (1 = accepted; the stake window follows). Error results play `ui_error001.wav`. `id` must be a player in view or nothing is shown | 0, 1, 2, 4 as above; 3 on the 10 s timeout (`PvPChkLeaveByTime`) |
 
@@ -61,7 +67,7 @@ Works like trade ([Social packets](client-social-packets.md#trade-0x0axx), `0x0A
 
 Original: every change clears both ready flags (`ExchangeCancleReadyPvP`); `0x2409 0` → `(1, 0)` to self, `(2, 0)` to the partner;
 both ready → stakes taken (`ExchangePvP`), `0x2403` to both; `0x2409 2` → `0x2408 2` to self, `0x2408 3` to the partner, duel ended.
-The winner gets the stakes at the end (`CUser::ItemDropPvP`, *inferred* from the name). confirmed (order), *inferred* (stake payout)
+The winner gets the stakes at the end: `CUser::ItemDropPvP` lays them on the ground at the loser's feet with the winner as owner, and every other end returns each side's stake to itself (**ref** [Duels](../original/duel.md#62-who-gets-what-itemdroppvp)). confirmed (order), **ref** (stake payout)
 
 ## Fight and end
 
@@ -77,12 +83,9 @@ Original for `/defeat` (`0x2406`, state 4 only): both get `0x2406 (2, giver's id
 `0x2406` reasons and `0x2405` come from `CUser::PvPChkLeaveByDeath` / `ByMove` / `ByZoneLeave` / `ByAttack` / `PvPChkLoseDeath`
 (see [Duels on the server side](../original/duel.md#6-how-a-duel-ends)).
 
-## For a server
+## For server developers
 
-- Keep the order: `0x2401` → `0x2402 1` → `0x2407` → stake packets → `0x2403` → (5 s) → `0x2404` → `0x2405` / `0x2406`.
-- `0x2403` carries floats (the centre), not ids.
-- Check the area on the server (35 units around the centre, *inferred* from the client's warning radius) and send `0x2406 1`.
-- Players must be enemies only while the duel is in state 4 (`IsTeam`, see [Player kills](../original/pvp.md#1-enemies)).
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#duels).
 
 ## Open
 

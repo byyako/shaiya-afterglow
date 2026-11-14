@@ -1,9 +1,8 @@
-# Packet opportunities: every opcode, the original server, and what the client could still do
+# Every opcode against the original server
 
 This page is one catalogue of every opcode the US EP4 client `game.exe` (built 2010-04-26, patch 108) handles (server → client) or sends
-(client → server), with what the original EP4.5 `ps_game.exe` (built 2009-07-15, the PDB build) does with it. Then come the
-**opportunities**: packet forms the client already supports that would add or improve features with no client change, and the ones a
-**client patch** would unlock because a region feature gates them.
+(client → server), with what the original EP4.5 `ps_game.exe` (built 2009-07-15, the PDB build) does with it. It is for people who write a
+server, study the protocol or patch the client, and it is the place to look an opcode up by its number.
 
 Sizes include the 2-byte opcode and exclude the length prefix. Messages are `sysmsg-uni.txt` IDs. Field details live on the
 [packet catalogue](client-packets.generated.md), [World packets](client-world-packets.md) and [Social packets](client-social-packets.md);
@@ -11,15 +10,17 @@ this page links to them rather than repeating them.
 
 ## In short
 
-- **The client knows more than the original server uses.** 41 packets the client handles are never sent by the original server, and
-  some of them would fix things players notice: correct monster health bars from the first frame, a "logged in elsewhere" message instead
-  of a silent disconnect, item-mall names and prices from the database, and a free skill reset that counts down on screen.
-- **Some features are switched off for the US client.** The client checks a "region feature" list in many places. Flipping a feature on
-  with a client patch would unlock things like choosing which lapis to extract, a target HP percentage, auto-dismount when using a skill,
-  and swapping quick slots. Others need art files the client does not ship.
-- **One mismatch in the original**: the original server answers lapis extraction with 34 bytes, but the US client reads 33, so the gold
-  shown goes wrong until the next money update.
+- **One row per [opcode](glossary.md#opcode) and direction.** Each row gives the size, the fields the client reads or writes, what the client does with it, what the original server does, and a status.
+- **Status says who uses it.** **both** means the original server and the client both handle the opcode; **client-only** means the client handles or sends it but the original never does; other values are written out in the row.
+- **The client knows more than the original server uses.** 41 packets the client handles are never sent by the original server.
+- **One mismatch in the original**: the original server answers lapis extraction with 34 bytes, but the US client reads 33, so the gold shown goes wrong until the next money update (see below).
 - **Warehouse gold looks possible but is not**: the client has the request and the answer, but never creates the window that would send it.
+
+### Using this page
+
+- **If you write a server:** the opportunities this catalogue opens up are on [Opportunities the client already supports](afterglow/opportunities.md); [What a server must do for this client](afterglow/server-checklist.md) collects the advice.
+- **If you patch or mod the client:** the features a patch could switch on are on [Region features](region-features.md).
+- **To check a claim yourself:** read the "How the columns were filled" table below, then redo a row with the method in [Tools and method](tools-and-method.md).
 
 Status words:
 
@@ -39,152 +40,23 @@ Status words:
 | original ps_game, C→S | the `case` labels of the `CUser::Packet*` dispatchers (decompiled), plus the compare chains (`PacketGetInfo`, `PacketNpc`, `PacketPriest`, `PacketUQ`, `PacketBilling`, `PacketPVPGuild`, `PacketProcessing`) | **confirmed**. "ignored" = no case in any dispatcher; `PacketProcessing` has **no group for `0x1Dxx`, `0x27xx`** and drops unknown groups |
 | status | **both**: the original sends or handles it and the client handles or sends it; **client-only**: the client handles or sends it, the original never does; other values as written | GM opcodes (`F1xx`–`FAxx`) are listed but were not checked one by one here (see [GM opcodes and commands](gm-and-commands.md)) |
 
+
 ## The extraction answer
 
 Confirmed. The original server always answers lapis extraction with the **34-byte** `0x0802` (see
 [Lapis and enchanting](../original/lapis.md#4-extraction-0x0802)), but this client reads **33 bytes** (no `gemPos`; `0x57cb40`, region
-feature 0 off; see the [client facts](CLIENT-FACTS.md), "Compared with the server's docs"). Read one byte off, the uniform shift leaves
-lapis 1–5 in the right places, but **the gold shown becomes `money × 256` (wrapped) plus the sixth count byte** until the next money update,
-and a sixth lapis would be written at bag 255 (outside the client's bag table, no bound check in `0x558510`). Fix: drop the `gemPos` byte
-for this client (or flip feature 0, below).
+feature 0 off; see the [client facts](CLIENT-FACTS.md), "Compared with the server pages"). The extra byte shifts every field after it by
+one, so the gold shown is wrong until the next money update. What a server does about it is on
+[Opportunities the client already supports](afterglow/opportunities.md#the-extraction-answer).
 
-## Opportunities without a client change
+## Region features
 
-Ranked by value. Each needs only server work; "risk" is what could go wrong for players.
+The client's per-region feature switches, with what each controls and what flipping it would do, are on [Region features](region-features.md).
 
-| # | what players get | packets | evidence | risk |
-|---|---|---|---|---|
-| 1 | **Warehouse gold**: deposit and withdraw gold in the warehouse window. **Not reachable without a client change.** The request and the answer with messages 236/237 exist, but the number dialog that sends `0x020D` (window `+0x720`, direction `+0x724`) is **never created**: every store to `+0x720` in `.text` writes 0 and nothing writes `+0x724` (confirmed, byte scan of all `mov [reg+0x720]` / `+0x724`; the item-count dialog `+0x600` is created at `0x49ca73`/`0x4fc3f5`/`0x4fcd75`, so the method finds real ones). The S→C answer still works if a server sent it, but nothing in the client asks | C→S `0x020D` 7 (`u8 dir`: 0 withdraw, 1 deposit; `u32 amount`), from both warehouse windows (`0x49d210`, `0x4fd530`). S→C `0x020D` 7 (`u8 dir, u32 amount`): 0 → money + amount, warehouse money − amount, "Found <v>G in warehouse" (236); 1 → the reverse, "Stored <v>G in warehouse" (237) (`0x54d6e0`). The warehouse money already travels in `0x0711` (`TP_CHAR_BANK.dwMoney`) | **confirmed** (client); the original has **no `0x020D` case** (`PacketMaininterface`), and deposit/withdraw does not exist on the server ([Warehouse](../original/warehouse.md)) | the client changes both totals itself from the answer: answer only after the server has moved the money, with the amount actually moved; refuse overflow (u32) on either side. Whether the button shows for region 6: **live** |
-| 2 | **Correct monster HP bars** from the first frame, including Kimuraku (835, client file max 115,438 vs database 1,115,438) | S→C `0x0608` 14 (`u32 id, u32 maxHP, u32 HP`) after `0x0601`, and whenever HP changes if wanted (`0x54eff0`: mob `+0x54` max, `+0x58` HP) | **confirmed**; the original never sends it (no instruction uses `0x608`): status **client-only** (see [Client-ready extras](../original/client-extras.md)) | none known; `0x0601` alone leaves current HP 0 (bar empty) until an update |
-| 3 | **Item-mall names and prices from the database** (no `Cash.SData` edit): the client asks for the product list at the end of a scene set-up (`0xB106` 2, region feature 10 on, `0x426724`; seen after entering the world, see [Entering the world](../original/enter-world.md)) and nobody answers | S→C `0xB106`: `u8 n`, n × 76 (`char code[21], char name[51], u32 price`). For each record whose code matches a product already in the client's list (`0x84cea0`, 148-byte entries), the client replaces the name (≤ 50 characters) and a `u32` at entry `+0xc` (*inferred* the price) (`0x55a000`) | **confirmed** (client); the original has no `0xB106` at all (see the [game server](../original/ps_game.md#54-corrections-to-earlier-notes)); PDB struct `TP_BILLING_PRODUCTLIST` 9731 = 3 + 128 × 76 | only products the client already lists can change; codes must match exactly (case-sensitive compare); ≤ 128 records per packet (PDB size). New products still need `Cash.SData` |
-| 4 | **Creation modes per account**: the second byte of `0x0109` (`byMaxGrow`) enables the mode buttons on the creation screen: **< 2 disables Hard, < 3 disables Ultimate** (`0x466be0`, `create_mode_button.tga`) | S→C `0x0109` 4 (`u8 country, u8 maxGrow`), before the creation screen opens | **confirmed** (client); the original sends it from `CUser::PacketUserDBChar` with the database's value (**ref** [game server](../original/ps_game.md#61-what-the-client-receives-after-the-handshake): "`0x0109`, if `byWithCountry`"), and in the shipped database that value is always 3 | server-side rule needed (the server must also refuse a mode above the account's maximum in `0x0102`) |
-| 5 | **Free skill reset counted down** on the NPC-13 menu | S→C `0x0215` with the optional 6th byte ≠ 0 (`0x580740`, `0x5528a0`) | **confirmed** ([client facts](CLIENT-FACTS.md)) | none; 5 bytes keeps "1 chances left" on screen (original behaviour) |
-| 6 | **"Duplicate login" message** instead of a silent disconnect | S→C `0x0004` 3 (`u8`): 0 → message box 10070 "disconnect due to using logged in ID.", else 10071 "system error" (a Windows box "Message", or the in-game box when network object `+0x370` is set); then the client posts `WM_CLOSE` to itself and quits (`0x54c860`) | **confirmed** (client). Who sends it originally is not settled (the opcode-store scan cannot tell for the value 4; *inferred* the session server's duplicate-login kick) | send it just before closing the older connection |
-| 7 | **"Server busy / maintenance" answers** for a portal to another server | S→C `0x0110` 3 (`u8`): 1 → 10096 "server saturated. Please connect later", 2 → 10059 "checking server. Please check notice board" (`0x54c9b0`); the original sends `0x0110 02` when a confirmed portal (`0x0227`, dialog 0x17) leads to map 200 and the other server is down (`PacketMaininterface` case `0x227`) | **confirmed** (both) | value 0 starts a world change on the client: use 1/2 only as messages |
-| 8 | **Old lists the client still understands** (no player gain, only freedom): `0x0D0F`/`0x0D10` 50-byte guild list, `0x0D15` remove member, `0x1D11` "You get <i>." with gold (legacy mail), `0x2609` clear several item-mall storage slots at once | see the tables | **confirmed** (client), never sent by the original | none; no new feature |
-| 9 | **Extra trailing bytes are ignored** by readers that stop early: `0x0801` (reads 18, the original's 20 are fine), `0x0105` (guild-name tail read up to 25). Not a feature, but it lets one builder serve both clients | — | **confirmed** | do not rely on it for readers that loop on a count |
+## Opportunities for a server
 
-Not an opportunity here (checked): the **web inventory** (`0x2701`–`0x2703`, 36 slots moved with `0x0204` bag 200, window `0x4a36d0`)
-needs `data/interface/web_inven.tga`, which is in neither archive (the original 108 archive or the repacked one), and its window opens as dialog mode 0x18
-from a side tab on the inventory window that exists **only for region 4** (Japan; four region checks, its three tab textures also missing;
-see [Open questions](#open-questions)). So it needs a client patch on those checks, four textures and a server that sends `0x2701`.
-**`0xB104`** ("3 hour-free service") is shown only with feature 28 (off): dead here. **Mail (`1Dxx`)** is a leftover "mail-box account"
-result set (7143–7166) with no request side in this client.
-
-Systems the original runs with the most visible player value (all **ref**/confirmed in the tables): personal shop (`23xx`, client UI
-complete; a "Market Anywhere" client patch already exists), duels (`24xx`), guild battles (`25xx`), union parties, the guild house, NPC guards
-(`0E05`/`0E06` from `CNpc::Attack`), mob speech (`1109`–`110B` from mob Lua/AI), obelisks and roads (`21xx`), the item mall (`26xx`).
-
-## Region features: what a client patch would unlock
-
-`IsOn(n)` is virtual slot `+4` of the feature object (`0x405c60`, vtable `0x6a5614`; object at `0x7013d4`, copy `0x0222ea44`). The table
-below lists **every call through either pointer** (265 + 16 reads, 260 + 3 `IsOn` calls; disassembly scan of each read, then the decompile
-around it; bounded: an indirect call through another copy of the pointer would be missed). On for region 6: 3, 4, 10, 11, 13–17, 19, 22,
-30, 31, 33, 34, 37–40, 42, 54, 57, 61 (the client's action notes, §7). No callers: 2, 18, 20, 33.
-
-A patch can either add region 6 to a feature's list in the constructor `0x405cd0` (one feature, every caller) or force a single call
-site. **Nothing was patched.** "needs" = what the server or the archive must supply for the change to be useful.
-
-### Features that are off for this client (candidates)
-
-| n | callers (function@call) | flipping it on would | needs | value / risk |
-|---|---|---|---|---|
-| **0** | link window `0x493d30`@`0x494ab3`, @`0x493f95`; `0x0802` reader `0x57cb40` | **selectable lapis extraction** (below) | server: the 8-byte `0x0802` request and the 34-byte answer, which the original already handles and sends | **high**; every extraction then uses the 8-byte form |
-| 1 | model render `0x428860`@`0x429118`, @`0x429212` | weapon-effect render pass without the video option (*inferred*) | — | low, graphics |
-| 5 | `0x464ab0`@`0x464b23`, @`0x46680a` | confirmed: character creation, **Easy mode** button: asks first, "You can only attain Level 30 in Easy Mode. Are you sure…?" (5382), and selects Easy (description 5034) only after OK; off: selected at once | — | small; safe |
-| 6 | warehouse `0x4fbd00`, `0x4fb8c0` | **limits the warehouse to 40 slots** unless "Double Warehouse" (812) | — | **negative**: do not flip |
-| 7 | `0x4c1f80` (from the hit handlers `0x0502`/`0x0503`/`0x0511`/`0x0512`/`0x0517`/`0x0518`) | confirmed (disasm): when the local player lands a hit, the client's own copy of the **weapon's durability** (Quality of equipment slot 5, `0x84e7a6`) drops by 1 on normal hits *and* criticals (`bySuccess` 0–1); off: criticals only (1). Only Special-25 items refill it (none in patch-108 `Item.SData`) | the server's own durability updates | low; display only |
-| 8 | death window `0x4c8bf0`@`0x4c90b6` | "You do not possess a Resurrection Rune." (838) on the revive window when you have none | — | small hint; safe |
-| 9 | login sender `0x5867c0` | 33-byte password field (`0xA102` 67 bytes) | login server must accept it | none |
-| 12 | `0x48aa00`, `0x48c120`@`0x48c13d`, `0x51e720` | confirmed: **windowed mode only** (`[VIDEO] FULLSCREEN=FALSE`): a 32-px title bar (`window.tga`, set up by `0x4fea00`) slides down when the cursor reaches the top edge, with minimize (`SC_MINIMIZE`), maximize/restore and a button that sends `0x0506` motion 1 (sit); full screen: the cursor is clamped to the screen height (`0x51e720`) | **`window_button.tga` missing** from both archives (buttons invisible) | low |
-| 21 | resource loaders `0x435050`, `0x452270`, `0x5404d0`, `0x540600`, `0x543b00`, `0x570480`–`0x570e90` | confirmed: engine only: **ref-counted preloading**: each texture/model/effect is loaded as the map's resource list is read (`0x52ad00`, `0x53ed50`, `0x543ab0`: count 0 → load) and released at unload (`0x52ad30`, `0x53e820`, `0x543190`); off: map load takes the `0x444ca0` path (`0x452270`) | — | engine; load time / memory, needs testing |
-| 23 | buff list `0x4b8220`@`0x4b82ec` | **"Continuous Resurrect Rune is left <b> minutes."** (861) for buffs whose skill record byte `+100` is 46 (`.`) | — | small; safe |
-| 24 | login screen `0x4b1f70`, `0x4b2cb0`, `0x4b3470`, `0x4b61b0` | confirmed: an **on-screen keyboard** under the login box at ≥ 1024×768 (`0x505660`, layout `1234567890-=\`, Backspace, `qwerty…`, Shift via `0x505540`; `keyboard.tga`, `0x504fa0`): clicking keys types into the login fields, its Enter submits the login (saves `[LOGIN] ID`/`NOLTOSITE`, then `0x4b5060`, or `0xA105` when the feature-29 step is armed) | `keyboard.tga` in both archives | small (anti-keylogger); safe; needs a live look |
-| **25, 26** | target window `0x4f8e50`@`0x4f9554`, @`0x4f957b` | **target HP percentage** under the target bar ("%.2f%%", `HP / max × 100`; 26 = always, 25 = when `0x431a40` allows) | `0x0608` (opportunity 2), or the bar's max is the file's | **high**, cheap; pairs with `0x0608` |
-| **27** | action loop `0x43c000`@`0x44055f` | clicking any player in range **attacks** (sends `0x0502`) without the faction / duel / guild-war check | server must decide who may be hit (same-faction PvP zones) | medium; the server already refuses illegal attacks |
-| 28 | `0xB104` handler `0x559cf0` | "3 hour-free service (time left)" (813/847) | `0xB104` | none |
-| 29 | login flow `0x4b1a10`, `0x4b5060` | confirmed: a **second login step** (security card / code): `0xA104` (`char[15]` label, `u8 n`, n × `u16` cell numbers; `0x55c7b0`) arms it, the player types n numbers, `0xA105` sends `u8 n` + the bytes (`0x586870`), its answer (`0x55c720`) 1 = continue, 0 = wrong (10120 for tries 1–2), 2 = 10019. On, a successful login waits for that step when armed, and login result 4 shows 10122 "account is blocked" / 10019 / 10120 instead of 10025 | login server `0xA104`/`0xA105` | none; harmless without `0xA104` except the result-4 text |
-| 32 | item use `0x4c7d40`@`0x4c7f6a` | Teleportation Stone: number of usable save points from the item (`+0x1a`) | — | the stone already works (the client's action notes, §1) |
-| 35 | options `0x4ec7f0`, render `0x53b8a0`, `0x53c3a0` | graphics option slider with 4 steps instead of 2, and the matching render states | — | low |
-| 36 | `0x4444d0`, `0x447d30` | confirmed: **bump-mapped reflective water** (shader `BumpWater_R.fx`, technique `BumpReflect`, `0x52a430`; needs vertex/pixel shader 2.0) with `data/Effect/wave.dds` and `data/sky/skycube.bmp` (`0x4444d0`); drawn by `0x447d30`@`0x44a0da` unless Left Shift is held | **`BumpWater_R.fx`, `wave.dds`, `skycube.bmp` missing** from both archives | not usable |
-| 41 | map board `0x4b9f90`, `0x4ba470`, `0x4bb4f0`, `0x4bcde0` | confirmed: a **world map** mode in the map board ("Teos Epeiros", 5424): buttons `wm_button_m`/`_w` switch map ↔ world (`wm_map.tga`, `wm_letter.tga`); 19 regions from `data/WorldMap.cfg` (`count`, `WorldMap<n>`: `Country`, `MapNum`, `Click_left/top/right/bottom`, `ImgPos_x/y`; `0x4bc1a0`) highlight on hover (`wm_e<map>`/`wm_f<map>.tga`); clicking one shows that map's `MiniMap/<map>.tga` and name (`0x4b9960`), the other faction's maps show `wm_warning.tga` | **`WorldMap.cfg` and every `wm_*.tga` missing** from both archives (the 22 `MiniMap` images are there); without the cfg the clicks do nothing | medium if the art and cfg are made |
-| 43 | quick bar `0x4d4b30` | confirmed: a **brand-new character** (level 1, `0x84d684` 0 (*inferred* exp), every quick slot empty) gets two default quick slots: basic actions 5 and 4 (bag 101; the T and Z key actions) | — | small; safe |
-| 44 | text `0x41e2d0`, chat `0x46f4c0` | confirmed: chat and wrapped text use the alternate font `+0x3a4` (`0x52ef90`, `0x530990`), which `0x5315c0` creates only for region 7 and the later European branches (17-px Arial); **region 6 never creates it**, so nothing changes | — | none |
-| **45** | options `0x4e8740`, `0x4e8af0`, `0x4eb450`, `0x4ebac0`, `0x4ed990` | an options checkbox **"lock the skill window"** (`[VIDEO] SKILLWNDLOCK`) | — | small QoL, safe |
-| **46** | quick slots `0x4d4e10`, skill bar `0x4db300`, skill window `0x4f12c0`, resume `0x416ba0` | **auto-dismount**: using a skill or quick slot while riding sends `0x0216` (get off) and queues the action (`0x21e8988`–`0x21e8994`); **confirmed** that the queue is replayed after the answer: `0x416ba0` (the entity's dismount clean-up, run when its state becomes 0) calls `0x4c49c0` when feature 46 is on, which re-runs the queued quick slot, skill-bar slot or skill-window skill and clears the pending flag `0x21e8988` (kind `0x21e898c`: 0 quick slot, 1 skill bar, 2 skill window) | the original already answers `0x0216` | **medium-high** QoL |
-| 47 | lists `0x4dca00`, `0x4dd0d0` | a list shown newest-first (index reversed) | — | low |
-| 48 | `0x427f50`, `0x428430`, inventory `0x4e6250`, ground items `0x55acb0` | item 44/246 dropped as a special ground model (`drop_item004.3DO/.DDS`), allowed to be dropped, ≤ 99 kept | **`drop_item004` missing** from both archives | not usable |
-| 49 | `0x49d760`, `0x49d9b0` | an icon outline texture (`interface/icon/Icon_stroke.dds`) | **missing** | not usable |
-| 50 | country select `0x47b0a0` | `select_country_bg3.jpg` and the two factions' sides swapped | **missing** | not usable |
-| 51 | skill window `0x4f0ff0`, `0x4f1630`, `0x4f2700` | a **skill tree** button (`skilltree_.tga`) and window (`0x424100`) for one job (`0x84fa22 == 2`) | **`skilltree_.tga` missing**; window contents unknown | not usable without art |
-| 52 | login screen `0x4b1f70`, `0x4b2cb0`, `0x4b5060`, `0x4b61b0` | two extra checkboxes (`[LOGIN] NOLTOSITE`) | — | none |
-| 53 | `0x4be6b0` | a slider/scroll value moves the other way | — | low |
-| 55 | `Item.SData` loader `0x460500` | confirmed: **doubles every weapon's max durability** (Quality, file offset +37 → record `+0x2c`) at load; types 1–15 and 45–65 are exactly the weapon banks (1200/1700 → 2400/3400) | server must use the same doubled values | **do not flip**: client and server durability would disagree |
-| 56 | `0x482c40` | a list width of 400 instead of 200 | — | low |
-| 58 | `0x4c2bb0` (22 sites) | confirmed: the built-in **guild-house NPC upgrade table** (36 × 16 bytes at `0x199abc0`; per NPC (description 8011 Gate keeper, 8012 weapon merchant, …) and level 0–3) **doubles both upgrade costs** (`+8`, `+0xa`: e.g. Gate keeper 1000/1500/2000 + 200/500/800 → 2000/3000/4000 + 400/1000/1600; *inferred* `+8` = Etin) | — | low: display and client pre-check only (`0x0D25` carries no cost; the server charges) |
-| 59 | system menu `0x489ff0`, `0x48c120` | skips the exit/character-select dialog 0x12 | — | low |
-| 60 | debug text `0x52fe20` | the coordinate overlay text replaced by a centred string | — | none |
-| **62** | quick slots `0x4d43c0`, `0x4d5540` | **dragging a quick slot onto another swaps them** (confirmed `0x4d43c0`; off: move and clear) | — | small QoL, safe |
-
-### Features that are on (flipping them off would remove)
-
-| n | what it gates (callers) |
-|---|---|
-| 3 | item-mall window layout (`ins_market.tga`, `ins_market_past.tga` widths) (`0x4cd7f0`, `0x4ce550`, `0x4cf0c0`) |
-| 4 | weapon effects with the option (`0x428860`), video options entries (`0x4e8740`, `0x4e8af0`, `0x4e9730`, `0x4eb450`, `0x4ebac0`, `0x4ed990`) |
-| 10 | sends `0xB106` after a scene set-up (`0x4248e0`) |
-| 11 | colour/link markers on item names in messages and the AH (`0x49fa00`, `0x4f77c0`, `0x46f4c0`, `0x55a670`, `0x55d490`, `0x55f2e0`) |
-| 13 | chat: a sixth tab and the `~ ` prefix / key for chat type 5 (`0x46f4c0`, `0x475e00`) |
-| 14, 15 | login and character-select scene (`login2.wld`, camera, panels) (`0x447d30`, `0x4b17f0`–`0x4b61b0`, `0x504bc0`) |
-| 16 | map loading bitmap (`0x452270`) |
-| 17 | `0x0207` with two `u32` (`0x57a380`) |
-| 19 | render states (`0x428040`, `0x428860`, `0x447d30`, `0x468c00`) |
-| 22 | Movement Rune falls back to the party window's member (`0x4c7c00`, `0x4c7d40`) |
-| 30 | chat input commands and a bar (`0x475e00`, `0x5010f0`, `0x502750`, `0x502aa0`, `0x503f90`, `0x504400`) |
-| 31 | a list walk in `0x4c5470` |
-| 34 | loading-screen images (`0x4b0cc0`) |
-| 37 | the auction house (35 sites: AH window `0x456810`–`0x45d535`, tooltips `0x49fa00`, `0x4af1f0`, `0x4b0020`, `0x4e7580`, `0x4ff810`, `0x4ffff0`) |
-| 38 | weather sound and sky (`Rain.wav`; `0x42ca20`, `0x4354f0`, `0x4516f0`, `0x447d30`, `0x539b40`–`0x53a040`) |
-| 39 | an options default (`0x4eaa10`) |
-| 40 | the "[Selected Item]" block in tooltips (`0x49fa00`, `0x4a3570`) |
-| 42 | `0x41cee0` |
-| 54 | start-up (`0x40a6f0`) |
-| 57 | a UI size (200) (`0x49d760`) |
-| 61 | list sorting from `SORT_LIST.INI` (`0x4dd620`, `0x4dca00`, `0x4dd0d0`) |
-
-Region checks in packet code (the readers/senders and their handlers): `0x0207` reader (17), `0x0802` reader (0), login sender (9), the
-`0xB106` request (10, in a scene function) and the `0xB104` handler (28). The link window chooses the `0x0802` request form (0).
-
-### Feature 0 in full (selectable lapis extraction)
-
-Everything feature 0 controls (confirmed; the three call sites above, plus the code only reachable through them):
-
-1. **Which extra items the link window accepts** (`0x493d30`@`0x493f95`, item record `+0x2a` = Special). Off: Special 36 (Linking Hammer)
-   and 69 as the "extra" item of a link. On: 36 → mode 1 (link with hammer), 69 → mode 1 with a flag (`+0x242c`, used by the rate
-   display), **58 → mode 2 (extraction with a chosen gem)**.
-2. **The extraction request** (`0x494ab3`). Off: always `0x0802` **4 bytes** (`u8 bag, slot`, `0x586540`). On: always the **8-byte form**
-   (`0x586580`): mode 2 → `u8 bag, slot, 1, gemPos (0-based), hammerBag, hammerSlot`; any other mode → `u8 bag, slot, 0, 0, 0, 0`. Both
-   on-forms are sent only while an NPC is selected (the trailing NPC-id argument is not on the wire).
-3. **Choosing the gem** (mode 2 only, `0x493360`/`0x492f60`): clicking one of the item's gems selects it (`+0x2428` = 1–6); the other gems
-   are drawn dimmed (`0xff333333`), and the success-rate text is computed for the chosen gem only.
-4. **The answer** (`0x57cb40`). Off: 33 bytes → `0x558510` (vt `+0x1c8`), which clears **all six** gems of the item and places each lapis
-   whose count is non-zero. On: 34 bytes with `gemPos` → `0x558700` (vt `+0x1c4`): `gemPos` 255 clears all, otherwise **only that gem**;
-   then the same placement. Messages 57/58, `ui_rapis001/002.wav`.
-
-Assets: the link window loads `interface/rapis.tga`, `rapis_button.tga`, `rapis_button2.tga` unconditionally (`0x492aa0`); all three are in
-`data.saf` (and the original archive). The gem choice adds **no texture** of its own: it reuses the item icons with a tint. Nothing is
-missing.
-
-Items with **Special 58** in this client's `Item.SData` (patch 108): **100/140 Small Extraction Hammer**, **100/141 Large Extraction
-hammer** (both stack 255, price 0, "extract Lapis with a fair / an excellent success rate"), **44/237 GM Extraction Hammer** and
-**100/204** (Korean name, GM) (stack 10). Special 36: the Linking Hammers 100/49, 100/195–199, 100/193–194, 44/193–199, Operator's
-Exclusive 100/82. Special 69: none.
-
-Server side (**ref** [Lapis and enchanting](../original/lapis.md#4-extraction-0x0802)): the original handles the 8-byte form
-(`ItemGemRemovePos`: Extraction Hammer = real type 26, special 58, one used up, success when `rand() % 100 < reqvg`) and always answers 34
-bytes. So **with feature 0 on, client and original server agree as they are**; with it off, the server must send 33 bytes (see
-[The extraction answer](#the-extraction-answer)). Risk of the patch: none known beyond the request form changing for all extractions; needs
-one **live** try.
+The packet forms the client already supports that a server could use with no client change are on
+[Opportunities the client already supports](afterglow/opportunities.md).
 
 ## Catalogue by family
 
@@ -257,10 +129,10 @@ One row per opcode and direction. `client` cells end with the page they come fro
 | `0x020D` | S→C | 7 | u8 u32 | **warehouse gold**: `u8 dir, u32 amount`. 0 → "Found <v>G in warehouse" (236), money + amount, warehouse money − amount; 1 → "Stored <v>G in warehouse" (237), the reverse (`0x54d6e0`, confirmed) | never (no opcode store) | **client-only** |
 | `0x020D` | C→S | 7 | +2:u8 +3:u32 | **warehouse gold**: `u8 dir` (0 withdraw, 1 deposit), `u32 amount`, from a number dialog in either warehouse window (`0x49d210`, `0x4fd530`, confirmed) that **no code ever creates**: dead without a client change | ignored (no case) | **dead** |
 | `0x020E` | S→C | 7 | u8 u32 | *EP6/PDB name* GameUserKillCountOutgoing (TP_USER_KILLCOUNT) | sends: CUser::KillPCFrom, CUser::KillPCTo | both |
-| `0x020F` | S→C | 7 | u8 u32 | *inferred*: `u8, u32`: per-faction kill count (*inferred* from the original's `CWorldThread::SendAllKillCount`) | sends: CWorldThread::SendAllKillCount | both |
+| `0x020F` | S→C | 7 | u8 u32 | `u8 faction, u32 count`: per-faction kill count, sent to every player of that faction (**ref** [Player kills 2](../original/pvp-2.md#9-the-counts-and-grades), `CWorldThread::SendAllKillCount`) | sends: CWorldThread::SendAllKillCount | both |
 | `0x0210` | S→C | 3 | u8 | *EP6/PDB name* GameUserSetRunOutgoing (TP_USER_SETRUN) | sends: CUser::RemApplySkillByOtherSkill, CUser::RemApplySkillHide, CUser::RemApplySkillToMOB … | both |
 | `0x0210` | C→S | 2 | — | walk/run toggle | handled: CUser::PacketMaininterface | both |
-| `0x0211` | S→C | 11 | u8 u32 u32 | per-faction value with a countdown run by the client (goddess blessing event, *inferred*; client facts) | sends: CUser::SendKCStatus | both |
+| `0x0211` | S→C | 11 | u8 u32 u32 | per-faction value with a countdown run by the client (the faction's kill count and the time left of its top grade; the Goddess Blessing item raises the grade, **ref** [Player kills 2](../original/pvp-2.md#9-the-counts-and-grades); client facts) | sends: CUser::SendKCStatus | both |
 | `0x0212` | S→C | var | — | auto-attack started/stopped | sends: CUser::SendAttackStart | both |
 | `0x0212` | C→S | 2 | — | stop the auto-attack | handled: CUser::PacketMaininterface | both |
 | `0x0213` | S→C | 6 | u32 | *EP6/PDB name* GameUserSetMoneyOutgoing (TP_USER_SETMONEY) | sends: CGuildMgr::CreateGuild, CMiniGame::GameExit, CUser::ExchangePvP … | both |
@@ -391,7 +263,7 @@ One row per opcode and direction. `client` cells end with the page they come fro
 |---|---|---|---|---|---|---|
 | `0x0601` | S→C | 17 | u32 u8 u16 u32 u32 | creates the mob from `Monster.SData[wMOBID]` (model, **max HP** from the record), random facing; `byNew != 0` plays the spawn animation. **Current HP starts at 0**: send… (`client-world-packets.md`) | sends: CCell::SendCellInfoEnter, CUser::LevelUp, CZone::EnterMob … | both |
 | `0x0602` | S→C | 6 | u32 | removes the mob (`client-world-packets.md`) | sends: CCell::SendCellInfoLeave, CZone::MobRemove, CZone::MobRemoveByID … | both |
-| `0x0603` | S→C | 15 | u32 u8 u32 u32 | moves toward x/z; `byMotion` stored (*inferred* walk 0 / run 1) (`client-world-packets.md`) | sends: CGuildMgr::CreateGuild, CMiniGame::CardRun, CMiniGame::CardStop … | both |
+| `0x0603` | S→C | 15 | u32 u8 u32 u32 | moves toward x/z; `byMotion` stored (walk 0 / run 1, **confirmed** in the client: `0x431aa0` picks the walk slot for 0 and the run slot for anything else; **ref** [Monsters: walking about](../original/mobs.md#6-walking-about): the server sends 0 for an idle step and 1 for chase and path moves ([Monsters fighting back](../original/mob-fight.md#4-chasing), [Monster paths](../original/pathing.md#3-chasing))) (`client-world-packets.md`) | sends: CGuildMgr::CreateGuild, CMiniGame::CardRun, CMiniGame::CardStop … | both |
 | `0x0604` | S→C | 6 | u32 | removes the mob (no existence check) (`client-world-packets.md`) | never (no opcode store) | **client-only** |
 | `0x0605` | S→C | 17 | u8 u32 u32 u16 u16 u16 | mob attack animation (one of its 3 attacks, `Monster.SData`), damage applied to the player when the blow lands; unknown mob: applied at once (`client-world-packets.md`) | sends: CMob::Attack, CUser::PacketAdminCmdB | both |
 | `0x0606` | S→C | 11 | u32 u8 u32 | mob dies (death animation if its HP < 1); players attacking it stop (`client-world-packets.md`) | sends: CMob::Death | both |
@@ -553,20 +425,20 @@ One row per opcode and direction. `client` cells end with the page they come fro
 | `0x0D0A` | C→S | 6 | +2:u32 | member list "kick" (`client-social-packets.md`) | handled: CUser::PacketGuild | both |
 | `0x0D0B` | S→C | var | u32 u8 u8 bytes[21]* | **ignored** (empty function) | never (no opcode store) | ignored by the client |
 | `0x0D0C` | S→C | 7 | u8 u32 | member event, by `byState`: < 100 sets the member's level; 101 (0x65) "Guild has been disbanded." (395), guild cleared; 102 "<b> quit guild." (397) and 103 "<b> has been… (`client-social-packets.md`) | sends: CGuild::ChangeGuildUserLevel, CGuild::ChangeUserLevel, CGuild::ConnectUser … | both |
-| `0x0D0C` | C→S | 7 | +2:u8 +3:u32 | member list rank buttons (two buttons send 0 and 1: *inferred* demote/promote, which is which **unknown**) (`client-social-packets.md`) | handled: CUser::PacketGuild | both |
+| `0x0D0C` | C→S | 7 | +2:u8 +3:u32 | member list rank buttons: 0 = promote, 1 = demote (**confirmed (disasm)** plus the button picture `guild_button1.tga`; sender `0x588bc0`; [Social packets](client-social-packets.md)) | handled: CUser::PacketGuild | both |
 | `0x0D0D` | S→C | var | — | clears the guild list before a new one (`client-social-packets.md`) | sends: CGuildMgr::SendGuildList | both |
 | `0x0D0E` | S→C | var | — | **ignored** (end of list) (`client-social-packets.md`) | sends: CGuildMgr::SendGuildList | both |
 | `0x0D0F` | S→C | var | u8 var | old guild list / add (no rank, remark or points) (`client-social-packets.md`) | never (no opcode store) | **client-only** |
 | `0x0D10` | S→C | 52 | bytes[50] | old guild list / add (no rank, remark or points) (`client-social-packets.md`) | never (no opcode store) | **client-only** |
 | `0x0D11` | S→C | 6 | u32 | removes a guild from the list (`client-social-packets.md`) | sends: CGuildMgr::FireGuild | both |
-| `0x0D12` | S→C | var | u8 var | adds members with status 1 / 2 / 3 (*inferred* online / offline / in war zone); my entry sets my rank (`client-social-packets.md`) | sends: CGuild::SendGuildUserList | both |
-| `0x0D13` | S→C | var | u8 var | adds members with status 1 / 2 / 3 (*inferred* online / offline / in war zone); my entry sets my rank (`client-social-packets.md`) | sends: CGuild::SendGuildUserList | both |
+| `0x0D12` | S→C | var | u8 var | adds members with status 1 / 2 / 3: the guild window prints 1 and 3 as "On" and 2 as "Off", so 1 and 3 are online and 2 is offline (**confirmed**); why 3 has its own colour (a war zone?) stays *inferred*; my entry sets my rank ([Social packets](client-social-packets.md)) | sends: CGuild::SendGuildUserList | both |
+| `0x0D13` | S→C | var | u8 var | adds members with status 1 / 2 / 3: the guild window prints 1 and 3 as "On" and 2 as "Off", so 1 and 3 are online and 2 is offline (**confirmed**); why 3 has its own colour (a war zone?) stays *inferred*; my entry sets my rank ([Social packets](client-social-packets.md)) | sends: CGuild::SendGuildUserList | both |
 | `0x0D14` | S→C | 32 | u8 bytes[29] | adds one member (status `byState`); shows my guild name over that player (`client-social-packets.md`) | sends: CGuild::JoinOK, CGuild::JoinUser | both |
 | `0x0D15` | S→C | 6 | u32 | removes a member, clears the name over that player (`client-social-packets.md`) | never (no instruction uses `0xD15`) | **client-only** |
 | `0x0D16` | S→C | var | u8 var | join requests (for the master/officers) (`client-social-packets.md`) | sends: CGuild::SendGuildJoinList | both |
 | `0x0D17` | S→C | 30 | bytes[28] | adds one join request (`client-social-packets.md`) | sends: CGuild::JoinRequest | both |
 | `0x0D18` | S→C | 6 | u32 | removes it (`client-social-packets.md`) | sends: CGuild::DeleteChar, CGuild::JoinNO, CGuild::JoinOK … | both |
-| `0x0D19` | S→C | var | u8 var | adds members with status 1 / 2 / 3 (*inferred* online / offline / in war zone); my entry sets my rank (`client-social-packets.md`) | sends: CGuild::SendGuildUserList | both |
+| `0x0D19` | S→C | var | u8 var | adds members with status 1 / 2 / 3: the guild window prints 1 and 3 as "On" and 2 as "Off", so 1 and 3 are online and 2 is offline (**confirmed**); why 3 has its own colour (a war zone?) stays *inferred*; my entry sets my rank ([Social packets](client-social-packets.md)) | sends: CGuild::SendGuildUserList | both |
 | `0x0D20` | S→C | var | u8 bytes[65]* | sets my guild's remark in the guild list (`byResult` unused) (`client-social-packets.md`) | sends: CGuild::UpdateRemark, CUser::PacketGuild | both |
 | `0x0D20` | C→S | 67 | +2:bytes[65] | remark edit (`client-social-packets.md`) | handled: CUser::PacketGuild | both |
 | `0x0D21` | S→C | var | u8 u32 u8 bytes[25]* bytes[65]* | creation result (current version). 1: "Formed <b>guild." (372), my guild name set, and guild name + id set on every party member in view. Failure codes: 0 "Failed to for… (`client-social-packets.md`) | sends: CGuildMgr::CreateGuild, CUser::PacketGuild | both |
@@ -595,7 +467,7 @@ One row per opcode and direction. `client` cells end with the page they come fro
 | `0x0D38` | S→C | 6 | u32 | guild house reset: "Guild House server has been reset." (8057), sound and effect (`client-social-packets.md`) | never (no opcode store) | **client-only** |
 | `0x0E01` | S→C | 23 | u32 u8 u16 u32 u32 u32 u16 | creates the NPC (type/typeId index `NpcQuest.SData`), facing `wDir` (`client-world-packets.md`) | sends: CCell::SendCellInfoEnter, CUser::PvPChkLoseDeath, CZone::EnterNpc … | both |
 | `0x0E02` | S→C | 6 | u32 | removes the NPC (`client-world-packets.md`) | sends: CCell::SendCellInfoLeave, CUser::PacketPoint, CUser::PvPChkLoseDeath … | both |
-| `0x0E03` | S→C | 19 | u32 u8 u32 u32 u32 | walks the NPC to x/y/z (turns to face it); `byMotion != 0` is kept as a flag (*inferred* run) (`client-world-packets.md`) | sends: CUser::PacketPVP, CUser::PacketPoint, CUser::PvPChkLeaveByAttack … | both |
+| `0x0E03` | S→C | 19 | u32 u8 u32 u32 u32 | walks the NPC to x/y/z (turns to face it); `byMotion != 0` is kept as a flag that multiplies the step by 4, so it means run (**confirmed**, `0x433d90`; [World packets](client-world-packets.md)) | sends: CUser::PacketPVP, CUser::PacketPoint, CUser::PvPChkLeaveByAttack … | both |
 | `0x0E04` | S→C | 6 | u32 | **ignored** (empty function) (`client-world-packets.md`) | never (no opcode store) | ignored by the client |
 | `0x0E04` | C→S | 6 | +2:u32 | NPC clicked (`u32 npcId`) | handled: CUser::PacketNpc | both |
 | `0x0E05` | S→C | 13 | u8 u32 u32 u16 | guard attacks a player (corrected: the player list, not a mob): attack animation, the HP lowered when the blow lands, at once for an unknown NPC (`client-world-packets.md`) | sends: CNpc::Attack, CUser::PacketPoint | both |
@@ -974,21 +846,25 @@ One row per opcode and direction. `client` cells end with the page they come fro
 | `0xFA17` | C→S | 2 | — | GM command (sender `00588050`) | ignored (no case) | **client-only** |
 | `0xFA18` | C→S | 3 | +2:u8 | GM command (sender `00587590`) | handled: CUser::PacketAdminCmdE | both |
 
+
+## In other episodes
+
+- The EP3 server pack shares opcode groups, connection states and damage formulas with the EP4.5 server this page compares against
+  (**ref** [Episode 3](episodes/ep3.md), citing the [EP3 server pack](../original/ep3.md)).
+- For EP5.4 the server page reads the packets from an EP5.4 client decompilation and checks them in the EP6 client dump; it does not
+  claim an original EP5.4 client was read (**ref** [Episode 5](episodes/ep5.md)). The EP6 buff, target-select, item-mall product list and
+  chance-preview packets agree with that reading, with the changes listed on the server page (**ref** [Episode 6](episodes/ep6.md)).
+
 ## Open questions
 
-- **Live** (nothing was run): `0xB106` changing a mall entry; `0x0004`'s message box; feature 0 flipped (8-byte request, 34-byte answer,
-  the gem choice).
-- Who sends `0x0004` originally (session or login server); `0xA104`/`0xA105` (login) not traced.
+- **Live** (nothing was run): `0xB106` changing a mall entry; `0x0004`'s message box.
+- Who sends `0x0004` originally (session or login server); `0xA104`/`0xA105` (login) not traced. The server pages show that the kick of a second login closes the connection silently (**ref** [A second login](../original/client-extras.md#2-a-second-login-of-the-same-account)), but not that no original server ever sends `0x0004`.
 - Web inventory (not pursued; kept here as reference only): the opener is found (confirmed (disasm)): a side tab on the inventory window
   (x left−16…left, y top+0xb2…top+0x10e, `0x4e6250`) toggles dialog mode 0x18 with a computed store (`SBB`/`AND 0x18` at `0x4e632d`),
   refused with 806 "Can use after closing other active windows." while another dialog is open. It exists **only for region 4** (Japan):
   four `CMP [0x6f1558],4` (`0x4e5952` textures, `0x4e5a8a` clean-up, `0x4e6282` click, `0x4e7594` draw). Needs a client patch on those
   four checks, the art (`item_inven_bg.tga`, `item_inven_button.tga`, `item_inven_button2.tga`, `web_inven.tga`: all missing from both
   archives) and a server that sends `0x2701`.
-- Every off feature has an effect line. The ones worth a patch with no new art: **24** (on-screen login keyboard) and the small QoL ones
-  (5, 8, 23, 43, 45, 46, 62). **41** (world map) needs `WorldMap.cfg` and the `wm_*.tga` set authored. Live checks not done for any of them.
-- Not settled: which of feature 12's buttons sits where (one sends sit, `0x0506` motion 1); the two cost fields of feature 58 (`+8`
-  inferred Etin); feature 43's `0x84d684` (inferred exp); whether feature 43's default slots reach the server.
 - The opcode-store scan cannot separate client packets from other servers' packets that share a value inside one function; rows whose
   "original" cell names unrelated functions (e.g. `0x0603`, `0x0A01`, `0x0B07`, `0x0D03`) should be read with the family pages.
 - GM opcodes (`F1xx`–`FAxx`): checked one by one on [GM opcodes and commands](gm-and-commands.md), which supersedes the GM table above

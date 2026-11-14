@@ -7,11 +7,18 @@ field means; the notes and confirmed details are on [Packet handling](client-pac
 
 ## In short
 
-- **425 opcodes come in, 245 go out.** Each table row is one opcode, with the client function that handles or builds it.
+- **425 [opcodes](glossary.md#opcode) come in, 245 go out.** Each table row is one opcode, with the client function that handles or builds it.
 - **"Client reads"** is the order of the reads the handler makes. The fixed size is given where the reads add up to one.
 - **The two right-hand columns** compare with other sources: the name a public EP6 project gives the packet, and the size of the matching
   struct in the EP4.5 server's PDB (✓ when it agrees).
 - **Sizes** include the 2-byte opcode and exclude the 2-byte length prefix.
+
+### Using this page
+
+- **If you write a server:** look the opcode up by number (the tables are sorted), read the "client reads" column as the field order
+  the client expects, and use the notes pages for what each field means.
+- **If you patch or mod the client:** the handler column gives the function to open in a decompiler.
+- **To check a claim yourself:** open the handler address in Ghidra; the method is on [Tools and method](tools-and-method.md).
 
 Field notation: `u8/u16/u32/f32/u64/bytes[n]` in read order; `*` = read-up-to (variable tail); `loop:`/`if:` = read inside a loop or
 condition (count or presence depends on earlier fields); `var(x)` = size from an expression.

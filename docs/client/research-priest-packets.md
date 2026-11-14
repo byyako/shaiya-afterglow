@@ -14,8 +14,15 @@ The open points are also tracked in `re-open-items.md`.
 - **`0x0F02` is a paid "reading":** 10 gold, sent from the window that a `0x0F01` reply with `u8 1` opens, one of four buttons, after a
   confirm box that names the price. The client requires 10 gold or more; the original server needs more than 10.
 - **The text that window would show is never loaded.** The lookup code and an empty table exist, but nothing fills the table, so the lookup
-  reads through a null pointer: a `0x0F02` reply with `u8 1` should crash the client (*inferred*, strong; **live** to confirm).
-- **For a server:** no player of this client can reach the Priest legitimately. Never answer `0x0F02` with `u8 1`.
+  reads through a null pointer: a `0x0F02` reply with `u8 1` should crash the client ([*inferred*](glossary.md#inferred), strong; [**live**](glossary.md#live) to confirm).
+- **No player of this client can reach the Priest legitimately**, and a `0x0F02` answer with `u8 1` is the one reply that is not safe
+  to send (the crash above).
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#the-priest-packets-0x0f01-0x0f02).
+- **If you patch or mod the client:** "The text that is never loaded" explains why the window cannot be used as it stands.
+- **To check a claim yourself:** start from the two sender addresses under "Who calls the two senders" ([tools-and-method.md](tools-and-method.md)).
 
 ## Who calls the two senders (confirmed)
 
@@ -121,17 +128,18 @@ value, result = that count − 1, but a count of 1 stays 1 (an off-by-one); Ligh
   if the last clicked NPC is not in view, the walk-away close never fires, so the window stays until the player closes it, dies or changes
   map, and its buttons send `0x0F02` from anywhere.
 - **`0x0F01 u8 0`** or **`0x0F02 u8 0`** show 303 "Insufficient gold" in every state.
+- **What the client does without a reply.** After a `0x0F02` request it waits for nothing, so an unanswered request is silent. The
+  reply `u8 0` shows 303 "Insufficient gold", which is misleading when the gold was enough. Each click on a button is a separate
+  request, so a server that charges for it charges each click. The client requires 10 gold or more, the original server needs more
+  than 10 (a gold mismatch at exactly 10, see Open).
+- **The "Priest NPC in view" test, if a server makes one:** the sender of `0x0F01` is NPC type 14, and no type-14 NPC exists in the
+  client data or in the original world, so such a test is never true. Type 4 is not the NPC: its button sends `0x0218`.
 - **`0x0F02 u8 1`** sets the pending flag `0x21e4938`; nothing is visible while the window is closed, and closing, death or a map change do
   **not** clear the flag. The next time the window is open, `0x4d0770` runs the text lookup → the crash above.
 
-## For a server
+## For server developers
 
-1. A "Priest NPC in view" check would have to require an NPC of **type 14**; none exists in the client data or in the original world, so it
-   equals "always refuse". Type 4 must not be the check: its button sends `0x0218`.
-2. Never answer `0x0F02` with `u8 1` to this client (crash, *inferred*). Answering `u8 0` shows a misleading "Insufficient gold"; ignoring
-   the request is silent and safe, because the client waits for nothing.
-3. If the original behaviour is kept, note the gold mismatch (client 10 or more, server more than 10) and that each click is a separate
-   charge.
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#the-priest-packets-0x0f01-0x0f02).
 
 ## Open
 

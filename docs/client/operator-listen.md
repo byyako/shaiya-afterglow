@@ -2,7 +2,7 @@
 
 This page describes a packet that does not exist in the original game: `0xF502`, which lets a server show an operator a copy of other
 players' chat. The stock client drops it; the companion DLL (`fixes-dll.md`) adds a handler. It describes the US `game.exe` (build
-2010-04-26, patch 108). Status words: **confirmed** (read in the binary, with address), **confirmed (disasm)**, *inferred*, **live**.
+2010-04-26, patch 108). Status words: **confirmed** (read in the binary, with address), **confirmed (disasm)**, [*inferred*](glossary.md#inferred), [**live**](glossary.md#live).
 
 ## In short
 
@@ -15,6 +15,12 @@ players' chat. The stock client drops it; the companion DLL (`fixes-dll.md`) add
   old renderer's markup parser.
 - **Not yet seen in game:** colour, tabs, wrapping and an end-to-end watch command are *live* checks.
 
+### Using this page
+
+- **If you write a server:** the wire contract gives the packet layout; the checklist is [What a server must do for this client](afterglow/server-checklist.md#operator-chat-copies-f502).
+- **If you use a DLL like this:** the handler is on by default (`listen_chat` in its settings file, see [the companion DLL](fixes-dll.md#settings)); a received copy appears in the operator chat list as `[Listen] Name: [a,b]text`.
+- **To check a claim yourself:** "How the client receives it" has the addresses.
+
 ## Wire contract
 
 Sizes include the opcode and exclude the transport's length prefix. Little endian:
@@ -26,12 +32,13 @@ Sizes include the opcode and exclude the transport's length prefix. Little endia
 | +23 | `u8 len`, exact number of following bytes |
 | +24 | `u8 text[len]`, normally `[a,b]` followed by the copied line |
 
-The packet size is exactly **24 + len** (len 0..255). A zero terminator may be included in `len` but is not required. A server should
-prefer a counted final NUL and keep the complete prefix, text and NUL at most 255 bytes. No extra bytes are accepted. Empty text, or a
+The packet size is exactly **24 + len** (len 0..255). A zero terminator may be included in `len` but is not required. The display
+works on a counted final NUL and at most 255 bytes of prefix, text and NUL together. No extra bytes are accepted. Empty text, or a
 `len`/packet-size mismatch, is consumed without displaying a line. Names are bounded at 21 bytes; text stops at its first zero.
 
 The layout follows the original server's listen-chat sender (`ps_game.exe 0x4702f0`). The meaning of `a` and `b` in the prefix is
-*inferred*; the client shows the prefix verbatim, so a server may keep the original numbers without any client change.
+read on the server side: `a` is the kind of the line and `b` a whisper's target (**ref** [Listening, `FA0B` and `FA0C`](../original/gm-commands.md#84-listening-fa0b-fa0c)).
+The client shows the prefix verbatim, so the original numbers work without any client change.
 
 ## Display
 
@@ -62,12 +69,12 @@ The setting is `[fixes] listen_chat` (default on); with 0 the original fallback 
 - **confirmed (disasm)** on the built DLL: i386 PE; the `0xF502` branch; non-`0xF502` opcodes tail-jump to `0x551030`; the display
   path loads `0x7013d8`, pushes the text and `0x10` and calls `0x41e2d0`; the hook's return cleans its two stack arguments.
 
-## For a server
+## For server developers
 
-Keep authorization and watch state on the server, and send copies only to the selected operator in the layout above. The meaning of
-`a` and `b` should be confirmed from the original server's call sites. An unmodified client drops the packet, so a server can send it
-without checking the client build.
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#operator-chat-copies-f502).
 
-**Open (live):** a watch session across ordinary, whisper, party and guild chat; the literal prefix, name and line; placement in the GM
+## Open
+
+**Live:** a watch session across ordinary, whisper, party and guild chat; the literal prefix, name and line; placement in the GM
 chat; that no more copies arrive after the watch stops; and that auctions, mail and server time keep working through the forwarded
 fallback.

@@ -7,11 +7,17 @@ quest window. The server uses its copy for what **happens**.
 
 ## In short
 
-- **The two files have the same layout**; only the text differs: English in the client, Korean on the server.
+- **The two [SData](glossary.md#sdata) files have the same layout**; only the text differs: English in the client, Korean on the server.
 - **Every shop lists the same items in the same order** on both sides. That matters, because a purchase names the position in the list,
   not the item.
 - **One gatekeeper fare differs**: the trip to the auction house costs 1,200 gold on the server but the client shows 1,000.
 - **The NPCs and quests the client lacks, or has empty, are all unused**: none of them is placed on a map.
+
+### Using this page
+
+- **If you write a server:** what to send and check is collected in [What a server must do for this client](afterglow/server-checklist.md#npcquestsdata-against-the-server).
+- **If you patch or mod the client:** "What differs for a player" is the short list; the gatekeeper fare is the one value a player can see at odds with the server.
+- **To check a claim yourself:** [sdata-generation.md](sdata-generation.md) has the file layout; [tools-and-method.md](tools-and-method.md) lists the tools.
 
 ## How the file was read
 
@@ -64,8 +70,11 @@ experience, money and item rewards), and so do the item links (505 items that st
 Neither side can offer it: 9999 is no quest, and 1221 is an empty quest (no name, no start NPC) that nobody can finish. The 34 other
 quests with previous quest 9999 (1526 to 1559) say 9999 on both sides.
 
-## For a server
+## What differs for a player
 
-Nothing to change: the server's file stays as it is. The one visible difference is the auction house fare (1,200 against 1,000 shown).
-If generated client files are ever shipped (see [Generating the client data files](sdata-generation.md)), this file is the easiest to
-generate: it is the server's own layout, and only the texts need a source of their own.
+The one visible difference is the auction house fare: 1,200 gold on the server against 1,000 shown by the client. The file has the
+server's own layout, so only its texts need a source of their own (see [Generating the client data files](sdata-generation.md)).
+
+## For server developers
+
+What a server should do with these facts: [What a server must do for this client](afterglow/server-checklist.md#npcquestsdata-against-the-server).
