@@ -104,18 +104,21 @@ impl Heartbeat for PgBackend {
             bail!("game server {server_id} is not registered (servers add {server_id} <name> <ip>)");
         }
         // Only the accounts this process holds: a row whose end was lost (or that another process of this server id left) is not
-        // renewed and runs out within `SESSION_GAME_SECS`. An id that does not fit the column cannot be a row.
+        // renewed and runs out within `SESSION_GAME_SECS`. An id that does not fit the column cannot be a row. A held row is
+        // rewritten only when it has under `SESSION_RENEW_BELOW` seconds left (a row with more is as good as renewed).
         let online: Vec<i32> = online.iter().filter_map(|&user| i32::try_from(user).ok()).collect();
         if online.is_empty() {
             return Ok(());
         }
         sqlx::query(
             "UPDATE sessions SET expires_at = now() + make_interval(secs => $2)
-              WHERE server_id = $1 AND game_connected_at IS NOT NULL AND user_id = ANY($3)",
+              WHERE server_id = $1 AND game_connected_at IS NOT NULL AND user_id = ANY($3)
+                AND expires_at < now() + make_interval(secs => $4)",
         )
         .bind(i16::from(server_id))
         .bind(SESSION_GAME_SECS)
         .bind(&online)
+        .bind(SESSION_RENEW_BELOW)
         .execute(&self.pool)
         .await?;
         Ok(())

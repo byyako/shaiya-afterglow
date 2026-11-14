@@ -226,6 +226,57 @@ async fn the_heartbeat_renews_only_the_sessions_this_server_holds() {
 }
 
 #[tokio::test]
+async fn a_held_session_is_renewed_only_when_it_runs_low() {
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    sqlx::query("INSERT INTO game_servers (id, name, address) VALUES (1, 'Test', '10.0.0.1'::inet)").execute(&db.pool).await.unwrap();
+    let [fresh, low] = [db.account("fresh").await, db.account("low").await];
+    for (user, identity) in [(fresh, [1; 16]), (low, [2; 16])] {
+        db.session(user, identity, 1, "192.168.0.20").await;
+        backend.claim(&claim(user, identity, None)).await.unwrap().expect("claimed");
+    }
+    // The 110 s row is set to a fixed instant, so "unchanged" means the same timestamp, not just about the same.
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '110 seconds' WHERE user_id = $1")
+        .bind(fresh as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '80 seconds' WHERE user_id = $1")
+        .bind(low as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let expiry = |user: u32| {
+        let pool = db.pool.clone();
+        async move {
+            sqlx::query_scalar::<_, String>("SELECT expires_at::text FROM sessions WHERE user_id = $1")
+                .bind(user as i32)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    let left = |user: u32| {
+        let pool = db.pool.clone();
+        async move {
+            sqlx::query_scalar::<_, f64>("SELECT extract(epoch FROM expires_at - now())::float8 FROM sessions WHERE user_id = $1")
+                .bind(user as i32)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    let before = expiry(fresh).await;
+
+    backend.heartbeat(1, 2, true, &[fresh, low]).await.unwrap();
+
+    assert_eq!(expiry(fresh).await, before, "a session with 110 s left is not written");
+    let low_left = left(low).await;
+    assert!((115.0..=120.5).contains(&low_left), "a session with 80 s left is renewed to about 120 s, got {low_left}");
+    db.drop().await;
+}
+
+#[tokio::test]
 async fn characters_follow_the_original_rules() {
     let Some(db) = TestDb::create().await else { return };
     let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
