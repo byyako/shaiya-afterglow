@@ -1914,6 +1914,131 @@ async fn a_character_loads_on_a_pool_of_one_connection() {
 }
 
 #[tokio::test]
+async fn a_loaded_character_has_its_bank_its_bags_and_its_account_fields() {
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    let (alice, bob) = (db.account("alice").await, db.account("bob").await);
+    for user in [alice, bob] {
+        backend.choose_faction(user, 1, 0).await.unwrap();
+    }
+    let CreateOutcome::Created(id) = backend.create(&hero(alice, 0, "Banker")).await.unwrap() else { panic!("not created") };
+    let CreateOutcome::Created(other) = backend.create(&hero(bob, 0, "Other")).await.unwrap() else { panic!("not created") };
+    // The rows are written in scrambled order, so the order the load returns is the query's: bags then slots, the bank by slot. Bob's
+    // bank row and bob's character's item must not turn up on alice's character.
+    sqlx::query("DELETE FROM character_items WHERE character_id = ANY($1)")
+        .bind(vec![id as i32, other as i32])
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    for (character, bag, slot, item_id, kind, type_id, count, craft) in [
+        (id, 5, 23, 1005, 10, 5, 1, "Last"),
+        (id, 0, 5, 1001, 1, 1, 1, ""),
+        (id, 2, 4, 1002, 2, 2, 3, "Smith"),
+        (id, 0, 1, 1003, 3, 3, 1, ""),
+        (other, 0, 0, 1004, 4, 4, 9, ""),
+    ] {
+        sqlx::query(
+            "INSERT INTO character_items (character_id, bag, slot, item_id, type, type_id, quality, gems, count, craft_name)
+             VALUES ($1, $2, $3, $4, $5, $6, 700, '\\x010203040506', $7, $8)",
+        )
+        .bind(character as i32)
+        .bind(bag as i16)
+        .bind(slot as i16)
+        .bind(item_id)
+        .bind(kind as i16)
+        .bind(type_id as i16)
+        .bind(count as i16)
+        .bind(craft)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    }
+    for (user, server, slot, item_id, kind, type_id, count, craft) in [
+        (alice, 1, 9, 2001, 20, 1, 2, "Vault"),
+        (alice, 1, 2, 2002, 21, 2, 1, ""),
+        (alice, 0, 0, 2003, 22, 3, 1, ""), // alice's warehouse on another server
+        (bob, 1, 1, 2004, 23, 4, 1, ""),
+    ] {
+        sqlx::query(
+            "INSERT INTO bank_items (user_id, server_id, slot, item_id, type, type_id, quality, gems, count, craft_name)
+             VALUES ($1, $2, $3, $4, $5, $6, 0, '\\x000000000000', $7, $8)",
+        )
+        .bind(user as i32)
+        .bind(server as i16)
+        .bind(slot as i16)
+        .bind(item_id)
+        .bind(kind as i16)
+        .bind(type_id as i16)
+        .bind(count as i16)
+        .bind(craft)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query("UPDATE accounts SET points = 7, premium = 2, premium_until = to_timestamp(2000000000) WHERE id = $1")
+        .bind(alice as i32)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+    let loaded = backend.load(alice, 1, id).await.unwrap().unwrap();
+    let rows = |items: &[game_server::backend::ItemUnit]| {
+        items.iter().map(|i| (i.bag, i.slot, i.item_type, i.type_id, i.quality, i.gems, i.count, i.craft_name.clone())).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        rows(&loaded.items),
+        [
+            (0, 1, 3, 3, 700, [1, 2, 3, 4, 5, 6], 1, b"".to_vec()),
+            (0, 5, 1, 1, 700, [1, 2, 3, 4, 5, 6], 1, b"".to_vec()),
+            (2, 4, 2, 2, 700, [1, 2, 3, 4, 5, 6], 3, b"Smith".to_vec()),
+            (5, 23, 10, 5, 700, [1, 2, 3, 4, 5, 6], 1, b"Last".to_vec()),
+        ],
+        "the bags only, by bag and slot"
+    );
+    assert_eq!(
+        rows(&loaded.bank),
+        [(100, 2, 21, 2, 0, [0; 6], 1, b"".to_vec()), (100, 9, 20, 1, 0, [0; 6], 2, b"Vault".to_vec())],
+        "the warehouse only, by slot, this account on this server"
+    );
+    assert_eq!((loaded.account_id, loaded.account_name.as_str()), (alice, "alice"));
+    assert_eq!((loaded.mall.points, loaded.mall.premium), (7, game_server::backend::Premium { kind: 2, until: Some(2_000_000_000) }));
+    assert_eq!((loaded.name.as_str(), loaded.id), ("Banker", id));
+    // A character with an empty warehouse and no premium end.
+    let bobs = backend.load(bob, 1, other).await.unwrap().unwrap();
+    assert_eq!((bobs.items.len(), bobs.bank.len(), bobs.account_name.as_str()), (1, 1, "bob"));
+    assert_eq!((bobs.mall.points, bobs.mall.premium), (0, game_server::backend::Premium { kind: 0, until: None }));
+    // Another account's character, and a deleted one, are not found.
+    assert!(backend.load(bob, 1, id).await.unwrap().is_none());
+    db.drop().await;
+}
+
+/// `characters.user_id` references `accounts`, so a character without its account cannot be written; with the constraint's triggers
+/// off (superuser only) the row can be made, and the load answers it with an error as it did when the account's name was a separate
+/// `SELECT` (`fetch_one`), not with "no such character".
+#[tokio::test]
+async fn a_character_without_an_account_row_fails_to_load() {
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    let alice = db.account("alice").await;
+    backend.choose_faction(alice, 1, 0).await.unwrap();
+    let CreateOutcome::Created(id) = backend.create(&hero(alice, 0, "Orphan")).await.unwrap() else { panic!("not created") };
+    assert!(sqlx::query("DELETE FROM accounts WHERE id = $1").bind(alice as i32).execute(&db.pool).await.is_err(), "the foreign key holds");
+    let mut conn = db.pool.acquire().await.unwrap();
+    if sqlx::query("SET session_replication_role = replica").execute(&mut *conn).await.is_err() {
+        eprintln!("not a superuser: the orphan row cannot be made, skipping");
+        drop(conn);
+        db.drop().await;
+        return;
+    }
+    sqlx::query("DELETE FROM accounts WHERE id = $1").bind(alice as i32).execute(&mut *conn).await.unwrap();
+    sqlx::query("RESET session_replication_role").execute(&mut *conn).await.unwrap();
+    drop(conn);
+    let loaded = backend.load(alice, 1, id).await;
+    assert!(loaded.is_err(), "an error, not Ok(None): {loaded:?}");
+    db.drop().await;
+}
+
+#[tokio::test]
 async fn the_game_log_writes_action_and_chat_rows() {
     use game_server::game_log::{self, Entry, Header};
     let Some(db) = TestDb::create().await else { return };

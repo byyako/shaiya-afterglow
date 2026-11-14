@@ -260,14 +260,19 @@ impl CharacterStore for PgBackend {
         // One connection for the whole load: fifteen separate acquisitions each waited in the pool's queue, and with the pool busy
         // an entry took longer than a bot waits (`docs/plans/load-fixes.md` section 3.4). Given back when this returns, on any path.
         let mut conn = self.acquire().await?;
+        // The account's name, points and premium come with the row (a LEFT JOIN: with no account row the answer is the error the
+        // separate `SELECT username` gave, not "no such character"; `characters.user_id` references `accounts`, so it cannot happen).
         let row: Option<PlayRow> = sqlx::query_as(
-            "SELECT id, name, family, grow, hair, face, size, job, sex, level, stat_point, skill_point, str, dex, rec, int, wis, luc,
-                    hp, mp, sp, map, dir,
-                    pos_x, pos_y, pos_z,
-                    exp, money, kills, deaths, victories, defeats, hg, vg, cg, og, ig, free_skill_reset_used, kill_level, dead_level,
-                    (CASE WHEN guild_joined_at IS NOT NULL THEN greatest(extract(epoch FROM now() - guild_joined_at), 0) END)::float8 AS guild_joined_secs
-               FROM characters
-              WHERE id = $3 AND user_id = $1 AND server_id = $2 AND deleted_at IS NULL AND delete_requested_at IS NULL",
+            "SELECT c.id, c.name, c.family, c.grow, c.hair, c.face, c.size, c.job, c.sex, c.level, c.stat_point, c.skill_point,
+                    c.str, c.dex, c.rec, c.int, c.wis, c.luc, c.hp, c.mp, c.sp, c.map, c.dir,
+                    c.pos_x, c.pos_y, c.pos_z,
+                    c.exp, c.money, c.kills, c.deaths, c.victories, c.defeats, c.hg, c.vg, c.cg, c.og, c.ig, c.free_skill_reset_used,
+                    c.kill_level, c.dead_level,
+                    (CASE WHEN c.guild_joined_at IS NOT NULL THEN greatest(extract(epoch FROM now() - c.guild_joined_at), 0) END)::float8 AS guild_joined_secs,
+                    a.username AS account_name, a.points AS account_points, a.premium AS account_premium,
+                    extract(epoch FROM a.premium_until)::bigint AS account_premium_until
+               FROM characters c LEFT JOIN accounts a ON a.id = c.user_id
+              WHERE c.id = $3 AND c.user_id = $1 AND c.server_id = $2 AND c.deleted_at IS NULL AND c.delete_requested_at IS NULL",
         )
         .bind(i32::try_from(user_id)?)
         .bind(i16::from(server_id))
@@ -275,21 +280,21 @@ impl CharacterStore for PgBackend {
         .fetch_optional(&mut *conn)
         .await?;
         let Some(row) = row else { return Ok(None) };
-        let items: Vec<ItemRow> = sqlx::query_as(
-            "SELECT bag, slot, type, type_id, quality, gems, count, craft_name FROM character_items
-              WHERE character_id = $1 ORDER BY bag, slot",
+        // The bags and the warehouse in one statement: the warehouse's rows come as bag 100, after bags 0 to 5 (`character_items.bag`
+        // is 0 to 5), each in slot order, so the order is the two separate reads' order.
+        let stored: Vec<ItemRow> = sqlx::query_as(
+            "SELECT bag, slot, type, type_id, quality, gems, count, craft_name FROM character_items WHERE character_id = $1
+             UNION ALL
+             SELECT 100::int2, slot, type, type_id, quality, gems, count, craft_name FROM bank_items WHERE user_id = $2 AND server_id = $3
+             ORDER BY bag, slot",
         )
         .bind(row.id)
-        .fetch_all(&mut *conn)
-        .await?;
-        let bank: Vec<ItemRow> = sqlx::query_as(
-            "SELECT 100::int2 AS bag, slot, type, type_id, quality, gems, count, craft_name FROM bank_items
-              WHERE user_id = $1 AND server_id = $2 ORDER BY slot",
-        )
         .bind(i32::try_from(user_id)?)
         .bind(i16::from(server_id))
         .fetch_all(&mut *conn)
         .await?;
+        let (bank, items): (Vec<ItemUnit>, Vec<ItemUnit>) =
+            stored.into_iter().map(ItemRow::into_unit).collect::<Result<Vec<_>>>()?.into_iter().partition(|item| item.bag == 100);
         let skills: Vec<(i16, i16, i16, i32)> =
             sqlx::query_as("SELECT number, skill_id, level, delay FROM character_skills WHERE character_id = $1 ORDER BY number")
                 .bind(row.id)
@@ -322,11 +327,14 @@ impl CharacterStore for PgBackend {
             .bind(row.id)
             .fetch_all(&mut *conn)
             .await?;
+        let (Some(account_name), Some(points), Some(premium)) = (row.account_name.clone(), row.account_points, row.account_premium) else {
+            return Err(sqlx::Error::RowNotFound.into());
+        };
+        let premium_until = row.account_premium_until;
         let mut character = row.into_play()?;
         character.account_id = user_id;
-        character.account_name =
-            sqlx::query_scalar("SELECT username FROM accounts WHERE id = $1").bind(i32::try_from(user_id)?).fetch_one(&mut *conn).await?;
-        character.mall = load_mall(&mut conn, user_id, server_id, character.id).await?;
+        character.account_name = account_name;
+        character.mall = load_mall(&mut conn, user_id, server_id, character.id, points, premium, premium_until).await?;
         character.interest = interest.into_iter().map(u32::try_from).collect::<Result<_, _>>()?;
         character.save_points = save_points
             .into_iter()
@@ -352,8 +360,8 @@ impl CharacterStore for PgBackend {
                 Ok(SavedApplied { skill_id: u16::try_from(skill_id)?, level: u8::try_from(level)?, seconds: u32::try_from(seconds)? })
             })
             .collect::<Result<_>>()?;
-        character.items = items.into_iter().map(ItemRow::into_unit).collect::<Result<_>>()?;
-        character.bank = bank.into_iter().map(ItemRow::into_unit).collect::<Result<_>>()?;
+        character.items = items;
+        character.bank = bank;
         character.skills = skills
             .into_iter()
             .map(|(number, id, level, delay)| {
@@ -722,6 +730,11 @@ struct PlayRow {
     kill_level: i16,
     dead_level: i16,
     guild_joined_secs: Option<f64>,
+    // The account's side of the LEFT JOIN: `None` for the first three only when there is no account row.
+    account_name: Option<String>,
+    account_points: Option<i32>,
+    account_premium: Option<i16>,
+    account_premium_until: Option<i64>,
 }
 
 impl PlayRow {
@@ -777,16 +790,19 @@ impl PlayRow {
     }
 }
 
-/// The item mall's part of a character's load (`docs/original/item-mall.md` section 10): the account's points and premium, this
-/// character's last 10 log rows (newest first), the account's item-mall storage on this server and its billing storage.
-/// Runs on the connection `load` holds, so it takes none of its own.
-async fn load_mall(conn: &mut sqlx::PgConnection, user_id: u32, server_id: u8, character_id: u32) -> Result<Mall> {
+/// The item mall's part of a character's load (`docs/original/item-mall.md` section 10): the account's points and premium (read with
+/// the character's row, so given here), this character's last 10 log rows (newest first), the account's item-mall storage on this
+/// server and its billing storage. Runs on the connection `load` holds, so it takes none of its own.
+async fn load_mall(
+    conn: &mut sqlx::PgConnection,
+    user_id: u32,
+    server_id: u8,
+    character_id: u32,
+    points: i32,
+    premium: i16,
+    until: Option<i64>,
+) -> Result<Mall> {
     let user = i32::try_from(user_id)?;
-    let (points, premium, until): (i32, i16, Option<i64>) =
-        sqlx::query_as("SELECT points, premium, extract(epoch FROM premium_until)::bigint FROM accounts WHERE id = $1")
-            .bind(user)
-            .fetch_one(&mut *conn)
-            .await?;
     let log: Vec<(String, i64, i32)> = sqlx::query_as(
         "SELECT product_code, extract(epoch FROM at)::bigint, points FROM point_log WHERE character_id = $1 ORDER BY at DESC, id DESC LIMIT 10",
     )
