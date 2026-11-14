@@ -108,6 +108,9 @@ N3 the warehouse fee wraps as in the original; N4 a lock order to write down; N5
     (default 4 MiB, about 80 s of a busy town) it drops the packet and marks the connection as overflowed. `world_loop` ends an
     overflowed connection as a lost one. The drain subtracts what it writes. The events channel stays unbounded: its events carry items
     and gold, and with the write deadline the task always drains it.
+  - Sends made while the zone's `maps` lock is held are queued per thread and made once it is released (`outbox::defer`, opened by
+    `Zones::maps`), each through the code a direct send runs, so the byte count, the limit and the overflow flag are applied at
+    delivery and the order of one operation's packets is kept (`docs/plans/load-fixes.md` section 4, design B2).
   - Optional: drain up to about 16 KB of queued packets into one write.
 - Player-visible: only a client that stops reading for 20 s is disconnected.
 - Tests: a game_flow test whose second client stops reading while the first floods zone chat. The reader is gone within the deadline

@@ -5176,3 +5176,38 @@ fn holding_maps_is_timed() {
     drop(zones.maps());
     assert!(zones.maps.try_lock().is_ok());
 }
+
+#[test]
+fn packets_sent_under_the_maps_lock_arrive_when_it_is_released() {
+    let zones = Zones::default();
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    let (b, mut b_in) = player(2, 100.0, 101.0);
+    zones.enter(1, a);
+    zones.enter(1, b);
+    received(&mut a_in);
+    received(&mut b_in);
+    let guard = zones.maps();
+    guard[&1][&1].send(&[1, 0, 0xAA]);
+    guard[&1][&2].send(&[2, 0, 0xBB]);
+    guard[&1][&1].send(&[3, 0, 0xCC]);
+    assert!(received(&mut a_in).is_empty() && received(&mut b_in).is_empty(), "nothing is delivered while the lock is held");
+    drop(guard);
+    assert_eq!(received(&mut a_in), [vec![1, 0, 0xAA], vec![3, 0, 0xCC]], "in the order they were sent");
+    assert_eq!(received(&mut b_in), [vec![2, 0, 0xBB]]);
+    // The lock was free when they went out: its own scope ended after the unlock (the field order of `MapsGuard`).
+    assert!(zones.maps.try_lock().is_ok());
+}
+
+#[test]
+fn a_zone_call_delivers_its_fan_out_before_it_returns() {
+    // A call that takes `maps` several times in a row (a step: each one its own scope) leaves nothing queued behind it.
+    let zones = Zones::default();
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    let (b, mut b_in) = player(2, 100.0, 101.0);
+    zones.enter(1, a);
+    zones.enter(1, b);
+    received(&mut a_in);
+    received(&mut b_in);
+    zones.move_to(1, 1, &step(100.0, 102.0));
+    assert!(!received(&mut b_in).is_empty(), "the other player has the step as soon as the call returns");
+}

@@ -1710,16 +1710,23 @@ fn view_cells(view: (i32, i32)) -> impl Iterator<Item = (i32, i32)> {
     (-VIEW_CELLS..=VIEW_CELLS).flat_map(move |dx| (-VIEW_CELLS..=VIEW_CELLS).map(move |dz| (view.0 + dx, view.1 + dz)))
 }
 
-/// The players of every map, locked (`Zones::maps`). It is the `maps` mutex's own guard plus a timer: every hold, from the lock
-/// being taken to its being released, goes into `monitor::counters().maps_held` (`maps_held_ms` and `maps_held_max_ms` of the stats
-/// line), so a run shows how much of the time the zone's busiest lock is held and not only how long it is waited for.
+/// The players of every map, locked (`Zones::maps`). It is the `maps` mutex's own guard, a timer, and a deferral scope
+/// (`outbox::defer`): every hold, from the lock being taken to its being released, goes into `monitor::counters().maps_held`
+/// (`maps_held_ms` and `maps_held_max_ms` of the stats line), so a run shows how much of the time the zone's busiest lock is held
+/// and not only how long it is waited for; and every `Outbox::send` made on this thread while the guard lives is queued and made
+/// after the lock is released, so the channel pushes and the wake-ups of a fan-out are not done with every other step waiting
+/// (`docs/plans/load-fixes.md` section 4, design B2; `docs/server/audit.md` R1).
 ///
-/// The fields are declared lock first, timer second, and Rust drops fields in declaration order: the lock is released, then the
-/// timer reads the clock. That order is the point; swapped, the hold would end before the lock does and the figure would miss the
-/// unlock. (`sync::Relock::guard` still times the waits, under the lock's type name, `maps`.)
+/// The fields are declared lock first, timer second, scope third, and Rust drops fields in declaration order: the lock is released,
+/// then the timer reads the clock, then the scope delivers the queued packets. That order is the point. The scope before the lock
+/// would deliver with the lock still held, and the whole gain would be gone; the timer after the scope would count the deliveries in
+/// the hold, and the figure would say the lock was held when it was not. The scope is made after the lock is taken, so a thread
+/// waiting for the lock is not deferring anything. The scope is `!Send`, so the guard cannot be held across an `.await`.
+/// (`sync::Relock::guard` still times the waits, under the lock's type name, `maps`.)
 struct MapsGuard<'a> {
     lock: MutexGuard<'a, HashMap<u16, HashMap<u32, Placed>>>,
     _held: HoldTimer,
+    _deferred: crate::outbox::DeferScope,
 }
 
 /// Records how long it lived into the `maps` hold counters when it is dropped.
@@ -1746,11 +1753,12 @@ impl DerefMut for MapsGuard<'_> {
 }
 
 impl Zones {
-    /// The players of every map, locked, and timed until the guard drops (`MapsGuard`). The one way to take `maps`, so the lock's
-    /// order against `mobs` and the rest stays as the fields say.
+    /// The players of every map, locked, timed until the guard drops, and with the sends made meanwhile held back until after the
+    /// unlock (`MapsGuard`). The one way to take `maps` outside the tests, so every hold is timed and every send under it is
+    /// deferred, and the lock's order against `mobs` and the rest stays as the fields say.
     fn maps(&self) -> MapsGuard<'_> {
         let lock = Relock::guard(&self.maps);
-        MapsGuard { lock, _held: HoldTimer(Instant::now()) }
+        MapsGuard { lock, _held: HoldTimer(Instant::now()), _deferred: crate::outbox::defer() }
     }
 
     /// Zones with the world's NPCs placed in their cells and the monster spawn areas ready (nothing spawned yet).
