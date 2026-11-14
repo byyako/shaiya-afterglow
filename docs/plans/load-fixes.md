@@ -245,7 +245,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 5 | F4b, fewer round trips in `load` | done | 3876678 | accepted 2026-11-14, 1 round |
 | 6 | F4c, the heartbeat's session writes | done | 2f81384 | accepted 2026-11-14, 1 round |
 | 7 | F2a, the ban end kept in the world loop | done | b7dd31e | accepted 2026-11-14, 1 round |
-| 8 | F2b, the `maps` guard and its hold time | not started | | |
+| 8 | F2b, the `maps` guard and its hold time | done | 83bb08b | accepted 2026-11-14, 1 round |
 | 9 | F2c, sends deferred while `maps` is held | not started | | |
 | 10 | F2d, a step's follow-up checks | not started | | |
 | 11a | the runs and the cleanup | not started | | |
@@ -260,6 +260,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
   `SESSION_RENEW_BELOW` comment: a row is rewritten every 30 to 35 s, and at a 60 s interval it keeps 60 s, not 30 (the floor is `SESSION_GAME_SECS`
   minus one interval when that is smaller).
 - Piece 4: `db_waits` counts only `load`'s acquisition; the write-up must say so when it quotes the figure.
+- Piece 8: `monitor.rs` `maps_held` doc: the total can exceed the interval by up to one hold that straddles its start (reword); `Zones::maps` doc: "the one way to take `maps` outside the tests, so every hold is timed"; `docs/server/settings.md` `stats_every` row: separate the `maps_held` sentence from the `db_waits` parenthetical.
 - Piece 3: `docs/testing/load-pvp.md` F5 text: "the ones counted are from 2026-11-04 to 11-11" could name the 36 INSERTs and 2,101 UPDATEs.
 
 ### Piece 0. The specs committed (the orchestrator)
