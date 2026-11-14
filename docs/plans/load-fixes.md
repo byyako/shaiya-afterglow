@@ -246,7 +246,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 6 | F4c, the heartbeat's session writes | done | 2f81384 | accepted 2026-11-14, 1 round |
 | 7 | F2a, the ban end kept in the world loop | done | b7dd31e | accepted 2026-11-14, 1 round |
 | 8 | F2b, the `maps` guard and its hold time | done | 83bb08b | accepted 2026-11-14, 1 round |
-| 9 | F2c, sends deferred while `maps` is held | not started | | |
+| 9 | F2c, sends deferred while `maps` is held | done | 412f9c3 | accepted 2026-11-14, 1 round |
 | 10 | F2d, a step's follow-up checks | not started | | |
 | 11a | the runs and the cleanup | not started | | |
 | 11b | the write-up and the push | not started | | |
@@ -261,6 +261,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
   minus one interval when that is smaller).
 - Piece 4: `db_waits` counts only `load`'s acquisition; the write-up must say so when it quotes the figure.
 - Piece 8: `monitor.rs` `maps_held` doc: the total can exceed the interval by up to one hold that straddles its start (reword); `Zones::maps` doc: "the one way to take `maps` outside the tests, so every hold is timed"; `docs/server/settings.md` `stats_every` row: separate the `maps_held` sentence from the `db_waits` parenthetical.
+- Piece 9: the cost of B2 is wider than "for a moment": the client drops a packet about an id it does not know yet, so a swapped order across two threads (an appearance after a death, a hit on a just-spawned mob) lasts until that unit's next update, and a `0x0610` HP delta that was dropped leaves a bar off for the fight. Put one clause in section 8's first risk row and section 4's "What it gives up", and one sentence in the `DeferScope` doc (`outbox.rs`): the order is kept per thread, not across threads. The write-up in `load-pvp.md` says the real client was not in the runs (C9), so this artifact is unchecked; list it as an open question for a run with the client. `defer()` uses `DEFERRED.with`; `try_with` would match the rest of the file (optional).
 - Piece 3: `docs/testing/load-pvp.md` F5 text: "the ones counted are from 2026-11-04 to 11-11" could name the 36 INSERTs and 2,101 UPDATEs.
 
 ### Piece 0. The specs committed (the orchestrator)
