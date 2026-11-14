@@ -248,7 +248,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 8 | F2b, the `maps` guard and its hold time | done | 83bb08b | accepted 2026-11-14, 1 round |
 | 9 | F2c, sends deferred while `maps` is held | done | 412f9c3 | accepted 2026-11-14, 1 round |
 | 10 | F2d, a step's follow-up checks | done | 06fb355 | accepted 2026-11-14, 1 round |
-| 11a | the runs and the cleanup | not started | | |
+| 11a | the runs and the cleanup | done | (no commit; logs/load-pvp/R2-summary.txt) | accepted 2026-11-14, 1 round; all targets held, no extra round |
 | 11b | the write-up and the push | not started | | |
 
 **Carry-overs for piece 11b** (non-blocking notes from the reviews; 11b's builder takes them with its write-up, small doc edits only):
