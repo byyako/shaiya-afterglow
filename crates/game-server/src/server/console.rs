@@ -135,7 +135,8 @@ fn info<S>(ctx: &Context<S>) -> String {
 pub(super) async fn set_accepting<S: Backend>(ctx: &Context<S>, on: bool) {
     ctx.accepting.store(on, Ordering::Relaxed);
     // The login server lists the server as closed at once, not at the next heartbeat.
-    if let Err(error) = ctx.store.heartbeat(ctx.config.server_id, ctx.players.load(Ordering::Relaxed), on).await {
+    let online = ctx.online.user_ids();
+    if let Err(error) = ctx.store.heartbeat(ctx.config.server_id, ctx.players.load(Ordering::Relaxed), on, &online).await {
         tracing::warn!(%error, "heartbeat failed");
     }
 }

@@ -85,7 +85,7 @@ impl Heartbeat for PgBackend {
         Ok(())
     }
 
-    async fn heartbeat(&self, server_id: u8, players: u16, open: bool) -> Result<()> {
+    async fn heartbeat(&self, server_id: u8, players: u16, open: bool, online: &[u32]) -> Result<()> {
         // No `last_seen` is how the login server lists a server as closed.
         let done = sqlx::query("UPDATE game_servers SET players = $2, last_seen = CASE WHEN $3 THEN now() END WHERE id = $1")
             .bind(i16::from(server_id))
@@ -96,12 +96,19 @@ impl Heartbeat for PgBackend {
         if done.rows_affected() == 0 {
             bail!("game server {server_id} is not registered (servers add {server_id} <name> <ip>)");
         }
+        // Only the accounts this process holds: a row whose end was lost (or that another process of this server id left) is not
+        // renewed and runs out within `SESSION_GAME_SECS`. An id that does not fit the column cannot be a row.
+        let online: Vec<i32> = online.iter().filter_map(|&user| i32::try_from(user).ok()).collect();
+        if online.is_empty() {
+            return Ok(());
+        }
         sqlx::query(
             "UPDATE sessions SET expires_at = now() + make_interval(secs => $2)
-              WHERE server_id = $1 AND game_connected_at IS NOT NULL",
+              WHERE server_id = $1 AND game_connected_at IS NOT NULL AND user_id = ANY($3)",
         )
         .bind(i16::from(server_id))
         .bind(SESSION_GAME_SECS)
+        .bind(&online)
         .execute(&self.pool)
         .await?;
         Ok(())

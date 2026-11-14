@@ -75,6 +75,47 @@ async fn handshake_opens_an_empty_character_screen() {
 }
 
 #[tokio::test]
+async fn the_heartbeat_names_only_the_accounts_connected_here() {
+    let backend = backend_with_session([5; 16]);
+    let (addr, ctx) = start(backend.clone(), true).await;
+    tokio::spawn(heartbeat(ctx.clone()));
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    let named = |backend: &MemoryBackend| backend.last_heartbeat_users.guard().clone();
+    timeout(Duration::from_secs(2), async {
+        while named(&backend) != [7] {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the heartbeat names the player in the world");
+
+    // After it quits and its session is released, nobody is named.
+    drop(client);
+    wait_gone(&backend, 7, Duration::from_secs(5)).await;
+    timeout(Duration::from_secs(2), async {
+        while !named(&backend).is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the heartbeat names nobody once the account has left");
+}
+
+#[tokio::test]
+async fn a_session_end_that_fails_is_tried_again() {
+    let backend = backend_with_session([5; 16]);
+    backend.fail_releases.store(1, Ordering::SeqCst);
+    let (addr, _) = start(backend.clone(), true).await;
+    let mut client = Client::connect(addr).await;
+    enter_world(&mut client, 7, [5; 16], true).await;
+    drop(client);
+    // The first release fails; the retry in the background ends the session.
+    wait_gone(&backend, 7, Duration::from_secs(2)).await;
+    assert_eq!(backend.fail_releases.load(Ordering::SeqCst), 0, "the injected failure was used");
+}
+
+#[tokio::test]
 async fn refused_handshakes_get_no_reply() {
     let backend = Arc::new(MemoryBackend::default());
     backend.add_session(1, session([1; 16], Some(SERVER_ID), LOCAL));

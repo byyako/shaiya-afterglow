@@ -659,6 +659,11 @@ impl OnlineUsers {
         users.len()
     }
 
+    /// The accounts with a connection here, in no order: the sessions the heartbeat renews (`Heartbeat::heartbeat`).
+    pub fn user_ids(&self) -> Vec<u32> {
+        self.users.guard().keys().copied().collect()
+    }
+
     /// Whether the account has a connection here.
     pub fn contains(&self, user_id: u32) -> bool {
         self.users.guard().contains_key(&user_id)
@@ -762,7 +767,7 @@ impl Drop for Online<'_> {
     }
 }
 
-async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Context<S>) -> Result<()> {
+async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Arc<Context<S>>) -> Result<()> {
     let handshake_due = Instant::now() + ctx.config.handshake_timeout;
     stream.set_nodelay(true)?;
     let mut conn = Connection {
@@ -794,10 +799,8 @@ async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Context<S
         Ok(Ok(Some(entered))) => entered,
         other => {
             let session = claimed.guard().take();
-            if let Some((user_id, identity)) = session
-                && let Err(error) = ctx.store.release(user_id, identity).await
-            {
-                tracing::warn!(%error, user_id, "could not end the session of a failed handshake");
+            if let Some((user_id, identity)) = session {
+                end_session(ctx, user_id, identity, "a failed handshake").await;
             }
             return other.and_then(|handshaken| handshaken).map(|_| ());
         }
@@ -814,9 +817,7 @@ async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Context<S
         }
     }
     .await;
-    if let Err(error) = ctx.store.release(player.user_id, player.identity).await {
-        tracing::warn!(%error, user_id = player.user_id, "could not end the session");
-    }
+    end_session(ctx, player.user_id, player.identity, "the connection's end").await;
     tracing::info!(%peer, user_id = player.user_id, "left");
     // The account is free for the newer login before the kicked client's socket is drained.
     drop(online);
@@ -825,6 +826,26 @@ async fn handle<S: Backend>(stream: TcpStream, peer: SocketAddr, ctx: &Context<S
         conn.drain().await;
     }
     result
+}
+
+/// Ends the session the connection claimed (`why` names the place, for the log). It is tried once here, before the account leaves
+/// `OnlineUsers`; when that fails (the database was busy or away) a task of its own tries again after 200 ms, 1 s and 5 s and
+/// logs the outcome, and the connection does not wait for it. A session nobody ends is not renewed once its account has left
+/// `OnlineUsers` (the heartbeat renews only the held ones), so it runs out within 120 s at the latest. The delete
+/// names the identity, so a retry can never end a newer login's session.
+async fn end_session<S: Backend>(ctx: &Arc<Context<S>>, user_id: u32, identity: [u8; 16], why: &'static str) {
+    let Err(error) = ctx.store.release(user_id, identity).await else { return };
+    tracing::warn!(%error, user_id, why, "could not end the session; trying again in the background");
+    let ctx = ctx.clone();
+    tokio::spawn(async move {
+        match crate::supervise::retried(&crate::supervise::WRITE_RETRIES, || ctx.store.release(user_id, identity)).await {
+            Ok(Ok(())) => tracing::info!(user_id, why, "the session was ended on a retry"),
+            Ok(Err(error)) => {
+                tracing::warn!(%error, user_id, why, "could not end the session; given up, it expires within 120 s");
+            }
+            Err(panic) => tracing::warn!(%panic, user_id, why, "ending the session panicked; given up, it expires within 120 s"),
+        }
+    });
 }
 
 /// Waits for `0xA301` (plain text), checks the session and starts encryption. `None` when the client left or was refused;

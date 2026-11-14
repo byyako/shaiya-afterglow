@@ -217,7 +217,8 @@ pub async fn heartbeat<S: Backend>(ctx: Arc<Context<S>>) {
         tick.tick().await;
         ctx.limits.sweep();
         let players = ctx.players.load(Ordering::Relaxed);
-        if let Err(error) = ctx.store.heartbeat(ctx.config.server_id, players, ctx.accepting.load(Ordering::Relaxed)).await {
+        let online = ctx.online.user_ids();
+        if let Err(error) = ctx.store.heartbeat(ctx.config.server_id, players, ctx.accepting.load(Ordering::Relaxed), &online).await {
             tracing::warn!(%error, "heartbeat failed");
         }
     }

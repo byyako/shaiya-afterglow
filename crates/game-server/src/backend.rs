@@ -783,9 +783,10 @@ pub trait FriendStore: Send + Sync + 'static {
 }
 
 pub trait Heartbeat: Send + Sync + 'static {
-    /// Reports this server alive with its player count, and keeps its players' sessions from expiring. `open` false (an operator's
-    /// `/server off`) lists the server as closed to the login server until a heartbeat says open again.
-    fn heartbeat(&self, server_id: u8, players: u16, open: bool) -> impl Future<Output = Result<()>> + Send;
+    /// Reports this server alive with its player count, and keeps the sessions of `online` (the accounts this process holds, in
+    /// any order) from expiring: a session of this server's that no connection here holds is left to run out. `open` false (an
+    /// operator's `/server off`) lists the server as closed to the login server until a heartbeat says open again.
+    fn heartbeat(&self, server_id: u8, players: u16, open: bool, online: &[u32]) -> impl Future<Output = Result<()>> + Send;
     /// The factions' kill counts of this server (`docs/original/pvp-2.md` section 9), 0 when never saved.
     /// The monsters' object id counter of this server (`docs/original/quest-drops.md` section 4.3), 1 when never saved.
     fn load_mob_id(&self, server_id: u8) -> impl Future<Output = Result<u32>> + Send;
@@ -1290,8 +1291,8 @@ impl<T: FriendStore> FriendStore for std::sync::Arc<T> {
 }
 
 impl<T: Heartbeat> Heartbeat for std::sync::Arc<T> {
-    fn heartbeat(&self, server_id: u8, players: u16, open: bool) -> impl Future<Output = Result<()>> + Send {
-        (**self).heartbeat(server_id, players, open)
+    fn heartbeat(&self, server_id: u8, players: u16, open: bool, online: &[u32]) -> impl Future<Output = Result<()>> + Send {
+        (**self).heartbeat(server_id, players, open, online)
     }
     fn load_mob_id(&self, server_id: u8) -> impl Future<Output = Result<u32>> + Send {
         (**self).load_mob_id(server_id)

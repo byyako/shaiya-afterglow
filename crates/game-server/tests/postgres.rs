@@ -150,9 +150,9 @@ async fn sessions_are_claimed_once_and_released() {
     assert!(!backend.claimable(&claim(user, [7; 16], Some(HOME))).await.unwrap(), "used");
 
     // The heartbeat needs the server registered, and keeps in-game sessions alive.
-    assert!(backend.heartbeat(9, 1, true).await.is_err(), "unregistered server");
+    assert!(backend.heartbeat(9, 1, true, &[user]).await.is_err(), "unregistered server");
     sqlx::query("UPDATE sessions SET expires_at = now() + interval '5 seconds'").execute(&db.pool).await.unwrap();
-    backend.heartbeat(1, 1, true).await.unwrap();
+    backend.heartbeat(1, 1, true, &[user]).await.unwrap();
     let (players, left): (i32, f64) = sqlx::query_as(
         "SELECT players, (SELECT extract(epoch FROM expires_at - now())::float8 FROM sessions) FROM game_servers WHERE id = 1",
     )
@@ -174,6 +174,54 @@ async fn sessions_are_claimed_once_and_released() {
     db.session(user, [3; 16], 1, "192.168.0.20").await;
     sqlx::query("UPDATE sessions SET expires_at = now() - interval '1 second'").execute(&db.pool).await.unwrap();
     assert!(backend.claim(&claim(user, [3; 16], None)).await.unwrap().is_none(), "expired");
+    db.drop().await;
+}
+
+#[tokio::test]
+async fn the_heartbeat_renews_only_the_sessions_this_server_holds() {
+    let Some(db) = TestDb::create().await else { return };
+    let backend = PgBackend::new(db.pool.clone(), Duration::from_secs(7200));
+    for (id, address) in [(1, "10.0.0.1"), (2, "10.0.0.2")] {
+        sqlx::query("INSERT INTO game_servers (id, name, address) VALUES ($1, 'Test', $2::inet)")
+            .bind(id as i16)
+            .bind(address)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+    }
+    // A: claimed on server 1 and held. B: claimed on server 1, its end lost (not held). C: claimed on server 2 (named too: the server id still has to match). D: not claimed yet on server 1, named.
+    let [a, b, c, d] = [db.account("a").await, db.account("b").await, db.account("c").await, db.account("d").await];
+    for (user, server, identity) in [(a, 1, [1; 16]), (b, 1, [2; 16]), (c, 2, [3; 16]), (d, 1, [4; 16])] {
+        db.session(user, identity, server, "192.168.0.20").await;
+    }
+    for (user, server, identity) in [(a, 1, [1; 16]), (b, 1, [2; 16]), (c, 2, [3; 16])] {
+        let claim = Claim { user_id: user, identity, server_id: server, ip: None };
+        backend.claim(&claim).await.unwrap().expect("claimed");
+    }
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '5 seconds'").execute(&db.pool).await.unwrap();
+
+    backend.heartbeat(1, 1, true, &[a, c, d]).await.unwrap();
+    let left = |user: u32| {
+        let pool = db.pool.clone();
+        async move {
+            sqlx::query_scalar::<_, f64>("SELECT extract(epoch FROM expires_at - now())::float8 FROM sessions WHERE user_id = $1")
+                .bind(user as i32)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    assert!(left(a).await > 100.0, "the held session is renewed");
+    assert!(left(b).await < 10.0, "a session nobody here holds is left to run out");
+    assert!(left(c).await < 10.0, "another server's session is not renewed");
+    assert!(left(d).await < 10.0, "a session not claimed yet is not renewed");
+
+    // An empty list renews nothing, and the server's own row is still updated.
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '5 seconds'").execute(&db.pool).await.unwrap();
+    backend.heartbeat(1, 3, true, &[]).await.unwrap();
+    assert!(left(a).await < 10.0, "nothing named, nothing renewed");
+    let players: i32 = sqlx::query_scalar("SELECT players FROM game_servers WHERE id = 1").fetch_one(&db.pool).await.unwrap();
+    assert_eq!(players, 3);
     db.drop().await;
 }
 

@@ -29,8 +29,8 @@ use crate::skills::{SkillDef, SkillDefs};
 use crate::stats::StatusTable;
 use crate::world::{BindArea, Gate, GateKeeper, MapNpcRow, Portal, World};
 
-/// How long a session stays valid without a heartbeat once its player is in the game. The heartbeat renews it,
-/// so it only runs out when this server stops.
+/// How long a session stays valid without a heartbeat once its player is in the game. The heartbeat renews it while a connection of
+/// this server holds the account, so it runs out when this server stops or when its end was lost.
 pub const SESSION_GAME_SECS: f64 = 120.0;
 /// The login server's notification of every login (`docs/original/client-extras.md` section 3.2).
 pub const ACCOUNT_LOGIN_CHANNEL: &str = "account_login";

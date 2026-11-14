@@ -55,8 +55,12 @@ The steps:
    `server_id` must match; a session is claimed once), takes the key and IV from it, and starts the game cipher from `SHA-256(aes_iv)[0..16]`
    (`docs/original/ps_game.md` section 4). The session row is deleted when the connection ends.
 4. The game server's heartbeat (every `heartbeat_interval`, 5 seconds by default) writes `players` and `last_seen` to its `game_servers` row (no `last_seen`
-   while it is not accepting connections) and renews `expires_at` of every session it has claimed. A session lives 5 minutes after login, 2 minutes after
-   selection and 2 minutes after each renewal; the login server removes expired rows a minute after expiry.
+   while it is not accepting connections) and renews `expires_at` of the sessions of the accounts it holds (those with a connection on this process, on the character screen or in the world, and a
+   character still staying after its connection ended), not of every session with its server id. A session lives 5 minutes after login, 2 minutes after
+   selection and 2 minutes after each renewal; the login server removes expired rows a minute after expiry. The game server ends the session when the
+   connection ends and, if that fails, tries again in the background (200 ms, 1 s, 5 s). A restart holds nobody, so no row of the old process is renewed:
+   a row whose end was lost expires 120 s after the old process's last heartbeat and the login server deletes it a minute later. A player who logs in
+   meanwhile gets a new row as always; nothing is cleaned at start.
 
 **One IP per game server.** The client connects to the game server on port 30810, fixed in `game.exe` (`docs/original/client-login.md`), and the
 server-select reply carries only an IPv4 address, so every game server needs its own address: extra addresses on the network card, or separate machines,

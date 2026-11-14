@@ -57,6 +57,8 @@ pub struct MemoryBackend {
     characters: Mutex<Vec<StoredCharacter>>,
     /// Last heartbeat: (server, players).
     pub last_heartbeat: Mutex<Option<(u8, u16)>>,
+    /// The accounts the last heartbeat named as held by the server (its sessions are the ones it renews).
+    pub last_heartbeat_users: Mutex<Vec<u32>>,
     /// The monsters' object id counter as last saved (`None` until the first save, which reads as 1).
     pub mob_id: Mutex<Option<u32>>,
     /// The factions' kill counts as last saved.
@@ -78,6 +80,8 @@ pub struct MemoryBackend {
     pub delete_due: std::sync::atomic::AtomicBool,
     /// The next `ItemStore::trade` fails with a database error (a test sets it; the flag clears itself).
     pub fail_next_trade: std::sync::atomic::AtomicBool,
+    /// The next this many `SessionGate::release` calls fail with a database error (a test sets it; it counts down).
+    pub fail_releases: std::sync::atomic::AtomicU32,
     /// When the guild ranking update was left due (unix seconds).
     pub ranking_due: Mutex<Option<i64>>,
     guilds: Mutex<Vec<GuildRow>>,
@@ -413,6 +417,20 @@ impl SessionGate for MemoryBackend {
     }
 
     async fn release(&self, user_id: u32, identity: [u8; 16]) -> Result<()> {
+        // Counts the injected failures down; a compare-exchange loop because `fetch_update` is deprecated and its successor is newer
+        // than the workspace's minimum Rust version.
+        let mut left = self.fail_releases.load(std::sync::atomic::Ordering::SeqCst);
+        while left > 0 {
+            match self.fail_releases.compare_exchange(
+                left,
+                left - 1,
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+            ) {
+                Ok(_) => anyhow::bail!("injected database error"),
+                Err(now) => left = now,
+            }
+        }
         let mut sessions = self.sessions.guard();
         if sessions.get(&user_id).is_some_and(|s| s.identity == identity) {
             sessions.remove(&user_id);
@@ -1265,8 +1283,9 @@ impl QuestStore for MemoryBackend {
 }
 
 impl Heartbeat for MemoryBackend {
-    async fn heartbeat(&self, server_id: u8, players: u16, _open: bool) -> Result<()> {
+    async fn heartbeat(&self, server_id: u8, players: u16, _open: bool, online: &[u32]) -> Result<()> {
         *self.last_heartbeat.guard() = Some((server_id, players));
+        *self.last_heartbeat_users.guard() = online.to_vec();
         Ok(())
     }
 
