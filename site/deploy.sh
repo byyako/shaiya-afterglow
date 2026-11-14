@@ -58,7 +58,7 @@ if not pages:
 missing = []
 for md in pages:
     stem = md[:-3]
-    html = "index.html" if stem == "index" else os.path.join(stem, "index.html")
+    html = stem + ".html" if stem == "index" or stem.endswith("/index") else os.path.join(stem, "index.html")
     path = os.path.join(stage, html)
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         missing.append(html)
