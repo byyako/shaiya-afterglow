@@ -251,7 +251,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | 9 | F2c, sends deferred while `maps` is held | done | 412f9c3 | accepted 2026-11-14, 1 round |
 | 10 | F2d, a step's follow-up checks | done | 06fb355 | accepted 2026-11-14, 1 round |
 | 11a | the runs and the cleanup | done | (no commit; logs/load-pvp/R2-summary.txt) | accepted 2026-11-14, 1 round; all targets held, no extra round |
-| 11b | the write-up and the push | done | this commit | the push is the report's last line |
+| 11b | the write-up and the push | done | dc7654d | review pending (Opus), 2026-11-14 |
 
 **Carry-overs for piece 11b** (non-blocking notes from the reviews; 11b took them with its write-up, small doc edits only; all taken except `defer()`'s `try_with`, which is a code change, left):
 
