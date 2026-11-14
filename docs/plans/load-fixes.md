@@ -238,7 +238,7 @@ Piece 0 is the orchestrator's; pieces 1 to 11b are one agent each, in this order
 | piece | what | state | commit | reviewed |
 |---|---|---|---|---|
 | 0 | the specs committed | done | 1774edb | by the maintainer's request, 2026-11-13 |
-| 1 | batching | not started | | |
+| 1 | batching | done | f0896b4 | accepted 2026-11-13, 1 round |
 | 2 | F3, sessions | not started | | |
 | 3 | F5, the kill counts | not started | | |
 | 4 | F4a, the pool measured, `load` on one connection | not started | | |
