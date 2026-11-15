@@ -1710,6 +1710,22 @@ fn view_cells(view: (i32, i32)) -> impl Iterator<Item = (i32, i32)> {
     (-VIEW_CELLS..=VIEW_CELLS).flat_map(move |dx| (-VIEW_CELLS..=VIEW_CELLS).map(move |dz| (view.0 + dx, view.1 + dz)))
 }
 
+/// What the connection decides in the middle of a step (`Zones::step`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StepVerdict {
+    /// The step is accepted; `stop_summon` when it stops a summon in progress (`CUser::PacketPC` 0x0501).
+    Go { stop_summon: bool },
+    /// The speed check refused it: the player goes back to this position.
+    Back([f32; 3]),
+}
+
+/// A step made (`Zones::step`): the packets for the mover, in order, and whether it was undone.
+#[derive(Debug)]
+pub struct Stepped {
+    pub packets: Vec<Vec<u8>>,
+    pub refused: bool,
+}
+
 /// The players of every map, locked (`Zones::maps`). It is the `maps` mutex's own guard, a timer, and a deferral scope
 /// (`outbox::defer`): every hold, from the lock being taken to its being released, goes into `monitor::counters().maps_held`
 /// (`maps_held_ms` and `maps_held_max_ms` of the stats line), so a run shows how much of the time the zone's busiest lock is held
@@ -1764,6 +1780,8 @@ impl Zones {
     /// unlock (`MapsGuard`). The one way to take `maps` outside the tests, so every hold is timed and every send under it is
     /// deferred, and the lock's order against `mobs` and the rest stays as the fields say.
     fn maps(&self) -> MapsGuard<'_> {
+        #[cfg(test)]
+        tests::MAPS_TAKEN.with(|n| n.set(n.get() + 1));
         let lock = Relock::guard(&self.maps);
         MapsGuard { _held: HoldTimer(Instant::now()), lock, _deferred: crate::outbox::defer() }
     }
@@ -2862,6 +2880,11 @@ impl Zones {
     pub fn move_to(&self, map: u16, id: u32, step: &Move) -> Vec<Vec<u8>> {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
+        self.moved(map, players, id, step)
+    }
+
+    /// `move_to` with `maps` held by the caller.
+    fn moved(&self, map: u16, players: &mut HashMap<u32, Placed>, id: u32, step: &Move) -> Vec<Vec<u8>> {
         let Some(mut me) = players.remove(&id) else { return Vec::new() };
         me.occupant.position = step.position;
         me.occupant.dir = step.dir;
@@ -2888,6 +2911,35 @@ impl Zones {
         out
     }
 
+    /// A whole step (`CUser::PacketPC` 0x0501 from the speed check on), under one `maps` lock: `judge` is given the mover's vehicle
+    /// status, read under the lock, and says whether the step goes on or the player goes back (the connection's own speed check,
+    /// which touches only its own state); then the step is made (`move_to`) or undone (`move_back`), the trade is checked
+    /// (`trade_moved`) and the duel and war areas (`left_areas`), in that order, as they were when each took the lock. Every send
+    /// is deferred and delivered in order once the lock is released (`MapsGuard`). `judge` runs under the lock: it must not take it.
+    pub fn step(&self, map: u16, id: u32, step: &Move, judge: impl FnOnce(Riding) -> StepVerdict) -> Stepped {
+        let mut maps = self.maps();
+        let riding = maps.get(&map).and_then(|p| p.get(&id)).map_or(Riding::OnFoot, |p| p.ride.status);
+        let verdict = judge(riding);
+        let refused = matches!(verdict, StepVerdict::Back(_));
+        let packets = match maps.get_mut(&map) {
+            None => Vec::new(),
+            Some(players) => match verdict {
+                StepVerdict::Go { stop_summon } => {
+                    if stop_summon {
+                        vehicle::stop_summon_in(players, id);
+                    }
+                    self.moved(map, players, id, step)
+                }
+                StepVerdict::Back(to) => self.relocated(map, players, id, to, false),
+            },
+        };
+        self.trade_apart(&maps, map, id);
+        if let Some(players) = maps.get_mut(&map) {
+            self.left_areas_in(map, players, id, Instant::now());
+        }
+        Stepped { packets, refused }
+    }
+
     /// A teleport on the same map (`CZone::MoveUserLocal`, `docs/original/gatekeeper.md` section 3): the view is swapped as
     /// for a step but without `0x0501`, then everyone in view, the player included, gets `0x020B` with the new position.
     pub fn warp(&self, map: u16, id: u32, position: [f32; 3]) -> Vec<Vec<u8>> {
@@ -2903,6 +2955,11 @@ impl Zones {
     fn relocate(&self, map: u16, id: u32, position: [f32; 3], split: bool) -> Vec<Vec<u8>> {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
+        self.relocated(map, players, id, position, split)
+    }
+
+    /// `relocate` with `maps` held by the caller.
+    fn relocated(&self, map: u16, players: &mut HashMap<u32, Placed>, id: u32, position: [f32; 3], split: bool) -> Vec<Vec<u8>> {
         // A teleport splits a pair on one mount (`CZone::MoveUser`).
         if split {
             vehicle::split(players, id, false, Instant::now());

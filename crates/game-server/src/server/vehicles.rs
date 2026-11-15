@@ -96,10 +96,18 @@ pub(super) async fn summon_due<S: Backend>(
 
 /// A summon stops without a word (an accepted step, a hit, a map change).
 pub(super) fn cancel_summon<S>(ctx: &Context<S>, state: &mut WorldState, id: u32) {
-    if state.summon_due.take().is_some() {
-        state.next_summon = None;
+    if summon_stopped(state) {
         ctx.zones.stop_summon(state.map, id);
     }
+}
+
+/// The connection's side of a summon stopping: whether one was in progress (the zone's side is `Zones::stop_summon`).
+pub(super) fn summon_stopped(state: &mut WorldState) -> bool {
+    let was = state.summon_due.take().is_some();
+    if was {
+        state.next_summon = None;
+    }
+    was
 }
 
 /// The mount slot changed (`CUser::ItemBagToBag`, section 2): summoning stops or the rider gets off, `0x0216` 1, 0 and the shape.

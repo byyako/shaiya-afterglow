@@ -675,3 +675,10 @@ target is recorded as an open finding; links check; the push went through or its
 2. Is the relaxed cross-operation order of design B2 acceptable, or should piece 9 deliver under the second mutex from the start?
 3. Keep piece 7 (the `bans` lock, not in the findings) and the entry check E2-1000?
 4. Is 192.168.1.240 still the dev box's LAN address for `--login`?
+
+## 11. After piece 11b: the `maps` wait fixes 1 and 2 (2026-11-15), built, not yet measured
+
+From `docs/testing/maps-lock-investigation.md` section 5: a step takes `maps` once (`Zones::step`, piece 10's three takes folded into
+one, the speed check run under the lock as a closure on the connection's own state), and `MapsGuard`'s fields are now timer, lock,
+scope (so the hold figure stops at the unlock; the delivery is still after it). This supersedes the "lock, timer, scope" order named in
+pieces 8 and 9 above. No run has measured either.

@@ -166,6 +166,15 @@ pub(super) fn split(players: &mut Players, id: u32, leaving: bool, now: Instant)
     }
 }
 
+/// `stop_summon` with `maps` held by the caller.
+pub(super) fn stop_summon_in(players: &mut Players, id: u32) {
+    if let Some(p) = players.get_mut(&id)
+        && p.ride.status == Riding::Summoning
+    {
+        p.ride.status = Riding::OnFoot;
+    }
+}
+
 impl Zones {
     /// The player's vehicle status.
     pub fn riding(&self, map: u16, id: u32) -> Riding {
@@ -195,10 +204,8 @@ impl Zones {
 
     /// A summon stops without a word (a step, a failed completion).
     pub fn stop_summon(&self, map: u16, id: u32) {
-        if let Some(p) = self.maps().get_mut(&map).and_then(|p| p.get_mut(&id))
-            && p.ride.status == Riding::Summoning
-        {
-            p.ride.status = Riding::OnFoot;
+        if let Some(players) = self.maps().get_mut(&map) {
+            stop_summon_in(players, id);
         }
     }
 

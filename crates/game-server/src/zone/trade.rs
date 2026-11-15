@@ -195,6 +195,11 @@ impl Zones {
             return;
         }
         let maps = self.maps();
+        self.trade_apart(&maps, map, me);
+    }
+
+    /// `trade_moved` with `maps` held by the caller (a step: `Zones::step`); `trades` is taken after it, in the lock order.
+    pub(super) fn trade_apart(&self, maps: &Maps, map: u16, me: u32) {
         let mut trades = self.trades();
         let Some(partner) = trades.partner(me) else { return };
         let Some(players) = maps.get(&map) else { return };
@@ -204,7 +209,7 @@ impl Zones {
             return;
         }
         if trades.end(me).is_some() {
-            tell_cancelled(&maps, me, partner);
+            tell_cancelled(maps, me, partner);
         }
     }
 

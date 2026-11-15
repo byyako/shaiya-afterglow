@@ -1,6 +1,7 @@
 //! The move speed check (`stUserMoveChk`, `docs/original/move-check.md`): the distance walked in a window of at least five
 //! seconds against the fastest speed the player had in it.
 
+use crate::zone::Riding;
 use std::time::{Duration, Instant};
 
 /// A window lasts at least this long (`stUserMoveChk::Reset`: start + 5000).
@@ -17,6 +18,17 @@ pub const CHARGE: u16 = 56;
 /// The speed a step is checked at on foot (or summoning): the table at the move speed, clamped to 0..4 (`GetMoveSpeedNow`).
 pub fn foot_speed(move_speed: u8) -> f32 {
     SPEEDS[usize::from(move_speed.min(4))]
+}
+
+/// The check of a step that passed the step check (`CUser::PacketPC` 0x46a36d): riding is checked at `RIDING`, someone summoning or
+/// on foot at the table's speed for `foot_move_speed`, and a passenger (`Behind`) not at all (`None`: the window is not touched).
+pub fn step_checked(check: &mut MoveCheck, riding: Riding, foot_move_speed: u8, now: Instant, position: [f32; 3]) -> Option<Checked> {
+    let speed = match riding {
+        Riding::Behind => return None,
+        Riding::Riding(_) => RIDING,
+        Riding::OnFoot | Riding::Summoning => foot_speed(foot_move_speed),
+    };
+    Some(check.update(now, position, speed))
 }
 
 /// How a closed window went: the distance walked, the allowance and the window's length.
@@ -114,6 +126,32 @@ mod tests {
             check.update(t0 + WINDOW + Duration::from_secs(5), at(20.0), 5.0),
             Checked::Passed(Window { walked: 20.0, allowed: 75.0, seconds: 5.0, fastest: 5.0 })
         );
+    }
+
+    #[test]
+    fn a_step_is_checked_at_the_speed_of_its_vehicle_status() {
+        use crate::zone::Mount;
+        let t0 = Instant::now();
+        let mount = Riding::Riding(Mount { shape: 1, two_seat: false });
+        // 80 walked in 5 s: on foot at move speed 0 (3 x 5 + 50 = 65) it is too much, riding (8 x 5 + 50 = 90) it is not.
+        let walk = |riding, speed| {
+            let mut check = MoveCheck::new(t0, at(0.0));
+            let first = step_checked(&mut check, riding, speed, t0 + Duration::from_secs(1), at(40.0));
+            (first, step_checked(&mut check, riding, speed, t0 + WINDOW, at(80.0)))
+        };
+        for riding in [Riding::OnFoot, Riding::Summoning] {
+            let (first, last) = walk(riding, 0);
+            assert_eq!(first, Some(Checked::Open));
+            assert!(matches!(last, Some(Checked::Refused { to, .. }) if to == at(0.0)), "{riding:?}: {last:?}");
+        }
+        let (_, last) = walk(mount, 0);
+        assert!(matches!(last, Some(Checked::Passed(w)) if w.allowed == 90.0 && w.fastest == RIDING), "{last:?}");
+        // The foot speed is the table's at the move speed: 7 x 5 + 50 = 85 passes the 80.
+        assert!(matches!(walk(Riding::OnFoot, 4).1, Some(Checked::Passed(w)) if w.allowed == 85.0));
+        // A passenger is not checked, and the window does not see the step: the next step still counts from the window's start.
+        let mut check = MoveCheck::new(t0, at(0.0));
+        assert_eq!(step_checked(&mut check, Riding::Behind, 0, t0 + WINDOW, at(500.0)), None);
+        assert!(matches!(step_checked(&mut check, Riding::OnFoot, 0, t0 + WINDOW, at(10.0)), Some(Checked::Passed(w)) if w.walked == 10.0));
     }
 
     #[test]

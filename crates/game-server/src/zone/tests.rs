@@ -5229,6 +5229,15 @@ thread_local! {
     pub(super) static ON_HOLD_END: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
+thread_local! {
+    /// How many times `Zones::maps` was called on this thread (a zone call is synchronous, so a test reads the count around it).
+    pub(super) static MAPS_TAKEN: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+fn maps_taken() -> u32 {
+    MAPS_TAKEN.with(std::cell::Cell::get)
+}
+
 #[test]
 fn the_maps_hold_is_read_before_the_unlock_and_the_delivery_comes_after_it() {
     // The hold's end is read while the lock is still taken (so the unlock's wake-up is not in `maps_held_ms`), and the queued
@@ -5290,4 +5299,159 @@ fn a_zone_call_delivers_its_fan_out_before_it_returns() {
     received(&mut b_in);
     zones.move_to(1, 1, &step(100.0, 102.0));
     assert!(!received(&mut b_in).is_empty(), "the other player has the step as soon as the call returns");
+}
+
+fn go() -> StepVerdict {
+    StepVerdict::Go { stop_summon: false }
+}
+
+#[test]
+fn a_step_takes_maps_once() {
+    use shaiya_proto::trade as tp;
+    let zones = Zones::default();
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    let (b, mut b_in) = player(2, 100.0, 101.0);
+    zones.enter(1, a);
+    zones.enter(1, b);
+    received(&mut a_in);
+    received(&mut b_in);
+    // The step that is made: the status, the move, the trade check and the areas under one lock (it was five takes before piece 10,
+    // three before this).
+    let before = maps_taken();
+    let stepped = zones.step(1, 1, &step(100.0, 102.0), |_| go());
+    assert_eq!(maps_taken() - before, 1, "a step takes maps once");
+    assert!(!stepped.refused && !stepped.packets.is_empty());
+    // The step that is undone is one take as well.
+    let before = maps_taken();
+    let stepped = zones.step(1, 1, &step(100.0, 103.0), |_| StepVerdict::Back([100.0, 0.0, 100.0]));
+    assert_eq!(maps_taken() - before, 1, "so does a refused step");
+    assert!(stepped.refused);
+    assert_eq!(zones.whereabouts(1, 1).unwrap().position, [100.0, 0.0, 100.0], "the player is back where it was");
+    // And with a trade ended by the step: still one.
+    let (a, mut a_in, _) = member(11, 200.0, 100.0, 0, b"Alice", 10);
+    let (b, mut b_in, _) = member(12, 205.0, 100.0, 0, b"Bob", 10);
+    zones.enter(1, a);
+    zones.enter(1, b);
+    zones.trade_request(1, 11, 12, Instant::now());
+    zones.trade_answer(12, true);
+    drain(&mut a_in);
+    drain(&mut b_in);
+    let before = maps_taken();
+    zones.step(1, 11, &step(180.0, 100.0), |_| go());
+    assert_eq!(maps_taken() - before, 1, "a step that ends a trade takes maps once");
+    assert!(received(&mut a_in).contains(&tp::end(tp::END_CANCELLED)));
+    assert!(received(&mut b_in).contains(&tp::end(tp::END_CANCELLED_BY_PARTNER)));
+}
+
+#[test]
+fn a_step_judges_with_the_vehicle_status_read_under_the_lock() {
+    let zones = Zones::default();
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    let (b, _b_in) = player(2, 100.0, 101.0);
+    zones.enter(1, a);
+    zones.enter(1, b);
+    received(&mut a_in);
+    let mount = Mount { shape: 14, two_seat: false };
+    let asked = |zones: &Zones, id: u32| {
+        let mut seen = None;
+        zones.step(1, id, &step(100.0, 102.0), |riding| {
+            seen = Some(riding);
+            // The lock is taken now: the judge sees the state the zone has, and cannot take it again.
+            assert!(zones.maps.try_lock().is_err());
+            go()
+        });
+        seen.expect("the judge was asked")
+    };
+    assert_eq!(asked(&zones, 1), Riding::OnFoot);
+    for status in [Riding::Summoning, Riding::Riding(mount), Riding::Behind, Riding::OnFoot] {
+        edit(&zones, 1, |p| p.ride.status = status);
+        assert_eq!(asked(&zones, 1), status, "the same status `riding` gives");
+        assert_eq!(zones.riding(1, 1), status, "the step does not change it");
+    }
+    // A player the zone does not have, and a map it does not have: on foot, as `riding` says.
+    assert_eq!(asked(&zones, 99), Riding::OnFoot);
+    let mut seen = None;
+    let stepped = zones.step(7, 1, &step(100.0, 102.0), |riding| {
+        seen = Some(riding);
+        go()
+    });
+    assert_eq!((seen, stepped.packets.len(), stepped.refused), (Some(Riding::OnFoot), 0, false));
+}
+
+#[test]
+fn a_step_is_the_move_the_trade_check_and_the_areas_in_that_order() {
+    // The same setup, once with `step` and once with the calls it replaces; every outbox holds the same packets.
+    let run = |whole: bool| {
+        let (zones, mut inboxes, _) = duel_ground();
+        duel_fight(&zones, &mut inboxes);
+        for (id, to) in [(3, (100.0, 143.0)), (3, (100.0, 144.0)), (1, (100.0, 101.0))] {
+            let next = step(to.0, to.1);
+            if whole {
+                zones.step(1, id, &next, |_| go());
+            } else {
+                zones.move_to(1, id, &next);
+                zones.trade_moved(1, id);
+                zones.left_areas(1, id, Instant::now());
+            }
+        }
+        // The stakes dropped on the ground land at random places: those packets are compared by opcode only.
+        let alike = |p: Vec<u8>| if opcode(&p) == 0x0401 { p[..4].to_vec() } else { p };
+        inboxes.iter_mut().map(|inbox| received(inbox).into_iter().map(alike).collect::<Vec<_>>()).collect::<Vec<_>>()
+    };
+    let (whole, parts) = (run(true), run(false));
+    assert_eq!(whole, parts);
+    assert!(!whole[1].is_empty());
+}
+
+#[test]
+fn a_step_out_of_a_duel_area_ends_the_duel() {
+    use shaiya_proto::duel as dp;
+    let (zones, mut inboxes, _) = duel_ground();
+    duel_fight(&zones, &mut inboxes);
+    // The centre is (100, 103): 40 away is still in, 41 is out.
+    zones.step(1, 3, &step(100.0, 143.0), |_| go());
+    assert!(!received(&mut inboxes[2]).iter().any(|p| opcode(p) == dp::OP_CANCEL), "40 is still in");
+    zones.step(1, 3, &step(100.0, 144.0), |_| go());
+    assert_eq!(received(&mut inboxes[1]).last(), Some(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)));
+    assert_eq!(received(&mut inboxes[2]).last(), Some(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)));
+    // A step the speed check refused puts the player back, and the areas are checked there: from outside the area it ends too.
+    let (zones, mut inboxes, _) = duel_ground();
+    duel_fight(&zones, &mut inboxes);
+    edit(&zones, 3, |p| p.occupant.position = [100.0, 0.0, 130.0]);
+    let stepped = zones.step(1, 3, &step(100.0, 131.0), |_| StepVerdict::Back([100.0, 0.0, 150.0]));
+    assert!(stepped.refused);
+    assert_eq!(received(&mut inboxes[1]).last(), Some(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)), "back to 150: out");
+}
+
+#[test]
+fn a_step_out_of_a_war_area_takes_the_player_out_of_the_war() {
+    use shaiya_proto::guild_war as wp;
+    let (zones, mut inboxes, _) = war_ground();
+    let now = war_countdown(&zones, &mut inboxes);
+    zones.war_timers(now + crate::guild_war::COUNTDOWN);
+    for inbox in inboxes.iter_mut() {
+        received(inbox);
+    }
+    // The centre is (100, 115): Ben at (100, 150) steps to 155 (40 away, in) and then to 156 (out).
+    zones.step(1, 4, &step(100.0, 155.0), |_| go());
+    assert!(at_war(&zones, 4).is_some());
+    zones.step(1, 4, &step(100.0, 156.0), |_| go());
+    for inbox in &mut inboxes[..4] {
+        assert_eq!(war_packets(inbox), [wp::left(wp::OUT_OF_AREA, 4)]);
+    }
+    assert!(at_war(&zones, 4).is_none());
+}
+
+#[test]
+fn a_step_stops_a_summon_only_when_it_is_made() {
+    let zones = Zones::default();
+    let (a, _a_in) = player(1, 100.0, 100.0);
+    zones.enter(1, a);
+    edit(&zones, 1, |p| p.ride.status = Riding::Summoning);
+    zones.step(1, 1, &step(100.0, 101.0), |_| go());
+    assert_eq!(zones.riding(1, 1), Riding::Summoning, "a step that does not say so leaves it");
+    zones.step(1, 1, &step(100.0, 102.0), |_| StepVerdict::Back([100.0, 0.0, 100.0]));
+    assert_eq!(zones.riding(1, 1), Riding::Summoning, "a refused step does not stop it");
+    zones.step(1, 1, &step(100.0, 103.0), |_| StepVerdict::Go { stop_summon: true });
+    assert_eq!(zones.riding(1, 1), Riding::OnFoot);
 }

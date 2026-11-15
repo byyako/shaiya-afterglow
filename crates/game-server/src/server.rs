@@ -2292,27 +2292,37 @@ async fn world_loop<S: Backend>(
                 if !ctx.data.world.is_safe_pos(map, step.position) {
                     bail!("moving to {:?}, off map {map}", step.position);
                 }
-                if ctx.config.move_check && !speed_checked(ctx, state, id, step.position) {
-                    // Back to the window's start, the server's position included (deviation 1); the original's packets.
+                // The vehicle status is read, the speed checked, the step made (or undone) and the trade, duel and war areas checked
+                // under one `maps` lock (`Zones::step`); the speed check is the connection's own state and a closure under the lock.
+                let mut checked = None;
+                let stepped = ctx.zones.step(map, id, &step, |riding| {
+                    if ctx.config.move_check {
+                        checked = speed_checked(state, riding, step.position);
+                    }
+                    if let Some(move_check::Checked::Refused { to, .. }) = checked {
+                        // Back to the window's start, the server's position included (deviation 1).
+                        state.position = to;
+                        return crate::zone::StepVerdict::Back(to);
+                    }
+                    state.position = step.position;
+                    state.dir = step.dir;
+                    state.last_move = Some(Instant::now());
+                    // A step stops a summon (`CUser::PacketPC` 0x0501, `docs/original/vehicles.md` section 1).
+                    crate::zone::StepVerdict::Go { stop_summon: vehicles::summon_stopped(state) }
+                });
+                log_speed_check(id, checked);
+                if stepped.refused {
+                    // The original's packets.
                     stop_attacking(ctx, state, id);
-                    for packet in ctx.zones.move_back(map, id, state.position) {
+                    for packet in stepped.packets {
                         conn.send(packet).await?;
                     }
                     conn.send(w::move_refused(id)).await?;
-                    ctx.zones.trade_moved(map, id);
-                    ctx.zones.left_areas(map, id, Instant::now());
                     continue;
                 }
-                state.position = step.position;
-                state.dir = step.dir;
-                state.last_move = Some(Instant::now());
-                // A step stops a summon (`CUser::PacketPC` 0x0501, `docs/original/vehicles.md` section 1).
-                vehicles::cancel_summon(ctx, state, id);
-                for packet in ctx.zones.move_to(map, id, &step) {
+                for packet in stepped.packets {
                     conn.send(packet).await?;
                 }
-                ctx.zones.trade_moved(map, id);
-                ctx.zones.left_areas(map, id, Instant::now());
                 // A step cancels a move by item, after it went out (`CUser::CancleMove`, `docs/original/item-use.md` section 9).
                 if let Some(packet) = cancel_item_move(ctx, state, id) {
                     conn.send(packet).await?;
@@ -3228,21 +3238,20 @@ const GATEKEEPER: u8 = 2;
 /// How close a player must be to a gatekeeper (`SVector::Distance2`).
 const GATEKEEPER_RANGE: f32 = 30.0;
 
-/// The move speed check on a step that passed the step check (`CUser::PacketPC` 0x46a36d, `docs/original/move-check.md`): false
-/// when refused, with `state.position` then the window's start. Riding is checked at 8.0, a passenger not at all.
-fn speed_checked<S>(ctx: &Context<S>, state: &mut WorldState, id: u32, position: [f32; 3]) -> bool {
-    let speed = match ctx.zones.riding(state.map, id) {
-        crate::zone::Riding::Behind => return true,
-        crate::zone::Riding::Riding(_) => move_check::RIDING,
-        _ => move_check::foot_speed(state.totals.speeds().1),
-    };
-    match state.move_check.update(Instant::now(), position, speed) {
-        move_check::Checked::Open => true,
-        move_check::Checked::Passed(w) => {
+/// The move speed check on a step that passed the step check (`CUser::PacketPC` 0x46a36d, `docs/original/move-check.md`), given the
+/// vehicle status read under the zone's lock (`Zones::step`): the check's verdict, `Refused` when refused (the caller then puts the
+/// position back to `to`), `None` for a passenger, who is not checked at all. It touches only the connection's own state, so it can
+/// run under the lock; `log_speed_check` says what it found afterwards.
+fn speed_checked(state: &mut WorldState, riding: crate::zone::Riding, position: [f32; 3]) -> Option<move_check::Checked> {
+    move_check::step_checked(&mut state.move_check, riding, state.totals.speeds().1, Instant::now(), position)
+}
+
+fn log_speed_check(id: u32, checked: Option<move_check::Checked>) {
+    match checked {
+        Some(move_check::Checked::Passed(w)) => {
             tracing::debug!(id, walked = w.walked, seconds = w.seconds, average = w.walked / w.seconds, fastest = w.fastest, "move window");
-            true
         }
-        move_check::Checked::Refused { window: w, to } => {
+        Some(move_check::Checked::Refused { window: w, to }) => {
             tracing::info!(
                 id,
                 walked = w.walked,
@@ -3252,9 +3261,8 @@ fn speed_checked<S>(ctx: &Context<S>, state: &mut WorldState, id: u32, position:
                 ?to,
                 "move refused: too fast"
             );
-            state.position = to;
-            false
         }
+        Some(move_check::Checked::Open) | None => {}
     }
 }
 

@@ -362,6 +362,11 @@ impl Zones {
     pub fn left_areas(&self, map: u16, me: u32, now: Instant) {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };
+        self.left_areas_in(map, players, me, now);
+    }
+
+    /// `left_areas` with `maps` held by the caller (a step: `Zones::step`).
+    pub(super) fn left_areas_in(&self, map: u16, players: &mut Players, me: u32, now: Instant) {
         let out = players.get(&me).is_some_and(|p| {
             p.duel
                 .as_ref()

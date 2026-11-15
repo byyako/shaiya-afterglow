@@ -320,6 +320,12 @@ wait). Gains below are for the 300 battle unless said; at 700 and 1000 the same 
 | 6 | **Per-map locks** (design A) | `HashMap<u16, Mutex<...>>` | **nothing for this battle** (one map); divides the contention in a spread-out world | high: 193 sites, cross-map walks take every lock, a map change takes two | medium |
 | 7 | Spin before sleeping (`parking_lot` or by hand) | measured: `MAPS_PROBE_SPIN_US=50` | -11 % of the wait, more CPU, latency not better | small | low, but not worth it on a 4-core box shared with the bots |
 
+**Fixes 1 and 2 are built, not yet measured** (2026-11-15). Fix 1: `Zones::step` takes `maps` once for a whole step (the vehicle status for the
+speed check, the move or the move back, the trade check, the duel and war areas; `server.rs` runs the speed check as a closure under
+the lock); a zone test counts the takes. Fix 2: `MapsGuard` drops the timer, then the lock, then the deferred scope, so `maps_held_ms`
+no longer includes the unlock (a test reads the timer's end with the lock still taken). The predicted drop in the wait is still to be
+checked by a 300 and a 700 run with the plain build; section 4's holds from before the change include the unlock.
+
 Not a fix, but for reading the figure: **on this box a quarter of the wait is the bots' doing** (nice 19: -25 %, 3.3), so a knee run with
 the bots on another machine would show a smaller `maps` wait for the same server. And the probe's CPU sample (`CLOCK_THREAD_CPUTIME_ID`)
 must stay off for figures to compare (it raised the wait about 45 % in M-300).
