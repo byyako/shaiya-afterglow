@@ -5224,6 +5224,39 @@ fn holding_maps_is_timed() {
     assert!(zones.maps.try_lock().is_ok());
 }
 
+thread_local! {
+    /// Run once by the next `MapsGuard` to end on this thread, when its timer reads the clock (`zone::HoldTimer`).
+    pub(super) static ON_HOLD_END: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[test]
+fn the_maps_hold_is_read_before_the_unlock_and_the_delivery_comes_after_it() {
+    // The hold's end is read while the lock is still taken (so the unlock's wake-up is not in `maps_held_ms`), and the queued
+    // packets still go out only after the lock is free, in the order they were sent.
+    let zones = std::sync::Arc::new(Zones::default());
+    let (a, mut a_in) = player(1, 100.0, 100.0);
+    zones.enter(1, a);
+    received(&mut a_in);
+    let seen = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0));
+    let probe = {
+        let (zones, seen) = (zones.clone(), seen.clone());
+        move || seen.store(if zones.maps.try_lock().is_err() { 1 } else { 2 }, std::sync::atomic::Ordering::SeqCst)
+    };
+    ON_HOLD_END.with(|p| *p.borrow_mut() = Some(Box::new(probe)));
+    let guard = zones.maps();
+    guard[&1][&1].send(&[1, 0, 0xAA]);
+    guard[&1][&1].send(&[2, 0, 0xBB]);
+    assert!(received(&mut a_in).is_empty(), "nothing is delivered while the lock is held");
+    drop(guard);
+    assert_eq!(
+        seen.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the timer was read with the lock still held (0: not read, 2: after the unlock)"
+    );
+    assert_eq!(received(&mut a_in), [vec![1, 0, 0xAA], vec![2, 0, 0xBB]], "delivered in order after the unlock");
+    assert!(zones.maps.try_lock().is_ok());
+}
+
 #[test]
 fn packets_sent_under_the_maps_lock_arrive_when_it_is_released() {
     let zones = Zones::default();

@@ -1717,15 +1717,17 @@ fn view_cells(view: (i32, i32)) -> impl Iterator<Item = (i32, i32)> {
 /// after the lock is released, so the channel pushes and the wake-ups of a fan-out are not done with every other step waiting
 /// (`docs/plans/load-fixes.md` section 4, design B2; `docs/server/audit.md` R1).
 ///
-/// The fields are declared lock first, timer second, scope third, and Rust drops fields in declaration order: the lock is released,
-/// then the timer reads the clock, then the scope delivers the queued packets. That order is the point. The scope before the lock
-/// would deliver with the lock still held, and the whole gain would be gone; the timer after the scope would count the deliveries in
-/// the hold, and the figure would say the lock was held when it was not. The scope is made after the lock is taken, so a thread
-/// waiting for the lock is not deferring anything. The scope is `!Send`, so the guard cannot be held across an `.await`.
+/// The fields are declared timer first, lock second, scope third, and Rust drops fields in declaration order: the timer reads the
+/// clock, then the lock is released, then the scope delivers the queued packets. That order is the point. The scope before the lock
+/// would deliver with the lock still held, and the whole gain would be gone; the timer after the lock would count the unlock (a
+/// `futex` wake when a thread waits, about 28 % of the figure on the dev box) and the figure would say the lock was held when the
+/// holder was already letting go of it; the timer after the scope would count the deliveries too. The scope is made after the lock is
+/// taken, so a thread waiting for the lock is not deferring anything. The scope is `!Send`, so the guard cannot be held across an
+/// `.await`.
 /// (`sync::Relock::guard` still times the waits, under the lock's type name, `maps`.)
 struct MapsGuard<'a> {
-    lock: MutexGuard<'a, HashMap<u16, HashMap<u32, Placed>>>,
     _held: HoldTimer,
+    lock: MutexGuard<'a, HashMap<u16, HashMap<u32, Placed>>>,
     _deferred: crate::outbox::DeferScope,
 }
 
@@ -1735,6 +1737,11 @@ struct HoldTimer(Instant);
 impl Drop for HoldTimer {
     fn drop(&mut self) {
         crate::monitor::counters().maps_held(self.0.elapsed());
+        // A test's probe of what the guard looks like at the moment the hold's end is read (once, on this thread).
+        #[cfg(test)]
+        if let Some(probe) = tests::ON_HOLD_END.with(|p| p.borrow_mut().take()) {
+            probe();
+        }
     }
 }
 
@@ -1758,7 +1765,7 @@ impl Zones {
     /// deferred, and the lock's order against `mobs` and the rest stays as the fields say.
     fn maps(&self) -> MapsGuard<'_> {
         let lock = Relock::guard(&self.maps);
-        MapsGuard { lock, _held: HoldTimer(Instant::now()), _deferred: crate::outbox::defer() }
+        MapsGuard { _held: HoldTimer(Instant::now()), lock, _deferred: crate::outbox::defer() }
     }
 
     /// Zones with the world's NPCs placed in their cells and the monster spawn areas ready (nothing spawned yet).
