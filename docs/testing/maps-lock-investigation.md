@@ -1,6 +1,6 @@
 # The `maps` lock wait: an investigation (2026-11-15)
 
-No production code was changed; the instrumentation lived in a throwaway worktree (`target/maps-probe/wt`, gitignored) and is
+Up to section 5 no production code was changed (fixes 1 and 2 came after, section 6); the instrumentation lived in a throwaway worktree (`target/maps-probe/wt`, gitignored) and is
 described in section 2. Eleven 300-bot runs and one 700-bot run (server side) on the dev box on 2026-11-15.
 
 The question (`docs/testing/load-pvp.md`, F2 and "Open questions"): in the 2026-11-14 runs the `maps` wait per 10 s (`lock_worst`
@@ -323,8 +323,8 @@ wait). Gains below are for the 300 battle unless said; at 700 and 1000 the same 
 **Fixes 1 and 2 are built, not yet measured** (2026-11-15). Fix 1: `Zones::step` takes `maps` once for a whole step (the vehicle status for the
 speed check, the move or the move back, the trade check, the duel and war areas; `server.rs` runs the speed check as a closure under
 the lock); a zone test counts the takes. Fix 2: `MapsGuard` drops the timer, then the lock, then the deferred scope, so `maps_held_ms`
-no longer includes the unlock (a test reads the timer's end with the lock still taken). The predicted drop in the wait is still to be
-checked by a 300 and a 700 run with the plain build; section 4's holds from before the change include the unlock.
+no longer includes the unlock (a test reads the timer's end with the lock still taken). The predicted drop in the wait is measured in
+section 6; section 4's holds from before the change include the unlock.
 
 Not a fix, but for reading the figure: **on this box a quarter of the wait is the bots' doing** (nice 19: -25 %, 3.3), so a knee run with
 the bots on another machine would show a smaller `maps` wait for the same server. And the probe's CPU sample (`CLOCK_THREAD_CPUTIME_ID`)
@@ -334,7 +334,54 @@ Recommended order: 1 and 2 together (small, low risk, the measured bulk of the w
 to check the predicted drop; 3 if the attack sites are then the larger share; 4 for CPU at 1000; 5 and 6 only for a bigger or
 spread-out world.
 
-## 6. Files
+## 6. Fixes 1 and 2 measured (2026-11-15, evening)
+
+The plain release build of `6167efb` (fixes 1 and 2, no probe; `target/maps-probe/bin/game-server-6167efb`), the bots of the same
+commit, the same settings, ramp (5 a second), `--duration 10m`, `stats_every = 10` and scripts (`seq2.sh`, `run2.sh`, `sched2.sh`,
+`sum.py`) as the X-* runs of section 3. Run: two 300 runs (F12-300a, F12-300b), one 700 run (F12-700) and a 700 control with the
+pre-fix `5f74544` binary (`game-server-main`, X-main-700), all on 2026-11-15 from 21:23 UTC. The planned pre-fix 300 control on this
+evening's box (X-main-300-c) was not run.
+
+Fix 2 changes what `maps_held_ms` measures (the unlock is no longer in it), so the held figures before and after are not
+comparable; the wait (`lock_worst maps`) is measured exactly as before.
+
+| | X-main-300 (pre-fix, 19:33 UTC) | F12-300a (21:23 to 21:33) | F12-300b (21:34 to 21:45) |
+|---|---|---|---|
+| `maps` wait per 10 s, median | 890 ms | 688 ms | 959 ms |
+| contended acquisitions per 10 s | 2,104 | 1,282 | 1,411 |
+| mean wait | 423 us | 537 us | 680 us |
+| longest wait (median of the lines) | 9.4 ms | 9.6 ms | 13.8 ms |
+| `maps_held_ms` (not comparable, see above) | 543 ms | 383 ms | 413 ms |
+| ack p95, step echo p95 | 10.6, 16.4 ms | 10.6, 17.1 ms | 10.6, 17.1 ms |
+| server CPU (all threads, median of 400 %); workers' CPU per 10 s | 43 %; 4.34 s | 44 %; 4.44 s | 45 %; 4.47 s |
+| workers' run-queue wait per 10 s | 2.75 s (316 us per slice) | 2.69 s (352 us) | 2.77 s (366 us) |
+| workers' voluntary / involuntary switches | 5,158 / 3,322 | 4,432 / 3,198 | 4,392 / 3,230 |
+| in the world; disconnected; `pool timed out` | 300 of 300; 0; 0 | 300 of 300; 0; 0 | 300 of 300; 0; 0 |
+| logout clean | 300 of 300 | 300 of 300 | 300 of 300 |
+
+| 700 bots | X-main-700 (pre-fix, 21:59 UTC) | F12-700 (21:48 UTC) |
+|---|---|---|
+| `maps` wait per 10 s, mean of 48 lines | 2,805 ms | 2,239 ms (-20 %) |
+| contended acquisitions per 10 s | 4,580 | 2,926 (-36 %) |
+| mean wait | 613 us | 765 us |
+| longest wait (mean of the lines) | 15.6 ms | 14.9 ms |
+| `maps_held_ms` (not comparable) | 1,611 ms | 1,135 ms |
+| ack p95, step echo p95 | 16.4, 28.8 ms | 15.7, 25.3 ms |
+| workers' CPU per 10 s; run-queue wait | 15.9 s; 10.75 s | 16.9 s; 11.04 s |
+| in the world; disconnected | 700 of 700; 0 | 700 of 700; 0 |
+| logout clean | 699 of 700 | 699 of 700 |
+
+**Result.** The fix did what it was built to do: the contended acquisitions fell by a third at 300 and at 700 (-33 to -39 %, -36 %).
+The wait fell less than predicted (-35 to -50 %): -20 % at 700, and at 300 -23 % in one run and none in the other (single runs spread
+about +-12 %). The reason is the second factor of section 5: each wait got longer (423 to 537 and 680 us at 300; 613 to 765 us at
+700). The acquisitions that remain are the ones that meet a busy lock, and the cost of a sleep and wake-up on this box is the same
+or higher, so the total falls by less than the count. The latencies are the same or a little better (700: step echo p95 28.8 to
+25.3 ms), and nobody was disconnected. **Fixes 1 and 2 are kept; the wait is lower but not by the predicted share.** Rank 3 (the
+attack path) would take about 10 to 15 % more by the same arithmetic; it is not built, because the latencies already meet the
+targets and the box's scheduling, not the server, is the larger factor. A knee run above 1000 or a run with the bots on another
+machine would say more than a further fix here.
+
+## 7. Files
 
 Not in git (`logs/` and `target/` are ignored):
 
