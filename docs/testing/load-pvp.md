@@ -252,5 +252,5 @@ left behind. That is the next question for R2 (100 bots with the client) and R3 
   a just-spawned monster, a dropped `0x0610` HP delta leaving a bar off for the fight); and whether the client still crashes at 300
   in view (the 2026-11-12 crashes). R2 and R3 with the client are still to do. If the artifacts show, the fallback is to deliver the
   deferred sends under a second mutex taken before `maps` is released.
-- **The `maps` wait** (F2): why the wait per 10 s is higher than on 2026-11-12 with better latency.
+- **The `maps` wait** (F2): answered in [`maps-lock-investigation.md`](maps-lock-investigation.md): the write batching let more workers meet at the lock (sleep and wake-up, not longer holds); one take per step (`3c8f7f2`) cut the contended acquisitions by a third and the wait by about 20 % at 700.
 - **The knee**: no run above 1000 was made.
