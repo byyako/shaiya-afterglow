@@ -359,6 +359,10 @@ impl Zones {
     /// 40 from the centre ends the window, the countdown or the fight. Then the guild war (`CUser::PvPChkLeaveByMove`): the same
     /// distance takes the player out of the countdown or the fight. The packets of one end go out before the other's, as when they
     /// were two calls (the sends under the lock are delivered in order once it is released).
+    ///
+    /// Only the tests call this now: a step is `Zones::step`, which holds `maps` already and runs `left_areas_in`. This is the separate
+    /// call it replaced, kept as the reference the step is compared with.
+    #[cfg(test)]
     pub fn left_areas(&self, map: u16, me: u32, now: Instant) {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return };

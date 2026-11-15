@@ -5240,30 +5240,32 @@ fn maps_taken() -> u32 {
 
 #[test]
 fn the_maps_hold_is_read_before_the_unlock_and_the_delivery_comes_after_it() {
-    // The hold's end is read while the lock is still taken (so the unlock's wake-up is not in `maps_held_ms`), and the queued
-    // packets still go out only after the lock is free, in the order they were sent.
+    // The order the guard's parts end in (`MapsGuard`'s field order), seen from outside: first the hold's end is read, with the lock
+    // still taken (so the unlock's wake-up is not in `maps_held_ms`); then the lock is released; then the queued packets go out,
+    // with the lock free (so nobody waits for the channel pushes), in the order they were sent.
     let zones = std::sync::Arc::new(Zones::default());
     let (a, mut a_in) = player(1, 100.0, 100.0);
     zones.enter(1, a);
     received(&mut a_in);
-    let seen = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0));
-    let probe = {
-        let (zones, seen) = (zones.clone(), seen.clone());
-        move || seen.store(if zones.maps.try_lock().is_err() { 1 } else { 2 }, std::sync::atomic::Ordering::SeqCst)
+    // Each probe writes down what it is and whether the lock was taken at that moment.
+    let log = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let probe = |what: &'static str| {
+        let (zones, log) = (zones.clone(), log.clone());
+        Box::new(move || log.borrow_mut().push((what, zones.maps.try_lock().is_err()))) as Box<dyn FnOnce()>
     };
-    ON_HOLD_END.with(|p| *p.borrow_mut() = Some(Box::new(probe)));
+    ON_HOLD_END.with(|p| *p.borrow_mut() = Some(probe("timer read")));
+    crate::outbox::ON_DELIVER.with(|p| *p.borrow_mut() = Some(probe("delivery")));
     let guard = zones.maps();
     guard[&1][&1].send(&[1, 0, 0xAA]);
     guard[&1][&1].send(&[2, 0, 0xBB]);
     assert!(received(&mut a_in).is_empty(), "nothing is delivered while the lock is held");
     drop(guard);
     assert_eq!(
-        seen.load(std::sync::atomic::Ordering::SeqCst),
-        1,
-        "the timer was read with the lock still held (0: not read, 2: after the unlock)"
+        *log.borrow(),
+        [("timer read", true), ("delivery", false)],
+        "the timer first with the lock taken, then the delivery with it free (and both probes ran)"
     );
-    assert_eq!(received(&mut a_in), [vec![1, 0, 0xAA], vec![2, 0, 0xBB]], "delivered in order after the unlock");
-    assert!(zones.maps.try_lock().is_ok());
+    assert_eq!(received(&mut a_in), [vec![1, 0, 0xAA], vec![2, 0, 0xBB]], "delivered in order");
 }
 
 #[test]
@@ -5283,7 +5285,7 @@ fn packets_sent_under_the_maps_lock_arrive_when_it_is_released() {
     drop(guard);
     assert_eq!(received(&mut a_in), [vec![1, 0, 0xAA], vec![3, 0, 0xCC]], "in the order they were sent");
     assert_eq!(received(&mut b_in), [vec![2, 0, 0xBB]]);
-    // The lock was free when they went out: its own scope ended after the unlock (the field order of `MapsGuard`).
+    // (That the delivery happens after the unlock, not only after the guard's drop began, is the test above's.)
     assert!(zones.maps.try_lock().is_ok());
 }
 
@@ -5378,29 +5380,73 @@ fn a_step_judges_with_the_vehicle_status_read_under_the_lock() {
     assert_eq!((seen, stepped.packets.len(), stepped.refused), (Some(Riding::OnFoot), 0, false));
 }
 
-#[test]
-fn a_step_is_the_move_the_trade_check_and_the_areas_in_that_order() {
-    // The same setup, once with `step` and once with the calls it replaces; every outbox holds the same packets.
+/// One step of the equivalence test: who steps, to where, and whether the speed check refused it (the player goes back there).
+type Taken = (u32, (f32, f32), bool);
+
+/// The same setup run twice, once with `Zones::step` and once with the calls it replaces (`move_to` or `move_back`, then
+/// `trade_moved`, then `left_areas`): what comes back for the mover and what every outbox holds must be the same.
+fn step_both_ways(setup: impl Fn() -> (Zones, Vec<crate::outbox::OutboxInbox>), steps: &[Taken]) -> Vec<Vec<Vec<u8>>> {
     let run = |whole: bool| {
-        let (zones, mut inboxes, _) = duel_ground();
-        duel_fight(&zones, &mut inboxes);
-        for (id, to) in [(3, (100.0, 143.0)), (3, (100.0, 144.0)), (1, (100.0, 101.0))] {
-            let next = step(to.0, to.1);
-            if whole {
-                zones.step(1, id, &next, |_| go());
+        let (zones, mut inboxes) = setup();
+        let mut returned = Vec::new();
+        for &(id, (x, z), back) in steps {
+            let next = step(x, z);
+            let packets = if whole {
+                let verdict = if back { StepVerdict::Back([x, 0.0, z]) } else { go() };
+                let stepped = zones.step(1, id, &next, |_| verdict);
+                assert_eq!(stepped.refused, back);
+                stepped.packets
             } else {
-                zones.move_to(1, id, &next);
+                let packets = if back { zones.move_back(1, id, [x, 0.0, z]) } else { zones.move_to(1, id, &next) };
                 zones.trade_moved(1, id);
                 zones.left_areas(1, id, Instant::now());
-            }
+                packets
+            };
+            returned.push(packets);
         }
         // The stakes dropped on the ground land at random places: those packets are compared by opcode only.
         let alike = |p: Vec<u8>| if opcode(&p) == 0x0401 { p[..4].to_vec() } else { p };
-        inboxes.iter_mut().map(|inbox| received(inbox).into_iter().map(alike).collect::<Vec<_>>()).collect::<Vec<_>>()
+        let held: Vec<Vec<Vec<u8>>> = inboxes.iter_mut().map(|inbox| received(inbox).into_iter().map(alike).collect::<Vec<_>>()).collect();
+        (returned, held)
     };
-    let (whole, parts) = (run(true), run(false));
-    assert_eq!(whole, parts);
-    assert!(!whole[1].is_empty());
+    let ((whole_back, whole), (parts_back, parts)) = (run(true), run(false));
+    assert_eq!(whole_back, parts_back, "what the mover is sent");
+    assert_eq!(whole, parts, "what the others are sent");
+    whole
+}
+
+#[test]
+fn a_step_is_the_move_the_trade_check_and_the_areas_in_that_order() {
+    use shaiya_proto::duel as dp;
+    use shaiya_proto::trade as tp;
+    // A duel: a step within the area, a refused step put back inside it, then out of it by a step and by a refused step.
+    let held = step_both_ways(
+        || {
+            let (zones, mut inboxes, _) = duel_ground();
+            duel_fight(&zones, &mut inboxes);
+            (zones, inboxes.into())
+        },
+        &[(3, (100.0, 143.0), false), (1, (100.0, 101.0), true), (3, (100.0, 144.0), false), (2, (100.0, 150.0), true)],
+    );
+    assert!(held[1].contains(&dp::cancel(dp::CANCEL_OUT_OF_AREA, 3)), "the duel ended on the way");
+    // A trade: a step that keeps the partners near, a refused step that puts one 20 apart, and one more step with the trade over.
+    let held = step_both_ways(
+        || {
+            let zones = Zones::default();
+            let mut inboxes = Vec::new();
+            for (id, x, name) in [(1, 100.0, b"Alice".as_slice()), (2, 105.0, b"Bob"), (3, 100.0, b"Cat")] {
+                let (o, inbox, _) = member(id, x, if id == 3 { 90.0 } else { 100.0 }, 0, name, 10);
+                zones.enter(1, o);
+                inboxes.push(inbox);
+            }
+            zones.trade_request(1, 1, 2, Instant::now());
+            zones.trade_answer(2, true);
+            inboxes.iter_mut().for_each(|inbox| drop(received(inbox)));
+            (zones, inboxes)
+        },
+        &[(1, (104.0, 100.0), false), (1, (125.0, 100.0), true), (1, (126.0, 100.0), false)],
+    );
+    assert!(held[0].contains(&tp::end(tp::END_CANCELLED)) && held[1].contains(&tp::end(tp::END_CANCELLED_BY_PARTNER)));
 }
 
 #[test]

@@ -186,9 +186,10 @@ impl Zones {
     }
 
     /// After a step (`CUser::PacketPC` 0x46a5d1): more than 10 from the partner ends the trade at any stage, `0x0A04 2` and `3`.
-    /// Most players have no trade, so `trades` alone is asked first (and released) and the step goes on without taking `maps`. With a
-    /// partner, `maps` and then `trades` are taken in the lock order and the partner is read again: the trade may have ended or changed
-    /// partner meanwhile, and what is found under both locks decides, as when both were held from the start.
+    /// Only the tests call this now: a step is `Zones::step`, which holds `maps` already and runs `trade_apart`. This is the separate
+    /// call it replaced, kept as the reference the step is compared with: `trades` alone is asked first (and released) and, with no
+    /// trade, `maps` is not taken; with a partner, `maps` and then `trades` are taken in the lock order and the partner is read again.
+    #[cfg(test)]
     pub fn trade_moved(&self, map: u16, me: u32) {
         let traded = self.trades().partner(me).is_some();
         if !traded {
@@ -198,7 +199,7 @@ impl Zones {
         self.trade_apart(&maps, map, me);
     }
 
-    /// `trade_moved` with `maps` held by the caller (a step: `Zones::step`); `trades` is taken after it, in the lock order.
+    /// The trade check of a step (`trade_moved`) with `maps` held by the caller (`Zones::step`); `trades` is taken after it, in the lock order.
     pub(super) fn trade_apart(&self, maps: &Maps, map: u16, me: u32) {
         let mut trades = self.trades();
         let Some(partner) = trades.partner(me) else { return };

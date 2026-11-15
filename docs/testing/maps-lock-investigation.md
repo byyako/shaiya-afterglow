@@ -33,7 +33,7 @@ although the latencies and the CPU were better.
 
 A probe build of `5f74544` in the worktree `target/maps-probe/wt` (uncommitted, never on `main`): `crates/game-server/src/maps_probe.rs`
 plus small edits to `zone.rs` (`Zones::maps` is `#[track_caller]` and does `Relock::guard`'s steps by hand; `MapsGuard` gets a `Drop`
-that keeps the field order lock, timer, scope), `outbox.rs` (`deferred_len`) and `server/tasks.rs` (the probe's lines after each stats
+that keeps the field order lock, timer, scope, before 023d594), `outbox.rs` (`deferred_len`) and `server/tasks.rs` (the probe's lines after each stats
 line). Per call site of `Zones::maps` (the caller's file and line) and per 10 s it logs:
 
 - `acq`, `hold_ms`, `hold_max_us`, a hold histogram: the hold from just after the lock is taken to just before the unlock;
@@ -275,7 +275,7 @@ under 4 % of the time, so the steps of several connections are being handled at 
   is an underestimate: the mutex is not fair, so a running thread takes the free lock ahead of the woken one, and the woken one goes
   back to sleep.
 
-**The deferred flush adds no hold time.** It runs after the unlock (`MapsGuard`'s fields: lock, then timer, then scope); the probe
+**The deferred flush adds no hold time.** It runs after the unlock (`MapsGuard`'s fields: lock, then timer, then scope, before 023d594; since then timer, lock, scope); the probe
 times it separately: 217 ms per 10 s for 640 k packets at 300 (0.34 us a packet), 883 ms for 3.07 M at 700, all outside the lock.
 With the deferral off (M-300-nodefer) the holds grew 20 % (448 to 539 ms), and the wait did not move (1,277 to 1,180 ms, within the
 spread). `DeferScope`'s drop is the flush, so it adds nothing either. What does add to the **reported** hold is `HoldTimer` being

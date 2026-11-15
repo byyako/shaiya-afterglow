@@ -94,7 +94,8 @@ pub(super) async fn summon_due<S: Backend>(
     conn.send(shape).await
 }
 
-/// A summon stops without a word (an accepted step, a hit, a map change).
+/// A summon stops without a word (a hit, a map change). An accepted step stops it inside `Zones::step` (`StepVerdict::Go`'s
+/// `stop_summon`, from `summon_stopped`), under the same `maps` hold as the step, so it does not come through here.
 pub(super) fn cancel_summon<S>(ctx: &Context<S>, state: &mut WorldState, id: u32) {
     if summon_stopped(state) {
         ctx.zones.stop_summon(state.map, id);

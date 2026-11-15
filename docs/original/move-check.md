@@ -180,12 +180,13 @@ To build (`move_check.rs`, the rules; the `0x0501` handler):
 ## 9. Built
 
 `move_check.rs` (the window, `Checked::{Open, Passed, Refused}`, the constants), in the `0x0501` handler after the step and map checks
-(`server.rs`, `speed_checked`): riding 8.0 (the original's, 0x46a378), a passenger not checked (the original's 10,007), otherwise the table at the current move speed. Started again on
-entering a zone, in `move_player`, and on the three same-map revivals. A refused step: `stop_attacking`, `Zones::move_back` (the
-window start for the zone and the view, `0x020B` to them and the player, a mount pair kept), `0x0502` 5, then the trade, duel and war
-distance checks; the connection's position is the window start. Charge takes its reach off when it goes off. A step that is too long
+(`server.rs`, the closure given to `Zones::step`, which runs `move_check::step_checked`): riding 8.0 (the original's, 0x46a378), a passenger not checked (the original's 10,007), otherwise the table at the current move speed. Started again on
+entering a zone, in `move_player`, and on the three same-map revivals. A refused step: `Zones::step` does the move back (the
+window start for the zone and the view, `0x020B` to them and the player, a mount pair kept) and then the trade, duel and war distance
+checks, all under one `maps` hold, with the vehicle status for the speed check read under the same hold; then `stop_attacking`, then
+`0x0502` 5; the connection's position is the window start. Charge takes its reach off when it goes off. A step that is too long
 now stops attacking too. `move_check` (default `true`). Logs: "move refused: too fast" (`info`), "move window" (`debug`). Tests:
-`move_check` (4) and `game_flow::walking_too_fast_goes_back_to_the_windows_start`. Live test: checklist section 45.
+`move_check` (5) and `game_flow::walking_too_fast_goes_back_to_the_windows_start`. Live test: checklist section 45.
 
 ## 10. Other episodes
 

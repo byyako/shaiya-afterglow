@@ -2876,7 +2876,9 @@ impl Zones {
 
     /// An accepted step (`CZone::MoveUserByPacket`, `CZone::SendMoveUser`). Changes the cell when the player is past the
     /// margin and swaps what each side sees (players both ways, then the NPCs that left and came into the mover's view),
-    /// then sends `0x0501` to the players within range, the mover included.
+    /// then sends `0x0501` to the players within range, the mover included. Only the tests call this now: a step is `Zones::step`,
+    /// which runs `moved` under the hold it shares with the speed check and the follow-up checks.
+    #[cfg(test)]
     pub fn move_to(&self, map: u16, id: u32, step: &Move) -> Vec<Vec<u8>> {
         let mut maps = self.maps();
         let Some(players) = maps.get_mut(&map) else { return Vec::new() };
@@ -2915,7 +2917,9 @@ impl Zones {
     /// status, read under the lock, and says whether the step goes on or the player goes back (the connection's own speed check,
     /// which touches only its own state); then the step is made (`move_to`) or undone (`move_back`), the trade is checked
     /// (`trade_moved`) and the duel and war areas (`left_areas`), in that order, as they were when each took the lock. Every send
-    /// is deferred and delivered in order once the lock is released (`MapsGuard`). `judge` runs under the lock: it must not take it.
+    /// is deferred and delivered in order once the lock is released (`MapsGuard`). `judge` runs under the lock and must stay
+    /// short: it must take no lock at all (not `maps`, which is not re-entrant, and no other, which would put one under `maps` out of
+    /// the lock order), must not block or wait, and must not log (a subscriber can block); it changes only what the connection owns.
     pub fn step(&self, map: u16, id: u32, step: &Move, judge: impl FnOnce(Riding) -> StepVerdict) -> Stepped {
         let mut maps = self.maps();
         let riding = maps.get(&map).and_then(|p| p.get(&id)).map_or(Riding::OnFoot, |p| p.ride.status);
@@ -2947,7 +2951,9 @@ impl Zones {
     }
 
     /// A step refused by the move speed check: the player goes back to `position` as for a teleport, but a pair on one mount
-    /// stays together (`docs/original/move-check.md`, deviation 1).
+    /// stays together (`docs/original/move-check.md`, deviation 1). Only the tests call this now: a refused step is `Zones::step` with
+    /// `StepVerdict::Back`, which runs `relocated` under the step's hold.
+    #[cfg(test)]
     pub fn move_back(&self, map: u16, id: u32, position: [f32; 3]) -> Vec<Vec<u8>> {
         self.relocate(map, id, position, false)
     }

@@ -82,6 +82,13 @@ pub fn defer() -> DeferScope {
     DeferScope { _thread: PhantomData }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Run once by the next outermost scope to end on this thread, just before it delivers (a test's probe of what the world looks
+    /// like at that moment: `zone::tests`).
+    pub(crate) static ON_DELIVER: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+}
+
 impl Drop for DeferScope {
     /// Never panics: `try_with` (the list is gone only when the thread is ending) and a delivery that is `Outbox::deliver`.
     fn drop(&mut self) {
@@ -90,6 +97,10 @@ impl Drop for DeferScope {
             d.depth.set(depth);
             if depth > 0 {
                 return;
+            }
+            #[cfg(test)]
+            if let Some(probe) = ON_DELIVER.with(|p| p.borrow_mut().take()) {
+                probe();
             }
             // Taken out of the cell first, so nothing is borrowed while the packets go: delivery is outside any borrow.
             let mut sends = std::mem::take(&mut *d.queue.borrow_mut());

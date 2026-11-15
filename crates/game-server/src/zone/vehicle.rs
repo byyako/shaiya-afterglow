@@ -202,7 +202,7 @@ impl Zones {
         packet
     }
 
-    /// A summon stops without a word (a step, a failed completion).
+    /// A summon stops without a word (a hit, a failed completion). A step stops it inside `Zones::step` (`stop_summon_in`).
     pub fn stop_summon(&self, map: u16, id: u32) {
         if let Some(players) = self.maps().get_mut(&map) {
             stop_summon_in(players, id);
