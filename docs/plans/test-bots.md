@@ -449,10 +449,10 @@ what limits each; the bottlenecks found are fixed or listed.
   named player and follows them, for the two-client items of `docs/testing/live-test-solo.md`.
 - **Bot-only scenarios**: checklist items that need no eyes (an answer packet and a database row), run as a test command.
 - **The soak test**: hundreds of bots spread over the maps, hours long, for the 1.0 capacity figure.
-- **Known gap in the bots' logout** (F6 of `docs/testing/load-pvp.md`, found 2026-11-14): `leave` in `crates/bot/src/bot.rs` asks to log
-  out again only on an `OP_ATTACK_USER` or a single-target skill hit, but the server also stands a sitting player up on area-skill
-  hits (`OP_USE_PARTY`, `0x0513`, which `crates/bot/src/world.rs` does not parse), so under a battle some bots (42 of 1000) never ask again
-  and are closed at the 30 s wait. A later bot change should treat any stand-up as "struck".
+- **The bots' logout and area-skill hits** (F6 of `docs/testing/load-pvp.md`, found 2026-11-14, fixed in the bots afterwards, not re-measured): `leave` in
+  `crates/bot/src/bot.rs` used to ask to log out again only on an `OP_ATTACK_USER` or a single-target skill hit, but the server also stands a
+  sitting player up on area-skill hits (`OP_USE_PARTY`, `0x0513`) and monster attacks (`0x0605`), so under a battle some bots (42 of 1000) never asked again and were
+  closed at the 30 s wait. `crates/bot/src/world.rs` now turns both into events (`AreaHit`, `MobHit`) and `leave` treats every hit on the bot as "struck" and asks again.
 
 ## 15. The Sonnet build prompt (one part at a time)
 

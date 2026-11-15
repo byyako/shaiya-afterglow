@@ -234,15 +234,15 @@ left behind. That is the next question for R2 (100 bots with the client) and R3 
   logged during the runs: the ones counted (36 `INSERT INTO faction_kill_counts` and 2,101 `UPDATE game_servers SET players`) are from 2026-11-04 to 11-11,
   before the databases moved to the SSD (one more `INSERT`, on 2026-11-14, is after the runs). Pinned by `kc.rs` `with_counting_off_kills_move_nothing_but_the_tick_still_sends_and_saves` and
   `tests/game_flow.rs` `kill_count_false_survives_loading_the_saved_counts`.
-- **F6, new, open: the bots' logout leaves bots behind at 1000.** E2-1000 logged 958 of 1000 clean; R2-700 one of 700. From 09:17:36 the server logged `logout pending` (10 s) for all 1000 bots and `logout cancelled: attacked` 747 times for 57 of
+- **F6, fixed in the bots (not re-measured): the bots' logout leaves bots behind at 1000.** E2-1000 logged 958 of 1000 clean; R2-700 one of 700. From 09:17:36 the server logged `logout pending` (10 s) for all 1000 bots and `logout cancelled: attacked` 747 times for 57 of
   them (a few over and over: 158, 129, 116, 80 and 78 times); 15 of the 57 asked again and got out, and the other 42 had their logout
   cancelled by a hit and never asked again (each closed at 30 s: `connection ended in the world; the character stays linger=10s`),
   and the server freed all of them by 09:18:21. The log does not name the kind of hit; the code shows what the bots do not watch for:
   `crates/bot/src/bot.rs` `leave` (about lines 142 to 176) asks again only on `OP_ATTACK_USER` or a single-target skill
   (`OP_USE_USER`, `0x0511`) aimed at it, but the server also stands a sitting player up on area-skill hits (`zone.rs` `hit_player`
   with `single = false` sends `OP_USE_PARTY`, `0x0513`; monster hits do the same) and `crates/bot/src/world.rs` does not parse
-  `0x0513`. That fits the 42 being struck by area-skill or monster hits. A later change to the bots should treat a `0x0513` hit, or
-  any stand-up, as "struck". The one unclean bot in R2-700 shows the same pattern. Not fixed in this work; the server's side is as designed.
+  `0x0513`. That fits the 42 being struck by area-skill or monster hits. The one unclean bot in R2-700 shows the same pattern. The server's side is as designed.
+  Fixed afterwards in the bots: `crates/bot/src/world.rs` now parses `0x0513` (`Event::AreaHit`) and the monster attack `0x0605` (`Event::MobHit`), and `leave` asks again on any of them, as it does for `0x0502` and `0x0511` (`is_strike_on` in `bot.rs`, unit tests in both files). No run was made after the change, so the 42 unfinished logouts are not shown to be gone.
 
 ## Open questions
 

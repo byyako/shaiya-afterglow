@@ -55,6 +55,18 @@ pub enum Event {
         caster: u32,
         target: u32,
     },
+    /// `0x0513`: one hit of an area (or party) skill on `target`; the same 12 bytes as `0x0511`. Kept apart from `Skill` so a bot's own
+    /// area skill, announced once per victim, is not counted as one outcome each.
+    AreaHit {
+        result: u8,
+        caster: u32,
+        target: u32,
+    },
+    /// `0x0605`: a monster's normal attack on `target`.
+    MobHit {
+        mob: u32,
+        target: u32,
+    },
     /// `0x0504`.
     Died {
         id: u32,
@@ -332,6 +344,20 @@ impl World {
                     events.push(Event::Skill { result: p[0], caster: u32_at(p, 1), target: u32_at(p, 5) });
                 }
             }
+            skill::OP_USE_PARTY => {
+                if p.len() < 12 {
+                    bad(&mut events);
+                } else {
+                    events.push(Event::AreaHit { result: p[0], caster: u32_at(p, 1), target: u32_at(p, 5) });
+                }
+            }
+            combat::OP_MOB_ATTACK => {
+                if p.len() < 15 {
+                    bad(&mut events);
+                } else {
+                    events.push(Event::MobHit { mob: u32_at(p, 1), target: u32_at(p, 5) });
+                }
+            }
             combat::OP_DEATH => {
                 if p.len() < 9 {
                     bad(&mut events);
@@ -478,6 +504,23 @@ mod tests {
             w.handle(&combat::attack_refused(server_combat::RESULT_OUT_OF_RANGE, 1)),
             [Event::Attack { result: 5, attacker: 1, target: 0 }]
         );
+    }
+
+    #[test]
+    fn area_skill_and_monster_hits_are_events_like_the_single_target_ones() {
+        let mut w = World::new(1, 0, 0, 1, 18);
+        assert_eq!(
+            w.handle(&skill::skill_use(skill::OP_USE_PARTY, server_combat::RESULT_HIT, 7, 1, 20, 1, [5, 0, 0])),
+            [Event::AreaHit { result: server_combat::RESULT_HIT, caster: 7, target: 1 }]
+        );
+        assert_eq!(
+            w.handle(&skill::skill_use(skill::OP_USE_USER, server_combat::RESULT_HIT, 7, 1, 20, 1, [5, 0, 0])),
+            [Event::Skill { result: server_combat::RESULT_HIT, caster: 7, target: 1 }]
+        );
+        assert_eq!(w.handle(&combat::mob_attack(server_combat::RESULT_HIT, 900, 1, 12)), [Event::MobHit { mob: 900, target: 1 }]);
+        for opcode in [skill::OP_USE_PARTY, combat::OP_MOB_ATTACK] {
+            assert_eq!(w.handle(&shaiya_proto::encode(opcode, &[1, 2])), [Event::Bad(opcode)]);
+        }
     }
 
     #[test]

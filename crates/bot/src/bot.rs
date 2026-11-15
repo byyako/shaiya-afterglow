@@ -15,6 +15,18 @@ use crate::world::{Event, World};
 /// `0x0553` kind 2: back to life at the bind position.
 const REBIRTH_KIND: u8 = 2;
 
+/// Whether an event is a hit on `me` from someone else: a blow, a single-target or area skill, or a monster's attack. Each of them stands a
+/// sitting player up on the server and cancels its logout countdown, so `leave` asks again after any of them.
+fn is_strike_on(event: &Event, me: u32) -> bool {
+    match event {
+        Event::Attack { attacker: by, target, .. }
+        | Event::Skill { caster: by, target, .. }
+        | Event::AreaHit { caster: by, target, .. } => *target == me && *by != me,
+        Event::MobHit { target, .. } => *target == me,
+        _ => false,
+    }
+}
+
 pub struct Bot {
     pub link: Link,
     pub world: World,
@@ -158,11 +170,7 @@ impl Bot {
             let ended = self
                 .pump(deadline, |bot, opcode, events| {
                     left.store(opcode == world::OP_LOGOUT_TO_SELECT, std::sync::atomic::Ordering::Relaxed);
-                    left.load(std::sync::atomic::Ordering::Relaxed)
-                        || !bot.world.alive
-                        || events.iter().any(|e| {
-                            matches!(e, Event::Attack { attacker: by, target, .. } | Event::Skill { caster: by, target, .. } if *target == me && *by != me)
-                        })
+                    left.load(std::sync::atomic::Ordering::Relaxed) || !bot.world.alive || events.iter().any(|e| is_strike_on(e, me))
                 })
                 .await;
             // Only the answer is a logout; a blow or a death that ended the wait sends the bot round again.
@@ -173,5 +181,24 @@ impl Bot {
         }
         self.link.close().await;
         answered
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_kind_of_hit_on_the_bot_cancels_a_logout_wait_but_not_its_own_or_others() {
+        let (me, other) = (1, 2);
+        assert!(is_strike_on(&Event::Attack { result: 0, attacker: other, target: me }, me));
+        assert!(is_strike_on(&Event::Skill { result: 0, caster: other, target: me }, me));
+        assert!(is_strike_on(&Event::AreaHit { result: 0, caster: other, target: me }, me));
+        assert!(is_strike_on(&Event::MobHit { mob: 900, target: me }, me));
+        // Its own skill, or a hit on someone else.
+        assert!(!is_strike_on(&Event::AreaHit { result: 0, caster: me, target: me }, me));
+        assert!(!is_strike_on(&Event::AreaHit { result: 0, caster: other, target: 3 }, me));
+        assert!(!is_strike_on(&Event::MobHit { mob: 900, target: 3 }, me));
+        assert!(!is_strike_on(&Event::AttackStart, me));
     }
 }
