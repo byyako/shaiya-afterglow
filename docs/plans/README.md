@@ -16,6 +16,7 @@ The live plan is [`roadmap.md`](roadmap.md): what is next, what is frozen, and w
 - [`test-bots.md`](test-bots.md): the test bots, first as a 200 to 300 player PvP battle to load the server and the client (specified 2026-11-12; parts 1 to 4 built; the runs at 300, 700 and 1000 bots done on 2026-11-12 and 2026-11-14, bots only, written up in [`../testing/load-pvp.md`](../testing/load-pvp.md); the runs with the real client are still to do).
 - [`load-fixes.md`](load-fixes.md): what the PvP load runs found (write batching, the session lockout, the database pool at entry, the `maps` lock), in pieces, with the prompt that builds them one at a time ([`load-fixes-prompt.md`](load-fixes-prompt.md)) (specified 2026-11-13; built 2026-11-14).
 - [`1.0.0.md`](1.0.0.md): the plan for version 1.0.0: the gates, what agents can do alone, what needs the maintainer (draft 2026-11-16, nothing started).
+- [`1.0.0-prompt.md`](1.0.0-prompt.md): the orchestrator prompt for that plan (draft; not started).
 - [`ideas.md`](ideas.md): ideas and discussions that are parked, with what each would need.
 - [`balance/`](balance/README.md): the balance analysis and its plan (parked; it would come as extension work).
 - [`done/`](done/README.md): the plans of what has been built, kept as the record of the design.
